@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IES Communications — WACC Build-Up · Annotated Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #FDF8F8;
+    --ink: #1C1B1B;
+    --body: #484646;
+    --highlight: #DCE1FF;
+    --accent: #001D69;
+    --accent-soft: #eef1ff;
+    --line: #e5e2e2;
+    --muted: #8a8686;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--body);
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top fixed nav bar */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    padding: 14px 24px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .topnav .brand {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    text-align: left;
+  }
+
+  .topnav .brand .brand-sub {
+    display: block;
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  .topnav .chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: var(--highlight);
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+
+  .topnav .nav-actions { justify-self: end; }
+
+  /* Page wrapper */
+  .page {
+    flex: 1;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
+  }
+
+  .page-header h1 {
+    font-family: "Inter", sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+
+  .page-header p.intro {
+    font-size: 16px;
+    color: var(--body);
+    line-height: 1.6;
+    max-width: 780px;
+  }
+
+  .page-header p.intro strong { color: var(--ink); font-weight: 600; }
+
+  /* Two-column component layout */
+  .component-row {
+    display: grid;
+    grid-template-columns: 45fr 55fr;
+    gap: 28px;
+    align-items: start;
+    margin-bottom: 28px;
+  }
+
+  /* Left column: spreadsheet-style row */
+  .sheet-wrap {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0, 29, 105, 0.06);
+  }
+
+  .sheet-caption {
+    font-family: "Inter", sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 12px 16px 8px;
+    background: #fff;
+  }
+
+  .dcf-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+
+  .dcf-table th {
+    background: var(--highlight);
+    color: var(--ink);
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: "Inter", sans-serif;
+    border-bottom: 1px solid #c8d1f0;
+    border-top: 1px solid #c8d1f0;
+  }
+
+  .dcf-table td {
+    padding: 14px 14px;
+    border-bottom: 1px solid #f2eded;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    vertical-align: middle;
+  }
+
+  .dcf-table tr:last-child td { border-bottom: none; }
+
+  .dcf-table td.component-cell {
+    color: var(--ink);
+    font-family: "Inter", sans-serif;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dcf-table td.value-cell {
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .dcf-table td.source-cell {
+    color: var(--body);
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+  }
+
+  .dcf-table tr.highlighted-row td {
+    background: var(--accent-soft);
+  }
+
+  /* Total row: heavier visual weight to read as a sum, not a component */
+  .dcf-table tr.total-row td {
+    border-top: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .dcf-table tr.total-row td.component-cell {
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .dcf-table tr.total-row td.value-cell {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.01em;
+  }
+
+  /* Number marker — pairs with annotation card */
+  .marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 29, 105, 0.25);
+  }
+
+  /* Right column: annotation card */
+  .annotation {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 26px;
+    box-shadow: 0 8px 28px rgba(0, 29, 105, 0.06);
+    border-left: 4px solid var(--accent);
+  }
+
+  .annotation-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .annotation-header .marker { width: 28px; height: 28px; font-size: 14px; }
+
+  .annotation-header h2 {
+    font-family: "Inter", sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  .annotation dl {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .annotation dt {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .annotation dd {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.55;
+  }
+
+  .annotation dd strong { color: var(--ink); font-weight: 600; }
+
+  .annotation p {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+  }
+
+  .annotation a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+  }
+
+  .annotation a:hover { text-decoration-thickness: 2px; }
+
+  .annotation a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Total annotation: simpler — no marker, no dl */
+  .annotation.total-annotation {
+    border-left-width: 4px;
+  }
+
+  /* Debt-handling note callout — single-column aside */
+  .note-callout {
+    background: var(--highlight);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 28px rgba(0, 29, 105, 0.06);
+  }
+
+  .note-callout p {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+  }
+
+  .note-callout p + p { margin-top: 10px; }
+
+  .note-callout p strong { color: var(--ink); font-weight: 700; }
+
+  /* Self-check prompt — soft cream aside with reveal button */
+  .self-check {
+    background: var(--accent-soft);
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 28px rgba(0, 29, 105, 0.06);
+  }
+
+  .self-check .label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 10px;
+  }
+
+  .self-check .preamble {
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+
+  .self-check .question {
+    font-size: 15px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .self-check button {
+    font-family: "Inter", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: transparent;
+    border: 1.5px solid var(--accent);
+    padding: 8px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .self-check button:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .self-check button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .self-check .answer {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+  }
+
+  .self-check .answer.visible { display: block; }
+
+  /* Closing block */
+  .closing {
+    max-width: 780px;
+    margin: 36px auto 0;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .closing p {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+  }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    .topnav { padding: 12px 14px; grid-template-columns: 1fr auto; gap: 10px; }
+    .topnav .brand { font-size: 12px; }
+    .topnav .brand .brand-sub { display: none; }
+    .topnav .chip { display: none; }
+    .topnav .nav-actions { display: none; }
+    .page { padding: 24px 16px 60px; }
+    .page-header h1 { font-size: 24px; }
+    .page-header p.intro { font-size: 14px; }
+    .component-row { grid-template-columns: 1fr; gap: 16px; }
+    .annotation { padding: 18px 20px; }
+    .note-callout { padding: 18px 20px; }
+    .self-check { padding: 18px 20px; }
+    .dcf-table { font-size: 12px; }
+    .dcf-table td { padding: 12px 10px; }
+    .closing { margin-top: 28px; padding-top: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav" role="navigation" aria-label="Top">
+  <div class="brand">
+    IES Communications — WACC Build-Up
+    <span class="brand-sub">Annotated walkthrough</span>
+  </div>
+  <div class="chip" aria-label="Row count">6 rows</div>
+  <div class="nav-actions"></div>
+</nav>
+
+<main class="page">
+
+  <header class="page-header">
+    <div class="page-eyebrow">Discount Rate · Annotated</div>
+    <h1>How the IES WACC Build-Up Works</h1>
+    <p class="intro">The IES model uses a discount rate of <strong>16.25%</strong> to value the business. That single number is built by adding five pieces together. This page explains each piece: what it is, where the number comes from, and what value IES used.</p>
+  </header>
+
+  <!-- ============ COMPONENT 1 ============ -->
+  <section class="component-row" aria-labelledby="annot-1-heading">
+
+    <!-- Left: spreadsheet row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: Risk-free rate row">
+      <div class="sheet-caption">WACC Build-Up · Row 1 of 5</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlighted-row">
+            <td class="component-cell">
+              <span class="marker" aria-hidden="true">1</span>
+              <span>Risk-free rate (10-yr Treasury)</span>
+            </td>
+            <td class="value-cell">4.25%</td>
+            <td class="source-cell">Treasury direct</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: annotation card -->
+    <aside class="annotation">
+      <div class="annotation-header">
+        <span class="marker" aria-hidden="true">1</span>
+        <h2 id="annot-1-heading">Risk-free rate</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>What it is</dt>
+          <dd>The return you can earn from a safe investment, like lending money to the US government. It's the starting point. Any investment that carries real risk should pay more than this.</dd>
+        </div>
+        <div>
+          <dt>Where to pull it</dt>
+          <dd>Use the current yield on the 10-year US Treasury bond. You can look it up at <a href="https://www.treasury.gov/resource-center/data-chart-center/interest-rates/" target="_blank" rel="noopener">treasury.gov</a>. The 10-year version matches the medium-term horizon a DCF projects over, and it's the most liquid benchmark on the curve, so it's the standard reference point in valuation work.</dd>
+        </div>
+        <div>
+          <dt>Why IES has 4.25%</dt>
+          <dd>When the IES model was built, the 10-year Treasury yield was around 4.25%. If you were running this model today, you'd update this with whatever the current rate is.</dd>
+        </div>
+      </dl>
+    </aside>
+
+  </section>
+
+  <!-- ============ COMPONENT 2 ============ -->
+  <section class="component-row" aria-labelledby="annot-2-heading">
+
+    <!-- Left: spreadsheet row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: Equity risk premium row">
+      <div class="sheet-caption">WACC Build-Up · Row 2 of 5</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlighted-row">
+            <td class="component-cell">
+              <span class="marker" aria-hidden="true">2</span>
+              <span>Equity risk premium</span>
+            </td>
+            <td class="value-cell">5.50%</td>
+            <td class="source-cell">Kroll recommendation</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: annotation card -->
+    <aside class="annotation">
+      <div class="annotation-header">
+        <span class="marker" aria-hidden="true">2</span>
+        <h2 id="annot-2-heading">Equity risk premium</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>What it is</dt>
+          <dd>Investors won't put money in a stock unless it pays more than a safe Treasury. The equity risk premium is the extra return they demand for taking on stock-market risk on top of the risk-free rate.</dd>
+        </div>
+        <div>
+          <dt>Where to pull it</dt>
+          <dd>Kroll publishes a recommended equity risk premium every quarter. Their latest number is the standard reference for US-based valuations. Pull it from <a href="https://www.kroll.com/en/reports/cost-of-capital/recommended-us-equity-risk-premium-and-corresponding-risk-free-rates" target="_blank" rel="noopener">Kroll's cost of capital page</a>.</dd>
+        </div>
+        <div>
+          <dt>Why IES has 5.50%</dt>
+          <dd>This was Kroll's most recent recommendation when the IES model was built. Kroll updates the number every quarter, so it would be different if you ran the model today.</dd>
+        </div>
+      </dl>
+    </aside>
+
+  </section>
+
+  <!-- ============ COMPONENT 3 ============ -->
+  <section class="component-row" aria-labelledby="annot-3-heading">
+
+    <!-- Left: spreadsheet row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: Size premium row">
+      <div class="sheet-caption">WACC Build-Up · Row 3 of 5</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlighted-row">
+            <td class="component-cell">
+              <span class="marker" aria-hidden="true">3</span>
+              <span>Size premium</span>
+            </td>
+            <td class="value-cell">3.50%</td>
+            <td class="source-cell">Kroll CRSP decile</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: annotation card -->
+    <aside class="annotation">
+      <div class="annotation-header">
+        <span class="marker" aria-hidden="true">3</span>
+        <h2 id="annot-3-heading">Size premium</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>What it is</dt>
+          <dd>Small companies are riskier than large ones. They have less ability to absorb a bad year, less access to credit, less negotiating power. Investors demand extra return for owning a smaller company, on top of the standard equity risk premium. That extra is the size premium.</dd>
+        </div>
+        <div>
+          <dt>Where to pull it</dt>
+          <dd>Kroll publishes a size premium for each decile of company size (decile 1 = largest, decile 10 = smallest). The smallest companies get the highest premium. The Kroll Cost of Capital Navigator is a paid product; if you don't have access, the historical range for the smallest deciles is roughly 3-6%.</dd>
+        </div>
+        <div>
+          <dt>Why IES has 3.50%</dt>
+          <dd>IES Communications, treated as a small standalone segment, falls into one of Kroll's smaller micro/small-cap deciles. 3.50% was the size premium for that decile when the model was built.</dd>
+        </div>
+      </dl>
+    </aside>
+
+  </section>
+
+  <!-- ============ COMPONENT 4 ============ -->
+  <section class="component-row" aria-labelledby="annot-4-heading">
+
+    <!-- Left: spreadsheet row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: Industry risk premium row">
+      <div class="sheet-caption">WACC Build-Up · Row 4 of 5</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlighted-row">
+            <td class="component-cell">
+              <span class="marker" aria-hidden="true">4</span>
+              <span>Industry risk premium</span>
+            </td>
+            <td class="value-cell">1.00%</td>
+            <td class="source-cell">Damodaran industry data</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: annotation card -->
+    <aside class="annotation">
+      <div class="annotation-header">
+        <span class="marker" aria-hidden="true">4</span>
+        <h2 id="annot-4-heading">Industry risk premium</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>What it is</dt>
+          <dd>Some industries are riskier than others. Communications infrastructure and IT services rise and fall with enterprise tech spending: they grow when customers invest in networks, data centers, and connectivity, and slow when capital budgets tighten. The industry risk premium adds extra return to reflect that built-in cyclicality.</dd>
+        </div>
+        <div>
+          <dt>Where to pull it</dt>
+          <dd>Aswath Damodaran publishes industry-specific risk premia annually on the <a href="https://pages.stern.nyu.edu/~adamodar/" target="_blank" rel="noopener">NYU Stern data page</a>. IT services and infrastructure firms typically fall in the 0.5% to 1.5% range. Kroll also publishes industry data for paid subscribers.</dd>
+        </div>
+        <div>
+          <dt>Why IES has 1.00%</dt>
+          <dd>IES Communications is in the communications and IT infrastructure services space. Enterprise tech-spending cycles push them above the lowest-risk industries (consumer staples, utilities) but well below high-volatility sectors like commodities or biotech. A 1% add reflects that.</dd>
+        </div>
+      </dl>
+    </aside>
+
+  </section>
+
+  <!-- ============ COMPONENT 5 ============ -->
+  <section class="component-row" aria-labelledby="annot-5-heading">
+
+    <!-- Left: spreadsheet row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: Company-specific risk row">
+      <div class="sheet-caption">WACC Build-Up · Row 5 of 5</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlighted-row">
+            <td class="component-cell">
+              <span class="marker" aria-hidden="true">5</span>
+              <span>Company-specific risk</span>
+            </td>
+            <td class="value-cell">+2.00%</td>
+            <td class="source-cell">Analyst judgment</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: annotation card -->
+    <aside class="annotation">
+      <div class="annotation-header">
+        <span class="marker" aria-hidden="true">5</span>
+        <h2 id="annot-5-heading">Company-specific risk</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>What it is</dt>
+          <dd>An extra cushion the analyst adds for risks specific to this business that the other four components don't capture: customer concentration, key-person dependence, sub-scale operations, unusual contract terms. This one isn't published anywhere. It's the analyst's judgment call.</dd>
+        </div>
+        <div>
+          <dt>Where to pull it</dt>
+          <dd>You decide. There's no website to pull this from. The common range is 0% to 5%, and whatever value you pick, you need to justify it with the actual business risks you can name. If you can't list them, the number is probably wrong.</dd>
+        </div>
+        <div>
+          <dt>Why IES has 2.00%</dt>
+          <dd>The IES segment carries above-average customer concentration and depends on a relatively small operating team. A 2% add reflects those risks without being heavy-handed.</dd>
+        </div>
+      </dl>
+    </aside>
+
+  </section>
+
+  <!-- ============ TOTAL ROW ============ -->
+  <section class="component-row" aria-labelledby="annot-total-heading">
+
+    <!-- Left: spreadsheet total row -->
+    <div class="sheet-wrap" aria-label="Spreadsheet view: WACC total row">
+      <div class="sheet-caption">Total · WACC</div>
+      <table class="dcf-table">
+        <thead>
+          <tr>
+            <th style="width:55%;">Component</th>
+            <th style="width:18%;">Value</th>
+            <th style="width:27%;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="total-row">
+            <td class="component-cell">
+              <span>WACC (sum of all five)</span>
+            </td>
+            <td class="value-cell">16.25%</td>
+            <td class="source-cell">4.25 + 5.50 + 3.50 + 1.00 + 2.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: total annotation -->
+    <aside class="annotation total-annotation">
+      <div class="annotation-header">
+        <h2 id="annot-total-heading">The total</h2>
+      </div>
+      <p>Add the five pieces together: 4.25% + 5.50% + 3.50% + 1.00% + 2.00% = 16.25%. That's the rate the IES DCF uses to discount every future dollar back to today. A higher rate would shrink each future dollar more, lowering the valuation. A lower rate would do the opposite.</p>
+    </aside>
+
+  </section>
+
+  <!-- ============ DEBT-HANDLING NOTE ============ -->
+  <aside class="note-callout" aria-label="A note on debt">
+    <p><strong>A note on debt.</strong></p>
+    <p>When debt is zero, WACC = cost of equity. The IES model treats debt as zero. The build-up above is technically the cost of equity build-up — but with no debt to weight in, it doubles as WACC. The same is true for AV (a private division that doesn't carry separate debt).</p>
+  </aside>
+
+  <!-- ============ SELF-CHECK ============ -->
+  <aside class="self-check" aria-label="Self-check question">
+    <div class="label">Self-check</div>
+    <p class="preamble">Take a moment to think before you click.</p>
+    <p class="question">If size premium goes up, does WACC go up or down? What does that mean for the business's value today?</p>
+    <button type="button" id="self-check-btn" aria-expanded="false" aria-controls="self-check-answer">Reveal answer</button>
+    <div class="answer" id="self-check-answer" role="region" aria-live="polite">
+      WACC goes up. A higher discount rate shrinks every future dollar of cash more, so the present value of the business gets smaller. Higher discount rate = lower business value.
+    </div>
+  </aside>
+
+  <!-- ============ CLOSING ============ -->
+  <div class="closing">
+    <p>Next, you'll do this same build on AV. Same five pieces. Different numbers, because AV is private, much smaller, and has its own specific risks.</p>
+  </div>
+
+</main>
+
+<script>
+  (function () {
+    var btn = document.getElementById('self-check-btn');
+    var answer = document.getElementById('self-check-answer');
+    if (!btn || !answer) return;
+    btn.addEventListener('click', function () {
+      var isVisible = answer.classList.toggle('visible');
+      btn.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+      btn.textContent = isVisible ? 'Hide answer' : 'Reveal answer';
+    });
+  })();
+</script>
+
+</body>
+</html>
