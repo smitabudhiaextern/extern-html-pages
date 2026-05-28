@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How a Spreadsheet Is Organized — A 2-Minute Primer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #FDF8F8;
+    --title:        #1C1B1B;
+    --body:         #484646;
+    --muted:        #64748b;
+    --slate:        #475569;
+    --line:         #e5e7eb;
+    --highlight:    #DCE1FF;
+    --accent:       #001D69;
+    --accent-soft:  #DCE1FF;
+    --nav-bg:       #001D69;
+    --white:        #ffffff;
+    --backdrop:     #F0F0FF;
+
+    --green:        #10B981;
+    --green-tint:   #D1FAE5;
+    --blue:         #2563EB;
+    --blue-tint:    #DBEAFE;
+    --purple:       #7C3AED;
+    --purple-tint:  #EDE9FE;
+    --amber:        #D97706;
+    --amber-tint:   #FEF3C7;
+
+    --sheet-grid:   #d4d4d8;
+    --sheet-head:   #f1f1f3;
+
+    /* ── 5-color stop palette (vibrant + soft tint pairs) ── */
+    --c-emerald:        #11A77E;
+    --c-emerald-soft:   #D9F4E5;
+    --c-coral:          #DC2626;
+    --c-coral-soft:     #FAD8DE;
+    --c-amber:          #D97706;
+    --c-amber-soft:     #FBF0CB;
+    --c-violet:         #6D28D9;
+    --c-violet-soft:    #E5DEFE;
+    --c-blue:           #2563EB;
+    --c-blue-soft:      #DCE5FB;
+  }
+
+  /* ── Per-stop theming ──
+     User-spec mapping: Stop 1 = emerald, Stop 2 = blue,
+                        Stop 3 = violet, Stop 4 = amber. */
+  .slide[data-stop="1"] { --stop-vibrant: var(--c-emerald); --stop-soft: var(--c-emerald-soft); }
+  .slide[data-stop="2"] { --stop-vibrant: var(--c-blue);    --stop-soft: var(--c-blue-soft); }
+  .slide[data-stop="3"] { --stop-vibrant: var(--c-violet);  --stop-soft: var(--c-violet-soft); }
+  .slide[data-stop="4"] { --stop-vibrant: var(--c-amber);   --stop-soft: var(--c-amber-soft); }
+
+  /* Within a themed stop slide, route the icon, meta, title, and sheet card
+     accent through the stop's vibrant/soft pair. Existing bg-* / color-* classes
+     in markup get overridden so we don't have to touch the HTML. */
+  .slide[data-stop] .stop-meta { color: var(--stop-vibrant); }
+  .slide[data-stop] .stop-title { color: var(--stop-vibrant); }
+  .slide[data-stop] .icon-square {
+    background: var(--stop-soft);
+    color: var(--stop-vibrant);
+  }
+  /* Mini-sheet card (formula-demo / anatomy-wrap) gets a thin vibrant left accent.
+     Background stays white. */
+  .slide[data-stop] .formula-demo {
+    border-left: 3px solid var(--stop-vibrant);
+  }
+  .slide[data-stop] .anatomy-wrap {
+    border-left: 3px solid var(--stop-vibrant);
+  }
+
+  html, body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    background: var(--backdrop);
+    font-family: 'Inter', sans-serif;
+    color: var(--title);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding-bottom: 56px; }
+
+  #deck-wrapper {
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 24px 28px;
+  }
+
+  .slide {
+    width: 100%;
+    background: var(--bg);
+    border-radius: 16px;
+    padding: 28px 32px 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 28px rgba(0,29,105,0.06);
+    border: 1px solid rgba(0,29,105,0.06);
+  }
+  .slide[aria-hidden="true"] { display: none; }
+
+  .stop-meta {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 6px;
+  }
+  .stop-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--title);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .slide p { font-size: 14.5px; line-height: 1.65; color: var(--body); margin-bottom: 10px; }
+  .slide strong { color: var(--title); }
+  .slide em { font-style: italic; }
+
+  .heading-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .icon-square {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .icon-square.bg-blue { background: var(--blue-tint); color: var(--blue); }
+  .icon-square.bg-green { background: var(--green-tint); color: var(--green); }
+  .icon-square.bg-purple { background: var(--purple-tint); color: var(--purple); }
+  .icon-square.bg-amber { background: var(--amber-tint); color: var(--amber); }
+
+  .heading-row .heading-text { flex: 1; min-width: 0; }
+  .heading-row .stop-meta,
+  .heading-row .stop-title { margin-bottom: 0; }
+  .heading-row .stop-meta { margin-bottom: 4px; }
+
+  /* Intro slide */
+  .slide-title {
+    padding: 48px 32px 44px;
+    text-align: center;
+  }
+  .scenario-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 6px 12px;
+    background: var(--highlight);
+    border-radius: 20px;
+    margin-bottom: 22px;
+  }
+  .scenario-eyebrow i { font-size: 13px; }
+  .slide-title h1 {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--title);
+    margin: 4px auto 18px;
+    letter-spacing: -0.015em;
+    max-width: 720px;
+  }
+  .slide-title .lede {
+    font-size: 16px;
+    color: var(--body);
+    max-width: 640px;
+    margin: 0 auto 24px;
+    line-height: 1.65;
+  }
+  .title-icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 6px;
+  }
+
+  .cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: opacity 0.15s, transform 0.15s;
+    text-decoration: none;
+  }
+  .cta-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+
+  .stop-intro {
+    background: #FBF7F6;
+    border: 1px solid #EEE8E6;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0 22px;
+  }
+  .stop-intro p { font-size: 14.5px; line-height: 1.6; color: var(--body); margin-bottom: 6px; }
+  .stop-intro p:last-child { margin-bottom: 0; }
+
+  .inline-code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+    background: #F1F1F4;
+    color: var(--title);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+
+  /* Formula Mini-Demo — looped animated workflow */
+  .formula-demo {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    margin: 6px auto 14px;
+    max-width: 520px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    position: relative;
+  }
+  .formula-demo .fd-caption {
+    font-size: 12px;
+    color: var(--slate);
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+  }
+  .formula-demo .fd-name-box {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 6px 0 0 0;
+    padding: 5px 8px;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-weight: 600;
+    border-right: none;
+    border-bottom: none;
+    min-width: 56px;
+  }
+  .formula-demo .fd-name-box.is-empty { color: var(--muted); font-weight: 400; }
+  .formula-demo .fd-bar-row {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    margin-bottom: 0;
+  }
+  .formula-demo .fd-formula-bar {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--title);
+    border-radius: 0 6px 0 0;
+  }
+  .formula-demo .fd-formula-bar .fd-fx {
+    color: var(--muted);
+    font-style: italic;
+    margin-right: 4px;
+  }
+  .formula-demo .fd-formula-bar .fd-text {
+    transition: color 0.2s;
+  }
+  .formula-demo .fd-sheet {
+    position: relative;
+    border: 1px solid var(--sheet-grid);
+    border-radius: 0 0 6px 6px;
+    background: var(--white);
+    overflow: hidden;
+  }
+  .formula-demo .fd-row { display: grid; grid-template-columns: var(--fd-grid, 28px 1fr 1fr 1fr 1fr); }
+  .formula-demo .fd-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-right: 1px solid var(--sheet-grid);
+    border-bottom: 1px solid var(--sheet-grid);
+    color: var(--title);
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    position: relative;
+  }
+  .formula-demo .fd-cell:last-child { border-right: none; }
+  .formula-demo .fd-row:last-child .fd-cell { border-bottom: none; }
+  .formula-demo .fd-cell.fd-head, .formula-demo .fd-cell.fd-rownum {
+    background: #E8ECF8;
+    color: var(--accent);
+    font-weight: 600;
+    justify-content: center;
+    font-size: 11px;
+  }
+  .formula-demo .fd-cell.fd-label {
+    justify-content: flex-start;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--title);
+  }
+  .formula-demo .fd-cell.fd-active {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: #F4F6FD;
+    z-index: 2;
+  }
+  .formula-demo .fd-cell.fd-flash {
+    background: var(--highlight);
+    transition: background 0.4s;
+  }
+  .formula-demo .fd-cell .fd-value {
+    transition: opacity 0.3s, color 0.3s;
+  }
+  .formula-demo .fd-cell .fd-value.is-input { color: #0000CC; }
+  .formula-demo .fd-cell .fd-value.is-formula { color: var(--title); }
+
+  .formula-demo .fd-cursor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 0 14px 9px;
+    border-color: transparent transparent var(--accent) transparent;
+    transform: rotate(-20deg);
+    pointer-events: none;
+    transition: top 0.85s cubic-bezier(0.4, 0, 0.2, 1), left 0.85s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    opacity: 0;
+    z-index: 5;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+  }
+
+  .formula-demo .fd-floating-label {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: var(--accent);
+    color: var(--white);
+    padding: 3px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    transition: top 0.85s cubic-bezier(0.4, 0, 0.2, 1), left 0.85s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    opacity: 0;
+    z-index: 6;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,29,105,0.25);
+  }
+  .formula-demo .fd-floating-label::after {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-style: solid;
+    border-width: 5px 6px 5px 0;
+    border-color: transparent var(--accent) transparent transparent;
+  }
+
+  .formula-demo .fd-note {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 10px;
+    font-style: italic;
+  }
+
+  /* Callout / annotation diagram for anatomy slide */
+  .anatomy-wrap {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 22px 18px 24px;
+    margin: 12px 0 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .anatomy-diagram {
+    position: relative;
+    max-width: 620px;
+    margin: 0 auto;
+  }
+  .anatomy-diagram .fd-name-box,
+  .anatomy-diagram .fd-formula-bar,
+  .anatomy-diagram .fd-sheet,
+  .anatomy-diagram .fd-bar-row { /* reuse same look */ }
+  .anatomy-tab-strip {
+    display: flex;
+    background: #F4F2F0;
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .anatomy-tab-strip .tab {
+    font-family: 'Inter', sans-serif;
+    font-size: 11.5px;
+    padding: 4px 12px;
+    border-radius: 4px 4px 0 0;
+    color: var(--slate);
+    background: transparent;
+  }
+  .anatomy-tab-strip .tab.active {
+    background: var(--white);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 -2px 0 var(--accent) inset;
+  }
+  .anatomy-callouts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .callout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .callout-num {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .callout-text { flex: 1; min-width: 0; }
+  .callout-text strong {
+    display: block;
+    font-size: 13px;
+    color: var(--title);
+    margin-bottom: 2px;
+  }
+  .callout-text p {
+    font-size: 12.5px;
+    color: var(--body);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* Completion banner */
+  #completion-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: var(--accent);
+    color: var(--white);
+    padding: 16px 28px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px rgba(0,29,105,0.35);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    letter-spacing: 0.02em;
+    transition: opacity 0.25s, transform 0.25s;
+    opacity: 0;
+  }
+  #completion-banner.show {
+    display: flex;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  #completion-banner i { font-size: 22px; color: var(--highlight); }
+
+  /* Nav */
+  #nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--nav-bg);
+    border-top: 1px solid rgba(0,29,105,0.15);
+    z-index: 100;
+    padding: 0 16px;
+  }
+  .nav-btn {
+    background: none;
+    border: none;
+    color: var(--white);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0 16px;
+    height: 56px;
+    letter-spacing: 0.02em;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+  .nav-btn:hover { color: var(--highlight); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .nav-btn:disabled:hover { color: var(--white); }
+
+  #progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: rgba(255,255,255,0.85);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  #progress-label {
+    min-width: 92px;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  #dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    border: none;
+    padding: 0;
+  }
+  .dot.active {
+    background: var(--highlight);
+    transform: scale(1.3);
+  }
+  .dot.done { background: rgba(220,225,255,0.65); }
+
+  .center-cta { text-align: center; margin-top: 10px; }
+
+  @media (max-width: 820px) {
+    #deck-wrapper { padding: 14px 10px 14px; }
+    .slide { padding: 20px 18px 22px; border-radius: 12px; }
+    .stop-title { font-size: 20px; }
+    .slide-title { padding: 32px 22px 30px; }
+    .slide-title h1 { font-size: 26px; }
+    .slide-title .lede { font-size: 14.5px; }
+    .formula-demo { padding: 10px 8px; max-width: 100%; }
+    .formula-demo .fd-bar-row { grid-template-columns: 48px 1fr; }
+    .formula-demo .fd-cell { font-size: 11px; padding: 5px 7px; }
+    .anatomy-callouts { grid-template-columns: 1fr; }
+    #progress-label { min-width: 0; font-size: 11px; }
+    .dot { width: 7px; height: 7px; }
+    .stop-intro { padding: 10px 12px; }
+    .stop-intro p { font-size: 13.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="deck-wrapper">
+
+  <!-- ── SLIDE 1: Intro ── -->
+  <div class="slide slide-title" role="region" aria-label="Intro">
+    <div class="title-icon"><i class="ph-bold ph-grid-four"></i></div>
+    <div class="scenario-eyebrow"><i class="ph-bold ph-clock"></i> A 2-minute primer</div>
+    <h1>How a spreadsheet is organized</h1>
+    <p class="lede">Brand new to spreadsheets? This quick visual primer walks you through the four parts of every sheet — cells, the formula bar, the difference between typed numbers and formulas, and the anatomy you'll see in Excel, Google Sheets, or any tool.</p>
+    <p class="lede" style="margin-bottom:28px;">Four short stops, each with a small animated demo. By the end, you'll be ready for the formulas walkthrough.</p>
+    <div class="center-cta">
+      <button class="cta-btn" onclick="navigate(1)">Start <i class="ph-bold ph-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 2: Stop 1 — Cells and addresses ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 1 — Cells and addresses" data-stop="1">
+    <div class="heading-row">
+      <div class="icon-square bg-blue"><i class="ph ph-grid-four"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta">Stop 1 of 4 · The grid</div>
+        <h2 class="stop-title">Cells and addresses</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>A spreadsheet is a grid. Every box is a <strong>cell</strong>, identified by its column letter and row number — <span class="inline-code">B4</span> means column B, row 4.</p>
+      <p>That's <strong>A1 notation</strong>, the address every formula uses.</p>
+    </div>
+
+    <div class="formula-demo" data-stop="1" aria-hidden="true"></div>
+  </div>
+
+  <!-- ── SLIDE 3: Stop 2 — The formula bar ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 2 — The formula bar" data-stop="2">
+    <div class="heading-row">
+      <div class="icon-square bg-purple"><i class="ph ph-function"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta">Stop 2 of 4 · Behind the cell</div>
+        <h2 class="stop-title">The formula bar</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Look at the top of the sheet. The <strong>formula bar</strong> shows what's actually inside the selected cell.</p>
+      <p>Sometimes it's a typed number. Sometimes it's a formula like <span class="inline-code">=A1*2</span> — the cell shows the result, the formula bar shows the math.</p>
+    </div>
+
+    <div class="formula-demo" data-stop="2" aria-hidden="true"></div>
+  </div>
+
+  <!-- ── SLIDE 4: Stop 3 — Hardcoded vs derived ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 3 — Typed vs formula" data-stop="3">
+    <div class="heading-row">
+      <div class="icon-square bg-amber"><i class="ph ph-flow-arrow"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta">Stop 3 of 4 · Inputs vs math</div>
+        <h2 class="stop-title">Typed numbers vs formulas</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Cells hold either a <strong>hardcoded</strong> value (someone typed <span class="inline-code">47.3</span> and that's what it is) or a <strong>formula</strong> (a calculation that updates when its inputs change).</p>
+      <p>Analysts color-code these — <span style="color:#0000CC;font-weight:600;">typed inputs in blue</span>, formula cells in black. So you can scan a model and see where the math lives.</p>
+    </div>
+
+    <div class="formula-demo" data-stop="3" aria-hidden="true"></div>
+  </div>
+
+  <!-- ── SLIDE 5: Stop 4 — Anatomy at a glance ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 4 — Anatomy at a glance" data-stop="4">
+    <div class="heading-row">
+      <div class="icon-square bg-green"><i class="ph ph-magnifying-glass"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta">Stop 4 of 4 · Put it together</div>
+        <h2 class="stop-title">Anatomy at a glance</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Here are the parts you'll see in every spreadsheet. Take a look — you'll meet them all in the formulas walkthrough.</p>
+    </div>
+
+    <div class="anatomy-wrap">
+      <div class="anatomy-diagram" id="anatomy-diagram">
+        <!-- name box + formula bar -->
+        <div class="fd-bar-row">
+          <div class="fd-name-box" id="anatomy-namebox">B2</div>
+          <div class="fd-formula-bar"><span class="fd-fx">fx</span><span class="fd-text">=A2*2</span></div>
+        </div>
+        <!-- sheet -->
+        <div class="fd-sheet" style="--fd-grid: 32px repeat(4, 1fr);">
+          <div class="fd-row">
+            <div class="fd-cell fd-head"></div>
+            <div class="fd-cell fd-head">A</div>
+            <div class="fd-cell fd-head">B</div>
+            <div class="fd-cell fd-head">C</div>
+            <div class="fd-cell fd-head">D</div>
+          </div>
+          <div class="fd-row">
+            <div class="fd-cell fd-rownum">1</div>
+            <div class="fd-cell fd-label">Item</div>
+            <div class="fd-cell fd-label">Value</div>
+            <div class="fd-cell"></div>
+            <div class="fd-cell"></div>
+          </div>
+          <div class="fd-row">
+            <div class="fd-cell fd-rownum">2</div>
+            <div class="fd-cell fd-label">Apples</div>
+            <div class="fd-cell fd-active"><span class="fd-value is-formula">20</span></div>
+            <div class="fd-cell"></div>
+            <div class="fd-cell"></div>
+          </div>
+          <div class="fd-row">
+            <div class="fd-cell fd-rownum">3</div>
+            <div class="fd-cell fd-label">Pears</div>
+            <div class="fd-cell"><span class="fd-value is-input" style="color:#0000CC">15</span></div>
+            <div class="fd-cell"></div>
+            <div class="fd-cell"></div>
+          </div>
+          <div class="fd-row">
+            <div class="fd-cell fd-rownum">4</div>
+            <div class="fd-cell fd-label">Plums</div>
+            <div class="fd-cell"><span class="fd-value is-input" style="color:#0000CC">8</span></div>
+            <div class="fd-cell"></div>
+            <div class="fd-cell"></div>
+          </div>
+        </div>
+        <!-- tab strip -->
+        <div class="anatomy-tab-strip">
+          <div class="tab active">Linden</div>
+          <div class="tab">Segments</div>
+        </div>
+      </div>
+
+      <div class="anatomy-callouts">
+        <div class="callout">
+          <div class="callout-num">1</div>
+          <div class="callout-text">
+            <strong>Column letters</strong>
+            <p>A, B, C, D across the top — they label vertical columns.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="callout-num">2</div>
+          <div class="callout-text">
+            <strong>Row numbers</strong>
+            <p>1, 2, 3, 4 down the left — they label horizontal rows.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="callout-num">3</div>
+          <div class="callout-text">
+            <strong>The active cell</strong>
+            <p>The highlighted cell — the one you've clicked on right now.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="callout-num">4</div>
+          <div class="callout-text">
+            <strong>Name box</strong>
+            <p>Top-left corner — shows the address of the active cell (here, <span class="inline-code">B2</span>).</p>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="callout-num">5</div>
+          <div class="callout-text">
+            <strong>Formula bar</strong>
+            <p>Shows what's actually inside the active cell — a typed value or a formula.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="callout-num">6</div>
+          <div class="callout-text">
+            <strong>Tab name</strong>
+            <p>The sheet tab at the bottom (here, <span class="inline-code">Linden</span>). A file can hold many tabs.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 6: Ready ── -->
+  <div class="slide slide-title" aria-hidden="true" role="region" aria-label="Ready">
+    <div class="title-icon"><i class="ph-bold ph-check-circle"></i></div>
+    <div class="scenario-eyebrow"><i class="ph-bold ph-flag-checkered"></i> Primer complete</div>
+    <h1>Ready for the formulas?</h1>
+    <p class="lede">Now you know how a sheet is organized — cells with addresses, the formula bar that reveals what's underneath, and the difference between a typed input and a calculation.</p>
+    <p class="lede" style="margin-bottom:28px;">Next up: 8 formulas that show up in every model an analyst builds.</p>
+    <div class="center-cta">
+      <button class="cta-btn" onclick="returnToTask()">Back to the lesson <i class="ph-bold ph-arrow-right"></i></button>
+    </div>
+  </div>
+
+</div>
+
+<div id="completion-banner" role="status" aria-live="polite">
+  <i class="ph-bold ph-check-circle"></i>
+  <span>Primer complete. Head back to the lesson.</span>
+</div>
+
+<nav id="nav" aria-label="Slide navigation">
+  <button class="nav-btn" id="btn-prev" onclick="navigate(-1)" aria-label="Previous slide">&larr; Prev</button>
+  <div id="progress-wrap">
+    <span id="progress-label">Intro</span>
+    <div id="dots" role="tablist" aria-label="Slide indicators"></div>
+  </div>
+  <button class="nav-btn" id="btn-next" onclick="navigate(1)" aria-label="Next slide">Next &rarr;</button>
+</nav>
+
+<script>
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  // ── Mini-demo factory ──
+  // Each demo is a config-driven looped animation tied to a slide.
+  // Step types: hold, type, clearFormula, setNameBox, cursorTo, highlightCell,
+  //             showLabel, hideLabel, fillCell, setCellValue, setCellType
+  var demos = {};
+
+  function createDemo(stopNum, config) {
+    var root = document.querySelector('.formula-demo[data-stop="' + stopNum + '"]');
+    if (!root) return { start: function(){}, stop: function(){} };
+
+    // ── Build HTML from config ──
+    var cols = config.sheet.cols;
+    var rows = config.sheet.rows;
+    var rowNumStart = config.sheet.rowNumStart || 1;
+    // Grid: 32px row-number column + 1fr per data column
+    var gridTemplate = '32px ' + cols.map(function() { return '1fr'; }).join(' ');
+
+    var html = '';
+    html += '<div class="fd-caption">' + escapeHtml(config.caption) + '</div>';
+
+    // name box + formula bar
+    html += '<div class="fd-bar-row">';
+    html += '<div class="fd-name-box is-empty" data-fd-namebox>—</div>';
+    html += '<div class="fd-formula-bar"><span class="fd-fx">fx</span><span class="fd-text" data-fd-formula></span></div>';
+    html += '</div>';
+
+    // sheet
+    html += '<div class="fd-sheet" data-fd-sheet style="--fd-grid:' + gridTemplate + '">';
+    // header row
+    html += '<div class="fd-row"><div class="fd-cell fd-head"></div>';
+    cols.forEach(function(c) { html += '<div class="fd-cell fd-head">' + escapeHtml(c) + '</div>'; });
+    html += '</div>';
+    // data rows
+    rows.forEach(function(rowCells, rIdx) {
+      html += '<div class="fd-row" data-fd-row="' + rIdx + '"><div class="fd-cell fd-rownum">' + (rowNumStart + rIdx) + '</div>';
+      rowCells.forEach(function(cell, cIdx) {
+        var cellObj = (typeof cell === 'object' && cell !== null) ? cell : { value: cell };
+        var clsExtra = '';
+        if (cellObj.label) clsExtra += ' fd-label';
+        var valueCls = 'fd-value';
+        if (cellObj.kind === 'input') valueCls += ' is-input';
+        if (cellObj.kind === 'formula') valueCls += ' is-formula';
+        html += '<div class="fd-cell' + clsExtra + '" data-fd-r="' + rIdx + '" data-fd-c="' + cIdx + '">';
+        html += '<span class="' + valueCls + '" data-fd-value>' + escapeHtml(cellObj.value || '') + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '<div class="fd-cursor" data-fd-cursor></div>';
+    html += '<div class="fd-floating-label" data-fd-label></div>';
+    html += '</div>'; // fd-sheet
+
+    if (config.note) {
+      html += '<small class="fd-note">' + escapeHtml(config.note) + '</small>';
+    } else {
+      html += '<small class="fd-note">(Looped demo)</small>';
+    }
+
+    root.innerHTML = html;
+
+    // refs
+    var sheetEl    = root.querySelector('[data-fd-sheet]');
+    var formulaEl  = root.querySelector('[data-fd-formula]');
+    var nameBoxEl  = root.querySelector('[data-fd-namebox]');
+    var cursorEl   = root.querySelector('[data-fd-cursor]');
+    var labelEl    = root.querySelector('[data-fd-label]');
+
+    var timers = [];
+    var running = false;
+    var activeCellEl = null;
+
+    function clearTimers() {
+      timers.forEach(function(t) { clearTimeout(t); });
+      timers = [];
+    }
+    function schedule(fn, delay) {
+      timers.push(setTimeout(fn, delay));
+    }
+
+    function clearActive() {
+      var all = sheetEl.querySelectorAll('.fd-cell.fd-active');
+      all.forEach(function(c) { c.classList.remove('fd-active'); });
+    }
+    function getCell(r, c) {
+      return sheetEl.querySelector('[data-fd-r="' + r + '"][data-fd-c="' + c + '"]');
+    }
+
+    function reset() {
+      formulaEl.textContent = '';
+      nameBoxEl.textContent = '—';
+      nameBoxEl.classList.add('is-empty');
+      cursorEl.style.opacity = '0';
+      labelEl.style.opacity = '0';
+      clearActive();
+      // restore original cell values
+      rows.forEach(function(rowCells, rIdx) {
+        rowCells.forEach(function(cell, cIdx) {
+          var cellObj = (typeof cell === 'object' && cell !== null) ? cell : { value: cell };
+          var el = getCell(rIdx, cIdx);
+          if (el) {
+            var v = el.querySelector('[data-fd-value]');
+            if (v) {
+              v.textContent = cellObj.value || '';
+              v.classList.remove('is-input', 'is-formula');
+              if (cellObj.kind === 'input') v.classList.add('is-input');
+              if (cellObj.kind === 'formula') v.classList.add('is-formula');
+            }
+          }
+        });
+      });
+    }
+
+    function moveCursorToCell(r, c) {
+      var cell = getCell(r, c);
+      if (!cell) return;
+      var sheetRect = sheetEl.getBoundingClientRect();
+      var cRect = cell.getBoundingClientRect();
+      cursorEl.style.left = (cRect.left - sheetRect.left + cRect.width * 0.55) + 'px';
+      cursorEl.style.top = (cRect.top - sheetRect.top + cRect.height * 0.55) + 'px';
+      cursorEl.style.opacity = '1';
+    }
+
+    function moveLabelToCell(r, c, text) {
+      var cell = getCell(r, c);
+      if (!cell) return;
+      var sheetRect = sheetEl.getBoundingClientRect();
+      var cRect = cell.getBoundingClientRect();
+      labelEl.textContent = text;
+      labelEl.style.left = (cRect.right - sheetRect.left + 10) + 'px';
+      labelEl.style.top  = (cRect.top - sheetRect.top + cRect.height/2 - 12) + 'px';
+      labelEl.style.opacity = '1';
+    }
+
+    function runStep(step, done) {
+      if (!running) return;
+
+      if (step.type === 'hold') {
+        schedule(done, step.ms || 500);
+      }
+      else if (step.type === 'cursorTo') {
+        moveCursorToCell(step.row, step.col);
+        schedule(done, step.ms || 750);
+      }
+      else if (step.type === 'highlightCell') {
+        clearActive();
+        var el = getCell(step.row, step.col);
+        if (el) el.classList.add('fd-active');
+        activeCellEl = el;
+        schedule(done, step.ms || 150);
+      }
+      else if (step.type === 'setNameBox') {
+        nameBoxEl.textContent = step.text;
+        nameBoxEl.classList.remove('is-empty');
+        schedule(done, step.ms || 120);
+      }
+      else if (step.type === 'showLabel') {
+        moveLabelToCell(step.row, step.col, step.text);
+        schedule(done, step.ms || 100);
+      }
+      else if (step.type === 'hideLabel') {
+        labelEl.style.opacity = '0';
+        schedule(done, step.ms || 150);
+      }
+      else if (step.type === 'setFormula') {
+        formulaEl.textContent = step.text || '';
+        schedule(done, step.ms || 150);
+      }
+      else if (step.type === 'setCellValue') {
+        var el2 = getCell(step.row, step.col);
+        if (!el2) { done(); return; }
+        var v = el2.querySelector('[data-fd-value]');
+        if (!v) { done(); return; }
+        v.style.opacity = '0';
+        schedule(function() {
+          if (!running) return;
+          v.textContent = step.value;
+          v.classList.remove('is-input', 'is-formula');
+          if (step.kind === 'input') v.classList.add('is-input');
+          if (step.kind === 'formula') v.classList.add('is-formula');
+          v.style.opacity = '1';
+          done();
+        }, step.ms || 220);
+      }
+      else if (step.type === 'flashCell') {
+        var el3 = getCell(step.row, step.col);
+        if (!el3) { done(); return; }
+        el3.classList.add('fd-flash');
+        schedule(function() {
+          if (el3) el3.classList.remove('fd-flash');
+          done();
+        }, step.ms || 600);
+      }
+      else {
+        done();
+      }
+    }
+
+    function runLoop() {
+      if (!running) return;
+      reset();
+      var steps = config.steps;
+      var idx = 0;
+      function nextStep() {
+        if (!running) return;
+        if (idx >= steps.length) {
+          schedule(function() { if (running) runLoop(); }, config.endHold || 1200);
+          return;
+        }
+        var s = steps[idx++];
+        runStep(s, nextStep);
+      }
+      nextStep();
+    }
+
+    return {
+      start: function() {
+        if (running) return;
+        running = true;
+        root.setAttribute('aria-hidden', 'false');
+        schedule(function() { if (running) runLoop(); }, 80);
+      },
+      stop: function() {
+        running = false;
+        clearTimers();
+        reset();
+        root.setAttribute('aria-hidden', 'true');
+      }
+    };
+  }
+
+  // ── Demo configs ──
+  var DEMOS = {
+    // STOP 1 — Cells and addresses. Cursor visits B2, C3, D1.
+    1: {
+      caption: 'Click a cell — the address shows in the name box',
+      sheet: {
+        cols: ['A','B','C','D'],
+        rows: [
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', '']
+        ]
+      },
+      endHold: 1200,
+      steps: [
+        { type: 'hold', ms: 700 },
+        // Visit B2
+        { type: 'cursorTo', row: 1, col: 1, ms: 850 },
+        { type: 'highlightCell', row: 1, col: 1 },
+        { type: 'setNameBox', text: 'B2' },
+        { type: 'showLabel', row: 1, col: 1, text: 'B2' },
+        { type: 'hold', ms: 1100 },
+        { type: 'hideLabel' },
+        // Visit C3
+        { type: 'cursorTo', row: 2, col: 2, ms: 800 },
+        { type: 'highlightCell', row: 2, col: 2 },
+        { type: 'setNameBox', text: 'C3' },
+        { type: 'showLabel', row: 2, col: 2, text: 'C3' },
+        { type: 'hold', ms: 1100 },
+        { type: 'hideLabel' },
+        // Visit D1
+        { type: 'cursorTo', row: 0, col: 3, ms: 800 },
+        { type: 'highlightCell', row: 0, col: 3 },
+        { type: 'setNameBox', text: 'D1' },
+        { type: 'showLabel', row: 0, col: 3, text: 'D1' },
+        { type: 'hold', ms: 1100 },
+        { type: 'hideLabel' }
+      ]
+    },
+
+    // STOP 2 — Formula bar shows the math, cell shows the result.
+    // B2 = 100 (typed). B3 = =B2*2 (cell shows 200, formula bar shows =B2*2).
+    2: {
+      caption: 'The cell shows the result. The formula bar shows the math.',
+      sheet: {
+        cols: ['A','B'],
+        rows: [
+          [{ value: 'Label', label: true }, { value: 'Value', label: true }],
+          [{ value: 'Price', label: true }, { value: '100', kind: 'input' }],
+          [{ value: 'Double', label: true }, { value: '200', kind: 'formula' }]
+        ]
+      },
+      endHold: 1400,
+      steps: [
+        { type: 'hold', ms: 700 },
+        // Click B2 — typed value 100
+        { type: 'cursorTo', row: 1, col: 1, ms: 850 },
+        { type: 'highlightCell', row: 1, col: 1 },
+        { type: 'setNameBox', text: 'B2' },
+        { type: 'setFormula', text: '100' },
+        { type: 'showLabel', row: 1, col: 1, text: 'just a typed number' },
+        { type: 'hold', ms: 1500 },
+        { type: 'hideLabel' },
+        // Click B3 — formula =B2*2, cell shows 200
+        { type: 'cursorTo', row: 2, col: 1, ms: 850 },
+        { type: 'highlightCell', row: 2, col: 1 },
+        { type: 'setNameBox', text: 'B3' },
+        { type: 'setFormula', text: '=B2*2' },
+        { type: 'showLabel', row: 2, col: 1, text: 'formula bar shows the math' },
+        { type: 'hold', ms: 1700 },
+        { type: 'hideLabel' }
+      ]
+    },
+
+    // STOP 3 — Hardcoded vs derived. Three rows. Revenue (100 typed) - COGS (40 typed) = Gross Profit (=B1-B2, =60).
+    // Then Revenue animates 100 → 120, Gross Profit auto-updates 60 → 80.
+    3: {
+      caption: 'Typed inputs (blue) stay put. Formulas update when inputs change.',
+      sheet: {
+        cols: ['A','B'],
+        rows: [
+          [{ value: 'Revenue',       label: true }, { value: '100', kind: 'input' }],
+          [{ value: 'COGS',          label: true }, { value: '40',  kind: 'input' }],
+          [{ value: 'Gross Profit',  label: true }, { value: '60',  kind: 'formula' }]
+        ]
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 600 },
+        // Visit B1 — typed 100
+        { type: 'cursorTo', row: 0, col: 1, ms: 800 },
+        { type: 'highlightCell', row: 0, col: 1 },
+        { type: 'setNameBox', text: 'B1' },
+        { type: 'setFormula', text: '100' },
+        { type: 'showLabel', row: 0, col: 1, text: 'typed' },
+        { type: 'hold', ms: 1100 },
+        { type: 'hideLabel' },
+        // Visit B2 — typed 40
+        { type: 'cursorTo', row: 1, col: 1, ms: 700 },
+        { type: 'highlightCell', row: 1, col: 1 },
+        { type: 'setNameBox', text: 'B2' },
+        { type: 'setFormula', text: '40' },
+        { type: 'showLabel', row: 1, col: 1, text: 'typed' },
+        { type: 'hold', ms: 1000 },
+        { type: 'hideLabel' },
+        // Visit B3 — formula
+        { type: 'cursorTo', row: 2, col: 1, ms: 700 },
+        { type: 'highlightCell', row: 2, col: 1 },
+        { type: 'setNameBox', text: 'B3' },
+        { type: 'setFormula', text: '=B1-B2' },
+        { type: 'showLabel', row: 2, col: 1, text: 'formula → 60' },
+        { type: 'hold', ms: 1400 },
+        { type: 'hideLabel' },
+        // Now change B1 from 100 to 120 and watch B3 update
+        { type: 'cursorTo', row: 0, col: 1, ms: 800 },
+        { type: 'highlightCell', row: 0, col: 1 },
+        { type: 'setNameBox', text: 'B1' },
+        { type: 'showLabel', row: 0, col: 1, text: 'change input →' },
+        { type: 'hold', ms: 600 },
+        { type: 'setCellValue', row: 0, col: 1, value: '120', kind: 'input' },
+        { type: 'setFormula', text: '120' },
+        { type: 'hold', ms: 600 },
+        { type: 'hideLabel' },
+        // Flash B3 then update it
+        { type: 'flashCell', row: 2, col: 1, ms: 500 },
+        { type: 'setCellValue', row: 2, col: 1, value: '80', kind: 'formula' },
+        { type: 'cursorTo', row: 2, col: 1, ms: 700 },
+        { type: 'highlightCell', row: 2, col: 1 },
+        { type: 'setNameBox', text: 'B3' },
+        { type: 'setFormula', text: '=B1-B2' },
+        { type: 'showLabel', row: 2, col: 1, text: 'auto-updated' },
+        { type: 'hold', ms: 1500 },
+        { type: 'hideLabel' }
+      ]
+    }
+  };
+
+  Object.keys(DEMOS).forEach(function(k) {
+    demos[k] = createDemo(k, DEMOS[k]);
+  });
+
+  // ── Slide navigation ──
+  var slides, total, current = 0;
+  var dotsContainer, progressLabel;
+
+  function init() {
+    slides = document.querySelectorAll('#deck-wrapper .slide');
+    total = slides.length;
+    dotsContainer = document.getElementById('dots');
+    progressLabel = document.getElementById('progress-label');
+
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.setAttribute('role', 'tab');
+      dot.dataset.index = i;
+      dot.addEventListener('click', function () {
+        goTo(parseInt(this.dataset.index, 10));
+      });
+      dotsContainer.appendChild(dot);
+    }
+
+    for (var j = 0; j < total; j++) {
+      if (j === 0) {
+        slides[j].removeAttribute('aria-hidden');
+        slides[j].style.display = 'block';
+      } else {
+        slides[j].setAttribute('aria-hidden', 'true');
+        slides[j].style.display = 'none';
+      }
+    }
+
+    document.getElementById('btn-prev').disabled = true;
+    updateProgress();
+    updateNextBtn();
+  }
+
+  function updateProgress() {
+    var labels = ['Intro', 'Stop 1 of 4', 'Stop 2 of 4', 'Stop 3 of 4', 'Stop 4 of 4', 'Ready'];
+    progressLabel.textContent = labels[current] || ('Slide ' + (current + 1));
+
+    for (var i = 0; i < dotsContainer.children.length; i++) {
+      var d = dotsContainer.children[i];
+      d.classList.remove('active', 'done');
+      if (i === current) d.classList.add('active');
+      else if (i < current) d.classList.add('done');
+    }
+  }
+
+  function updateNextBtn() {
+    var nextBtn = document.getElementById('btn-next');
+    var isLast = (current === total - 1);
+    nextBtn.innerHTML = isLast ? 'Finish' : 'Next &rarr;';
+    nextBtn.disabled = false;
+  }
+
+  function goTo(index) {
+    slides[current].setAttribute('aria-hidden', 'true');
+    slides[current].style.display = 'none';
+    current = index;
+    slides[current].removeAttribute('aria-hidden');
+    slides[current].style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('btn-prev').disabled = (current === 0);
+    updateProgress();
+    updateNextBtn();
+
+    // Start/stop mini-demos based on which slide is visible.
+    var activeStop = slides[current] && slides[current].getAttribute('data-stop');
+    Object.keys(demos).forEach(function(k) {
+      if (k === activeStop) demos[k].start();
+      else demos[k].stop();
+    });
+  }
+
+  function showCompletionBanner() {
+    var banner = document.getElementById('completion-banner');
+    banner.classList.add('show');
+    setTimeout(function () { banner.classList.remove('show'); }, 2800);
+  }
+
+  function navigate(dir) {
+    if (dir > 0 && current === total - 1) {
+      showCompletionBanner();
+      return;
+    }
+    var next = current + dir;
+    if (next < 0 || next >= total) return;
+    goTo(next);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+  });
+
+  window.navigate = navigate;
+
+  function returnToTask() {
+    showCompletionBanner();
+  }
+  window.returnToTask = returnToTask;
+
+  init();
+</script>
+
+</body>
+</html>
