@@ -1,0 +1,3602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Formulas Behind Every Model — A Linden Holdings Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #FDF8F8;
+    --title:        #1C1B1B;
+    --body:         #484646;
+    --muted:        #64748b;
+    --slate:        #475569;
+    --line:         #e5e7eb;
+    --highlight:    #DCE1FF;
+    --accent:       #001D69;
+    --accent-soft:  #DCE1FF;
+    --nav-bg:       #001D69;
+    --white:        #ffffff;
+    --backdrop:     #F0F0FF;
+
+    --green:        #10B981;
+    --green-tint:   #D1FAE5;
+    --green-deep:   #064E3B;
+    --blue:         #2563EB;
+    --blue-tint:    #DBEAFE;
+    --purple:       #7C3AED;
+    --purple-tint:  #EDE9FE;
+    --orange:       #EA580C;
+    --orange-tint:  #FED7AA;
+    --red:          #DC2626;
+    --red-tint:     #FECACA;
+    --red-deep:     #7F1D1D;
+    --amber:        #D97706;
+    --amber-tint:   #FEF3C7;
+
+    --sheet-grid:   #d4d4d8;
+    --sheet-head:   #f1f1f3;
+    --sheet-row:    #fafafa;
+    --highlight-cell: #FFF7B3;
+
+    /* ── 5-color stop palette (vibrant + soft tint pairs) ── */
+    --c-emerald:        #11A77E;
+    --c-emerald-soft:   #D9F4E5;
+    --c-blue:           #2563EB;
+    --c-blue-soft:      #DCE5FB;
+    --c-violet:         #6D28D9;
+    --c-violet-soft:    #E5DEFE;
+    --c-amber:          #D97706;
+    --c-amber-soft:     #FBF0CB;
+    --c-coral:          #DC2626;
+    --c-coral-soft:     #FAD8DE;
+  }
+
+  /* ── Per-stop theming via CSS custom properties ──
+     Mapping: 1 SUM=emerald, 2 Growth=coral, 3 Multiply=amber,
+              4 IF=violet, 5 AbsRef=blue, 6 IFERROR=coral,
+              7 VLOOKUP=emerald, 8 SUMIF=amber. */
+  .slide[data-stop="1"] { --stop-vibrant: var(--c-emerald); --stop-soft: var(--c-emerald-soft); }
+  .slide[data-stop="2"] { --stop-vibrant: var(--c-coral);   --stop-soft: var(--c-coral-soft); }
+  .slide[data-stop="3"] { --stop-vibrant: var(--c-amber);   --stop-soft: var(--c-amber-soft); }
+  .slide[data-stop="4"] { --stop-vibrant: var(--c-violet);  --stop-soft: var(--c-violet-soft); }
+  .slide[data-stop="5"] { --stop-vibrant: var(--c-blue);    --stop-soft: var(--c-blue-soft); }
+  .slide[data-stop="6"] { --stop-vibrant: var(--c-coral);   --stop-soft: var(--c-coral-soft); }
+  .slide[data-stop="7"] { --stop-vibrant: var(--c-emerald); --stop-soft: var(--c-emerald-soft); }
+  .slide[data-stop="8"] { --stop-vibrant: var(--c-amber);   --stop-soft: var(--c-amber-soft); }
+
+  /* Within a themed stop slide, the existing .color-* / .bg-* classes
+     inherit from the stop's vibrant/soft pair instead of their original hue.
+     This keeps the markup classes intact but routes their styling
+     through the new variable system. */
+  .slide[data-stop] .stop-meta[class*="color-"] { color: var(--stop-vibrant); }
+  .slide[data-stop] .stop-title[class*="color-"] { color: var(--stop-vibrant); }
+  .slide[data-stop] .icon-square[class*="bg-"] {
+    background: var(--stop-soft);
+    color: var(--stop-vibrant);
+  }
+  /* Stop intro formula skeleton — swap lavender accent for stop vibrant */
+  .slide[data-stop] .stop-intro-formula { border-left-color: var(--stop-vibrant); }
+  /* Teach panel — pick up stop vibrant on the left border + icon tint */
+  .slide[data-stop] .teach-panel {
+    border-left-color: var(--stop-vibrant);
+  }
+  .slide[data-stop] .teach-panel .panel-icon {
+    background: var(--stop-soft);
+    color: var(--stop-vibrant);
+  }
+  .slide[data-stop] .teach-panel .panel-label { color: var(--stop-vibrant); }
+  /* Exclude the verdict slide (data-stop="9") from stop-themed teach treatment — it uses accent */
+  .slide[data-stop="9"] .teach-panel { border-left-color: var(--blue); }
+  .slide[data-stop="9"] .teach-panel .panel-icon {
+    background: var(--blue-tint);
+    color: var(--blue);
+  }
+  .slide[data-stop="9"] .teach-panel .panel-label { color: var(--blue); }
+
+  html, body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    background: var(--backdrop);
+    font-family: 'Inter', sans-serif;
+    color: var(--title);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body { padding-bottom: 56px; }
+
+  #deck-wrapper {
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 24px 28px;
+  }
+
+  .slide {
+    width: 100%;
+    background: var(--bg);
+    border-radius: 16px;
+    padding: 28px 32px 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 28px rgba(0,29,105,0.06);
+    border: 1px solid rgba(0,29,105,0.06);
+  }
+  .slide[aria-hidden="true"] { display: none; }
+
+  .stop-meta {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 6px;
+  }
+  .stop-meta.color-blue { color: var(--blue); }
+  .stop-meta.color-green { color: var(--green); }
+  .stop-meta.color-purple { color: var(--purple); }
+  .stop-meta.color-orange { color: var(--orange); }
+  .stop-meta.color-amber { color: var(--amber); }
+  .stop-meta.color-red { color: var(--red); }
+
+  .stop-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--title);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .stop-title.color-blue { color: var(--blue); }
+  .stop-title.color-green { color: var(--green); }
+  .stop-title.color-purple { color: var(--purple); }
+  .stop-title.color-orange { color: var(--orange); }
+  .stop-title.color-amber { color: var(--amber); }
+  .stop-title.color-red { color: var(--red); }
+
+  .slide p { font-size: 14px; line-height: 1.6; color: var(--body); margin-bottom: 10px; }
+  .slide strong { color: var(--title); }
+  .slide em { font-style: italic; }
+
+  .heading-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .icon-square {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .icon-square.bg-blue { background: var(--blue-tint); color: var(--blue); }
+  .icon-square.bg-green { background: var(--green-tint); color: var(--green); }
+  .icon-square.bg-purple { background: var(--purple-tint); color: var(--purple); }
+  .icon-square.bg-orange { background: var(--orange-tint); color: var(--orange); }
+  .icon-square.bg-amber { background: var(--amber-tint); color: var(--amber); }
+  .icon-square.bg-red { background: var(--red-tint); color: var(--red); }
+  .icon-square.bg-accent { background: var(--accent-soft); color: var(--accent); }
+
+  .heading-row .heading-text { flex: 1; min-width: 0; }
+  .heading-row .stop-meta,
+  .heading-row .stop-title { margin-bottom: 0; }
+  .heading-row .stop-meta { margin-bottom: 4px; }
+
+  /* Title slide */
+  .slide-title {
+    padding: 40px 32px 36px;
+  }
+  .slide-title .center-block { text-align: center; }
+  .slide-title h1 {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--title);
+    margin: 18px auto 14px;
+    letter-spacing: -0.015em;
+    max-width: 720px;
+  }
+  .slide-title .lede {
+    font-size: 15px;
+    color: var(--body);
+    max-width: 640px;
+    margin: 0 auto 14px;
+    line-height: 1.65;
+  }
+  .title-icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin: 0 auto;
+  }
+  .scenario-block {
+    background: var(--white);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 12px 12px 0;
+    padding: 16px 20px;
+    margin: 18px auto 22px;
+    max-width: 780px;
+    text-align: left;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .scenario-block p { font-size: 14px; margin-bottom: 10px; }
+  .scenario-block p:last-child { margin-bottom: 0; }
+
+  /* Setup panel */
+  .setup-panel {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+    margin: 22px auto 18px;
+    max-width: 880px;
+    text-align: left;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border-top: 3px solid var(--accent);
+  }
+  .setup-panel h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .setup-panel h3 i { font-size: 18px; }
+  .setup-step {
+    margin-bottom: 16px;
+  }
+  .setup-step:last-child { margin-bottom: 0; }
+  .setup-step-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--slate);
+    margin-bottom: 6px;
+  }
+  .setup-step p { font-size: 13.5px; line-height: 1.55; color: var(--body); margin-bottom: 8px; }
+  .setup-step p:last-child { margin-bottom: 0; }
+
+  .copy-block {
+    position: relative;
+    background: #1C1B1B;
+    color: #F5F5F5;
+    border-radius: 8px;
+    padding: 12px 44px 12px 14px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow-x: auto;
+    margin-top: 6px;
+  }
+  .copy-block-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #F5F5F5;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.2); }
+  .copy-btn.copied { background: var(--green); border-color: var(--green); }
+
+  .cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    margin-top: 6px;
+    transition: opacity 0.15s, transform 0.15s;
+    text-decoration: none;
+  }
+  .cta-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+
+  /* Spreadsheet */
+  .sheet-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+  }
+  .sheet-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--slate);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .sheet-card-head i {
+    color: var(--green);
+    font-size: 14px;
+  }
+  .sheet-tab-label {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-left: 6px;
+  }
+
+  .spreadsheet {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    table-layout: fixed;
+  }
+  .spreadsheet th, .spreadsheet td {
+    border-right: 1px solid var(--sheet-grid);
+    border-bottom: 1px solid var(--sheet-grid);
+    padding: 5px 8px;
+    height: 24px;
+    background: var(--white);
+    transition: background 0.2s, outline 0.2s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .spreadsheet thead th {
+    background: var(--sheet-head);
+    color: var(--slate);
+    font-weight: 700;
+    text-align: center;
+    border-top: 1px solid var(--sheet-grid);
+    font-size: 11px;
+  }
+  .spreadsheet thead th:first-child {
+    border-left: 1px solid var(--sheet-grid);
+    width: 30px;
+  }
+  .spreadsheet tbody td.row-num {
+    background: var(--sheet-head);
+    color: var(--slate);
+    text-align: center;
+    font-weight: 600;
+    border-left: 1px solid var(--sheet-grid);
+    width: 30px;
+    font-size: 11px;
+  }
+  .spreadsheet .col-label {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    color: var(--title);
+  }
+  .spreadsheet .num {
+    text-align: right;
+    color: var(--title);
+  }
+  .spreadsheet .text {
+    text-align: left;
+    color: var(--title);
+    font-family: 'Inter', sans-serif;
+  }
+  .spreadsheet .num.input { color: #0000CC; }
+  .spreadsheet .num.formula { color: #000; }
+  .spreadsheet .blank-cell {
+    background: var(--sheet-row);
+  }
+  .spreadsheet .err-cell {
+    color: var(--red);
+    font-size: 11px;
+    text-align: right;
+  }
+  .spreadsheet .total-row td {
+    background: #fafafa;
+    font-weight: 700;
+    border-top: 2px solid #555;
+  }
+  .spreadsheet .spacer td {
+    background: #f5f5f5;
+    height: 14px;
+    padding: 0;
+  }
+  .spreadsheet .assumption-cell {
+    background: #FFF9E6;
+  }
+
+  .spreadsheet td.cell-highlight {
+    background: var(--highlight-cell) !important;
+    outline: 2px solid #E4B82E;
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+  }
+  .spreadsheet td.cell-target {
+    background: #DCE1FF !important;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+    color: var(--accent);
+  }
+  .spreadsheet td.cell-target::before {
+    content: '?';
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .spreadsheet td.cell-target.no-q::before { content: ''; }
+
+  /* Two-tab segments display for Stop 7 */
+  .two-tab-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 820px) {
+    .two-tab-row { grid-template-columns: 1fr; }
+  }
+  .two-tab-row .sheet-card { margin-bottom: 0; }
+
+  /* Teach panel + Question panel */
+  .teach-panel {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border-left: 4px solid var(--blue);
+  }
+  .teach-panel .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .panel-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    background: var(--blue-tint);
+    color: var(--blue);
+  }
+  .teach-panel .panel-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--blue);
+    display: block;
+    margin-bottom: 1px;
+  }
+  .teach-panel h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+  }
+  .teach-panel p {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--body);
+    margin-bottom: 8px;
+  }
+  .teach-panel p:last-child { margin-bottom: 0; }
+
+  .code-block {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    background: #1C1B1B;
+    color: #F5F5F5;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 8px 0 10px;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .code-block .c-key { color: #DCE1FF; }
+  .code-block .c-num { color: #FCD34D; }
+  .code-block .c-str { color: #86EFAC; }
+  .code-block .c-comment { color: #94a3b8; font-style: italic; }
+
+  .inline-code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+    background: #F1F1F4;
+    color: var(--title);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+
+  /* Stop intro — framing block between heading-row and sheet-card */
+  .stop-intro {
+    background: #FBF7F6;
+    border: 1px solid #EEE8E6;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0 24px;
+  }
+  .stop-intro p {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--body);
+    margin-bottom: 10px;
+  }
+  .stop-intro p:last-of-type { margin-bottom: 0; }
+  .stop-intro .stop-intro-q { margin-bottom: 12px; }
+  .stop-intro .stop-intro-q strong { color: var(--title); }
+  .stop-intro-formula {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 14px;
+    color: var(--title);
+    background: #F4F0EE;
+    border-left: 3px solid var(--highlight);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    line-height: 1.55;
+    word-break: break-word;
+  }
+
+  .tiny-example {
+    font-size: 12.5px;
+    color: var(--slate);
+    line-height: 1.5;
+    padding: 8px 10px;
+    background: var(--backdrop);
+    border-radius: 6px;
+    margin-top: 4px;
+  }
+  .tiny-example strong { color: var(--accent); }
+
+  /* Apply It — step-by-step workflow card */
+  .apply-it {
+    font-size: 13.5px;
+    color: var(--body);
+    line-height: 1.55;
+    padding: 12px 14px 12px 16px;
+    background: #F6F4FB;
+    border-left: 4px solid var(--highlight);
+    border-radius: 6px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+  .apply-it > strong {
+    display: block;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .apply-it ol {
+    list-style: none;
+    counter-reset: applyit;
+    padding-left: 0;
+    margin: 0;
+  }
+  .apply-it ol > li {
+    counter-increment: applyit;
+    position: relative;
+    padding: 4px 0 4px 30px;
+    margin-bottom: 6px;
+  }
+  .apply-it ol > li::before {
+    content: counter(applyit);
+    position: absolute;
+    left: 0;
+    top: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .apply-it ol > li strong { color: var(--title); }
+  .apply-it ol > li em { color: var(--accent); font-style: italic; }
+  .apply-it ul {
+    margin: 6px 0 6px 4px;
+    padding-left: 18px;
+    list-style: disc;
+  }
+  .apply-it ul li { margin-bottom: 3px; }
+
+  /* Formula Mini-Demo — looped animated workflow */
+  .formula-demo {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    margin: 14px auto;
+    max-width: 480px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .formula-demo .fd-caption {
+    font-size: 12px;
+    color: var(--slate);
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+  }
+  .formula-demo .fd-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: #F4F2F0;
+    border: 1px solid var(--line);
+    border-radius: 6px 6px 0 0;
+    border-bottom: none;
+  }
+  .formula-demo .fd-tool-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--body);
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    line-height: 1;
+    transition: background 0.18s, transform 0.18s, color 0.18s, box-shadow 0.18s;
+  }
+  .formula-demo .fd-tool-btn.is-active {
+    background: var(--highlight);
+    color: var(--accent);
+    box-shadow: 0 0 0 2px var(--highlight);
+  }
+  .formula-demo .fd-tool-btn.is-pressed {
+    transform: scale(0.92);
+    background: var(--accent);
+    color: var(--white);
+  }
+  .formula-demo .fd-tool-label {
+    font-size: 10.5px;
+    color: var(--muted);
+    margin-left: 6px;
+    letter-spacing: 0.04em;
+  }
+  .formula-demo .fd-formula-bar {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-top: none;
+    padding: 5px 10px;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--title);
+  }
+  .formula-demo .fd-formula-bar .fd-fx {
+    color: var(--muted);
+    font-style: italic;
+    margin-right: 4px;
+  }
+  .formula-demo .fd-formula-bar .fd-text::after {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 13px;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: fd-caret 0.9s steps(2) infinite;
+  }
+  @keyframes fd-caret {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  .formula-demo .fd-sheet {
+    position: relative;
+    margin-top: 8px;
+    border: 1px solid var(--sheet-grid);
+    border-radius: 0 0 6px 6px;
+    background: var(--white);
+    overflow: hidden;
+  }
+  .formula-demo .fd-row { display: grid; grid-template-columns: var(--fd-grid, 28px 1fr 1fr 1fr 1fr); }
+  .formula-demo .fd-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    padding: 5px 8px;
+    border-right: 1px solid var(--sheet-grid);
+    border-bottom: 1px solid var(--sheet-grid);
+    color: var(--title);
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+  }
+  .formula-demo .fd-cell:last-child { border-right: none; }
+  .formula-demo .fd-row:last-child .fd-cell { border-bottom: none; }
+  .formula-demo .fd-cell.fd-head, .formula-demo .fd-cell.fd-rownum {
+    background: #E8ECF8;
+    color: var(--accent);
+    font-weight: 600;
+    justify-content: center;
+    font-size: 11px;
+  }
+  .formula-demo .fd-cell.fd-active {
+    outline: 2px solid var(--highlight);
+    outline-offset: -2px;
+    background: #FBFBFF;
+  }
+  .formula-demo .fd-cell .fd-value {
+    transition: opacity 0.3s;
+  }
+  .formula-demo .fd-cell .fd-value.is-error {
+    color: var(--red);
+    font-weight: 600;
+  }
+  .formula-demo .fd-cell.fd-flash {
+    background: var(--highlight);
+    transition: background 0.4s;
+  }
+  .formula-demo .fd-row.fd-row-flash .fd-cell {
+    background: var(--highlight);
+    transition: background 0.4s;
+  }
+  .formula-demo .fd-tables {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .formula-demo .fd-tables .fd-table-wrap { min-width: 0; }
+  .formula-demo .fd-tables .fd-table-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-align: center;
+    color: var(--muted);
+    padding: 2px 0 4px;
+    letter-spacing: 0.04em;
+    background: #F4F2F0;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+  }
+  .formula-demo .fd-drag-handle {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    border: 1px solid var(--white);
+    box-shadow: 0 0 0 1px var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s, top 0.7s cubic-bezier(0.4,0,0.2,1), left 0.7s cubic-bezier(0.4,0,0.2,1);
+    z-index: 4;
+  }
+  .formula-demo .fd-drag-handle.show { opacity: 1; }
+  .formula-demo .fd-drag-selection {
+    position: absolute;
+    border: 1px dashed var(--accent);
+    background: rgba(0,29,105,0.06);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s, top 0.5s ease, left 0.5s ease, width 0.5s ease, height 0.5s ease;
+    z-index: 3;
+  }
+  .formula-demo .fd-drag-selection.show { opacity: 1; }
+  @media (max-width: 600px) {
+    .formula-demo .fd-tables { grid-template-columns: 1fr; }
+  }
+  .formula-demo .fd-cursor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 0 14px 9px;
+    border-color: transparent transparent var(--accent) transparent;
+    transform: rotate(-20deg);
+    pointer-events: none;
+    transition: top 0.9s cubic-bezier(0.4, 0, 0.2, 1), left 0.9s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    opacity: 0;
+    z-index: 5;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+  }
+  .formula-demo .fd-enter-pulse {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--accent);
+    background: var(--highlight);
+    padding: 2px 6px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .formula-demo .fd-enter-pulse.show {
+    opacity: 1;
+    animation: fd-pulse 0.4s ease-out;
+  }
+  @keyframes fd-pulse {
+    0% { transform: scale(0.7); opacity: 0; }
+    40% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .formula-demo .fd-note {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+    font-style: italic;
+  }
+  @media (max-width: 820px) {
+    .formula-demo { padding: 10px 8px; }
+    .formula-demo .fd-row { grid-template-columns: 24px 1fr 1fr 1fr 1fr; }
+    .formula-demo .fd-cell { font-size: 10.5px; padding: 4px 6px; }
+    .formula-demo .fd-cell.fd-head, .formula-demo .fd-cell.fd-rownum { font-size: 10px; }
+    .apply-it { font-size: 13px; }
+  }
+
+  /* Question panel */
+  .question-panel {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border-left: 4px solid var(--accent);
+  }
+  .question-panel .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .question-panel .panel-icon {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .question-panel .panel-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 1px;
+  }
+  .question-panel h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+  }
+  .question-panel .prompt {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--title);
+    margin-bottom: 12px;
+  }
+  .question-panel .prompt em {
+    color: var(--accent);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* AI help collapsible */
+  .ai-help {
+    margin: 10px 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #FAFAFB;
+    overflow: hidden;
+  }
+  .ai-help summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    list-style: none;
+  }
+  .ai-help summary::-webkit-details-marker { display: none; }
+  .ai-help summary i { font-size: 16px; }
+  .ai-help summary .chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 14px;
+  }
+  .ai-help[open] summary .chevron { transform: rotate(180deg); }
+  .ai-help .ai-body {
+    padding: 0 14px 14px;
+  }
+  .ai-help .ai-body p {
+    font-size: 12.5px;
+    color: var(--body);
+    margin-bottom: 8px;
+    line-height: 1.55;
+  }
+
+  /* Answers */
+  .answers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .answer-btn {
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 2px solid var(--accent);
+    background: white;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    text-align: center;
+    line-height: 1.3;
+    position: relative;
+  }
+  .answer-btn:hover:not(.locked) { background: var(--accent-soft); }
+  .answer-btn.flash-wrong {
+    background: var(--red) !important;
+    border-color: var(--red) !important;
+    color: white !important;
+  }
+  .answer-btn.locked-wrong {
+    opacity: 0.45;
+    pointer-events: none;
+    border-color: var(--line);
+    color: var(--muted);
+    background: #fafafa;
+  }
+  .answer-btn.locked-correct {
+    background: var(--green) !important;
+    border-color: var(--green) !important;
+    color: white !important;
+    pointer-events: none;
+  }
+  .answer-btn.locked-correct::after {
+    content: '\2713';
+    margin-left: 8px;
+    font-weight: 700;
+  }
+  .answer-btn.locked { pointer-events: none; }
+
+  .nudge {
+    display: none;
+    margin-top: 10px;
+    padding: 9px 12px;
+    background: var(--red-tint);
+    border-left: 3px solid var(--red);
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--red-deep);
+  }
+  .nudge.show { display: block; }
+
+  .reveal-panel {
+    display: none;
+    margin-top: 16px;
+    background: var(--white);
+    border-radius: 12px;
+    padding: 16px 18px;
+    border-left: 4px solid var(--green);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    animation: revealIn 0.35s ease;
+  }
+  .reveal-panel.show { display: block; }
+  @keyframes revealIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .reveal-panel .reveal-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--green);
+  }
+  .reveal-panel .reveal-head i { font-size: 16px; }
+  .reveal-panel p {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--body);
+    margin-bottom: 8px;
+  }
+  .reveal-panel p:last-child { margin-bottom: 0; }
+  .reveal-panel .code-block { margin: 6px 0 10px; }
+  .reveal-panel .why-it-matters {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--amber-tint);
+    border-radius: 8px;
+    border-left: 3px solid var(--amber);
+  }
+  .reveal-panel .why-it-matters p { color: #78350F; font-size: 13px; }
+  .reveal-panel .why-it-matters strong { color: #78350F; }
+
+  /* Recap — formula reference grid */
+  .recap-intro {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--body);
+    margin: 14px 0 18px;
+    max-width: 760px;
+  }
+  .recap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 14px 0 24px;
+  }
+  .recap-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    border-top: 4px solid var(--card-color, var(--accent));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .recap-card.color-emerald { --card-color: var(--c-emerald); }
+  .recap-card.color-coral   { --card-color: var(--c-coral); }
+  .recap-card.color-amber   { --card-color: var(--c-amber); }
+  .recap-card.color-violet  { --card-color: var(--c-violet); }
+  .recap-card.color-blue    { --card-color: var(--c-blue); }
+  .recap-card .recap-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--card-color, var(--accent));
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+  }
+  .recap-card .recap-sub {
+    font-size: 13px;
+    color: var(--slate);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .recap-card .recap-syntax {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    background: #F1F1F4;
+    color: var(--title);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    margin: 2px 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .recap-card .recap-use {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--body);
+    margin: 0;
+  }
+  .recap-card .recap-use strong {
+    color: var(--title);
+    font-weight: 600;
+  }
+
+  /* AI helper callout */
+  .ai-helper {
+    background: var(--highlight);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin: 6px 0 22px;
+    border: 1px solid rgba(0,29,105,0.10);
+  }
+  .ai-helper .ai-helper-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ai-helper .ai-helper-head i {
+    font-size: 22px;
+    color: var(--accent);
+  }
+  .ai-helper h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--title);
+    margin: 0;
+    line-height: 1.25;
+  }
+  .ai-helper p {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--body);
+    margin: 0 0 10px;
+  }
+  .ai-helper ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px;
+  }
+  .ai-helper ul li {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--body);
+    padding: 3px 0 3px 16px;
+    position: relative;
+    font-style: italic;
+  }
+  .ai-helper ul li::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 11px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .ai-helper-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .ai-link-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .ai-link-chip:hover {
+    background: var(--accent);
+    color: var(--white);
+  }
+  .ai-link-chip i {
+    font-size: 13px;
+  }
+
+  .recap-closer {
+    text-align: center;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--title);
+    line-height: 1.5;
+    margin: 18px auto 22px;
+    max-width: 640px;
+    padding: 16px 20px;
+  }
+  .center-cta { text-align: center; }
+
+  /* Completion banner */
+  #completion-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: var(--accent);
+    color: var(--white);
+    padding: 16px 28px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px rgba(0,29,105,0.35);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    letter-spacing: 0.02em;
+    transition: opacity 0.25s, transform 0.25s;
+    opacity: 0;
+  }
+  #completion-banner.show {
+    display: flex;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  #completion-banner i { font-size: 22px; color: var(--highlight); }
+
+  /* Nav */
+  #nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--nav-bg);
+    border-top: 1px solid rgba(0,29,105,0.15);
+    z-index: 100;
+    padding: 0 16px;
+  }
+  .nav-btn {
+    background: none;
+    border: none;
+    color: var(--white);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0 16px;
+    height: 56px;
+    letter-spacing: 0.02em;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+  .nav-btn:hover { color: var(--highlight); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .nav-btn:disabled:hover { color: var(--white); }
+  .nav-btn.primary {
+    background: var(--highlight);
+    color: var(--accent);
+    border-radius: 8px;
+    height: 36px;
+    padding: 0 18px;
+    font-weight: 700;
+  }
+  .nav-btn.primary:hover { color: var(--accent); opacity: 0.92; }
+
+  #progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: rgba(255,255,255,0.85);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  #progress-label {
+    min-width: 92px;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  #dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    border: none;
+    padding: 0;
+  }
+  .dot.active {
+    background: var(--highlight);
+    transform: scale(1.3);
+  }
+  .dot.done { background: rgba(220,225,255,0.65); }
+
+  /* ── Redesigned Slide A: Scenario / case file ── */
+  .slide-scenario {
+    padding: 52px 44px 46px;
+    border-top: 4px solid var(--accent);
+    position: relative;
+  }
+  .scenario-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 6px 12px;
+    background: var(--highlight);
+    border-radius: 20px;
+    margin-bottom: 24px;
+  }
+  .scenario-eyebrow i { font-size: 13px; }
+  .slide-scenario h1 {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--title);
+    letter-spacing: -0.015em;
+    max-width: 760px;
+    margin-bottom: 18px;
+  }
+  .slide-scenario .lede {
+    font-size: 16px;
+    color: var(--body);
+    max-width: 700px;
+    margin-bottom: 32px;
+    line-height: 1.6;
+  }
+  .case-file {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 28px 32px 26px;
+    margin: 14px 0 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,29,105,0.05);
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .case-file::before {
+    content: 'CASE FILE · LIND';
+    position: absolute;
+    top: -10px;
+    left: 24px;
+    background: var(--accent);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+  }
+  .case-file p {
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: var(--body);
+    margin-bottom: 12px;
+  }
+  .case-file p:last-child { margin-bottom: 0; }
+  .case-file .case-headline {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--title);
+    margin-bottom: 14px;
+  }
+  .your-job {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--highlight);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 8px 0 28px;
+  }
+  .your-job-icon {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .your-job-text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--title);
+  }
+  .your-job-text strong { color: var(--accent); display: block; margin-bottom: 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .scenario-cta-row { text-align: center; margin-top: 8px; }
+  .cta-btn-lg {
+    padding: 14px 28px;
+    font-size: 15px;
+  }
+
+  /* ── Redesigned Slide B: Setup ── */
+  .slide-setup {
+    padding: 44px 40px 40px;
+    border-top: 4px solid var(--accent);
+  }
+  .setup-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 6px 12px;
+    background: var(--highlight);
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .slide-setup h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--title);
+    letter-spacing: -0.015em;
+    margin-bottom: 10px;
+  }
+  .slide-setup .setup-sub {
+    font-size: 14.5px;
+    color: var(--body);
+    line-height: 1.6;
+    margin-bottom: 26px;
+    max-width: 680px;
+  }
+
+  .recommended-card {
+    background: var(--highlight);
+    border-radius: 16px;
+    padding: 28px 30px;
+    margin-bottom: 22px;
+    border: 1px solid rgba(0,29,105,0.12);
+    position: relative;
+  }
+  .recommended-tag {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .recommended-card h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--title);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .recommended-card p {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+    margin-bottom: 16px;
+    max-width: 600px;
+  }
+  .copy-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 26px;
+    background: var(--accent);
+    color: var(--white);
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(0,29,105,0.22);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .copy-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,29,105,0.28);
+  }
+  .copy-cta i { font-size: 20px; }
+  .copy-cta-note {
+    font-size: 12.5px;
+    color: var(--slate);
+    margin-top: 12px;
+  }
+
+  details.manual-setup {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+  details.manual-setup > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--title);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    user-select: none;
+  }
+  details.manual-setup > summary::-webkit-details-marker { display: none; }
+  details.manual-setup > summary .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  details.manual-setup > summary .summary-left i { color: var(--accent); font-size: 18px; }
+  details.manual-setup > summary .summary-caret {
+    font-size: 16px;
+    color: var(--slate);
+    transition: transform 0.2s;
+  }
+  details.manual-setup[open] > summary .summary-caret { transform: rotate(180deg); }
+  details.manual-setup > summary:hover { background: #FAFAFA; }
+  .manual-body {
+    padding: 4px 22px 22px;
+    border-top: 1px solid var(--line);
+  }
+  .manual-body .setup-step { margin-top: 18px; }
+  .manual-body .setup-step:first-child { margin-top: 14px; }
+
+  .ai-note {
+    background: var(--white);
+    border-left: 4px solid var(--purple);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin-bottom: 26px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .ai-note-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--purple);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ai-note p {
+    font-size: 13.5px;
+    color: var(--body);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .setup-cta-row { text-align: center; margin-top: 8px; }
+
+  @media (max-width: 820px) {
+    #deck-wrapper { padding: 14px 10px 14px; }
+    .slide { padding: 20px 18px 22px; border-radius: 12px; }
+    .stop-title { font-size: 20px; }
+    .slide-title h1 { font-size: 26px; }
+    .slide-scenario { padding: 32px 22px 30px; }
+    .slide-scenario h1 { font-size: 26px; }
+    .slide-scenario .lede { font-size: 14.5px; }
+    .case-file { padding: 22px 18px 18px; }
+    .case-file::before { left: 14px; }
+    .slide-setup { padding: 30px 20px 28px; }
+    .slide-setup h1 { font-size: 23px; }
+    .recommended-card { padding: 22px 18px; }
+    .recommended-card h2 { font-size: 18px; }
+    .copy-cta { padding: 12px 20px; font-size: 14px; }
+    .answers { grid-template-columns: 1fr; }
+    .recap-grid { grid-template-columns: 1fr; }
+    .ai-helper { padding: 18px 18px; }
+    .ai-link-chip { padding: 7px 12px; font-size: 12.5px; }
+    .spreadsheet { font-size: 10.5px; }
+    .spreadsheet th, .spreadsheet td { padding: 4px 5px; }
+    #progress-label { min-width: 0; font-size: 11px; }
+    .dot { width: 7px; height: 7px; }
+    .stop-intro { padding: 10px 12px; }
+    .stop-intro p { font-size: 14px; }
+    .stop-intro-formula { font-size: 13px; padding: 8px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="deck-wrapper">
+
+  <!-- ── SLIDE A: Scenario / case file ── -->
+  <div class="slide slide-scenario" role="region" aria-label="Scenario">
+    <div class="scenario-eyebrow"><i class="ph-bold ph-function"></i> A Linden Holdings Walkthrough</div>
+    <h1>The Formulas Behind Every Model</h1>
+    <p class="lede">Eight formulas, one segment sheet, the story the market hasn't read yet.</p>
+
+    <div class="case-file">
+      <p class="case-headline">Read the segments before the market does.</p>
+      <p><strong>Linden Holdings (LIND)</strong> is a small-cap software company. The stock has drifted sideways for two years. The Street covers it as "mature, stable." Boring.</p>
+      <p>Today the 10-K drops. You're an analyst covering Linden — and the segment data has just hit your desk.</p>
+      <p>You're going to compute the story yourself. Each stop poses an analyst question, you work it in your own spreadsheet, then come back and pick the answer.</p>
+    </div>
+
+    <div class="your-job">
+      <div class="your-job-icon"><i class="ph-bold ph-target"></i></div>
+      <div class="your-job-text">
+        <strong>Your job</strong>
+        Read the segment data and figure out what's actually happening inside the business — before the market does.
+      </div>
+    </div>
+
+    <div class="scenario-cta-row">
+      <button class="cta-btn cta-btn-lg" onclick="navigate(1)">Set up your sheet <i class="ph-bold ph-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- ── SLIDE B: Set up your practice sheet ── -->
+  <div class="slide slide-setup" aria-hidden="true" role="region" aria-label="Setup">
+    <div class="setup-eyebrow"><i class="ph-bold ph-wrench"></i> Step 1 · Get ready</div>
+    <h1>Set up your practice sheet</h1>
+    <p class="setup-sub">You'll work each stop in your own spreadsheet. Pick the fast path or build from scratch — both land you in the same place.</p>
+
+    <div class="recommended-card">
+      <span class="recommended-tag">Recommended</span>
+      <h2>Make a copy of the practice sheet</h2>
+      <p>We built a Google Sheet with both tabs pre-set up — <span class="inline-code">Linden</span> and <span class="inline-code">Segments</span>. Click below, Google prompts you to copy it to your own Drive, sign in with any Google account, and you're ready.</p>
+      <a href="https://docs.google.com/spreadsheets/d/1D9JI1ZohbSGJ-v-ZM0X1QWbNzX5L-2XIionsfgm-Rks/copy" target="_blank" class="copy-cta"><i class="ph-bold ph-copy-simple"></i> Make a copy of the practice sheet</a>
+      <p class="copy-cta-note">Opens Google Sheets in a new tab.</p>
+    </div>
+
+    <details class="manual-setup">
+      <summary>
+        <span class="summary-left"><i class="ph ph-wrench"></i> Or build it from scratch (Excel or blank Sheet)</span>
+        <i class="ph-bold ph-caret-down summary-caret"></i>
+      </summary>
+      <div class="manual-body">
+        <div class="setup-step">
+          <div class="setup-step-label">1 · Open your tool</div>
+          <p>Open <strong>Google Sheets</strong> (<a href="https://sheets.google.com" target="_blank" style="color:var(--accent);">sheets.google.com</a>), <strong>Excel</strong>, or any spreadsheet tool you have. Create a new blank sheet.</p>
+        </div>
+
+        <div class="setup-step">
+          <div class="setup-step-label">2 · Paste the Linden data (tab 1)</div>
+          <p>Rename the first tab to <span class="inline-code">Linden</span>. Click cell A1, then paste this block. Cells are tab-separated, so they'll land in the right columns.</p>
+          <div class="copy-block-label">Block 1 — paste into cell A1 of tab "Linden"</div>
+          <div class="copy-block" id="block-linden"><button class="copy-btn" data-copy-target="block-linden-data"><i class="ph ph-copy"></i> Copy</button><span id="block-linden-data">Segment	2021	2022	2023	2024	Growth Rate (4-yr)		Flag
+Legacy Software	800	600	350	100
+Cloud Platform	0	150	400	700
+Services	200	200	250	250
+Total Revenue
+						0.21
+Pre-Tax Income	250	210	240	270
+Tax Expense						</span></div>
+          <p style="margin-top:10px;font-size:12px;color:var(--slate);">The Tax Rate (0.21 = 21%) sits in cell G6. Format it as a percentage if you'd like.</p>
+        </div>
+
+        <div class="setup-step">
+          <div class="setup-step-label">3 · Add a second tab (for Stop 7)</div>
+          <p>Stop 7 uses VLOOKUP across two tabs. Add a new tab called <span class="inline-code">Segments</span> and paste this block in cell A1.</p>
+          <div class="copy-block-label">Block 2 — paste into cell A1 of tab "Segments"</div>
+          <div class="copy-block" id="block-segments"><button class="copy-btn" data-copy-target="block-segments-data"><i class="ph ph-copy"></i> Copy</button><span id="block-segments-data">Segment	2021	2022	2023	2024
+Legacy Software	800	600	350	100
+Cloud Platform	0	150	400	700
+Services	200	200	250	250</span></div>
+        </div>
+      </div>
+    </details>
+
+    <div class="ai-note">
+      <div class="ai-note-label"><i class="ph-bold ph-robot"></i> Need an AI co-pilot?</div>
+      <p>Every stop has an optional "Need help?" panel with a prompt you can paste into <a href="https://gemini.google.com" target="_blank" style="color:var(--accent);">Gemini</a>, <a href="https://claude.ai" target="_blank" style="color:var(--accent);">Claude</a>, or any chatbot. It'll walk you through the formula. No setup required.</p>
+    </div>
+
+    <div class="setup-cta-row">
+      <button class="cta-btn cta-btn-lg" onclick="navigate(1)">Begin the walkthrough <i class="ph-bold ph-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 1: SUM -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 1 of 8 — SUM" data-stop="1">
+    <div class="heading-row">
+      <div class="icon-square bg-blue"><i class="ph ph-plus-circle"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-blue">Stop 1 of 8 · The total</div>
+        <h2 class="stop-title color-blue">SUM — add a range</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Linden reports Total Revenue on its 10-K. Before you trust it, you'll verify it from the segments — adding the three rows yourself.</p>
+      <p class="stop-intro-q"><strong>How would you do that? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=SUM(range)</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="1"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>SUM — add a range</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Find the range you want to add</strong> — a continuous block of cells (rows or columns).</li>
+          <li><strong>Click an empty cell</strong> where the total will live.</li>
+          <li><strong>Type the formula.</strong> Start with <span class="inline-code">=SUM(</span>, then either drag-select your range or type cell references like <span class="inline-code">B2:B4</span>, and close with <span class="inline-code">)</span>.</li>
+          <li><strong>Hit Enter.</strong> The cell shows the sum.</li>
+          <li><strong>Tip:</strong> check the range every time. Long lists are where <span class="inline-code">=SUM(B2:B10)</span> quietly misses rows 11–12.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="1" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=SUM(A1:A3)</span> where A1=10, A2=20, A3=30 returns <strong>60</strong>.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>What's Linden's 2021 Total Revenue?</h3></div>
+      </div>
+      <p class="prompt">Your three segments are in column B (2021): Legacy 800, Cloud 0, Services 200. You want to verify Linden's 2021 Total Revenue. Type the SUM formula into cell <em>B5</em> of your sheet. <strong>What does it return?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-1"><button class="copy-btn" data-copy-target="ai-1-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-1-data">I have three numbers in cells B2, B3, B4 of a Google Sheet — they are 800, 0, and 200. What formula gives me their total in cell B5? Just give me the formula and the answer.</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="Only Legacy. SUM adds everything in the range — include Cloud and Services.">800</button>
+        <button class="answer-btn" data-correct="false" data-nudge="You missed one row. The range B2:B4 has three values.">900</button>
+        <button class="answer-btn" data-correct="true">1,000</button>
+        <button class="answer-btn" data-correct="false" data-nudge="You added a row that isn't in B2:B4. Check the range.">1,200</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — 1,000</div>
+      <p>SUM grabs B2, B3, B4 (800 + 0 + 200) and returns the total.</p>
+      <div class="code-block"><span class="c-key">=SUM</span>(B2:B4)  <span class="c-comment">// returns 1,000</span></div>
+      <p>Drag the formula across columns and you get 950, 1,000, 1,050 — matching the totals you'll need for the P&L.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> The most common SUM error in financial models isn't the math — it's the range. You SUM <span class="inline-code">B2:B10</span> when the segments live in <span class="inline-code">B2:B12</span>, and the last two rows quietly vanish. Check the range every time. The senior reviewing your model will.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 2: Growth Rate -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 2 of 8 — Growth Rate" data-stop="2">
+    <div class="heading-row">
+      <div class="icon-square bg-purple"><i class="ph ph-trend-down"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-purple">Stop 2 of 8 · Two-cell math</div>
+        <h2 class="stop-title color-purple">Subtraction, division, and growth rate</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Legacy Software fell from $800M in 2021 to $100M in 2024. You need to convert that drop into a percentage growth rate — the metric every investor reads first.</p>
+      <p class="stop-intro-q"><strong>How would you compute it? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=end / start − 1</span> (then format the cell as %).</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="2"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>Two-cell math</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Pick your two cells.</strong> One is your <em>starting</em> value, one is your <em>ending</em> value. For a 4-year growth, starting = the first year, ending = the last year.</li>
+          <li><strong>Click an empty cell</strong> where the answer will live (the question below tells you which — for this stop, F2).</li>
+          <li><strong>Type the formula.</strong> Start with <span class="inline-code">=</span>, then <span class="inline-code">[ending cell] / [starting cell] - 1</span>. Use your real cell references — for example, if starting is in B2 and ending in E2, you'd type <span class="inline-code">=E2/B2-1</span>.</li>
+          <li><strong>Hit Enter.</strong> You'll see a number like <span class="inline-code">0.125</span> or <span class="inline-code">-0.875</span>. That's the math — but not yet the format an analyst wants.</li>
+          <li><strong>Format the cell as a percentage.</strong> Click the cell, then any of these:
+            <ul>
+              <li>Press <span class="inline-code">Ctrl + Shift + 5</span> (Mac: <span class="inline-code">⌘ + Shift + 5</span>)</li>
+              <li>Click the <span class="inline-code">%</span> button on the toolbar</li>
+              <li>Or use <strong>Format → Number → Percent</strong> in the menu</li>
+            </ul>
+            Now the cell reads <span class="inline-code">-87.5%</span> instead of <span class="inline-code">-0.875</span>. Negative is fine — it just means the value shrank.
+          </li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="2" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> A12 holds $120 (this year's revenue), A11 holds $100 (last year's). <span class="inline-code">=A12/A11-1</span> returns 0.20. <strong>Why the &minus;1?</strong> Dividing end by start gives you a ratio like 1.20 — meaning "you have 120% of where you started." Subtract 1 to strip out the original 100% you started with, and you're left with just the change: +20%. Format as percentage → <strong>+20%</strong>.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>How badly has Legacy collapsed?</h3></div>
+      </div>
+      <p class="prompt">You want to know how badly Legacy Software has declined from 2021 to 2024 — as a growth rate. Legacy was 800 in B2, 100 in E2. Type the growth-rate formula in cell <em>F2</em> and format the cell as a percentage. <strong>What does it display?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-2"><button class="copy-btn" data-copy-target="ai-2-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-2-data">I have a value of 800 in cell B2 and 100 in cell E2 in Google Sheets. What formula gives me the growth rate from 2021 (B2) to 2024 (E2)? Format the answer as a percentage.</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="Close. Recompute 100/800. It's 0.125, not 0.25.">−75%</button>
+        <button class="answer-btn" data-correct="true">−87.5%</button>
+        <button class="answer-btn" data-correct="false" data-nudge="That's the dollar change (B2 minus E2 = 700), not the rate.">−700%</button>
+        <button class="answer-btn" data-correct="false" data-nudge="You forgot the −1 at the end. You computed E2/B2 = 0.125 (12.5%). Subtract 1 to get the growth rate.">+12.5%</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — −87.5%</div>
+      <p>The math: 100/800 = 0.125, minus 1 = −0.875. Format as percentage → −87.5%.</p>
+      <div class="code-block"><span class="c-key">=E2/B2-1</span>   <span class="c-comment">// returns -0.875 → -87.5%</span></div>
+      <p>Legacy's revenue has collapsed by nearly nine-tenths in four years. This is the formula running underneath every "% growth" claim in every pitch deck.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> Drag the formula and let references shift, and you're now dividing Q2 gross profit by Q3 revenue. The number still calculates. Nothing tells you it's wrong.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 3: Multiplication -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 3 of 8 — Multiplication" data-stop="3">
+    <div class="heading-row">
+      <div class="icon-square bg-orange"><i class="ph ph-x"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-orange">Stop 3 of 8 · Rate × base</div>
+        <h2 class="stop-title color-orange">Multiplication — rate times base</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Linden's tax rate is 21% and 2024 Pre-Tax Income is $270M. You need to calculate the resulting Tax Expense for the P&amp;L.</p>
+      <p class="stop-intro-q"><strong>How will you do that? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=base * rate</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="3"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>Multiplication — rate × base</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Identify your two cells</strong> — one holds a base value, the other holds a rate or driver.</li>
+          <li><strong>Click an empty cell</strong> for the result.</li>
+          <li><strong>Type</strong> <span class="inline-code">=</span> then the base cell reference (e.g., <span class="inline-code">A1</span>), then <span class="inline-code">*</span>, then the rate cell (e.g., <span class="inline-code">B1</span>).</li>
+          <li><strong>Hit Enter.</strong> The cell shows base × rate.</li>
+          <li><strong>Reminder:</strong> rates entered as <span class="inline-code">0.15</span> mean 15%. If you typed <span class="inline-code">15</span>, you'd get 15× the base (very wrong).</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="3" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=100*0.21</span> returns <strong>21</strong>.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>What's Linden's 2024 Tax Expense?</h3></div>
+      </div>
+      <p class="prompt">Pre-Tax Income for 2024 is in cell <em>E7</em> (=270), and the tax rate is in cell <em>G6</em> (=21%, stored as 0.21). Type the formula in cell <em>E8</em>. <strong>What does it return?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-3"><button class="copy-btn" data-copy-target="ai-3-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-3-data">In Google Sheets, cell E7 holds 270 and cell G6 holds 21% (= 0.21). What formula in cell E8 gives me 270 × 21%?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="You used the wrong base. Check E7 — it's 270, not 200.">$42M</button>
+        <button class="answer-btn" data-correct="true">$56.7M</button>
+        <button class="answer-btn" data-correct="false" data-nudge="That would be Net Income (270 minus tax). Tax expense is rate × pre-tax.">$213M</button>
+        <button class="answer-btn" data-correct="false" data-nudge="Off by a decimal. 21% = 0.21, not 0.021.">$5.67M</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — $56.7M</div>
+      <p>270 × 0.21 = 56.7. That's exactly the tax expense for 2024.</p>
+      <div class="code-block"><span class="c-key">=E7*G6</span>   <span class="c-comment">// returns 56.7</span></div>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> The full forecast is built on multiplications like this — base in one cell, assumption in another, product is your forecast line. Wrong assumption cell, wrong forecast row, and the error compounds for every year you project forward.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 4: IF -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 4 of 8 — IF" data-stop="4">
+    <div class="heading-row">
+      <div class="icon-square bg-green"><i class="ph ph-arrows-split"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-green">Stop 4 of 8 · Conditional logic</div>
+        <h2 class="stop-title color-green">IF — run a test, return a value</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>You want a Flag column that labels each segment Growing or Shrinking based on its growth rate — so an analyst eye can scan and read the story instantly.</p>
+      <p class="stop-intro-q"><strong>How would you build that flag? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=IF(test, value_if_true, value_if_false)</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="4"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>IF — branch on a test</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Decide your test</strong> — a condition that's either true or false (e.g., <span class="inline-code">A1&gt;0</span>).</li>
+          <li><strong>Decide your two return values</strong> — text in quotes (<span class="inline-code">"Yes"</span>) or numbers, one for each outcome.</li>
+          <li><strong>Click an empty cell.</strong></li>
+          <li><strong>Type</strong> <span class="inline-code">=IF(test, value_if_true, value_if_false)</span>. Example: <span class="inline-code">=IF(A1&gt;0, "Yes", "No")</span>.</li>
+          <li><strong>Hit Enter.</strong> The cell returns one of your two values.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="4" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=IF(5&gt;0, "Yes", "No")</span> returns <strong>"Yes"</strong>.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>Flag each segment "Growing" or "Shrinking"</h3></div>
+      </div>
+      <p class="prompt">You want a column that flags each segment based on its growth rate. Type the IF formula in cell <em>H2</em> using F2 (Legacy's growth rate) as the test cell. Legacy's growth rate is −87.5% (F2 = −0.875). <strong>What does H2 return?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-4"><button class="copy-btn" data-copy-target="ai-4-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-4-data">In Google Sheets, cell F2 holds -0.875 (a negative growth rate). What formula in cell H2 returns the text "Growing" if F2 is positive, or "Shrinking" if F2 is negative?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="The test is F2>0. F2 is negative (−0.875), so the test fails.">"Growing"</button>
+        <button class="answer-btn" data-correct="true">"Shrinking"</button>
+        <button class="answer-btn" data-correct="false" data-nudge="IF returns the values YOU specify, not literal True/False.">"False"</button>
+        <button class="answer-btn" data-correct="false" data-nudge="IF returns one of the two text values you gave it, not the test value itself.">−87.5%</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — "Shrinking"</div>
+      <p>−0.875 is not greater than 0, so the test fails and IF returns the second value.</p>
+      <div class="code-block"><span class="c-key">=IF</span>(F2&gt;0, <span class="c-str">"Growing"</span>, <span class="c-str">"Shrinking"</span>)   <span class="c-comment">// returns "Shrinking"</span></div>
+      <p>Apply the formula to all three segments: Legacy → Shrinking, Cloud → Growing (we'll handle Cloud's special case in Stop 6), Services → Growing.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> IF is the foundation of every conditional in a model — covenant breached or not, margin above threshold or below, segment grew or declined. You'll wrap it around growth rates, ratios, dates, and string matches for the rest of your career.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 5: Absolute Reference -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 5 of 8 — Absolute Reference" data-stop="5">
+    <div class="heading-row">
+      <div class="icon-square bg-amber"><i class="ph ph-lock-key"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-amber">Stop 5 of 8 · Lock the reference</div>
+        <h2 class="stop-title color-amber">Absolute reference — the dollar signs</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>You already have 2024 tax expense. Now you need 2021, 2022, 2023 — each year's Pre-Tax Income times the same 21%. You want to drag one formula across with the rate locked in place.</p>
+      <p class="stop-intro-q"><strong>How do you lock it? What's the Excel trick?</strong></p>
+      <div class="stop-intro-formula">The trick: lock the rate cell with dollar signs, e.g., <span class="inline-code">$G$6</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="5"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>Lock a reference with $ signs</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Identify which input should NOT move when you drag</strong> — usually a single cell holding a rate, FX rate, share count, or constant.</li>
+          <li><strong>Type the formula</strong> in the first cell. Wrap the locked input in dollar signs (e.g., <span class="inline-code">$B$1</span> locks both column and row).</li>
+          <li><strong>Quick shortcut:</strong> put your cursor on the cell reference inside the formula and press <span class="inline-code">F4</span> (Windows) or <span class="inline-code">Cmd+T</span> (Mac). Each press cycles <span class="inline-code">$B$1</span> → <span class="inline-code">B$1</span> → <span class="inline-code">$B1</span> → <span class="inline-code">B1</span>.</li>
+          <li><strong>Hit Enter.</strong></li>
+          <li><strong>Now drag the formula</strong> across (or down). The locked reference stays put; the unlocked ones shift.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="5" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> Suppose A2 holds revenue and F1 holds a growth assumption. <span class="inline-code">=A2*$F$1</span> — drag it down and A2 becomes A3, A4 (good, the row moves), but F1 stays F1 (good, the assumption doesn't drift).</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>Fill the rest of the Tax Expense row</h3></div>
+      </div>
+      <p class="prompt">You already have 2024 tax expense in E8 (from Stop 3). Now you want to fill in <em>B8, C8, D8</em> — each year's Pre-Tax Income (row 7) multiplied by the same 21% in G6. You'll type the formula in B8 and drag it right. <strong>Which formula works?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-5"><button class="copy-btn" data-copy-target="ai-5-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-5-data">In Google Sheets, I have Pre-Tax Income in row 7 (cells B7 through E7) and a tax rate of 21% in cell G6. I want to type a formula in B8 that gives me B7 × 21%, then drag it right to C8, D8, E8 — with the tax rate locked in G6. What formula?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="Drag this right and G6 becomes H6, I6, J6 — empty cells. You need to lock G6.">=B7*G6</button>
+        <button class="answer-btn" data-correct="true">=B7*$G$6</button>
+        <button class="answer-btn" data-correct="false" data-nudge="You locked B7 — now every year shows 2021's tax. You locked the wrong cell.">=$B$7*G6</button>
+        <button class="answer-btn" data-correct="false" data-nudge="Both locked. The formula returns the same number every year. Only G6 should be locked.">=$B$7*$G$6</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — =B7*$G$6</div>
+      <p>Drag it right: B7 becomes C7, D7, E7 (year moves correctly), $G$6 stays put. Every year's pre-tax income gets multiplied by the same 21% rate.</p>
+      <div class="code-block"><span class="c-key">=B7*$G$6</span>   <span class="c-comment">// B8=52.5, C8=44.1, D8=50.4, E8=56.7</span></div>
+      <p>E8 matches what you computed in Stop 3 — the row ties out.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> This is the formula behind the question seniors ask more than any other: <em>"Where did this number come from?"</em> Drag a tax rate down a column without locking it, and by row 30 your formula is multiplying by an empty cell. The model returns zero. Everything still calculates. The senior notices.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 6: IFERROR -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 6 of 8 — IFERROR" data-stop="6">
+    <div class="heading-row">
+      <div class="icon-square bg-red"><i class="ph ph-warning-octagon"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-red">Stop 6 of 8 · Handle errors cleanly</div>
+        <h2 class="stop-title color-red">IFERROR — wrap a formula</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Cloud Platform was $0 in 2021 and $150M in 2022 — but your growth formula breaks with <span class="inline-code">#DIV/0!</span> because you can't divide by zero. You need to handle the error cleanly so the cell shows something useful instead.</p>
+      <p class="stop-intro-q"><strong>How would you wrap it? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The wrap: <span class="inline-code">=IFERROR(formula, fallback)</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="6"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>IFERROR — catch errors gracefully</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Write your normal formula first</strong> — see if it errors (<span class="inline-code">#DIV/0!</span>, <span class="inline-code">#N/A</span>, <span class="inline-code">#REF!</span>).</li>
+          <li><strong>If it does, wrap it:</strong> <span class="inline-code">=IFERROR(your_formula, "fallback")</span>.</li>
+          <li><strong>The fallback</strong> can be text (<span class="inline-code">"n/a"</span>, <span class="inline-code">"new"</span>), a number (<span class="inline-code">0</span>), or another formula.</li>
+          <li><strong>Hit Enter.</strong> The cell now shows your fallback whenever the inner formula errors.</li>
+          <li><strong>Use it</strong> on ratios where the denominator could be zero, or lookups that might fail.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="6" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=IFERROR(10/0, "n/a")</span> returns <strong>"n/a"</strong> instead of <span class="inline-code">#DIV/0!</span>.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>Fix Cloud's broken growth cell</h3></div>
+      </div>
+      <p class="prompt">Cloud Platform was 0 in 2021 (B3). You tried <span class="inline-code">=E3/B3-1</span> in <em>F3</em>, but B3 is 0 so the cell shows <span class="inline-code">#DIV/0!</span>. You want the cell to show <strong>"new"</strong> instead. <strong>What formula in F3 fixes it?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-6"><button class="copy-btn" data-copy-target="ai-6-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-6-data">In Google Sheets, my formula =E3/B3-1 returns #DIV/0! because B3 is zero. How do I wrap it so the cell shows "new" instead of an error?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="That's the original formula — it still errors. You need to wrap it.">=E3/B3-1</button>
+        <button class="answer-btn" data-correct="true">=IFERROR(E3/B3-1, "new")</button>
+        <button class="answer-btn" data-correct="false" data-nudge="This works, but it's more verbose and only catches B3=0. IFERROR is the standard pattern analysts use — it catches every error type, not just division by zero.">=IF(B3=0, "new", E3/B3-1)</button>
+        <button class="answer-btn" data-correct="false" data-nudge="Close — but you dropped the −1. This gives you a ratio (5.0), not a growth rate.">=IFERROR(E3/B3, "new")</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — =IFERROR(E3/B3-1, "new")</div>
+      <p>The cell now shows <strong>"new"</strong> instead of <span class="inline-code">#DIV/0!</span>. A reviewer can tell at a glance which segments are brand new vs. just declining.</p>
+      <div class="code-block"><span class="c-key">=IFERROR</span>(E3/B3-1, <span class="c-str">"new"</span>)   <span class="c-comment">// returns "new"</span></div>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> When you ship a model with <span class="inline-code">#DIV/0!</span> showing in any cell, that's the first thing a reviewer sees. Not your insight. Not your work. The error.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 7: VLOOKUP -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 7 of 8 — VLOOKUP" data-stop="7">
+    <div class="heading-row">
+      <div class="icon-square bg-blue"><i class="ph ph-magnifying-glass"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-blue">Stop 7 of 8 · Pull a value across tabs</div>
+        <h2 class="stop-title color-blue">VLOOKUP (and why you'll graduate to INDEX-MATCH)</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>Imagine Linden's segment data lives on a separate <span class="inline-code">Segments</span> tab and you're building the IS on a different tab. You need to pull Cloud's 2024 revenue across the gap.</p>
+      <p class="stop-intro-q"><strong>How would you fetch a value from another tab? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=VLOOKUP(lookup, table_range, col_number, FALSE)</span>.</div>
+    </div>
+
+    <div class="two-tab-row">
+      <div class="sheet-card">
+        <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+        <div data-sheet="7"></div>
+      </div>
+      <div class="sheet-card">
+        <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Lookup source <span class="sheet-tab-label" style="background:#FEF3C7;color:#78350F;">Segments</span></div>
+        <div data-sheet="7b"></div>
+      </div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>Two formulas, same job</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Identify what you're looking up</strong> — a name or key value.</li>
+          <li><strong>Identify the table range</strong> — must START with the column containing the lookup key.</li>
+          <li><strong>Count the column number</strong> — your answer column, counted from the start of the range. (Key in column A, answer in column C → column number 3.)</li>
+          <li><strong>Type</strong> <span class="inline-code">=VLOOKUP(lookup, table_range, col_number, FALSE)</span>. The <span class="inline-code">FALSE</span> forces an exact match (you almost always want this in finance models).</li>
+          <li><strong>If your table is on a different tab,</strong> prefix the range with the tab name: <span class="inline-code">Segments!A:E</span>.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="7" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=VLOOKUP("Cloud Platform", A:E, 5, FALSE)</span> finds "Cloud Platform" in column A and returns the value from the 5th column in the same row.</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>Pull Cloud's 2024 revenue across tabs</h3></div>
+      </div>
+      <p class="prompt">You want to pull Cloud Platform's 2024 revenue from the <em>Segments</em> tab into a cell in your main <em>Linden</em> tab. Pick any empty cell in Linden (say, <em>J1</em>). Type a VLOOKUP that looks up "Cloud Platform" on the Segments tab and returns the value from the 5th column. <strong>What does it return?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-7"><button class="copy-btn" data-copy-target="ai-7-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-7-data">In Google Sheets, I have a tab called "Segments" with segment names in column A and 2021–2024 revenue in columns B–E. From a different tab called "Linden", what VLOOKUP formula pulls Cloud Platform's 2024 revenue into a cell?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="That's the 2021 value (column B). The formula points to column 5, not column 2.">0</button>
+        <button class="answer-btn" data-correct="false" data-nudge="That's 2023 (column D, the 4th column). Count: A is 1, B is 2, C is 3, D is 4, E is 5.">400</button>
+        <button class="answer-btn" data-correct="true">700</button>
+        <button class="answer-btn" data-correct="false" data-nudge="'Cloud Platform' exists exactly in column A of the Segments tab, so the lookup finds it.">#N/A</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — 700</div>
+      <p>VLOOKUP found "Cloud Platform" in column A of the Segments tab and returned the value in the 5th column (E) — which is 2024 revenue.</p>
+      <div class="code-block"><span class="c-key">=VLOOKUP</span>(<span class="c-str">"Cloud Platform"</span>, Segments!A:E, 5, FALSE)   <span class="c-comment">// returns 700</span></div>
+      <p><strong>Why analysts prefer INDEX-MATCH.</strong> A coworker inserts a "2025 Estimate" column between 2024 and the next year. VLOOKUP still points to "the 5th column" — but the 5th column is now 2025, not 2024. The formula silently returns the wrong year. INDEX-MATCH references column E directly, so it survives the insert.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> VLOOKUP is the entry point. INDEX-MATCH is what gets used in production models because it doesn't quietly break when the source data moves around.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- STOP 8: SUMIF -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Stop 8 of 8 — SUMIF" data-stop="8">
+    <div class="heading-row">
+      <div class="icon-square bg-purple"><i class="ph ph-funnel"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta color-purple">Stop 8 of 8 · Conditional sum</div>
+        <h2 class="stop-title color-purple">SUMIF — sum only when</h2>
+      </div>
+    </div>
+
+    <div class="stop-intro">
+      <p>You have a Growing/Shrinking flag column from Stop 4. Now you want the 2024 revenue total of only the Growing segments — the "good" side of the business in one number.</p>
+      <p class="stop-intro-q"><strong>How would you sum only the matching rows? Which Excel formula could you use?</strong></p>
+      <div class="stop-intro-formula">The formula: <span class="inline-code">=SUMIF(criteria_range, criteria, sum_range)</span>.</div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your sheet so far <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="8"></div>
+    </div>
+
+    <div class="teach-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-book-open"></i></div>
+        <div><span class="panel-label">Teach</span><h3>SUMIF — sum when a condition is met</h3></div>
+      </div>
+
+      <div class="apply-it">
+        <strong>Apply it.</strong>
+        <ol>
+          <li><strong>Identify your criteria range</strong> — the column with labels you want to filter on.</li>
+          <li><strong>Identify your criteria</strong> — the label you want to match (in quotes if text: <span class="inline-code">"Yes"</span>).</li>
+          <li><strong>Identify your sum range</strong> — the column with values to add (only matching rows are added).</li>
+          <li><strong>Type</strong> <span class="inline-code">=SUMIF(criteria_range, criteria, sum_range)</span>. Example: <span class="inline-code">=SUMIF(A:A, "Yes", B:B)</span>.</li>
+          <li><strong>Hit Enter.</strong> The cell shows the sum of only matching rows.</li>
+        </ol>
+      </div>
+
+      <div class="formula-demo" data-stop="8" aria-hidden="true"></div>
+
+      <div class="tiny-example"><strong>Tiny example.</strong> <span class="inline-code">=SUMIF(A:A, "Yes", B:B)</span> sums column B only for rows where column A says "Yes".</div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-head">
+        <div class="panel-icon"><i class="ph ph-calculator"></i></div>
+        <div><span class="panel-label">Your question</span><h3>Total revenue of the Growing segments</h3></div>
+      </div>
+      <p class="prompt">Column H has each segment's Growing/Shrinking flag. Column E has 2024 revenue. You want the total 2024 revenue of only the Growing segments. Type a SUMIF formula in any empty cell (say <em>J3</em>). <strong>What does it return?</strong></p>
+
+      <details class="ai-help">
+        <summary><i class="ph ph-robot"></i> Need help? Ask an AI assistant <span class="chevron"><i class="ph-bold ph-caret-down"></i></span></summary>
+        <div class="ai-body">
+          <p>Copy this prompt into Gemini, Claude, or ChatGPT:</p>
+          <div class="copy-block" id="ai-8"><button class="copy-btn" data-copy-target="ai-8-data"><i class="ph ph-copy"></i> Copy</button><span id="ai-8-data">In Google Sheets, column H has the text "Growing" or "Shrinking" for each row, and column E has revenue numbers. What formula sums column E only for rows where column H is "Growing"?</span></div>
+        </div>
+      </details>
+
+      <div class="answers" data-answers>
+        <button class="answer-btn" data-correct="false" data-nudge="Only Services. There's another Growing segment too.">$250M</button>
+        <button class="answer-btn" data-correct="false" data-nudge="Only Cloud. Add the second Growing segment.">$700M</button>
+        <button class="answer-btn" data-correct="true">$950M</button>
+        <button class="answer-btn" data-correct="false" data-nudge="That's total revenue, including Legacy. SUMIF skips the Shrinking rows.">$1,050M</button>
+      </div>
+      <div class="nudge"></div>
+    </div>
+
+    <div class="reveal-panel">
+      <div class="reveal-head"><i class="ph-bold ph-check-circle"></i> Correct — $950M</div>
+      <p>SUMIF added 2024 revenue only for rows where the flag was "Growing": Cloud (700) + Services (250). Legacy (Shrinking, 100) was skipped.</p>
+      <div class="code-block"><span class="c-key">=SUMIF</span>(H2:H4, <span class="c-str">"Growing"</span>, E2:E4)   <span class="c-comment">// returns 950</span></div>
+      <p>The Growing portion of Linden's business is $950M of the $1,050M total. Legacy is now only 9.5% of the company.</p>
+      <div class="why-it-matters">
+        <p><strong>Why it matters.</strong> SUMIF is the clean way to handle messy data — leave it raw, write the formula that asks the question. You'll use it on segment data, geographic splits, customer cohorts, and any roll-up where the labels live next to the numbers.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- SLIDE 9: Verdict -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="The Recap" data-stop="9">
+    <div class="heading-row">
+      <div class="icon-square bg-accent"><i class="ph ph-list-checks"></i></div>
+      <div class="heading-text">
+        <div class="stop-meta">The Recap</div>
+        <h2 class="stop-title">8 formulas you now know</h2>
+      </div>
+    </div>
+
+    <div class="sheet-card">
+      <div class="sheet-card-head"><i class="ph-bold ph-table"></i> Your finished sheet <span class="sheet-tab-label">Linden</span></div>
+      <div data-sheet="9"></div>
+    </div>
+
+    <p class="recap-intro">These eight formulas cover most of what you'll type in a basic historical financial model. Here's a quick reference — bookmark this slide.</p>
+
+    <div class="recap-grid">
+      <div class="recap-card color-emerald">
+        <h4 class="recap-name">SUM</h4>
+        <p class="recap-sub">Add a range of cells</p>
+        <div class="recap-syntax">=SUM(range)</div>
+        <p class="recap-use"><strong>Use it when:</strong> you need a total — segments, costs, totals of any kind.</p>
+      </div>
+      <div class="recap-card color-coral">
+        <h4 class="recap-name">Growth Rate</h4>
+        <p class="recap-sub">Percentage change over time</p>
+        <div class="recap-syntax">=end / start - 1</div>
+        <p class="recap-use"><strong>Use it when:</strong> you need a YoY growth %, margin change, or any rate of change.</p>
+      </div>
+      <div class="recap-card color-amber">
+        <h4 class="recap-name">Multiplication</h4>
+        <p class="recap-sub">Apply a rate to a base</p>
+        <div class="recap-syntax">=base * rate</div>
+        <p class="recap-use"><strong>Use it when:</strong> you need a forecast line — revenue × COGS%, pre-tax × tax rate.</p>
+      </div>
+      <div class="recap-card color-violet">
+        <h4 class="recap-name">IF</h4>
+        <p class="recap-sub">Two outcomes from one test</p>
+        <div class="recap-syntax">=IF(test, true_val, false_val)</div>
+        <p class="recap-use"><strong>Use it when:</strong> you want a flag column (Growing/Shrinking, Pass/Fail, etc.).</p>
+      </div>
+      <div class="recap-card color-blue">
+        <h4 class="recap-name">Absolute Reference</h4>
+        <p class="recap-sub">Lock a cell when dragging</p>
+        <div class="recap-syntax">$G$6</div>
+        <p class="recap-use"><strong>Use it when:</strong> you're dragging a formula and one input (rate, FX, share count) shouldn't move.</p>
+      </div>
+      <div class="recap-card color-coral">
+        <h4 class="recap-name">IFERROR</h4>
+        <p class="recap-sub">Replace errors with a fallback</p>
+        <div class="recap-syntax">=IFERROR(formula, fallback)</div>
+        <p class="recap-use"><strong>Use it when:</strong> you ship models without <span class="inline-code">#DIV/0!</span> or <span class="inline-code">#N/A</span> showing.</p>
+      </div>
+      <div class="recap-card color-emerald">
+        <h4 class="recap-name">VLOOKUP</h4>
+        <p class="recap-sub">Pull a value across tabs</p>
+        <div class="recap-syntax">=VLOOKUP(lookup, range, col, FALSE)</div>
+        <p class="recap-use"><strong>Use it when:</strong> you're pulling historical figures from one tab into another.</p>
+      </div>
+      <div class="recap-card color-amber">
+        <h4 class="recap-name">SUMIF</h4>
+        <p class="recap-sub">Sum rows that match a condition</p>
+        <div class="recap-syntax">=SUMIF(criteria_range, criteria, sum_range)</div>
+        <p class="recap-use"><strong>Use it when:</strong> you want a filtered total — only Growing, only US, only Active.</p>
+      </div>
+    </div>
+
+    <div class="ai-helper">
+      <div class="ai-helper-head">
+        <i class="ph-bold ph-robot"></i>
+        <h3>Stuck on a formula? Ask an AI.</h3>
+      </div>
+      <p>ChatGPT, Claude, and Gemini are very good at Excel and Google Sheets formulas. If you forget syntax, can't remember which formula to use, or get an error you don't understand — paste your question into one of them. They'll walk you through it in seconds.</p>
+      <p><strong>Examples of prompts that work:</strong></p>
+      <ul>
+        <li>"How do I sum only the rows in column B where column A says 'Yes'?"</li>
+        <li>"My formula <span class="inline-code">=A1/B1</span> returns <span class="inline-code">#DIV/0!</span>. How do I show 'n/a' instead?"</li>
+        <li>"What's the difference between <span class="inline-code">$A$1</span>, <span class="inline-code">A$1</span>, and <span class="inline-code">$A1</span> in Excel?"</li>
+      </ul>
+      <div class="ai-helper-links">
+        <a class="ai-link-chip" href="https://claude.ai" target="_blank" rel="noopener noreferrer">Claude <i class="ph-bold ph-arrow-square-out"></i></a>
+        <a class="ai-link-chip" href="https://chat.openai.com" target="_blank" rel="noopener noreferrer">ChatGPT <i class="ph-bold ph-arrow-square-out"></i></a>
+        <a class="ai-link-chip" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">Gemini <i class="ph-bold ph-arrow-square-out"></i></a>
+      </div>
+    </div>
+
+    <p class="recap-closer">That's it. You're ready for the next step.</p>
+
+    <div class="center-cta">
+      <button class="cta-btn" onclick="returnToTask()"><i class="ph-bold ph-check-circle"></i> Finished</button>
+    </div>
+  </div>
+
+</div><!-- /#deck-wrapper -->
+
+<div id="completion-banner" role="status" aria-live="polite">
+  <i class="ph-bold ph-check-circle"></i>
+  <span>Walkthrough complete. Nice work.</span>
+</div>
+
+<nav id="nav" aria-label="Slide navigation">
+  <button class="nav-btn" id="btn-prev" onclick="navigate(-1)" aria-label="Previous slide">&larr; Prev</button>
+  <div id="progress-wrap">
+    <span id="progress-label">Scenario</span>
+    <div id="dots" role="tablist" aria-label="Slide indicators"></div>
+  </div>
+  <button class="nav-btn" id="btn-next" onclick="navigate(1)" aria-label="Next slide">Next &rarr;</button>
+</nav>
+
+<script>
+  // ── Sheet state model ─────────────────────────────────────
+  // Each cell can be filled (string/number), blank, or in an error state.
+  // We build the spreadsheet HTML per-stop based on what's filled so far.
+
+  // Final values for reference
+  var FINAL = {
+    A: { 1:'Segment',         2:'Legacy Software', 3:'Cloud Platform', 4:'Services',       5:'Total Revenue', 7:'Pre-Tax Income', 8:'Tax Expense' },
+    B: { 1:'2021',            2:'800',              3:'0',              4:'200',            5:'1,000',          7:'250',            8:'52.5' },
+    C: { 1:'2022',            2:'600',              3:'150',            4:'200',            5:'950',            7:'210',            8:'44.1' },
+    D: { 1:'2023',            2:'350',              3:'400',            4:'250',            5:'1,000',          7:'240',            8:'50.4' },
+    E: { 1:'2024',            2:'100',              3:'700',            4:'250',            5:'1,050',          7:'270',            8:'56.7' },
+    F: { 1:'Growth Rate',     2:'-87.5%',           3:'new',            4:'+25.0%' },
+    H: { 1:'Flag',            2:'Shrinking',        3:'Growing',        4:'Growing' }
+  };
+
+  // Per-stop fill state: which cells should be filled at that stop.
+  // The stop's target cell is left blank (and highlighted lavender).
+  // Each entry: { fills: {A1:'val', ...}, errors: {F3:true}, highlight: ['B2','B3','B4'], target: ['B5'], extras: {J1:'700'} }
+  var STOPS = {
+    // Stop 1: SUM → B5
+    1: {
+      fills: {},
+      highlight: ['B2','B3','B4'],
+      target: ['B5']
+    },
+    // Stop 2: Growth rate → F2 (row 5 now filled from stop 1)
+    2: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050' },
+      highlight: ['B2','E2'],
+      target: ['F2']
+    },
+    // Stop 3: Tax expense E8 (row 5 filled, F2 + F4 filled, F3 errored)
+    3: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F4:'+25.0%' },
+      errors: { F3:'#DIV/0!' },
+      highlight: ['E7','G6'],
+      target: ['E8']
+    },
+    // Stop 4: IF → H2 (E8 now filled = 56.7)
+    4: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F4:'+25.0%',
+               E8:'56.7' },
+      errors: { F3:'#DIV/0!' },
+      highlight: ['F2'],
+      target: ['H2']
+    },
+    // Stop 5: Absolute Reference → B8,C8,D8 (H column now filled)
+    5: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F4:'+25.0%',
+               E8:'56.7',
+               H2:'Shrinking', H3:'Growing', H4:'Growing' },
+      errors: { F3:'#DIV/0!' },
+      highlight: ['B7','C7','D7','E7','G6'],
+      target: ['B8','C8','D8']
+    },
+    // Stop 6: IFERROR → F3 (row 8 now fully filled)
+    6: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F4:'+25.0%',
+               B8:'52.5', C8:'44.1', D8:'50.4', E8:'56.7',
+               H2:'Shrinking', H3:'Growing', H4:'Growing' },
+      errors: { F3:'#DIV/0!' },
+      highlight: ['B3','C3','E3'],
+      target: ['F3']
+    },
+    // Stop 7: VLOOKUP → J1 (F3 now fixed = "new")
+    7: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F3:'new', F4:'+25.0%',
+               B8:'52.5', C8:'44.1', D8:'50.4', E8:'56.7',
+               H2:'Shrinking', H3:'Growing', H4:'Growing' },
+      highlight: [],
+      target: ['J1']
+    },
+    // Stop 8: SUMIF → J3 (J1 now filled = 700)
+    8: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F3:'new', F4:'+25.0%',
+               B8:'52.5', C8:'44.1', D8:'50.4', E8:'56.7',
+               H2:'Shrinking', H3:'Growing', H4:'Growing',
+               J1:'700' },
+      highlight: ['H2','H3','H4','E2','E3','E4'],
+      target: ['J3']
+    },
+    // Stop 9 (Verdict): all filled
+    9: {
+      fills: { B5:'1,000', C5:'950', D5:'1,000', E5:'1,050',
+               F2:'-87.5%', F3:'new', F4:'+25.0%',
+               B8:'52.5', C8:'44.1', D8:'50.4', E8:'56.7',
+               H2:'Shrinking', H3:'Growing', H4:'Growing',
+               J1:'700', J3:'950' },
+      highlight: [],
+      target: []
+    }
+  };
+
+  // Base (always present) data:
+  // Row 1: headers
+  // Row 2-4: segment names + 2021-2024 values (hardcoded inputs)
+  // Row 5: Total Revenue (formula row — depends on stop fill)
+  // Row 6: tax rate assumption (G6 = 21%) — always shown
+  // Row 7: Pre-Tax Income (hardcoded inputs B7:E7)
+  // Row 8: Tax Expense (formula row — depends on stop fill)
+
+  function makeSheet(stopNum, opts) {
+    opts = opts || {};
+    var st = STOPS[stopNum] || { fills:{}, highlight:[], target:[] };
+    var fills = st.fills || {};
+    var errors = st.errors || {};
+    var highlight = st.highlight || [];
+    var target = st.target || [];
+
+    var hi = {};
+    highlight.forEach(function(c){ hi[c] = true; });
+    var tg = {};
+    target.forEach(function(c){ tg[c] = true; });
+
+    function cls(cell, extra) {
+      var c = extra || '';
+      if (hi[cell]) c += ' cell-highlight';
+      if (tg[cell]) c += ' cell-target no-q';
+      return c;
+    }
+    function cellHTML(cell, value, type) {
+      // type: 'num' | 'text' | 'input' | 'formula' | 'err'
+      var v = '';
+      var classes = '';
+      if (errors[cell]) {
+        v = errors[cell];
+        classes = 'err-cell';
+      } else if (tg[cell] && (value === undefined || value === '')) {
+        // Target cell, no value yet — show as blank with ? marker via CSS
+        v = '';
+        classes = 'num';
+      } else if (value === undefined || value === '') {
+        v = '';
+        classes = 'blank-cell ' + (type === 'text' ? 'text' : 'num');
+      } else {
+        v = value;
+        if (type === 'text') classes = 'text';
+        else if (type === 'input') classes = 'num input';
+        else if (type === 'formula') classes = 'num formula';
+        else classes = 'num';
+      }
+      var finalCls = cls(cell, classes);
+      return '<td class="' + finalCls + '" data-cell="' + cell + '">' + v + '</td>';
+    }
+
+    // Headers: A B C D E F G H (J only for stops 7/8/9)
+    var includeJ = (stopNum >= 7);
+    var html = '<table class="spreadsheet">';
+    // thead
+    html += '<thead><tr><th></th>';
+    var cols = ['A','B','C','D','E','F','G','H'];
+    if (includeJ) cols.push('J');
+    cols.forEach(function(c){
+      var thStyle = (c === 'G') ? ' style="background:#FFF9E6;"' : '';
+      html += '<th'+thStyle+'>' + c + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+
+    function row(num, cells) {
+      html += '<tr>';
+      html += '<td class="row-num">' + num + '</td>';
+      cells.forEach(function(td){ html += td; });
+      if (includeJ) {
+        // J column for this row
+        var jCell = 'J' + num;
+        var jVal = fills[jCell] || '';
+        var jClass = '';
+        if (tg[jCell] && !jVal) { jClass = 'num'; }
+        else if (!jVal) { jClass = 'blank-cell num'; }
+        else { jClass = 'num formula'; }
+        html += '<td class="' + cls(jCell, jClass) + '" data-cell="' + jCell + '">' + jVal + '</td>';
+      }
+      html += '</tr>';
+    }
+
+    // Row 1: headers
+    row(1, [
+      '<td class="col-label" data-cell="A1"><strong>Segment</strong></td>',
+      '<td class="num" data-cell="B1"><strong>2021</strong></td>',
+      '<td class="num" data-cell="C1"><strong>2022</strong></td>',
+      '<td class="num" data-cell="D1"><strong>2023</strong></td>',
+      '<td class="num" data-cell="E1"><strong>2024</strong></td>',
+      '<td class="text" data-cell="F1" style="font-size:11px;"><strong>Growth Rate</strong></td>',
+      '<td class="num" data-cell="G1"></td>',
+      '<td class="text" data-cell="H1"><strong>Flag</strong></td>'
+    ]);
+
+    // Row 2: Legacy
+    row(2, [
+      '<td class="' + cls('A2','col-label') + '" data-cell="A2">Legacy Software</td>',
+      cellHTML('B2', '800', 'input'),
+      cellHTML('C2', '600', 'input'),
+      cellHTML('D2', '350', 'input'),
+      cellHTML('E2', '100', 'input'),
+      cellHTML('F2', fills.F2, 'formula'),
+      '<td class="num" data-cell="G2"></td>',
+      cellHTML('H2', fills.H2, 'text')
+    ]);
+
+    // Row 3: Cloud
+    row(3, [
+      '<td class="' + cls('A3','col-label') + '" data-cell="A3">Cloud Platform</td>',
+      cellHTML('B3', '0', 'input'),
+      cellHTML('C3', '150', 'input'),
+      cellHTML('D3', '400', 'input'),
+      cellHTML('E3', '700', 'input'),
+      cellHTML('F3', fills.F3, 'text'),
+      '<td class="num" data-cell="G3"></td>',
+      cellHTML('H3', fills.H3, 'text')
+    ]);
+
+    // Row 4: Services
+    row(4, [
+      '<td class="' + cls('A4','col-label') + '" data-cell="A4">Services</td>',
+      cellHTML('B4', '200', 'input'),
+      cellHTML('C4', '200', 'input'),
+      cellHTML('D4', '250', 'input'),
+      cellHTML('E4', '250', 'input'),
+      cellHTML('F4', fills.F4, 'formula'),
+      '<td class="num" data-cell="G4"></td>',
+      cellHTML('H4', fills.H4, 'text')
+    ]);
+
+    // Row 5: Total Revenue (formula row)
+    html += '<tr class="total-row">';
+    html += '<td class="row-num">5</td>';
+    html += '<td class="' + cls('A5','col-label') + '" data-cell="A5"><strong>Total Revenue</strong></td>';
+    html += cellHTML('B5', fills.B5, 'formula');
+    html += cellHTML('C5', fills.C5, 'formula');
+    html += cellHTML('D5', fills.D5, 'formula');
+    html += cellHTML('E5', fills.E5, 'formula');
+    html += '<td class="blank-cell" data-cell="F5"></td>';
+    html += '<td class="num" data-cell="G5"></td>';
+    html += '<td class="blank-cell" data-cell="H5"></td>';
+    if (includeJ) html += '<td class="blank-cell num" data-cell="J5"></td>';
+    html += '</tr>';
+
+    // Row 6: tax rate assumption in G6 (always shown)
+    html += '<tr>';
+    html += '<td class="row-num">6</td>';
+    html += '<td class="col-label" data-cell="A6" style="font-size:11px;color:var(--slate);"><em>Tax Rate →</em></td>';
+    html += '<td class="blank-cell" data-cell="B6"></td>';
+    html += '<td class="blank-cell" data-cell="C6"></td>';
+    html += '<td class="blank-cell" data-cell="D6"></td>';
+    html += '<td class="blank-cell" data-cell="E6"></td>';
+    html += '<td class="blank-cell" data-cell="F6"></td>';
+    html += '<td class="' + cls('G6','num assumption-cell') + '" data-cell="G6"><strong>21%</strong></td>';
+    html += '<td class="blank-cell" data-cell="H6"></td>';
+    if (includeJ) html += '<td class="blank-cell num" data-cell="J6"></td>';
+    html += '</tr>';
+
+    // Row 7: Pre-Tax Income
+    row(7, [
+      '<td class="' + cls('A7','col-label') + '" data-cell="A7">Pre-Tax Income</td>',
+      '<td class="' + cls('B7','num input') + '" data-cell="B7">250</td>',
+      '<td class="' + cls('C7','num input') + '" data-cell="C7">210</td>',
+      '<td class="' + cls('D7','num input') + '" data-cell="D7">240</td>',
+      '<td class="' + cls('E7','num input') + '" data-cell="E7">270</td>',
+      '<td class="blank-cell" data-cell="F7"></td>',
+      '<td class="num" data-cell="G7"></td>',
+      '<td class="blank-cell" data-cell="H7"></td>'
+    ]);
+
+    // Row 8: Tax Expense
+    row(8, [
+      '<td class="' + cls('A8','col-label') + '" data-cell="A8">Tax Expense</td>',
+      cellHTML('B8', fills.B8, 'formula'),
+      cellHTML('C8', fills.C8, 'formula'),
+      cellHTML('D8', fills.D8, 'formula'),
+      cellHTML('E8', fills.E8, 'formula'),
+      '<td class="blank-cell" data-cell="F8"></td>',
+      '<td class="num" data-cell="G8"></td>',
+      '<td class="blank-cell" data-cell="H8"></td>'
+    ]);
+
+    html += '</tbody></table>';
+    return html;
+  }
+
+  // Segments tab snippet for Stop 7
+  function makeSegmentsSheet() {
+    var html = '<table class="spreadsheet">';
+    html += '<thead><tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr></thead>';
+    html += '<tbody>';
+    html += '<tr><td class="row-num">1</td><td class="col-label"><strong>Segment</strong></td><td class="num"><strong>2021</strong></td><td class="num"><strong>2022</strong></td><td class="num"><strong>2023</strong></td><td class="num"><strong>2024</strong></td></tr>';
+    html += '<tr><td class="row-num">2</td><td class="col-label">Legacy Software</td><td class="num input">800</td><td class="num input">600</td><td class="num input">350</td><td class="num input">100</td></tr>';
+    html += '<tr><td class="row-num">3</td><td class="col-label">Cloud Platform</td><td class="num input cell-highlight" data-cell="A3-seg">0</td><td class="num input">150</td><td class="num input">400</td><td class="num input cell-highlight">700</td></tr>';
+    html += '<tr><td class="row-num">4</td><td class="col-label">Services</td><td class="num input">200</td><td class="num input">200</td><td class="num input">250</td><td class="num input">250</td></tr>';
+    html += '</tbody></table>';
+    return html;
+  }
+
+  // Inject sheets into each [data-sheet] placeholder
+  (function injectSheets() {
+    var placeholders = document.querySelectorAll('[data-sheet]');
+    placeholders.forEach(function(ph) {
+      var stop = ph.getAttribute('data-sheet');
+      if (stop === '7b') {
+        ph.innerHTML = makeSegmentsSheet();
+      } else {
+        ph.innerHTML = makeSheet(parseInt(stop, 10));
+      }
+    });
+  })();
+
+  // ── Copy buttons ──
+  document.querySelectorAll('.copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var targetId = btn.dataset.copyTarget;
+      var el = document.getElementById(targetId);
+      if (!el) return;
+      var text = el.innerText || el.textContent;
+      navigator.clipboard.writeText(text).then(function() {
+        btn.classList.add('copied');
+        var original = btn.innerHTML;
+        btn.innerHTML = '<i class="ph ph-check"></i> Copied';
+        setTimeout(function() {
+          btn.classList.remove('copied');
+          btn.innerHTML = original;
+        }, 1500);
+      }).catch(function() {
+        // Fallback
+        var range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        try { document.execCommand('copy'); } catch(e) {}
+        window.getSelection().removeAllRanges();
+        btn.classList.add('copied');
+        var original = btn.innerHTML;
+        btn.innerHTML = '<i class="ph ph-check"></i> Copied';
+        setTimeout(function() {
+          btn.classList.remove('copied');
+          btn.innerHTML = original;
+        }, 1500);
+      });
+    });
+  });
+
+  // ── Formula mini-demo — looped Sheets workflow simulation ──
+  // Reusable factory: build a config-driven looped animation for each Stop.
+  // Each demo container has class .formula-demo and data-stop="N".
+  // Config schema is documented inline in DEMO_CONFIGS below.
+  var formulaDemos = {};
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function createFormulaDemo(stopNum, config) {
+    var root = document.querySelector('.formula-demo[data-stop="' + stopNum + '"]');
+    if (!root) return { start: function(){}, stop: function(){} };
+
+    // ── Build HTML from config ──
+    function buildSheetHTML(sheetCfg) {
+      var cols = sheetCfg.cols;            // e.g. ['A','B','C']
+      var rows = sheetCfg.rows;            // array of arrays — cell contents
+      var target = sheetCfg.target || null; // { row, col } 0-indexed
+      var rowNumStart = sheetCfg.rowNumStart || 1;
+
+      // Grid template: 28px row-number column + 1fr per data column
+      var gridTemplate = '28px ' + cols.map(function() { return '1fr'; }).join(' ');
+      var html = '<div class="fd-sheet" data-fd-sheet style="--fd-grid:' + gridTemplate + '">';
+
+      // Header row (column letters)
+      html += '<div class="fd-row"><div class="fd-cell fd-head"></div>';
+      cols.forEach(function(c) { html += '<div class="fd-cell fd-head">' + escapeHtml(c) + '</div>'; });
+      html += '</div>';
+
+      // Data rows
+      rows.forEach(function(rowCells, rIdx) {
+        html += '<div class="fd-row" data-fd-row="' + rIdx + '"><div class="fd-cell fd-rownum">' + (rowNumStart + rIdx) + '</div>';
+        rowCells.forEach(function(cell, cIdx) {
+          var isTarget = target && target.row === rIdx && target.col === cIdx;
+          var cls = 'fd-cell';
+          if (isTarget) cls += ' fd-active';
+          var attrs = ' data-fd-r="' + rIdx + '" data-fd-c="' + cIdx + '"';
+          if (isTarget) attrs += ' data-fd-target';
+          if (isTarget) {
+            html += '<div class="' + cls + '"' + attrs + '><span class="fd-value" data-fd-value></span></div>';
+          } else {
+            html += '<div class="' + cls + '"' + attrs + '><span class="fd-value">' + escapeHtml(cell) + '</span></div>';
+          }
+        });
+        html += '</div>';
+      });
+
+      html += '<div class="fd-cursor" data-fd-cursor></div>';
+      html += '<div class="fd-drag-handle" data-fd-drag-handle></div>';
+      html += '<div class="fd-drag-selection" data-fd-drag-selection></div>';
+      html += '<div class="fd-enter-pulse" data-fd-enter>&#x21A9; Enter</div>';
+      html += '</div>';
+      return html;
+    }
+
+    // Top-level container HTML
+    var html = '';
+    html += '<div class="fd-caption">' + escapeHtml(config.caption) + '</div>';
+
+    if (config.showToolbar) {
+      html += '<div class="fd-toolbar">';
+      html += '<span class="fd-tool-btn" data-fd-pct>%</span>';
+      html += '<span class="fd-tool-btn" style="opacity:0.55">123</span>';
+      html += '<span class="fd-tool-btn" style="opacity:0.55">B</span>';
+      html += '<span class="fd-tool-btn" style="opacity:0.55">I</span>';
+      html += '<span class="fd-tool-label">Format</span>';
+      html += '</div>';
+    }
+
+    html += '<div class="fd-formula-bar"><span class="fd-fx">fx</span><span class="fd-text" data-fd-formula></span></div>';
+
+    if (config.tables) {
+      // Two side-by-side tables (Stop 7 VLOOKUP)
+      html += '<div class="fd-tables">';
+      config.tables.forEach(function(t, ti) {
+        html += '<div class="fd-table-wrap" data-fd-table="' + ti + '">';
+        if (t.label) html += '<div class="fd-table-label">' + escapeHtml(t.label) + '</div>';
+        html += buildSheetHTML(t);
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += buildSheetHTML(config.sheet);
+    }
+
+    if (config.note) {
+      html += '<small class="fd-note">' + escapeHtml(config.note) + '</small>';
+    } else {
+      html += '<small class="fd-note">(Looped demo with simplified data — work your own answer in your sheet)</small>';
+    }
+
+    root.innerHTML = html;
+
+    // ── Query references ──
+    // For single-sheet demos: primary sheet is the only one.
+    // For multi-table: each table has its own sheet; main interaction happens on the table that owns the target.
+    var allSheets = root.querySelectorAll('[data-fd-sheet]');
+    var primarySheet = null;
+    var targetCell = null;
+    var valueEl = null;
+    var dragHandle = null;
+    var dragSelection = null;
+    var cursor = null;
+    var enterEl = null;
+
+    // The primary sheet is the one containing the active target cell.
+    for (var s = 0; s < allSheets.length; s++) {
+      var t = allSheets[s].querySelector('[data-fd-target]');
+      if (t) {
+        primarySheet = allSheets[s];
+        targetCell = t;
+        valueEl = t.querySelector('[data-fd-value]');
+        dragHandle = primarySheet.querySelector('[data-fd-drag-handle]');
+        dragSelection = primarySheet.querySelector('[data-fd-drag-selection]');
+        cursor = primarySheet.querySelector('[data-fd-cursor]');
+        enterEl = primarySheet.querySelector('[data-fd-enter]');
+        break;
+      }
+    }
+    if (!primarySheet) primarySheet = allSheets[0];
+
+    var formulaEl = root.querySelector('[data-fd-formula]');
+    var pctBtn    = root.querySelector('[data-fd-pct]');
+
+    var timers = [];
+    var running = false;
+
+    function clearTimers() {
+      timers.forEach(function(t) { clearTimeout(t); });
+      timers = [];
+    }
+
+    function schedule(fn, delay) {
+      timers.push(setTimeout(fn, delay));
+    }
+
+    function reset() {
+      formulaEl.textContent = '';
+      if (valueEl) {
+        valueEl.textContent = '';
+        valueEl.style.opacity = '1';
+        valueEl.classList.remove('is-error');
+      }
+      if (cursor) cursor.style.opacity = '0';
+      if (pctBtn) pctBtn.classList.remove('is-pressed');
+      if (enterEl) enterEl.classList.remove('show');
+      if (dragHandle) dragHandle.classList.remove('show');
+      if (dragSelection) dragSelection.classList.remove('show');
+      // Restore any data rows that were transformed during the loop
+      if (config.sheet && config.sheet.rows) {
+        var rows = config.sheet.rows;
+        for (var r = 0; r < rows.length; r++) {
+          for (var c = 0; c < rows[r].length; c++) {
+            if (config.sheet.target && config.sheet.target.row === r && config.sheet.target.col === c) continue;
+            var cell = primarySheet.querySelector('[data-fd-r="' + r + '"][data-fd-c="' + c + '"] .fd-value');
+            if (cell) {
+              cell.textContent = rows[r][c];
+              cell.classList.remove('is-error');
+            }
+          }
+        }
+      }
+      // Clear extra fill targets (Stop 5 drag)
+      if (config.extraFillCells) {
+        config.extraFillCells.forEach(function(ef) {
+          var sel = '[data-fd-r="' + ef.row + '"][data-fd-c="' + ef.col + '"] .fd-value';
+          var el = primarySheet.querySelector(sel);
+          if (el) { el.textContent = ''; el.classList.remove('is-error'); }
+        });
+      }
+    }
+
+    // ── Step executor: maps a step config object to a timed action ──
+    // Step types: hold, type, retype, enter, fill, setCell, formatPct,
+    //             cursorTo, dragDown, flashRow, flashCell, hide
+    function runStep(step, done) {
+      if (!running) return;
+
+      if (step.type === 'hold') {
+        schedule(done, step.ms || 500);
+      }
+      else if (step.type === 'type') {
+        // Typewriter into formula bar
+        var text = step.text;
+        var cps = step.cps || 200; // ms per char
+        var i = 0;
+        function next() {
+          if (!running) return;
+          if (i <= text.length) {
+            formulaEl.textContent = text.substring(0, i);
+            i++;
+            schedule(next, cps);
+          } else {
+            done();
+          }
+        }
+        next();
+      }
+      else if (step.type === 'retype') {
+        // Clear and re-type
+        formulaEl.textContent = '';
+        schedule(function() { runStep({ type:'type', text: step.text, cps: step.cps }, done); }, 200);
+      }
+      else if (step.type === 'enter') {
+        if (enterEl) {
+          enterEl.classList.add('show');
+          schedule(function() {
+            if (!running) return;
+            enterEl.classList.remove('show');
+            formulaEl.textContent = '';
+            done();
+          }, 400);
+        } else { done(); }
+      }
+      else if (step.type === 'fill') {
+        // Fill the target cell with a value
+        if (!valueEl) { done(); return; }
+        valueEl.style.opacity = '0';
+        schedule(function() {
+          if (!running) return;
+          valueEl.textContent = step.value;
+          if (step.error) valueEl.classList.add('is-error'); else valueEl.classList.remove('is-error');
+          valueEl.style.opacity = '1';
+          done();
+        }, 250);
+      }
+      else if (step.type === 'setCell') {
+        // Update a non-target cell value (Stop 4: change A1 from 5 → -3)
+        var cellEl = primarySheet.querySelector('[data-fd-r="' + step.row + '"][data-fd-c="' + step.col + '"] .fd-value');
+        if (!cellEl) { done(); return; }
+        cellEl.style.opacity = '0';
+        schedule(function() {
+          if (!running) return;
+          cellEl.textContent = step.value;
+          cellEl.style.opacity = '1';
+          done();
+        }, 250);
+      }
+      else if (step.type === 'fillCell') {
+        // Fill a non-target cell (Stop 5 drag results)
+        var cellEl2 = primarySheet.querySelector('[data-fd-r="' + step.row + '"][data-fd-c="' + step.col + '"] .fd-value');
+        if (!cellEl2) { done(); return; }
+        cellEl2.style.opacity = '0';
+        schedule(function() {
+          if (!running) return;
+          cellEl2.textContent = step.value;
+          cellEl2.style.opacity = '1';
+          done();
+        }, 200);
+      }
+      else if (step.type === 'formatPct') {
+        // Move cursor to % button, press it, then transform target value
+        if (!pctBtn || !cursor || !valueEl) { done(); return; }
+        var sheetRect = primarySheet.getBoundingClientRect();
+        var pctRect = pctBtn.getBoundingClientRect();
+        // First, place cursor over target cell
+        var tRect = targetCell.getBoundingClientRect();
+        cursor.style.left = (tRect.left - sheetRect.left + tRect.width/2) + 'px';
+        cursor.style.top = (tRect.top - sheetRect.top + tRect.height/2) + 'px';
+        cursor.style.opacity = '1';
+        schedule(function() {
+          if (!running) return;
+          // Move to % button
+          cursor.style.left = (pctRect.left - sheetRect.left + pctRect.width/2) + 'px';
+          cursor.style.top = (pctRect.top - sheetRect.top + pctRect.height/2) + 'px';
+          schedule(function() {
+            if (!running) return;
+            pctBtn.classList.add('is-pressed');
+            schedule(function() {
+              if (!running) return;
+              pctBtn.classList.remove('is-pressed');
+              valueEl.style.opacity = '0';
+              schedule(function() {
+                if (!running) return;
+                valueEl.textContent = step.value;
+                valueEl.style.opacity = '1';
+                cursor.style.opacity = '0';
+                done();
+              }, 250);
+            }, 250);
+          }, 950);
+        }, 30);
+      }
+      else if (step.type === 'dragDown') {
+        // Show drag handle on target, then animate it down to the row indicated.
+        // Also reveal a faint selection box growing from target to end row.
+        if (!dragHandle || !dragSelection) { done(); return; }
+        var sheetRect2 = primarySheet.getBoundingClientRect();
+        var startRect = targetCell.getBoundingClientRect();
+        var endCellEl = primarySheet.querySelector('[data-fd-r="' + step.endRow + '"][data-fd-c="' + step.endCol + '"]');
+        var endRect = endCellEl ? endCellEl.getBoundingClientRect() : startRect;
+
+        // Position drag handle at bottom-right of target
+        var startLeft = startRect.right - sheetRect2.left - 4;
+        var startTop = startRect.bottom - sheetRect2.top - 4;
+        dragHandle.style.left = startLeft + 'px';
+        dragHandle.style.top = startTop + 'px';
+        dragHandle.classList.add('show');
+
+        // Show selection box covering just the target cell initially
+        var selLeft = startRect.left - sheetRect2.left;
+        var selTop = startRect.top - sheetRect2.top;
+        var selW = startRect.width;
+        var selH = startRect.height;
+        dragSelection.style.left = selLeft + 'px';
+        dragSelection.style.top = selTop + 'px';
+        dragSelection.style.width = selW + 'px';
+        dragSelection.style.height = selH + 'px';
+        dragSelection.classList.add('show');
+
+        schedule(function() {
+          if (!running) return;
+          // Move drag handle to end row's bottom-right
+          var endLeft = endRect.right - sheetRect2.left - 4;
+          var endTop = endRect.bottom - sheetRect2.top - 4;
+          dragHandle.style.left = endLeft + 'px';
+          dragHandle.style.top = endTop + 'px';
+          // Extend selection box to cover from target to end cell
+          var newH = (endRect.bottom - startRect.top);
+          dragSelection.style.height = newH + 'px';
+          schedule(done, 700);
+        }, 300);
+      }
+      else if (step.type === 'hideDrag') {
+        if (dragHandle) dragHandle.classList.remove('show');
+        if (dragSelection) dragSelection.classList.remove('show');
+        schedule(done, 150);
+      }
+      else if (step.type === 'flashRow') {
+        // Briefly highlight a data row by index in the primary sheet (or specified table)
+        var sheetForFlash = primarySheet;
+        if (typeof step.table === 'number') {
+          var t = root.querySelectorAll('[data-fd-table]')[step.table];
+          if (t) sheetForFlash = t.querySelector('[data-fd-sheet]');
+        }
+        var rowEl = sheetForFlash.querySelector('[data-fd-row="' + step.row + '"]');
+        if (rowEl) {
+          rowEl.classList.add('fd-row-flash');
+          schedule(function() {
+            if (rowEl) rowEl.classList.remove('fd-row-flash');
+            done();
+          }, step.ms || 600);
+        } else { done(); }
+      }
+      else if (step.type === 'flashCell') {
+        var sheetForFlashC = primarySheet;
+        if (typeof step.table === 'number') {
+          var t2 = root.querySelectorAll('[data-fd-table]')[step.table];
+          if (t2) sheetForFlashC = t2.querySelector('[data-fd-sheet]');
+        }
+        var cellElF = sheetForFlashC.querySelector('[data-fd-r="' + step.row + '"][data-fd-c="' + step.col + '"]');
+        if (cellElF) {
+          cellElF.classList.add('fd-flash');
+          schedule(function() {
+            if (cellElF) cellElF.classList.remove('fd-flash');
+            done();
+          }, step.ms || 600);
+        } else { done(); }
+      }
+      else {
+        done();
+      }
+    }
+
+    function runLoop() {
+      if (!running) return;
+      reset();
+      var steps = config.steps;
+      var idx = 0;
+      function nextStep() {
+        if (!running) return;
+        if (idx >= steps.length) {
+          // Final hold then loop
+          schedule(function() { if (running) runLoop(); }, config.endHold || 1200);
+          return;
+        }
+        var s = steps[idx++];
+        runStep(s, nextStep);
+      }
+      nextStep();
+    }
+
+    return {
+      start: function() {
+        if (running) return;
+        running = true;
+        root.setAttribute('aria-hidden', 'false');
+        schedule(function() { if (running) runLoop(); }, 80);
+      },
+      stop: function() {
+        running = false;
+        clearTimers();
+        reset();
+        root.setAttribute('aria-hidden', 'true');
+      }
+    };
+  }
+
+  // ── Demo configs — one per Stop ──
+  // Numbers are intentionally unrelated to Linden to avoid spoiling quiz answers.
+  var DEMO_CONFIGS = {
+    1: {
+      caption: 'Watch the workflow: select target, type SUM, press Enter',
+      sheet: {
+        cols: ['A'],
+        rows: [ ['10'], ['20'], ['30'], [''] ],
+        target: { row: 3, col: 0 }
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=SUM(A1:A3)', cps: 180 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'fill', value: '60' }
+      ]
+    },
+    2: {
+      caption: 'Watch the workflow: type the formula, press Enter, format as %',
+      showToolbar: true,
+      sheet: {
+        cols: ['A','B','C','D'],
+        rows: [
+          ['Year','Start','End','Growth'],
+          ['Sales','100','120','']
+        ],
+        target: { row: 1, col: 3 }
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=C2/B2-1', cps: 250 },
+        { type: 'hold', ms: 500 },
+        { type: 'enter' },
+        { type: 'fill', value: '0.2' },
+        { type: 'hold', ms: 200 },
+        { type: 'formatPct', value: '20%' }
+      ]
+    },
+    3: {
+      caption: 'Watch the workflow: type base × rate, press Enter',
+      sheet: {
+        cols: ['A','B','C'],
+        rows: [ ['100','0.15',''] ],
+        target: { row: 0, col: 2 }
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=A1*B1', cps: 200 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'fill', value: '15' }
+      ]
+    },
+    4: {
+      caption: 'Watch the workflow: IF returns one of two branches',
+      sheet: {
+        cols: ['A','B'],
+        rows: [ ['5',''] ],
+        target: { row: 0, col: 1 }
+      },
+      endHold: 1200,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=IF(A1>0, "Yes", "No")', cps: 130 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'fill', value: 'Yes' },
+        { type: 'hold', ms: 1200 },
+        { type: 'setCell', row: 0, col: 0, value: '-3' },
+        { type: 'hold', ms: 600 },
+        { type: 'fill', value: 'No' }
+      ]
+    },
+    5: {
+      caption: 'Watch the workflow: type with $ lock, then drag down',
+      sheet: {
+        cols: ['A','B','C'],
+        rows: [
+          ['100','0.10',''],
+          ['200','',''],
+          ['300','','']
+        ],
+        target: { row: 0, col: 2 }
+      },
+      extraFillCells: [ { row: 1, col: 2 }, { row: 2, col: 2 } ],
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=A1*$B$1', cps: 200 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'fill', value: '10' },
+        { type: 'hold', ms: 600 },
+        { type: 'dragDown', endRow: 2, endCol: 2 },
+        { type: 'fillCell', row: 1, col: 2, value: '20' },
+        { type: 'hold', ms: 250 },
+        { type: 'fillCell', row: 2, col: 2, value: '30' },
+        { type: 'hold', ms: 400 },
+        { type: 'hideDrag' }
+      ]
+    },
+    6: {
+      caption: 'Watch the workflow: error first, then wrap with IFERROR',
+      sheet: {
+        cols: ['A','B','C'],
+        rows: [ ['10','0',''] ],
+        target: { row: 0, col: 2 }
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=A1/B1', cps: 200 },
+        { type: 'enter' },
+        { type: 'fill', value: '#DIV/0!', error: true },
+        { type: 'hold', ms: 1000 },
+        { type: 'retype', text: '=IFERROR(A1/B1, "n/a")', cps: 130 },
+        { type: 'hold', ms: 300 },
+        { type: 'enter' },
+        { type: 'fill', value: 'n/a' }
+      ]
+    },
+    7: {
+      caption: 'Watch the workflow: VLOOKUP pulls from another tab',
+      tables: [
+        {
+          label: 'Data tab',
+          cols: ['A','B'],
+          rows: [ ['Apple','100'], ['Banana','200'], ['Cherry','300'] ]
+        },
+        {
+          label: 'Main tab',
+          cols: ['A'],
+          rows: [ [''] ],
+          target: { row: 0, col: 0 }
+        }
+      ],
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=VLOOKUP("Banana", Data!A:B, 2, FALSE)', cps: 110 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'flashRow', table: 0, row: 1, ms: 600 },
+        { type: 'flashCell', table: 0, row: 1, col: 1, ms: 500 },
+        { type: 'fill', value: '200' }
+      ]
+    },
+    8: {
+      caption: 'Watch the workflow: SUMIF sums only matching rows',
+      sheet: {
+        cols: ['A','B','C'],
+        rows: [
+          ['Yes','10',''],
+          ['No','20',''],
+          ['Yes','30',''],
+          ['No','40','']
+        ],
+        target: { row: 0, col: 2 }
+      },
+      endHold: 1500,
+      steps: [
+        { type: 'hold', ms: 1000 },
+        { type: 'type', text: '=SUMIF(A:A, "Yes", B:B)', cps: 130 },
+        { type: 'hold', ms: 400 },
+        { type: 'enter' },
+        { type: 'flashRow', row: 0, ms: 500 },
+        { type: 'flashRow', row: 2, ms: 500 },
+        { type: 'fill', value: '40' }
+      ]
+    }
+  };
+
+  // Build the registry on load
+  Object.keys(DEMO_CONFIGS).forEach(function(k) {
+    formulaDemos[k] = createFormulaDemo(k, DEMO_CONFIGS[k]);
+  });
+
+  // ── Slide navigation ──
+  var slides, total, current = 0;
+  var dotsContainer, progressLabel;
+
+  function init() {
+    slides = document.querySelectorAll('#deck-wrapper .slide');
+    total = slides.length;
+    dotsContainer = document.getElementById('dots');
+    progressLabel = document.getElementById('progress-label');
+
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.setAttribute('role', 'tab');
+      dot.dataset.index = i;
+      dot.addEventListener('click', function () {
+        goTo(parseInt(this.dataset.index, 10));
+      });
+      dotsContainer.appendChild(dot);
+    }
+
+    for (var j = 0; j < total; j++) {
+      if (j === 0) {
+        slides[j].removeAttribute('aria-hidden');
+        slides[j].style.display = 'block';
+      } else {
+        slides[j].setAttribute('aria-hidden', 'true');
+        slides[j].style.display = 'none';
+      }
+    }
+
+    document.getElementById('btn-prev').disabled = true;
+    updateProgress();
+    updateNextBtn();
+  }
+
+  function updateProgress() {
+    var labels = ['Scenario', 'Setup', 'Stop 1 of 8', 'Stop 2 of 8', 'Stop 3 of 8', 'Stop 4 of 8',
+                  'Stop 5 of 8', 'Stop 6 of 8', 'Stop 7 of 8', 'Stop 8 of 8', 'Recap'];
+    progressLabel.textContent = labels[current] || ('Slide ' + (current + 1));
+
+    for (var i = 0; i < dotsContainer.children.length; i++) {
+      var d = dotsContainer.children[i];
+      d.classList.remove('active', 'done');
+      if (i === current) d.classList.add('active');
+      else if (i < current) d.classList.add('done');
+    }
+  }
+
+  function updateNextBtn() {
+    var nextBtn = document.getElementById('btn-next');
+    var isLast = (current === total - 1);
+    nextBtn.innerHTML = isLast ? 'Finish' : 'Next &rarr;';
+
+    // Gate Next: if the current slide has a question, require the reveal panel before allowing forward.
+    var slide = slides[current];
+    var hasQuestion = !!(slide && slide.querySelector('[data-answers]'));
+    var reveal = slide ? slide.querySelector('.reveal-panel') : null;
+    var revealShown = !!(reveal && reveal.classList.contains('show'));
+    nextBtn.disabled = hasQuestion && !revealShown;
+
+    if (revealShown) nextBtn.classList.add('primary');
+    else nextBtn.classList.remove('primary');
+  }
+
+  function goTo(index) {
+    slides[current].setAttribute('aria-hidden', 'true');
+    slides[current].style.display = 'none';
+    current = index;
+    slides[current].removeAttribute('aria-hidden');
+    slides[current].style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('btn-prev').disabled = (current === 0);
+    updateProgress();
+    updateNextBtn();
+
+    // Start/stop mini-demos based on which slide is visible.
+    // Each demo has data-stop="N" matching its parent slide's data-stop.
+    var activeStop = slides[current] && slides[current].getAttribute('data-stop');
+    Object.keys(formulaDemos).forEach(function(k) {
+      if (k === activeStop) formulaDemos[k].start();
+      else formulaDemos[k].stop();
+    });
+  }
+
+  function showCompletionBanner() {
+    var banner = document.getElementById('completion-banner');
+    banner.classList.add('show');
+    setTimeout(function () { banner.classList.remove('show'); }, 2800);
+  }
+
+  function navigate(dir) {
+    if (dir > 0 && current === total - 1) {
+      showCompletionBanner();
+      return;
+    }
+    // Forward gating: block if the current slide has an unanswered question.
+    if (dir > 0) {
+      var slide = slides[current];
+      var hasQuestion = !!(slide && slide.querySelector('[data-answers]'));
+      var reveal = slide ? slide.querySelector('.reveal-panel') : null;
+      var revealShown = !!(reveal && reveal.classList.contains('show'));
+      if (hasQuestion && !revealShown) return;
+    }
+    var next = current + dir;
+    if (next < 0 || next >= total) return;
+    goTo(next);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // Don't intercept if user is interacting with a details/summary
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+  });
+
+  window.navigate = navigate;
+
+  // ── Answer handling ──
+  function handleAnswer(btn) {
+    var slide = btn.closest('.slide');
+    var answersBlock = btn.closest('[data-answers]');
+    var nudgeEl = answersBlock.parentElement.querySelector('.nudge');
+    var isCorrect = btn.dataset.correct === 'true';
+
+    if (isCorrect) {
+      var all = answersBlock.querySelectorAll('.answer-btn');
+      all.forEach(function(b) {
+        b.classList.add('locked');
+        if (b === btn) b.classList.add('locked-correct');
+        else b.classList.add('locked-wrong');
+      });
+      if (nudgeEl) nudgeEl.classList.remove('show');
+      var reveal = slide.querySelector('.reveal-panel');
+      if (reveal) reveal.classList.add('show');
+      updateNextBtn();
+      // Scroll reveal into view
+      setTimeout(function() {
+        if (reveal) reveal.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      }, 200);
+    } else {
+      btn.classList.add('flash-wrong');
+      setTimeout(function() { btn.classList.remove('flash-wrong'); }, 350);
+      if (nudgeEl) {
+        nudgeEl.textContent = btn.dataset.nudge || 'Not quite — try again.';
+        nudgeEl.classList.add('show');
+      }
+    }
+  }
+
+  document.querySelectorAll('.answer-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { handleAnswer(btn); });
+  });
+
+  function returnToTask() {
+    showCompletionBanner();
+  }
+  window.returnToTask = returnToTask;
+
+  init();
+</script>
+
+</body>
+</html>
