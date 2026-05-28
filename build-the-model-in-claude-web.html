@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build the Historical Model in Claude Web</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #FDF8F8;
+      --title: #1C1B1B;
+      --body: #484646;
+      --muted: rgba(72,70,70,0.6);
+      --highlight: #DCE1FF;
+      --highlight-dark: #c8cfff;
+      --accent: #001D69;
+      --nav-bg: #001D69;
+      --white: #ffffff;
+
+      /* Semantic palette */
+      --green: #10B981;
+      --green-tint: #D1FAE5;
+      --blue: #2563EB;
+      --blue-tint: #DBEAFE;
+      --purple: #7C3AED;
+      --purple-tint: #EDE9FE;
+      --orange: #EA580C;
+      --orange-tint: #FED7AA;
+      --red: #DC2626;
+      --red-tint: #FECACA;
+      --amber: #D97706;
+      --amber-tint: #FEF3C7;
+      --amber-bg: #FEF8E7;
+
+      /* Lavender backdrop */
+      --backdrop: #F0EAEA;
+
+      /* Code block */
+      --code-bg: #F0EAEA;
+      --free-bg: #F8F4F4;
+    }
+
+    /* ── Page shell ── */
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background: var(--backdrop);
+      font-family: 'Inter', sans-serif;
+      color: var(--title);
+    }
+
+    /* ── Best viewed note ── */
+    #viewport-note {
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    /* ── Fixed 960×540 deck container ── */
+    #deck-wrapper {
+      width: 960px;
+      height: 540px;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+      border-radius: 6px;
+    }
+
+    /* ── Individual slide ── */
+    .slide {
+      width: 960px;
+      height: 540px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 32px 56px 30px;
+      box-sizing: border-box;
+      background: var(--bg);
+    }
+
+    .slide[aria-hidden="true"] {
+      display: none;
+    }
+
+    .slide-inner {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* Slide number */
+    .slide-counter {
+      position: absolute;
+      bottom: 14px;
+      right: 22px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+    }
+
+    /* ── Cover slide ── */
+    .slide-cover {
+      justify-content: center;
+      align-items: center;
+    }
+
+    .slide-cover .slide-inner {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    .cover-icon {
+      width: 70px;
+      height: 70px;
+      border-radius: 16px;
+      background: var(--highlight);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      margin: 0 auto 18px;
+    }
+
+    .cover-title {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.18;
+      color: var(--title);
+      margin-bottom: 10px;
+      letter-spacing: -0.015em;
+    }
+
+    .cover-subtitle {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--accent);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    /* Warning callout (cover) */
+    .warning-callout {
+      background: var(--amber-bg);
+      border-left: 3px solid var(--amber);
+      border-radius: 8px;
+      padding: 14px 18px;
+      text-align: left;
+      max-width: 740px;
+      margin: 0 auto;
+      font-size: 13px;
+      color: var(--body);
+      line-height: 1.5;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .warning-icon {
+      flex-shrink: 0;
+      font-size: 22px;
+      color: var(--amber);
+      line-height: 1;
+      margin-top: 1px;
+    }
+
+    .warning-callout strong { color: var(--title); }
+    .warning-callout p { margin-bottom: 6px; }
+    .warning-callout p:last-child { margin-bottom: 0; }
+
+    /* ── Standard slide elements ── */
+    .slide-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .slide-title {
+      font-size: 27px;
+      font-weight: 700;
+      color: var(--title);
+      line-height: 1.2;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .slide-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .body-text {
+      font-size: 14.5px;
+      color: var(--body);
+      line-height: 1.5;
+    }
+
+    .body-text strong { color: var(--title); }
+    .body-text em { font-style: italic; }
+    .body-text a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid var(--highlight-dark);
+    }
+
+    .body-text ol, .body-text ul {
+      padding-left: 22px;
+      margin-bottom: 0;
+    }
+    .body-text li {
+      margin-bottom: 4px;
+    }
+    .body-text li:last-child { margin-bottom: 0; }
+
+    /* ── Code block with copy button ── */
+    .code-block {
+      position: relative;
+      background: var(--code-bg);
+      border-radius: 8px;
+      padding: 12px 14px 12px 14px;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #2a2929;
+      white-space: pre-wrap;
+      overflow: hidden;
+    }
+
+    .code-block.small {
+      font-size: 11.5px;
+      padding: 10px 12px;
+      line-height: 1.45;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--white);
+      border: 1px solid rgba(0,0,0,0.08);
+      color: var(--accent);
+      font-family: 'Inter', sans-serif;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .copy-btn i { font-size: 11px; }
+    .copy-btn:hover { background: var(--highlight); }
+    .copy-btn.copied {
+      background: var(--green-tint);
+      color: #047857;
+      border-color: var(--green-tint);
+    }
+
+    .code-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    /* ── Free vs Paid panel ── */
+    .tier-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .tier-box {
+      border-radius: 8px;
+      padding: 10px 13px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: var(--body);
+    }
+
+    .tier-box.free {
+      background: var(--free-bg);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .tier-box.paid {
+      background: var(--highlight);
+      border: 1px solid var(--highlight-dark);
+    }
+
+    .tier-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tier-box.free .tier-label { color: #756f6f; }
+    .tier-box.paid .tier-label { color: var(--accent); }
+    .tier-box strong { color: var(--title); }
+    .tier-box em { font-style: italic; }
+
+    /* Two-box layout (setup slide) */
+    .two-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Why-this-matters italic callout */
+    .why-callout {
+      background: var(--free-bg);
+      border-left: 3px solid var(--highlight-dark);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      font-style: italic;
+      color: var(--body);
+      line-height: 1.5;
+    }
+
+    /* Final closer */
+    .closer-text {
+      font-size: 12.5px;
+      font-style: italic;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    /* What happens line */
+    .what-happens {
+      font-size: 13px;
+      color: var(--body);
+      line-height: 1.5;
+      padding: 9px 13px;
+      background: var(--free-bg);
+      border-radius: 7px;
+    }
+    .what-happens strong { color: var(--title); }
+
+    /* ── Navigation bar ── */
+    #nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: var(--nav-bg);
+      z-index: 100;
+    }
+
+    .nav-btn {
+      background: none;
+      border: none;
+      color: var(--white);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 0 16px;
+      height: 48px;
+      letter-spacing: 0.02em;
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .nav-btn:hover { color: var(--highlight); }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .nav-btn:disabled:hover { color: var(--white); }
+
+    #counter-text {
+      color: rgba(255,255,255,0.7);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    #dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      border: none;
+      padding: 0;
+    }
+
+    .dot.active {
+      background: var(--highlight);
+      transform: scale(1.25);
+    }
+
+    /* ── Completion banner ── */
+    #completion-banner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: var(--accent);
+      color: var(--white);
+      padding: 16px 28px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 32px rgba(0,29,105,0.35);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: 0.02em;
+      transition: opacity 0.25s, transform 0.25s;
+      opacity: 0;
+    }
+
+    #completion-banner.show {
+      display: flex;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #completion-banner i {
+      font-size: 22px;
+      color: var(--highlight);
+    }
+  </style>
+</head>
+<body>
+
+<div id="viewport-note">Best viewed at 1024px or wider</div>
+
+<div id="deck-wrapper">
+
+  <!-- ── SLIDE 1: Cover + Warning ── -->
+  <div class="slide slide-cover" role="region" aria-label="Cover">
+    <div class="slide-inner">
+      <div class="cover-icon" aria-hidden="true">
+        <i class="ph-fill ph-browser"></i>
+      </div>
+      <h1 class="cover-title">Build the Historical Model in Claude Web</h1>
+      <p class="cover-subtitle">A browser-only alternative if Antigravity feels like too much</p>
+
+      <div class="warning-callout">
+        <i class="ph-fill ph-warning warning-icon" aria-hidden="true"></i>
+        <div>
+          <p><strong>Read this before you start.</strong></p>
+          <p>Claude's free version has limits. Your chat window can run out of context mid-build, or you can hit a daily message cap. If that happens, <strong>don't panic.</strong> Wait for the limit to reset (a few hours), open a new chat, re-upload your latest .xlsx + the 10-K, and pick up where you left off.</p>
+          <p>Patience is the cost of doing this on free. The upside: no install, no friction, works in any browser.</p>
+          <p>If you have <strong>Claude Pro ($20/mo)</strong>, none of this is an issue &mdash; you get Opus, longer context, and 5&times; more usage.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">01 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 2: Setup ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Setup">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 01 &middot; Setup</div>
+      <h2 class="slide-title">Set up Claude and upload the 10-K</h2>
+      <div class="slide-body">
+        <div class="body-text">
+          <ol>
+            <li>Open <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a>. Sign in.</li>
+            <li>Click the <strong>+</strong> (upload) button. Attach your selected company's 10-K (PDF).</li>
+            <li>Pick your model (see Free vs Paid below).</li>
+          </ol>
+        </div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            <strong>Sonnet 4.6</strong> is the default. Stay on Sonnet &mdash; capable, just hits limits faster.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Switch to <strong>Opus 4.7</strong> for the build. Drop back to Sonnet for audit prompts to preserve your Opus usage.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">02 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 3: Prompt 1 — Build ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Build the model">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 02 &middot; Prompt 1</div>
+      <h2 class="slide-title">Build the model</h2>
+      <div class="slide-body">
+        <div class="code-block" data-code="I've uploaded [COMPANY]'s 10-K. Build a 3-year historical 3-statement model as a downloadable Excel file called [ticker]-historical-model.xlsx. One sheet per statement (Income Statement, Balance Sheet, Cash Flow). Use SUM formulas for subtotals (gross profit, operating income, net income, total assets, total liabilities, total equity, net change in cash). Don't hardcode anything that should be a formula. Give me the file as a download link when you're done."><button class="copy-btn" onclick="copyCode(this)"><i class="ph ph-copy"></i>Copy</button>I've uploaded [COMPANY]'s 10-K. Build a 3-year historical 3-statement
+model as a downloadable Excel file called [ticker]-historical-model.xlsx.
+One sheet per statement (Income Statement, Balance Sheet, Cash Flow). Use
+SUM formulas for subtotals (gross profit, operating income, net income,
+total assets, total liabilities, total equity, net change in cash). Don't
+hardcode anything that should be a formula. Give me the file as a
+download link when you're done.</div>
+
+        <div class="what-happens">
+          <strong>What happens:</strong> Claude reads the PDF, runs Python in its analysis tool, builds the .xlsx, gives you a download link. Click and save to Desktop.
+        </div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            If the 10-K is huge (NVIDIA's is 300+ pages), you may hit a context limit. If you do, send: <em>"Just focus on the income statement first."</em> Work one statement at a time.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Handles most 10-Ks in one shot.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">03 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 4: Prompt 2 — Check connections ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Check connections">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 03 &middot; Prompt 2</div>
+      <h2 class="slide-title">Check the model connects</h2>
+      <div class="slide-body">
+        <div class="code-block small" data-code="Check that the three statements in the Excel file you just built connect properly. Specifically:
+(1) Net income on the IS should flow into retained earnings on the BS.
+(2) Ending cash on the CFS should match the cash line on the BS.
+(3) Depreciation on the CFS should reconcile with PP&E movement on the BS.
+(4) Changes in working capital on the CFS should match the change in current assets/liabilities on the BS.
+For each connection, show me the formula linkages. If any are missing or hardcoded, flag them. Don't fix yet — just report."><button class="copy-btn" onclick="copyCode(this)"><i class="ph ph-copy"></i>Copy</button>Check that the three statements in the Excel file you just built connect properly. Specifically:
+(1) Net income on the IS should flow into retained earnings on the BS.
+(2) Ending cash on the CFS should match the cash line on the BS.
+(3) Depreciation on the CFS should reconcile with PP&amp;E movement on the BS.
+(4) Changes in working capital on the CFS should match the change in current assets/liabilities on the BS.
+For each connection, show me the formula linkages. If any are missing or hardcoded, flag them. Don't fix yet &mdash; just report.</div>
+
+        <div class="code-label">Follow-up prompt</div>
+        <div class="code-block small" data-code="Fix the missing linkages in one pass. Every connection should be a formula reference between sheets, not a hardcoded value. Give me the updated file."><button class="copy-btn" onclick="copyCode(this)"><i class="ph ph-copy"></i>Copy</button>Fix the missing linkages in one pass. Every connection should be a formula
+reference between sheets, not a hardcoded value. Give me the updated file.</div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            Same prompt. Linkage checks are short enough not to stress the free tier.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Same prompt, faster response.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">04 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 5: Prompt 3 — Audit ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Audit against the 10-K">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 04 &middot; Prompt 3</div>
+      <h2 class="slide-title">Audit every value against the 10-K</h2>
+      <div class="slide-body">
+        <div class="body-text">
+          This is the equivalent of Antigravity's two audit passes &mdash; collapsed into one thorough prompt since Claude web doesn't have sub-agents.
+        </div>
+
+        <div class="code-block small" data-code="Now audit the Excel file against the 10-K I uploaded. For every cell that contains a value pulled from the 10-K, verify it matches the source. Also check formula intent — are there any AVERAGE() formulas where SUM() was meant? Any missing absolute references on constants like the tax rate? Any missing IFERROR() on ratios? Produce an audit report with every discrepancy flagged. Don't modify the file yet."><button class="copy-btn" onclick="copyCode(this)"><i class="ph ph-copy"></i>Copy</button>Now audit the Excel file against the 10-K I uploaded. For every cell that contains
+a value pulled from the 10-K, verify it matches the source. Also check formula
+intent &mdash; are there any AVERAGE() formulas where SUM() was meant? Any missing
+absolute references on constants like the tax rate? Any missing IFERROR() on
+ratios? Produce an audit report with every discrepancy flagged. Don't modify
+the file yet.</div>
+
+        <div class="code-label">Follow-up prompt</div>
+        <div class="code-block small" data-code="Apply all the fixes from your audit report. Give me the corrected file as a download."><button class="copy-btn" onclick="copyCode(this)"><i class="ph ph-copy"></i>Copy</button>Apply all the fixes from your audit report. Give me the corrected file as a download.</div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            If the audit response runs long, Claude may truncate. Break it down: <em>"Just audit the income statement."</em> Then balance sheet. Then cash flow. Three smaller audits keep you under the limit.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Run all three statements in one audit. Faster, cleaner output.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">05 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 6: Spot-check ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Spot-check">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 05 &middot; Your Work</div>
+      <h2 class="slide-title">Cross-check 5 values yourself</h2>
+      <div class="slide-body">
+        <div class="body-text">
+          <ul>
+            <li>Open the .xlsx in Excel.</li>
+            <li>Pick <strong>5 cells at random</strong> across the three statements (mix line items and subtotals).</li>
+            <li><strong>Don't</strong> pick lines Claude already flagged &mdash; pick ones the audit considered "clean." That's the test.</li>
+            <li>Open the 10-K side by side. Verify each value.</li>
+          </ul>
+        </div>
+
+        <div class="why-callout">
+          AI is consistent at catching its own pattern of slips. If there's a systematic error (wrong year column, segment data instead of consolidated), every AI pass might miss it the same way. Your spot-check is the circuit breaker.
+        </div>
+
+        <div class="body-text">
+          <strong>If any cell fails:</strong> re-upload the .xlsx, tell Claude what's wrong, ask for a fix.
+        </div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            Same for both &mdash; this is your work.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Same for both &mdash; this is your work.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">06 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 7: Business sense ── -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Business sense">
+    <div class="slide-inner">
+      <div class="slide-tag">Step 06 &middot; Final Sanity</div>
+      <h2 class="slide-title">Does this make business sense?</h2>
+      <div class="slide-body">
+        <div class="body-text">
+          Claude has verified structure, values, and formula intent. You spot-checked the result. Now the only question left is the one only you can answer.
+        </div>
+
+        <div class="body-text">
+          <ul>
+            <li><strong>Revenue trend</strong> &mdash; does it match your P3 thesis?</li>
+            <li><strong>Margin behavior</strong> &mdash; expanding or compressing? Does that match competitive position?</li>
+            <li><strong>CFO vs net income</strong> &mdash; what's the gap telling you?</li>
+            <li><strong>Balance sheet shape</strong> &mdash; debt? Working capital? Inventory?</li>
+          </ul>
+        </div>
+
+        <div class="closer-text">
+          If something looks off &mdash; either the model has an error, or your P3 story missed something. Both are useful discoveries.
+        </div>
+
+        <div class="tier-panel">
+          <div class="tier-box free">
+            <div class="tier-label"><i class="ph ph-circle"></i> Free Tier</div>
+            Same for both &mdash; pure human judgment.
+          </div>
+          <div class="tier-box paid">
+            <div class="tier-label"><i class="ph-fill ph-star"></i> Paid &mdash; Claude Pro</div>
+            Same for both &mdash; pure human judgment.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-counter">07 / 08</div>
+  </div>
+
+  <!-- ── SLIDE 8: Submit ── -->
+  <div class="slide slide-cover" aria-hidden="true" role="region" aria-label="Submit">
+    <div class="slide-inner">
+      <div class="cover-icon" aria-hidden="true">
+        <i class="ph-fill ph-paper-plane-tilt"></i>
+      </div>
+      <h1 class="cover-title">Submit your model</h1>
+      <p class="cover-subtitle">You built it. Now ship it.</p>
+
+      <div style="background: var(--free-bg); border-radius: 10px; padding: 18px 22px; max-width: 640px; margin: 0 auto; text-align: left;">
+        <div class="body-text" style="font-size: 15px;">
+          <ul style="padding-left: 22px;">
+            <li>Upload your final <strong>[ticker]-historical-model.xlsx</strong></li>
+            <li>Write a 3&ndash;5 sentence reflection: what surprised you about the historicals when you laid them next to your P3 story?</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="closer-text" style="margin-top: 16px; text-align: center; max-width: 600px;">
+        Same submission as the Antigravity version. The deliverable doesn't care which tool you used to get there.
+      </div>
+    </div>
+    <div class="slide-counter">08 / 08</div>
+  </div>
+
+</div><!-- /#deck-wrapper -->
+
+<!-- ── Completion banner ── -->
+<div id="completion-banner" role="status" aria-live="polite">
+  <i class="ph ph-check-circle"></i>
+  <span>Deck complete. Nice work.</span>
+</div>
+
+<!-- ── Navigation bar ── -->
+<nav id="nav" aria-label="Slide navigation">
+  <button class="nav-btn" id="btn-prev" onclick="navigate(-1)" aria-label="Previous slide">&larr; Prev</button>
+  <div id="dots" role="tablist" aria-label="Slide indicators"></div>
+  <span id="counter-text">1 / 8</span>
+  <button class="nav-btn" id="btn-next" onclick="navigate(1)" aria-label="Next slide">Next &rarr;</button>
+</nav>
+
+<script>
+  // ── Scale 960×540 wrapper to fit viewport above nav ──
+  var NAV_H = 48;
+  function scaleSlides() {
+    var wrapper = document.getElementById('deck-wrapper');
+    var availH = window.innerHeight - NAV_H - 40; // leave room for viewport-note
+    var scaleX = window.innerWidth / 960;
+    var scaleY = availH / 540;
+    var scale = Math.min(scaleX, scaleY, 1.6);
+    wrapper.style.transform = 'scale(' + scale + ')';
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = ((window.innerWidth - 960 * scale) / 2) + 'px';
+    wrapper.style.top = (40 + (availH - 540 * scale) / 2) + 'px';
+  }
+  window.addEventListener('resize', scaleSlides);
+  window.addEventListener('load', scaleSlides);
+
+  // ── Copy button ──
+  function copyCode(btn) {
+    var block = btn.parentElement;
+    var text = block.dataset.code || block.innerText.replace(/^Copy\s*/, '');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showCopied(btn);
+      }).catch(function () {
+        fallbackCopy(text, btn);
+      });
+    } else {
+      fallbackCopy(text, btn);
+    }
+  }
+
+  function fallbackCopy(text, btn) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    showCopied(btn);
+  }
+
+  function showCopied(btn) {
+    var original = btn.innerHTML;
+    btn.innerHTML = '<i class="ph ph-check"></i>Copied';
+    btn.classList.add('copied');
+    setTimeout(function () {
+      btn.innerHTML = original;
+      btn.classList.remove('copied');
+    }, 1600);
+  }
+
+  // ── Slide navigation ──
+  (function () {
+    var slides = document.querySelectorAll('#deck-wrapper .slide');
+    var total = slides.length;
+    var current = 0;
+
+    var dotsContainer = document.getElementById('dots');
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.setAttribute('role', 'tab');
+      dot.dataset.index = i;
+      dot.addEventListener('click', function () {
+        goTo(parseInt(this.dataset.index, 10));
+      });
+      dotsContainer.appendChild(dot);
+    }
+
+    function updateCounter() {
+      document.getElementById('counter-text').textContent = (current + 1) + ' / ' + total;
+    }
+
+    function updateNextBtn() {
+      var nextBtn = document.getElementById('btn-next');
+      var isLast = (current === total - 1);
+      nextBtn.innerHTML = isLast ? 'Finish' : 'Next &rarr;';
+      nextBtn.disabled = false;
+    }
+
+    function goTo(index) {
+      slides[current].setAttribute('aria-hidden', 'true');
+      slides[current].style.display = 'none';
+      dotsContainer.children[current].classList.remove('active');
+
+      current = index;
+
+      slides[current].removeAttribute('aria-hidden');
+      slides[current].style.display = 'flex';
+      dotsContainer.children[current].classList.add('active');
+
+      document.getElementById('btn-prev').disabled = (current === 0);
+      updateNextBtn();
+      updateCounter();
+    }
+
+    function showCompletionBanner() {
+      var banner = document.getElementById('completion-banner');
+      banner.classList.add('show');
+      setTimeout(function () {
+        banner.classList.remove('show');
+      }, 2800);
+    }
+
+    function navigate(dir) {
+      if (dir > 0 && current === total - 1) {
+        showCompletionBanner();
+        return;
+      }
+      var next = current + dir;
+      if (next < 0 || next >= total) return;
+      goTo(next);
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        navigate(1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        navigate(-1);
+      }
+    });
+
+    // Init
+    for (var j = 0; j < total; j++) {
+      if (j === 0) {
+        slides[j].removeAttribute('aria-hidden');
+        slides[j].style.display = 'flex';
+      } else {
+        slides[j].setAttribute('aria-hidden', 'true');
+        slides[j].style.display = 'none';
+      }
+    }
+
+    document.getElementById('btn-prev').disabled = true;
+    updateNextBtn();
+    updateCounter();
+
+    window.navigate = navigate;
+  })();
+</script>
+
+</body>
+</html>
