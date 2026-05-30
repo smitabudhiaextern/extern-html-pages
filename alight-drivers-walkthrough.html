@@ -1,0 +1,2552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A Look at Alight's Drivers — Reference Walkthrough</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FDF8F8;
+      --title: #1C1B1B;
+      --body: #484646;
+      --muted: rgba(72,70,70,0.6);
+      --line: rgba(72,70,70,0.18);
+      --line-soft: rgba(72,70,70,0.10);
+      --highlight: #DCE1FF;
+      --highlight-dark: #c8cfff;
+      --accent: #001D69;
+      --white: #ffffff;
+      --backdrop: #F0EAEA;
+      --paper: #FBF6F0;
+      --tape: #F2E8D9;
+
+      --green: #2D8659;
+      --green-tint: #E6F2EC;
+      --amber: #D97706;
+      --amber-tint: #FEF3C7;
+      --blue-tint: #DCE7FF;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--backdrop);
+      font-family: 'Inter', sans-serif;
+      color: var(--title);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #deck-wrapper {
+      width: 960px;
+      height: 540px;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+      border-radius: 6px;
+    }
+
+    .slide {
+      width: 960px;
+      height: 540px;
+      position: absolute;
+      top: 0; left: 0;
+      background: var(--bg);
+      animation: fade .35s ease;
+    }
+    .slide[aria-hidden="true"] { display: none; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* ── Nav ── */
+    .nav-strip {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 38px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      z-index: 20;
+      color: var(--white);
+    }
+    .nav-page {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+    }
+    .nav-page b { color: var(--white); font-weight: 600; }
+    .nav-progress {
+      flex: 1;
+      margin: 0 18px;
+      height: 2px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .nav-progress-fill {
+      height: 100%;
+      background: var(--white);
+      width: 5%;
+      transition: width .35s ease;
+    }
+    .nav-arrows { display: flex; gap: 6px; }
+    .nav-btn {
+      width: 24px; height: 24px;
+      border: none;
+      background: rgba(255,255,255,0.10);
+      color: var(--white);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      transition: background .15s ease;
+    }
+    .nav-btn:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* ── Hover tooltip for jargon terms ── */
+    .term {
+      position: relative;
+      border-bottom: 1px dotted var(--accent);
+      cursor: help;
+      color: inherit;
+    }
+    .term::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: var(--accent);
+      color: var(--white);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.4;
+      padding: 7px 10px;
+      border-radius: 5px;
+      white-space: normal;
+      width: 220px;
+      text-align: left;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+      z-index: 50;
+      letter-spacing: 0;
+      text-transform: none;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    }
+    .term::before {
+      content: '';
+      position: absolute;
+      bottom: calc(100% + 1px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      border: 5px solid transparent;
+      border-top-color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+      z-index: 50;
+    }
+    .term:hover::after, .term:hover::before {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Pulse highlight on takeaway lines ── */
+    .slide[aria-hidden="false"] .pulse {
+      animation: pulse 1.4s ease-out;
+    }
+    @keyframes pulse {
+      0% { background-color: var(--highlight); }
+      100% { background-color: transparent; }
+    }
+
+    /* ────────────────────────────────────────
+       SLIDE 1 — Cover
+       ───────────────────────────────────────── */
+    .slide-cover {
+      display: flex;
+      flex-direction: row;
+      padding: 0;
+    }
+    .cover-art {
+      width: 50%;
+      background: linear-gradient(135deg, #e8edff 0%, #c8cfff 60%, #b0b8f0 100%);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .clipboard {
+      width: 270px;
+      background: var(--paper);
+      border-radius: 6px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      padding: 38px 22px 22px;
+      position: relative;
+      transform: rotate(-2.5deg);
+    }
+    .clip-top {
+      position: absolute;
+      top: -14px; left: 50%;
+      transform: translateX(-50%);
+      width: 80px; height: 22px;
+      background: #4a5680;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+    }
+    .clip-top::after {
+      content: '';
+      position: absolute;
+      top: 4px; left: 50%; transform: translateX(-50%);
+      width: 30px; height: 8px;
+      background: #2a3560;
+      border-radius: 2px;
+    }
+    .clip-header {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border-bottom: 1.5px solid var(--line);
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .clip-pill {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--body);
+      padding: 4px 0;
+      border-bottom: 1px dotted var(--line-soft);
+    }
+    .clip-pill:last-child { border-bottom: none; }
+    .clip-pill .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      background: var(--highlight);
+      color: var(--accent);
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-weight: 700;
+    }
+    .cover-meta {
+      width: 50%;
+      padding: 50px 42px 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .cover-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 18px;
+    }
+    .cover-eyebrow span {
+      background: var(--highlight);
+      padding: 3px 8px;
+      border-radius: 3px;
+    }
+    .cover-title {
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1.08;
+      color: var(--title);
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+    }
+    .cover-title em { font-style: normal; color: var(--accent); }
+    .cover-sub {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--body);
+      margin-bottom: 16px;
+      max-width: 360px;
+    }
+    .cover-frame {
+      font-size: 13px;
+      color: var(--body);
+      line-height: 1.55;
+      max-width: 360px;
+      margin-bottom: 22px;
+      font-style: italic;
+    }
+    .cover-frame b { color: var(--accent); font-style: normal; font-weight: 600; }
+    .cover-tag-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 330px;
+    }
+    .cover-tag-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-top: 1px dashed var(--line);
+      font-size: 12px;
+    }
+    .cover-tag-row:last-child { border-bottom: 1px dashed var(--line); }
+    .cover-tag-row span:first-child { color: var(--muted); }
+    .cover-tag-row span:last-child { color: var(--title); font-weight: 600; }
+
+    /* ────────────────────────────────────────
+       SLIDE 2 — Financial snapshot table
+       ───────────────────────────────────────── */
+    .slide-snapshot {
+      padding: 28px 44px 56px;
+      display: flex;
+      flex-direction: column;
+    }
+    .snap-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .snap-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      margin-bottom: 6px;
+    }
+    .snap-title em { font-style: normal; color: var(--accent); }
+    .snap-lede {
+      font-size: 13px;
+      color: var(--body);
+      line-height: 1.5;
+      margin-bottom: 14px;
+      max-width: 760px;
+    }
+    .snap-table {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .snap-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr 0.9fr;
+      padding: 7px 16px;
+      border-bottom: 1px solid var(--line-soft);
+      font-size: 12.5px;
+      align-items: center;
+    }
+    .snap-row:last-child { border-bottom: none; }
+    .snap-row.header {
+      background: var(--paper);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      padding: 9px 16px;
+    }
+    .snap-row .lbl { color: var(--body); font-weight: 500; }
+    .snap-row .val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--title);
+      text-align: right;
+    }
+    .snap-row .val.proj { color: var(--accent); }
+    .snap-row .delta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+    }
+    .snap-row .delta.up { color: var(--green); }
+    .snap-row .delta.down { color: var(--amber); }
+    .snap-foot {
+      padding: 11px 14px;
+      background: var(--highlight);
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: var(--accent);
+      line-height: 1.5;
+    }
+
+    /* ────────────────────────────────────────
+       SLIDE 3 — Road map
+       ───────────────────────────────────────── */
+    .slide-grid {
+      padding: 32px 44px 56px;
+      display: flex;
+      flex-direction: column;
+    }
+    .grid-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .grid-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      margin-bottom: 6px;
+    }
+    .grid-title em { font-style: normal; color: var(--accent); }
+    .grid-lede {
+      font-size: 13.5px;
+      color: var(--body);
+      line-height: 1.5;
+      margin-bottom: 18px;
+      max-width: 760px;
+    }
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+    .cat-card {
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 14px 12px;
+      border-top: 3px solid var(--accent);
+      display: flex;
+      flex-direction: column;
+    }
+    .cat-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .cat-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--title);
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+    .cat-driver {
+      font-size: 11px;
+      color: var(--body);
+      padding: 4px 0;
+      border-top: 1px dotted var(--line-soft);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      line-height: 1.3;
+    }
+    .cat-driver:first-of-type { border-top: none; padding-top: 0; }
+    .cat-driver-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .grid-foot {
+      margin-top: 16px;
+      padding: 12px 14px;
+      background: var(--highlight);
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: var(--accent);
+      line-height: 1.5;
+    }
+    .grid-foot b { font-weight: 700; }
+
+    /* ────────────────────────────────────────
+       DRIVER slides
+       ───────────────────────────────────────── */
+    .slide-driver {
+      padding: 24px 40px 56px;
+      display: flex;
+      flex-direction: column;
+    }
+    .driver-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .driver-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .driver-eyebrow .pill {
+      background: var(--highlight);
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin-right: 6px;
+    }
+    .driver-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .driver-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--title);
+      line-height: 1.12;
+      margin-bottom: 8px;
+    }
+    .driver-plain {
+      font-size: 13px;
+      color: var(--body);
+      line-height: 1.55;
+      max-width: 870px;
+      margin-bottom: 12px;
+    }
+    .driver-plain b { color: var(--accent); font-weight: 600; }
+
+    .trajectory {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px 16px;
+      margin-bottom: 10px;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .trajectory:hover {
+      transform: scale(1.01);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    }
+    .traj-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+    .traj-pills {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .traj-pill {
+      background: var(--paper);
+      border-radius: 6px;
+      padding: 7px 6px;
+      text-align: center;
+      border: 1px solid var(--line-soft);
+    }
+    .traj-pill .year {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      margin-bottom: 3px;
+    }
+    .traj-pill .num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .traj-pill.dim .num { color: var(--muted); font-weight: 500; }
+
+    .dollar-context {
+      background: var(--paper);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      padding: 9px 14px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--body);
+      line-height: 1.5;
+    }
+    .dollar-context .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      margin-right: 8px;
+    }
+    .dollar-context b { color: var(--accent); font-weight: 600; }
+    .countup { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); }
+
+    .stands-out {
+      padding: 9px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--title);
+      line-height: 1.45;
+      border-left: 3px solid var(--amber);
+      background: var(--amber-tint);
+    }
+    .stands-out .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--amber);
+      font-weight: 700;
+      margin-right: 8px;
+    }
+    .stands-out.green { border-left-color: var(--green); background: var(--green-tint); }
+    .stands-out.green .tag { color: var(--green); }
+    .stands-out.blue { border-left-color: var(--accent); background: var(--blue-tint); }
+    .stands-out.blue .tag { color: var(--accent); }
+
+    /* Compact split driver (rev growth two-line, dep+amort combined) */
+    .split-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .split-row .trajectory { margin-bottom: 0; }
+    .traj-sub-label {
+      font-size: 11.5px;
+      color: var(--title);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    /* ────────────────────────────────────────
+       SLIDE 17 — Takeaways
+       ───────────────────────────────────────── */
+    .slide-takeaways {
+      padding: 28px 44px 56px;
+      display: flex;
+      flex-direction: column;
+    }
+    .takeaway-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-top: 6px;
+    }
+    .takeaway {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      align-items: start;
+    }
+    .takeaway .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .takeaway .text {
+      font-size: 12.5px;
+      color: var(--body);
+      line-height: 1.5;
+    }
+    .takeaway .text b { color: var(--title); font-weight: 700; }
+    .takeaway.aggressive { background: var(--amber-tint); }
+    .takeaway.aggressive .label { background: var(--amber); color: var(--white); }
+    .takeaway.conservative { background: var(--green-tint); }
+    .takeaway.conservative .label { background: var(--green); color: var(--white); }
+    .takeaway.telling { background: var(--blue-tint); }
+    .takeaway.telling .label { background: var(--accent); color: var(--white); }
+
+    /* ────────────────────────────────────────
+       SLIDE 18 — Cheat sheet receipt
+       ───────────────────────────────────────── */
+    .slide-receipt {
+      padding: 24px 44px 56px;
+      display: flex;
+      flex-direction: row;
+      gap: 24px;
+      align-items: stretch;
+    }
+    .receipt-left {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .receipt-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .receipt-title {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--title);
+      margin-bottom: 14px;
+    }
+    .receipt-title em { font-style: normal; color: var(--accent); }
+    .receipt-sub {
+      font-size: 12.5px;
+      color: var(--body);
+      line-height: 1.55;
+      max-width: 320px;
+      margin-bottom: 16px;
+    }
+    .receipt-next {
+      background: var(--highlight);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--accent);
+      line-height: 1.5;
+      max-width: 320px;
+    }
+    .receipt-next b { font-weight: 700; }
+
+    .receipt-card {
+      width: 400px;
+      background: var(--paper);
+      padding: 18px 20px 22px;
+      position: relative;
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .receipt-card::before,
+    .receipt-card::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 12px;
+      background:
+        radial-gradient(circle at 6px 0, transparent 5px, var(--paper) 5px);
+      background-size: 12px 12px;
+    }
+    .receipt-card::before { top: -10px; background-position: 0 -6px; transform: rotate(180deg); }
+    .receipt-card::after { bottom: -10px; background-position: 0 -6px; }
+    .receipt-head {
+      text-align: center;
+      border-bottom: 1px dashed var(--line);
+      padding-bottom: 7px;
+      margin-bottom: 6px;
+    }
+    .receipt-head .brand {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .receipt-head .tag {
+      font-size: 10px;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 2px;
+    }
+    .receipt-section {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      margin: 5px 0 3px;
+      padding-top: 4px;
+      border-top: 1px dashed var(--line-soft);
+    }
+    .receipt-section:first-of-type { border-top: none; padding-top: 0; }
+    .receipt-line {
+      display: grid;
+      grid-template-columns: 95px 1fr;
+      gap: 8px;
+      padding: 2.5px 0;
+      font-size: 10px;
+    }
+    .receipt-line .name {
+      font-weight: 700;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.04em;
+      padding-top: 1px;
+    }
+    .receipt-line .desc {
+      color: var(--body);
+      line-height: 1.3;
+    }
+    .receipt-line .desc small {
+      display: block;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5px;
+      margin-top: 1px;
+    }
+    .receipt-foot {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--line);
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ────────────────────────────────────────
+       Show-me-how calculation animation
+       ───────────────────────────────────────── */
+    :root {
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .source-pill {
+      display: inline-block;
+      transition: opacity .35s var(--ease), background .25s var(--ease);
+      border-radius: 4px;
+      padding: 0 2px;
+    }
+    .source-pill.flash {
+      background: var(--highlight);
+    }
+    .source-pill.dim {
+      opacity: 0.32;
+    }
+
+    .calc-cta-wrap {
+      position: absolute;
+      bottom: 50px;
+      right: 24px;
+      z-index: 12;
+    }
+    .calc-cta {
+      background: var(--accent);
+      color: var(--white);
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: -0.005em;
+      box-shadow: 0 4px 14px rgba(0, 29, 105, 0.22);
+      transition: transform .18s var(--ease), box-shadow .18s var(--ease), background .18s var(--ease);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .calc-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(0, 29, 105, 0.32);
+      background: #001550;
+    }
+    .calc-cta:active { transform: translateY(0); }
+    .calc-cta .play-icon {
+      font-size: 9.5px;
+      transform: translateY(-0.5px);
+    }
+
+    .calc-stage {
+      position: absolute;
+      top: 130px;
+      left: 40px;
+      right: 40px;
+      bottom: 48px;
+      background: var(--bg);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      padding: 18px 24px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 11;
+      gap: 4px;
+    }
+    .calc-stage.active { display: flex; }
+
+    .calc-stage-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .fraction {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      position: relative;
+    }
+    .slot {
+      width: 200px;
+      height: 50px;
+      background: var(--paper);
+      border: 1.5px dashed var(--line);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--accent);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .4s var(--ease), transform .4s var(--ease), border-color .3s var(--ease), background .3s var(--ease);
+      position: relative;
+    }
+    .slot.visible { opacity: 1; transform: none; }
+    .slot.filled {
+      border-style: solid;
+      border-color: var(--accent);
+      background: var(--white);
+    }
+    .slot-label {
+      position: absolute;
+      left: -110px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      width: 100px;
+      text-align: right;
+      opacity: 0;
+      transition: opacity .4s var(--ease);
+    }
+    .slot.visible .slot-label { opacity: 1; }
+
+    .divider-line {
+      width: 220px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      opacity: 0;
+      transform: scaleX(0.3);
+      transition: opacity .4s var(--ease), transform .5s var(--ease);
+    }
+    .divider-line.visible { opacity: 1; transform: scaleX(1); }
+
+    .multiplier-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .op-symbol {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--body);
+      opacity: 0;
+      transition: opacity .35s var(--ease);
+    }
+    .op-symbol.visible { opacity: 1; }
+
+    .equation-result {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity .4s var(--ease), transform .4s var(--ease);
+    }
+    .equation-result.visible {
+      opacity: 1;
+      transform: none;
+    }
+    .eq-symbol {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--body);
+    }
+    .eq-result-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--highlight);
+      padding: 5px 14px;
+      border-radius: 8px;
+      letter-spacing: -0.01em;
+      min-width: 100px;
+      text-align: center;
+      transition: transform .3s var(--ease);
+    }
+    .equation-result.popped .eq-result-value {
+      transform: scale(1.06);
+    }
+
+    .reset-btn {
+      margin-top: 14px;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--line);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .35s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
+      pointer-events: none;
+    }
+    .reset-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .reset-btn:hover {
+      background: var(--paper);
+      border-color: var(--accent);
+    }
+
+    /* Two-fraction layout for working capital */
+    .twin-fractions {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+    .twin-fractions .fraction { gap: 6px; }
+    .twin-fractions .slot {
+      width: 150px;
+      height: 42px;
+      font-size: 15px;
+    }
+    .twin-fractions .divider-line { width: 170px; }
+    .twin-fractions .slot-label {
+      left: -90px;
+      width: 80px;
+      font-size: 8.5px;
+    }
+    .twin-fractions .equation-result { margin-top: 8px; }
+    .twin-fractions .eq-result-value { font-size: 18px; min-width: 75px; padding: 4px 10px; }
+    .twin-fractions .eq-symbol { font-size: 16px; }
+    .twin-fractions .twin-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .twin-fractions .twin-col-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    /* Growth-style formula (base × rate) */
+    .growth-formula {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .growth-formula .slot { width: 170px; height: 50px; font-size: 17px; }
+
+    /* Flying clone */
+    .fly-clone {
+      position: fixed;
+      pointer-events: none;
+      z-index: 100;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--white);
+      border: 1.5px solid var(--accent);
+      border-radius: 6px;
+      padding: 5px 10px;
+      box-shadow: 0 8px 22px rgba(0, 29, 105, 0.22);
+      transition: transform 0.7s var(--ease);
+      will-change: transform;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="deck-wrapper">
+
+    <!-- ── SLIDE 1 — Cover ── -->
+    <section class="slide slide-cover" data-slide="1" aria-hidden="false">
+      <div class="cover-art">
+        <div class="clipboard">
+          <div class="clip-top"></div>
+          <div class="clip-header">Driver Sheet · ALIT</div>
+          <div class="clip-pill"><span>Revenue Growth</span><span class="badge">2 sub</span></div>
+          <div class="clip-pill"><span>Gross Margin</span><span class="badge">+100 bps</span></div>
+          <div class="clip-pill"><span>SG&amp;A Margin</span><span class="badge">step</span></div>
+          <div class="clip-pill"><span>Tax Rate</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>CapEx / Rev</span><span class="badge">step</span></div>
+          <div class="clip-pill"><span>D&amp;A / Rev</span><span class="badge">ramp</span></div>
+          <div class="clip-pill"><span>Working Capital</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>Interest Rate</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>SBC / Rev</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>New Logos</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>Losses / Churn</span><span class="badge">step</span></div>
+          <div class="clip-pill"><span>Fee / Employee</span><span class="badge">flat</span></div>
+          <div class="clip-pill"><span>ES Adj EBITDA %</span><span class="badge">+25 bps</span></div>
+        </div>
+      </div>
+      <div class="cover-meta">
+        <div class="cover-eyebrow"><span>Forecasting · Alight</span> · Reference walkthrough</div>
+        <h1 class="cover-title">A look at <em>Alight's drivers</em>.</h1>
+        <p class="cover-sub">How a real analyst built the projections — 13 drivers, 5 years (FY25 to FY29).</p>
+        <p class="cover-frame">Before you build the values in your own driver list, you decided to check what <b>Alight</b> has. This is what's already in the model.</p>
+        <div class="cover-tag-list">
+          <div class="cover-tag-row"><span>Company</span><span>Alight Inc. (ALIT)</span></div>
+          <div class="cover-tag-row"><span>FY24 Revenue</span><span>$2.33B</span></div>
+          <div class="cover-tag-row"><span>Drivers covered</span><span>8 universal + 5 Alight-specific</span></div>
+          <div class="cover-tag-row"><span>Projection window</span><span>FY2025 → FY2029</span></div>
+        </div>
+      </div>
+      <div class="nav-strip">
+        <div class="nav-page"><b>01</b> / 18 · COVER</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 5.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev1" disabled>‹</button>
+          <button class="nav-btn" id="next1">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 2 — Financial snapshot ── -->
+    <section class="slide slide-snapshot" data-slide="2" aria-hidden="true">
+      <div class="snap-eyebrow">Context · the dollars</div>
+      <h2 class="snap-title">The <em>dollars behind the ratios</em>.</h2>
+      <p class="snap-lede">Drivers are percentages. They shape these dollar lines forward. Here's the starting point (FY2024 actual) and where the model lands by FY2029 — all figures in millions, pulled directly from the model tab.</p>
+      <div class="snap-table">
+        <div class="snap-row header">
+          <div>Line item</div>
+          <div style="text-align:right;">FY2024 actual</div>
+          <div style="text-align:right;">FY2029 projected</div>
+          <div style="text-align:right;">5-yr change</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Revenue</div>
+          <div class="val">$2,332</div>
+          <div class="val proj">$2,598</div>
+          <div class="delta up">+$266</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Gross Profit</div>
+          <div class="val">$794</div>
+          <div class="val proj">$1,014</div>
+          <div class="delta up">+$220</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Operating Income</div>
+          <div class="val">($90)</div>
+          <div class="val proj">$274</div>
+          <div class="delta up">+$364</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl"><span class="term" data-tooltip="Adjusted EBITDA — earnings before interest, taxes, depreciation, and amortization, with one-time items removed. A common cash-earnings proxy.">Adj. EBITDA</span></div>
+          <div class="val">$556</div>
+          <div class="val proj">$800</div>
+          <div class="delta up">+$244</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Net Income</div>
+          <div class="val">($159)</div>
+          <div class="val proj">$122</div>
+          <div class="delta up">+$281</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Cash &amp; equivalents</div>
+          <div class="val">$343</div>
+          <div class="val proj">$1,536</div>
+          <div class="delta up">+$1,193</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl">Long-term Debt</div>
+          <div class="val">$2,000</div>
+          <div class="val proj">$2,025</div>
+          <div class="delta">+$25</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl"><span class="term" data-tooltip="Receivables — money customers owe Alight for services already delivered but not yet paid for.">Receivables</span></div>
+          <div class="val">$471</div>
+          <div class="val proj">$525</div>
+          <div class="delta up">+$54</div>
+        </div>
+        <div class="snap-row">
+          <div class="lbl"><span class="term" data-tooltip="Payables — money Alight owes its suppliers and vendors for services already received but not yet paid.">Payables</span></div>
+          <div class="val">$355</div>
+          <div class="val proj">$395</div>
+          <div class="delta up">+$40</div>
+        </div>
+      </div>
+      <div class="snap-foot">These are the actual numbers the drivers compute against. Every driver you'll see next shapes one or more of these lines forward.</div>
+      <div class="nav-strip">
+        <div class="nav-page"><b>02</b> / 18 · FINANCIAL SNAPSHOT</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 11%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev2">‹</button>
+          <button class="nav-btn" id="next2">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 3 — Road map ── -->
+    <section class="slide slide-grid" data-slide="3" aria-hidden="true">
+      <div class="grid-eyebrow">Road map</div>
+      <h2 class="grid-title"><em>13 drivers</em> across 5 categories.</h2>
+      <p class="grid-lede">Walking through each one — the 8 universal drivers you already met on Maya's stand, plus 5 the analyst added because of Alight's specific business model (segment build, employee-based pricing, stock comp).</p>
+      <div class="category-grid">
+        <div class="cat-card">
+          <div class="cat-label">Category 1</div>
+          <div class="cat-name">Revenue (5)</div>
+          <div class="cat-driver"><span class="cat-driver-num">01</span><span>ES Recurring growth</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">01</span><span>ES Project growth</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">10</span><span>New logos %</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">11</span><span>Losses / churn %</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">12</span><span>Fee per employee</span></div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-label">Category 2</div>
+          <div class="cat-name">Margins (3)</div>
+          <div class="cat-driver"><span class="cat-driver-num">02</span><span>Gross Margin</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">03</span><span>SG&amp;A Margin</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">13</span><span>ES Adj EBITDA %</span></div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-label">Category 3</div>
+          <div class="cat-name">Investment (2)</div>
+          <div class="cat-driver"><span class="cat-driver-num">05</span><span>CapEx / Rev</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">06</span><span>D&amp;A / Rev</span></div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-label">Category 4</div>
+          <div class="cat-name">Working Capital (2)</div>
+          <div class="cat-driver"><span class="cat-driver-num">07</span><span>Receivables / Rev</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">07</span><span>Payables / Rev</span></div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-label">Category 5</div>
+          <div class="cat-name">Capital &amp; Tax (3)</div>
+          <div class="cat-driver"><span class="cat-driver-num">04</span><span>Tax Rate</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">08</span><span>Interest Rate</span></div>
+          <div class="cat-driver"><span class="cat-driver-num">09</span><span>SBC / Rev</span></div>
+        </div>
+      </div>
+      <div class="grid-foot"><b>How to read the next slides:</b> one driver per page — what it is in plain English, the 5-year trajectory the analyst chose, what it means in actual dollars, and one honest read on the call.</div>
+      <div class="nav-strip">
+        <div class="nav-page"><b>03</b> / 18 · ROAD MAP</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 16.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev3">‹</button>
+          <button class="nav-btn" id="next3">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 4 — Revenue Growth (ES Recurring + Project) ── -->
+    <section class="slide slide-driver" data-slide="4" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Revenue</span> Revenue Growth (segment build)</div>
+        <div class="driver-count">Driver 1 of 13</div>
+      </div>
+      <h2 class="driver-title">Revenue Growth — ES Recurring + ES Project</h2>
+      <p class="driver-plain">Instead of one company-wide growth rate, the analyst split Alight's <span class="term" data-tooltip="Employer Solutions — Alight's main business segment, providing benefits and payroll services to large employers.">Employer Solutions</span> revenue into two streams: <b>Recurring</b> (multi-year contracts that renew) and <b>Project</b> (one-off implementation work). They behave differently, so they get separate growth assumptions.</p>
+      <div class="split-row">
+        <div class="trajectory">
+          <div class="traj-sub-label">ES Recurring growth %</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">+1%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">+3%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">+3%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">+3%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">+3%</div></div>
+          </div>
+        </div>
+        <div class="trajectory">
+          <div class="traj-sub-label">ES Project growth %</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">−6%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">−2%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">−2%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">−2%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">−2%</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>Recurring revenue grows from <b class="countup source-pill" id="src-s4-base" data-target="2135">$2,135M</b> (FY24) to <b class="countup" data-target="2427">$2,427M</b> (FY29). Project revenue shrinks from <b>$197M</b> to <b>$171M</b>. Total ES revenue lands at <b>$2,598M</b> by FY29 — a 5-year gain of ~$266M, almost entirely from the recurring book.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>Recurring is the engine of the thesis. The analyst is saying Alight's renewal book holds up while the lower-margin project work fades — a shift toward higher-quality revenue.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="4" data-calc-type="growth" data-src1="#src-s4-base" data-src1-text="$2,135M" data-rate="1" data-result="$2,156M" data-result-num="2156">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-4">
+        <div class="calc-stage-title">FY25 Recurring Revenue = Prior Recurring × (1 + Growth Rate)</div>
+        <div class="growth-formula">
+          <div class="slot" data-role="base"><span class="slot-label">Prior recurring</span><span class="slot-content"></span></div>
+          <span class="op-symbol" data-role="op">×</span>
+          <div class="slot" data-role="rate" style="width:130px;"><span class="slot-label">(1 + growth)</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">—</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>04</b> / 18 · REVENUE GROWTH</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 22%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev4">‹</button>
+          <button class="nav-btn" id="next4">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 5 — Gross Margin ── -->
+    <section class="slide slide-driver" data-slide="5" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Margins</span> Gross Margin</div>
+        <div class="driver-count">Driver 2 of 13</div>
+      </div>
+      <h2 class="driver-title">Gross Margin</h2>
+      <p class="driver-plain">Of every dollar Alight earns from selling its services, how much is left after paying the costs that go <b>directly</b> into delivering those services (the <span class="term" data-tooltip="Cost of Services — the direct cost of delivering Alight's benefits and payroll services to customers (analogous to COGS for a product business).">Cost of Services</span>). Higher is better — more dollars left to cover overhead, taxes, and profit.</p>
+      <div class="trajectory">
+        <div class="traj-label">Gross Margin trajectory · stepped +100 bps every year</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">35.0%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">36.0%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">37.0%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">38.0%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">39.0%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>Gross profit grows from <b class="countup source-pill" id="src-s5-gp" data-target="794">$794M</b> in FY24 (on revenue of <b class="source-pill" id="src-s5-rev">$2,332M</b>) to <b class="countup" data-target="1014">$1,014M</b> in FY29 — a <b>+$220M</b> lift. Most of that comes from margin expansion (+500 <span class="term" data-tooltip="Basis points — 1 bps = 0.01%. Used because it removes ambiguity (a '1% increase' could mean +1 percentage point or +1% of the value).">bps</span>), not revenue growth. If margin held flat at FY24's 34%, FY29 gross profit would only be ~$883M.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>+100 bps every year for four straight years is an aggressive call. Needs a thesis to defend — cost takeouts, mix shift toward higher-margin recurring revenue, or pricing power.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="5" data-calc-type="divide" data-src-num="#src-s5-gp" data-src-num-text="$794M" data-src-den="#src-s5-rev" data-src-den-text="$2,332M" data-num-label="Gross Profit" data-den-label="Revenue" data-result="34%" data-result-num="34" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-5">
+        <div class="calc-stage-title">FY24 Gross Margin = Gross Profit ÷ Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>05</b> / 18 · GROSS MARGIN</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 27.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev5">‹</button>
+          <button class="nav-btn" id="next5">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 6 — SG&A Margin ── -->
+    <section class="slide slide-driver" data-slide="6" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Margins</span> SG&amp;A Margin</div>
+        <div class="driver-count">Driver 3 of 13</div>
+      </div>
+      <h2 class="driver-title">SG&amp;A Margin</h2>
+      <p class="driver-plain"><span class="term" data-tooltip="Selling, General, and Administrative — overhead costs not tied directly to delivering services. Includes sales teams, finance, HR, executives, corporate IT, rent.">SG&amp;A</span> as a share of revenue. This is the "cost of running the company" — sales teams, finance, HR, executives, rent. As a percentage of revenue, lower means more revenue falls through to operating income.</p>
+      <div class="trajectory">
+        <div class="traj-label">SG&amp;A Margin trajectory · step-and-hold</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">20.0%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">19.5%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">19.0%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">19.0%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">19.0%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>SG&amp;A spend lands around <b class="countup source-pill" id="src-s6-sga" data-target="468">$468M</b> in FY25 (on FY25 revenue of <b class="source-pill" id="src-s6-rev">$2,341M</b>) and <b class="countup" data-target="494">$494M</b> by FY29 in absolute terms. The ratio drops because revenue grows faster than overhead. That's <span class="term" data-tooltip="Operating leverage — when a business grows revenue faster than its fixed costs, so each new dollar of revenue produces more profit than the last.">operating leverage</span> showing up.
+      </div>
+      <div class="stands-out pulse green">
+        <span class="tag">What stands out</span>Step-and-hold is a more conservative shape than the gross-margin call. The analyst takes 100 bps of efficiency over two years, then holds — instead of assuming overhead keeps falling forever.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="6" data-calc-type="divide" data-src-num="#src-s6-sga" data-src-num-text="$468M" data-src-den="#src-s6-rev" data-src-den-text="$2,341M" data-num-label="SG&A" data-den-label="Revenue" data-result="20%" data-result-num="20" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-6">
+        <div class="calc-stage-title">FY25 SG&amp;A Margin = SG&amp;A ÷ Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>06</b> / 18 · SG&amp;A MARGIN</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 33%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev6">‹</button>
+          <button class="nav-btn" id="next6">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 7 — Tax Rate ── -->
+    <section class="slide slide-driver" data-slide="7" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Capital &amp; Tax</span> Effective Tax Rate</div>
+        <div class="driver-count">Driver 4 of 13</div>
+      </div>
+      <h2 class="driver-title">Effective Tax Rate</h2>
+      <p class="driver-plain">The share of pre-tax income Alight expects to pay in taxes — federal, state, and international blended together. This single percentage sits between pre-tax income and net income on every projected year.</p>
+      <div class="trajectory">
+        <div class="traj-label">Tax Rate trajectory · flat (held at U.S. blended rate)</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">27%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">27%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">27%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">27%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">27%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>FY29 tax expense lands at <b class="countup source-pill" id="src-s7-tax" data-target="45">$45M</b> on <b class="source-pill" id="src-s7-pretax">$167M</b> of pre-tax income. FY24 was unusual — Alight had a pre-tax loss, so the effective rate that year was a meaningless 5%. The analyst snapped to a normalized 27% the moment the company turns profitable.
+      </div>
+      <div class="stands-out pulse blue">
+        <span class="tag">What stands out</span>Held flat at the U.S. blended rate. A reasonable default — but a deeper model would check if Alight has prior-year losses (<span class="term" data-tooltip="Net operating loss carryforwards — past losses a company can deduct from future taxable income, reducing taxes owed for several years after the loss.">NOLs</span>) that could shield income for a few years.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="7" data-calc-type="divide" data-src-num="#src-s7-tax" data-src-num-text="$45M" data-src-den="#src-s7-pretax" data-src-den-text="$167M" data-num-label="Tax Expense" data-den-label="Pre-tax Income" data-result="27%" data-result-num="27" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-7">
+        <div class="calc-stage-title">FY29 Effective Tax Rate = Tax Expense ÷ Pre-tax Income</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>07</b> / 18 · TAX RATE</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 38.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev7">‹</button>
+          <button class="nav-btn" id="next7">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 8 — CapEx / Revenue ── -->
+    <section class="slide slide-driver" data-slide="8" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Investment</span> CapEx / Revenue</div>
+        <div class="driver-count">Driver 5 of 13</div>
+      </div>
+      <h2 class="driver-title">CapEx / Revenue</h2>
+      <p class="driver-plain"><span class="term" data-tooltip="Capital Expenditure — money spent on long-lived assets like software platforms, data centers, or equipment. Hits cash flow now, but expensed over many years via depreciation.">CapEx</span> as a share of revenue. For Alight (a tech-platform business), this is mostly spend on software, data centers, and IT infrastructure. Lower means less reinvestment needed to keep the lights on.</p>
+      <div class="trajectory">
+        <div class="traj-label">CapEx / Revenue trajectory · step-and-hold</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">5.0%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">4.0%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">4.0%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">4.0%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">4.0%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>CapEx runs about <b class="countup source-pill" id="src-s8-capex" data-target="117">$117M</b> in FY25 on FY25 revenue of <b class="source-pill" id="src-s8-rev">$2,341M</b>, dips to <b>$96M</b> in FY26, then ramps back to ~<b class="countup" data-target="104">$104M</b> by FY29 (CapEx held flat at 4% of growing revenue). Roughly <b>$517M of cumulative reinvestment</b> across the 5-year window.
+      </div>
+      <div class="stands-out pulse green">
+        <span class="tag">What stands out</span>A one-step drop then flat. Conservative — the analyst is saying maintenance CapEx settles into a steady 4% of revenue once the heavier investment year (FY25) is behind them.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="8" data-calc-type="divide" data-src-num="#src-s8-capex" data-src-num-text="$117M" data-src-den="#src-s8-rev" data-src-den-text="$2,341M" data-num-label="CapEx" data-den-label="Revenue" data-result="5%" data-result-num="5" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-8">
+        <div class="calc-stage-title">FY25 CapEx / Revenue = CapEx ÷ Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>08</b> / 18 · CAPEX</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 44%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev8">‹</button>
+          <button class="nav-btn" id="next8">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 9 — D&A (Depreciation + Amortization combined) ── -->
+    <section class="slide slide-driver" data-slide="9" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Investment</span> D&amp;A / Revenue</div>
+        <div class="driver-count">Driver 6 of 13</div>
+      </div>
+      <h2 class="driver-title">D&amp;A / Revenue (Dep + Amort)</h2>
+      <p class="driver-plain"><span class="term" data-tooltip="Depreciation — the gradual write-down of physical assets (hardware, equipment) over their useful life. A non-cash expense.">Depreciation</span> spreads the cost of physical assets across their useful life. <span class="term" data-tooltip="Amortization — same idea as depreciation, but for intangible assets (software, customer relationships, acquired tech). For Alight, mostly the goodwill from prior acquisitions.">Amortization</span> does the same for intangibles like acquired software and customer relationships. Both are non-cash expenses that reduce reported profit.</p>
+      <div class="split-row">
+        <div class="trajectory">
+          <div class="traj-sub-label">Depreciation / Revenue</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">5.0%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">4.5%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">4.5%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">4.0%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">4.0%</div></div>
+          </div>
+        </div>
+        <div class="trajectory">
+          <div class="traj-sub-label">Amortization / Revenue</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">11.5%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">11.0%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">10.5%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">10.0%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">9.5%</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>Combined D&amp;A drops from <b class="source-pill" id="src-s9-da">$395M</b> in FY24 (~17% of FY24 revenue of <b class="source-pill" id="src-s9-rev">$2,332M</b>) to roughly <b class="countup" data-target="351">$351M</b> by FY29 (13.5%). Most of the decline is amortization — goodwill from older acquisitions is rolling off the books.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>Amortization steps down 50 bps every year for four years. The analyst is saying the intangible base from past M&amp;A finishes amortizing on schedule — no surprise impairments, no new acquisitions added in.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="9" data-calc-type="divide" data-src-num="#src-s9-da" data-src-num-text="$395M" data-src-den="#src-s9-rev" data-src-den-text="$2,332M" data-num-label="D&A" data-den-label="Revenue" data-result="17%" data-result-num="17" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-9">
+        <div class="calc-stage-title">FY24 D&amp;A / Revenue = D&amp;A ÷ Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>09</b> / 18 · D&amp;A</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 50%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev9">‹</button>
+          <button class="nav-btn" id="next9">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 10 — Working Capital (Receivables + Payables) ── -->
+    <section class="slide slide-driver" data-slide="10" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Working Capital</span> Receivables + Payables</div>
+        <div class="driver-count">Driver 7 of 13</div>
+      </div>
+      <h2 class="driver-title">Working Capital (Receivables % + Payables %)</h2>
+      <p class="driver-plain">How much cash sits in money customers owe Alight (<span class="term" data-tooltip="Accounts receivable — invoiced sales that customers haven't paid yet. Sits on the balance sheet as an asset.">receivables</span>) and money Alight owes its suppliers (<span class="term" data-tooltip="Accounts payable — bills Alight has received but not yet paid. Sits on the balance sheet as a liability.">payables</span>). Expressed as a share of revenue, so each scales as the company grows.</p>
+      <div class="split-row">
+        <div class="trajectory">
+          <div class="traj-sub-label">Receivables / Revenue</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">20.2%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">20.2%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">20.2%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">20.2%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">20.2%</div></div>
+          </div>
+        </div>
+        <div class="trajectory">
+          <div class="traj-sub-label">Payables / Revenue</div>
+          <div class="traj-pills">
+            <div class="traj-pill"><div class="year">FY25</div><div class="num">15.2%</div></div>
+            <div class="traj-pill"><div class="year">FY26</div><div class="num">15.2%</div></div>
+            <div class="traj-pill"><div class="year">FY27</div><div class="num">15.2%</div></div>
+            <div class="traj-pill"><div class="year">FY28</div><div class="num">15.2%</div></div>
+            <div class="traj-pill"><div class="year">FY29</div><div class="num">15.2%</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>Receivables grow with revenue: <b class="source-pill" id="src-s10-ar">$471M</b> (FY24) → <b class="countup" data-target="525">$525M</b> (FY29). Payables grow alongside: <b class="source-pill" id="src-s10-ap">$355M</b> → <b class="countup" data-target="395">$395M</b>. Both divided by FY24 revenue of <b class="source-pill" id="src-s10-rev">$2,332M</b>. The net gap (about $130M) is cash Alight has tied up in the working capital cycle.
+      </div>
+      <div class="stands-out pulse green">
+        <span class="tag">What stands out</span>Both ratios held flat at FY24 actuals. The analyst made no thesis on Alight improving collections or stretching supplier terms — a conservative call. A deeper model would typically test whether days outstanding could shift.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="10" data-calc-type="twin-divide" data-src-num1="#src-s10-ar" data-src-num1-text="$471M" data-src-den1="#src-s10-rev" data-src-den1-text="$2,332M" data-result1="20.2%" data-result1-num="20.2" data-src-num2="#src-s10-ap" data-src-num2-text="$355M" data-src-den2="#src-s10-rev" data-src-den2-text="$2,332M" data-result2="15.2%" data-result2-num="15.2" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-10">
+        <div class="calc-stage-title">FY24 Working Capital Ratios = Receivables ÷ Revenue · Payables ÷ Revenue</div>
+        <div class="twin-fractions">
+          <div class="twin-col">
+            <div class="twin-col-label">Receivables / Revenue</div>
+            <div class="fraction">
+              <div class="slot" data-role="num1"><span class="slot-content"></span></div>
+              <div class="divider-line"></div>
+              <div class="slot" data-role="den1"><span class="slot-content"></span></div>
+            </div>
+            <div class="equation-result" data-role="result1"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+          </div>
+          <div class="twin-col">
+            <div class="twin-col-label">Payables / Revenue</div>
+            <div class="fraction">
+              <div class="slot" data-role="num2"><span class="slot-content"></span></div>
+              <div class="divider-line"></div>
+              <div class="slot" data-role="den2"><span class="slot-content"></span></div>
+            </div>
+            <div class="equation-result" data-role="result2"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+          </div>
+        </div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>10</b> / 18 · WORKING CAPITAL</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 55.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev10">‹</button>
+          <button class="nav-btn" id="next10">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 11 — Interest Rate ── -->
+    <section class="slide slide-driver" data-slide="11" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Capital &amp; Tax</span> Net Interest Rate</div>
+        <div class="driver-count">Driver 8 of 13</div>
+      </div>
+      <h2 class="driver-title">Net Interest Rate</h2>
+      <p class="driver-plain">The blended rate Alight pays on its debt, net of any interest it earns on cash. Multiplied by the average debt balance, this drives the interest expense line that sits below operating income — eating into pre-tax profit.</p>
+      <div class="trajectory">
+        <div class="traj-label">Net Interest Rate trajectory · single anchor, held flat</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">4.7%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">4.7%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">4.7%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">4.7%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">4.7%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>FY29 interest expense lands at <b class="countup source-pill" id="src-s11-int" data-target="95">$95M</b> on an average debt balance of ~<b class="source-pill" id="src-s11-debt">$2,025M</b>. That's <b>$95M</b> of pre-tax income surrendered each year before any profit shows up.
+      </div>
+      <div class="stands-out pulse blue">
+        <span class="tag">What stands out</span>Hardcoded at 4.7% once and carried forward — a single anchor across the full window. A deeper model would tie this to actual loan terms (rate, maturity, refinancing dates) from the most recent 10-K.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="11" data-calc-type="divide" data-src-num="#src-s11-int" data-src-num-text="$95M" data-src-den="#src-s11-debt" data-src-den-text="$2,025M" data-num-label="Interest Expense" data-den-label="Average Debt" data-result="4.7%" data-result-num="4.7" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-11">
+        <div class="calc-stage-title">FY29 Net Interest Rate = Interest Expense ÷ Average Debt</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>11</b> / 18 · INTEREST RATE</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 61%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev11">‹</button>
+          <button class="nav-btn" id="next11">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 12 — SBC / Revenue (Alight-specific) ── -->
+    <section class="slide slide-driver" data-slide="12" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Alight-specific</span> SBC / Revenue</div>
+        <div class="driver-count">Driver 9 of 13</div>
+      </div>
+      <h2 class="driver-title">Stock-Based Compensation / Revenue</h2>
+      <p class="driver-plain">Alight is a tech-platform business that pays part of employee compensation in <span class="term" data-tooltip="Stock-Based Compensation — when a company pays employees in shares or stock options instead of (or in addition to) cash. A real expense even though no cash leaves the company.">stock</span>, not cash. <b>Why this driver exists for Alight:</b> SBC is a real expense — it dilutes existing shareholders — even though no cash leaves the business that year. Standard for tech companies, less common for old-line industrials.</p>
+      <div class="trajectory">
+        <div class="traj-label">SBC / Revenue trajectory · flat</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">3.3%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">3.3%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">3.3%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">3.3%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">3.3%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>Roughly <b class="countup source-pill" id="src-s12-sbc" data-target="77">$77M</b> in FY25 on FY25 revenue of <b class="source-pill" id="src-s12-rev">$2,341M</b>, stepping up to <b>$86M</b> by FY29 (SBC stays at 3.3% of revenue, but revenue grows) — about <b>$407M of cumulative dilution</b> over five years. Equivalent to a few percent of the share count each year.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>Held flat. The analyst is saying Alight's stock-comp budget scales linearly with revenue — no spike from a new exec hire, no decline from belt-tightening.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="12" data-calc-type="divide" data-src-num="#src-s12-sbc" data-src-num-text="$77M" data-src-den="#src-s12-rev" data-src-den-text="$2,341M" data-num-label="SBC" data-den-label="Revenue" data-result="3.3%" data-result-num="3.3" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-12">
+        <div class="calc-stage-title">FY25 SBC / Revenue = SBC ÷ Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>12</b> / 18 · SBC</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 66.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev12">‹</button>
+          <button class="nav-btn" id="next12">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 13 — New Logos % (Alight-specific) ── -->
+    <section class="slide slide-driver" data-slide="13" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Alight-specific</span> New Logos %</div>
+        <div class="driver-count">Driver 10 of 13</div>
+      </div>
+      <h2 class="driver-title">New Logos % of Revenue</h2>
+      <p class="driver-plain">The <span class="term" data-tooltip="Customer acquisition driver — the percentage of recurring revenue each year that comes from brand-new customers (logos) signed during that period, not from existing accounts.">customer acquisition driver</span>: how much of Alight's recurring revenue base grows each year from landing brand-new customers (called "logos"). <b>Why this driver exists for Alight:</b> recurring-revenue businesses live and die on the gap between new wins and lost customers.</p>
+      <div class="trajectory">
+        <div class="traj-label">New Logos % trajectory · flat</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">+1%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">+1%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">+1%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">+1%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">+1%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span><span class="source-pill" id="src-s13-rate">1%</span> of the recurring base of <b class="source-pill" id="src-s13-base">$2,135M</b> is roughly <b class="countup" data-target="22">$22M</b>/year of new logo revenue. Over five years, that's ~$115M cumulative — roughly 40% of total recurring revenue growth comes from new wins.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>1% is a modest assumption for a B2B platform business. The analyst is saying Alight isn't winning aggressively in the market — most of growth comes from the existing book, not new logos.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="13" data-calc-type="multiply" data-src1="#src-s13-base" data-src1-text="$2,135M" data-src2="#src-s13-rate" data-src2-text="1%" data-label1="Prior recurring" data-label2="New logo rate" data-result="$22M" data-result-num="22" data-result-unit="$M">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-13">
+        <div class="calc-stage-title">FY25 New Logo Revenue = Prior Recurring × New Logo Rate</div>
+        <div class="growth-formula">
+          <div class="slot" data-role="base"><span class="slot-label">Prior recurring</span><span class="slot-content"></span></div>
+          <span class="op-symbol" data-role="op">×</span>
+          <div class="slot" data-role="rate" style="width:120px;"><span class="slot-label">New logo rate</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">—</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>13</b> / 18 · NEW LOGOS</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 72%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev13">‹</button>
+          <button class="nav-btn" id="next13">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 14 — Losses / Churn (Alight-specific) ── -->
+    <section class="slide slide-driver" data-slide="14" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Alight-specific</span> Losses / Churn</div>
+        <div class="driver-count">Driver 11 of 13</div>
+      </div>
+      <h2 class="driver-title">Losses / Churn %</h2>
+      <p class="driver-plain">The <span class="term" data-tooltip="Retention driver — the percentage of recurring revenue lost each year when customers leave, downsize, or don't renew. The opposite of new logos.">retention driver</span>: how much recurring revenue Alight loses each year when customers leave, downsize, or fail to renew. <b>Why this driver exists for Alight:</b> in a subscription-style business, churn is the silent killer — even small leaks compound over years.</p>
+      <div class="trajectory">
+        <div class="traj-label">Losses / Churn trajectory · step-and-hold</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">−6%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">−4%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">−4%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">−4%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">−4%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>FY25 churn (<span class="source-pill" id="src-s14-rate">−6%</span> on a recurring base of <b class="source-pill" id="src-s14-base">$2,135M</b>) pulls roughly <b>−$128M</b> out of the recurring base; that settles to about <b class="countup" data-target="94">$94M</b>/year by FY29. Net of the 1% new-logo wins, the recurring book still grows — but only because pricing and new logos outpace losses.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>FY25's −6% normalizes to −4% from FY26 onward. The analyst is calling FY25 a clean-up year (one large lost contract, perhaps) and assuming steady-state churn for the rest of the window.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="14" data-calc-type="multiply" data-src1="#src-s14-base" data-src1-text="$2,135M" data-src2="#src-s14-rate" data-src2-text="−6%" data-label1="Prior recurring" data-label2="Churn rate" data-result="−$128M" data-result-num="-128" data-result-unit="$M">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-14">
+        <div class="calc-stage-title">FY25 Churned Revenue = Prior Recurring × Churn Rate</div>
+        <div class="growth-formula">
+          <div class="slot" data-role="base"><span class="slot-label">Prior recurring</span><span class="slot-content"></span></div>
+          <span class="op-symbol" data-role="op">×</span>
+          <div class="slot" data-role="rate" style="width:120px;"><span class="slot-label">Churn rate</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">—</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>14</b> / 18 · CHURN</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 77.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev14">‹</button>
+          <button class="nav-btn" id="next14">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 15 — Fee per Employee Growth (Alight-specific) ── -->
+    <section class="slide slide-driver" data-slide="15" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Alight-specific</span> Fee per Employee</div>
+        <div class="driver-count">Driver 12 of 13</div>
+      </div>
+      <h2 class="driver-title">Fee per Employee Growth</h2>
+      <p class="driver-plain">A <span class="term" data-tooltip="Per-employee pricing driver — Alight charges its clients (large employers) a monthly fee per employee enrolled. This driver assumes how much that fee rises each year.">pricing driver</span> unique to per-employee SaaS. Alight charges its clients (large employers) a monthly fee for every employee enrolled. <b>Why this driver exists for Alight:</b> it lets the analyst separate pricing power from volume — a fee bump flows straight to revenue without needing more customers.</p>
+      <div class="trajectory">
+        <div class="traj-label">Fee per Employee Growth trajectory · flat</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">+6%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">+6%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">+6%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">+6%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">+6%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span><span class="source-pill" id="src-s15-rate">+6%</span> annual fee growth on a recurring base of <b class="source-pill" id="src-s15-base">$2,135M</b> adds roughly <b class="countup" data-target="128">$128M</b>/year of pricing-driven revenue lift. Over the 5-year window, that's a major contributor to top-line growth.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>+6% every year is well above typical inflation. The analyst is betting Alight has pricing power — either through long-term contracts with built-in escalators or because clients accept rate hikes without switching providers.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="15" data-calc-type="multiply" data-src1="#src-s15-base" data-src1-text="$2,135M" data-src2="#src-s15-rate" data-src2-text="+6%" data-label1="Prior recurring" data-label2="Fee growth" data-result="$128M" data-result-num="128" data-result-unit="$M">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-15">
+        <div class="calc-stage-title">FY25 Pricing Lift = Prior Recurring × Fee Growth Rate</div>
+        <div class="growth-formula">
+          <div class="slot" data-role="base"><span class="slot-label">Prior recurring</span><span class="slot-content"></span></div>
+          <span class="op-symbol" data-role="op">×</span>
+          <div class="slot" data-role="rate" style="width:120px;"><span class="slot-label">Fee growth</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">—</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>15</b> / 18 · FEE PER EMPLOYEE</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 83%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev15">‹</button>
+          <button class="nav-btn" id="next15">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 16 — ES Adj EBITDA Margin (Alight-specific) ── -->
+    <section class="slide slide-driver" data-slide="16" aria-hidden="true">
+      <div class="driver-head">
+        <div class="driver-eyebrow"><span class="pill">Category · Alight-specific</span> ES Adj EBITDA Margin</div>
+        <div class="driver-count">Driver 13 of 13</div>
+      </div>
+      <h2 class="driver-title">Employer Solutions — Adj. EBITDA Margin</h2>
+      <p class="driver-plain"><span class="term" data-tooltip="Segment-level profitability — instead of one company-wide profit margin, the analyst projects each business segment separately. Each segment has different cost structures and growth profiles.">Segment-level profitability</span>. <b>Why this driver exists for Alight:</b> the analyst projected each segment separately because they have different cost structures. ES is the core business — a healthier margin here means more cash converting from revenue at the segment level, before corporate overhead.</p>
+      <div class="trajectory">
+        <div class="traj-label">ES Adj EBITDA Margin trajectory · +25 bps every year</div>
+        <div class="traj-pills">
+          <div class="traj-pill"><div class="year">FY25</div><div class="num">27.0%</div></div>
+          <div class="traj-pill"><div class="year">FY26</div><div class="num">27.3%</div></div>
+          <div class="traj-pill"><div class="year">FY27</div><div class="num">27.5%</div></div>
+          <div class="traj-pill"><div class="year">FY28</div><div class="num">27.8%</div></div>
+          <div class="traj-pill"><div class="year">FY29</div><div class="num">28.0%</div></div>
+        </div>
+      </div>
+      <div class="dollar-context">
+        <span class="tag">In dollars</span>ES Adj EBITDA grows from <b class="countup source-pill" id="src-s16-ebitda" data-target="556">$556M</b> (FY24, on ES revenue of <b class="source-pill" id="src-s16-rev">$2,332M</b>, a 23.8% margin) to <b class="countup" data-target="727">$727M</b> (FY29, at 28.0%). That <b>+$171M lift</b> is roughly half from revenue growth and half from margin expansion.
+      </div>
+      <div class="stands-out pulse">
+        <span class="tag">What stands out</span>The analyst takes margin up every single year of the projection. Combined with the gross-margin call, it's a coordinated bet on Alight executing on multi-year operating improvements — not a one-time fix.
+      </div>
+
+      <div class="calc-cta-wrap">
+        <button class="calc-cta" data-calc-slide="16" data-calc-type="divide" data-src-num="#src-s16-ebitda" data-src-num-text="$556M" data-src-den="#src-s16-rev" data-src-den-text="$2,332M" data-num-label="ES Adj EBITDA" data-den-label="ES Revenue" data-result="24%" data-result-num="24" data-result-unit="%">
+          <span class="play-icon">▶</span>Show me how this gets calculated
+        </button>
+      </div>
+      <div class="calc-stage" id="calc-stage-16">
+        <div class="calc-stage-title">FY24 ES Adj EBITDA Margin = ES Adj EBITDA ÷ ES Revenue</div>
+        <div class="fraction">
+          <div class="slot" data-role="num"><span class="slot-label">Numerator</span><span class="slot-content"></span></div>
+          <div class="divider-line"></div>
+          <div class="slot" data-role="den"><span class="slot-label">Denominator</span><span class="slot-content"></span></div>
+        </div>
+        <div class="equation-result"><span class="eq-symbol">=</span><span class="eq-result-value">0%</span></div>
+        <button class="reset-btn">↻ Reset</button>
+      </div>
+
+      <div class="nav-strip">
+        <div class="nav-page"><b>16</b> / 18 · ES ADJ EBITDA</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 88.5%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev16">‹</button>
+          <button class="nav-btn" id="next16">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 17 — What stands out (takeaways) ── -->
+    <section class="slide slide-takeaways" data-slide="17" aria-hidden="true">
+      <div class="snap-eyebrow">Honest read · the calls behind the calls</div>
+      <h2 class="snap-title">What <em>stands out</em> across all 13.</h2>
+      <p class="snap-lede">Look at the 13 drivers side by side and a shape emerges. Where the analyst leaned aggressive, where they leaned conservative, and where they punted on complexity.</p>
+      <div class="takeaway-list">
+        <div class="takeaway aggressive">
+          <div class="label">Aggressive</div>
+          <div class="text"><b>Gross Margin +100 bps/year for 4 years.</b> The most-leaned-on assumption in the model. Drives most of the operating income lift — needs a real thesis (cost takeouts, recurring-mix shift, pricing power) to defend.</div>
+        </div>
+        <div class="takeaway aggressive">
+          <div class="label">Aggressive</div>
+          <div class="text"><b>ES Adj EBITDA Margin growing every year (+25 bps/yr).</b> Combined with the gross-margin call, the analyst is stacking two layers of margin expansion. If gross margin underperforms, the segment margin call typically goes with it.</div>
+        </div>
+        <div class="takeaway conservative">
+          <div class="label">Conservative</div>
+          <div class="text"><b>Working capital held flat at FY24 actuals.</b> Receivables and payables ratios don't move for 5 years. No thesis on collections improvement, no thesis on stretching suppliers — the analyst left a lever untouched.</div>
+        </div>
+        <div class="takeaway telling">
+          <div class="label">Telling</div>
+          <div class="text"><b>Interest rate hardcoded at 4.7% and carried forward.</b> A single anchor across the full projection window. Refinancing dates, rate changes, or new debt issuance would all break this — but the analyst chose to keep it simple.</div>
+        </div>
+      </div>
+      <div class="nav-strip">
+        <div class="nav-page"><b>17</b> / 18 · WHAT STANDS OUT</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 94%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev17">‹</button>
+          <button class="nav-btn" id="next17">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SLIDE 18 — Cheat sheet receipt ── -->
+    <section class="slide slide-receipt" data-slide="18" aria-hidden="true">
+      <div class="receipt-left">
+        <div class="receipt-eyebrow">You now know all 13</div>
+        <h2 class="receipt-title">Screenshot this. <em>That's Alight's driver sheet.</em></h2>
+        <p class="receipt-sub">All 13 drivers on one card — the 8 universal ones plus the 5 the analyst added because of Alight's specific business model. Every value is pulled from the model's <span class="term" data-tooltip="FY25 to FY29 — the five-year forward projection window. FY25 is the first projected year; FY29 is the model's terminal year.">FY25–FY29</span> columns.</p>
+        <div class="receipt-next">
+          <b>What you do next:</b> build the same kind of driver list for the company you picked — pull the historicals, choose a trajectory shape (flat, step-and-hold, ramp), and write down the thesis for each call.
+        </div>
+      </div>
+      <div class="receipt-card">
+        <div class="receipt-head">
+          <div class="brand">Alight · 13 Drivers</div>
+          <div class="tag">FY25 → FY29 · pulled from Model tab</div>
+        </div>
+
+        <div class="receipt-section">— Universal · 8 —</div>
+        <div class="receipt-line">
+          <div class="name">01 · REV</div>
+          <div class="desc">Revenue Growth (segment build)<small>ES Recurring: +1% → +3% · Project: −6% → −2%</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">02 · GM</div>
+          <div class="desc">Gross Margin<small>35.0% → 39.0% · stepped +100 bps/yr</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">03 · SG&amp;A</div>
+          <div class="desc">SG&amp;A Margin<small>20.0% → 19.0% · step-and-hold</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">04 · TAX</div>
+          <div class="desc">Effective Tax Rate<small>27% · flat across 5 years</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">05 · CAPEX</div>
+          <div class="desc">CapEx / Revenue<small>5.0% → 4.0% · step-and-hold</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">06 · D&amp;A</div>
+          <div class="desc">D&amp;A / Revenue<small>Dep 5.0% → 4.0% · Amort 11.5% → 9.5%</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">07 · WC</div>
+          <div class="desc">Working Capital<small>AR/Rev 20.2% · AP/Rev 15.2% · both flat</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">08 · INT</div>
+          <div class="desc">Net Interest Rate<small>4.7% · single anchor, held flat</small></div>
+        </div>
+
+        <div class="receipt-section">— Alight-Specific · 5 —</div>
+        <div class="receipt-line">
+          <div class="name">09 · SBC</div>
+          <div class="desc">SBC / Revenue<small>3.3% · flat (tech-company expense)</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">10 · LOGOS</div>
+          <div class="desc">New Logos %<small>+1% / year of recurring base</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">11 · CHURN</div>
+          <div class="desc">Losses / Churn<small>−6% (FY25) → −4% · step-and-hold</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">12 · FEE</div>
+          <div class="desc">Fee per Employee Growth<small>+6% / year · pricing driver</small></div>
+        </div>
+        <div class="receipt-line">
+          <div class="name">13 · ES EBITDA</div>
+          <div class="desc">ES Adj EBITDA Margin<small>27.0% → 28.0% · +25 bps/yr</small></div>
+        </div>
+
+        <div class="receipt-foot">— end of walkthrough —</div>
+      </div>
+      <div class="nav-strip">
+        <div class="nav-page"><b>18</b> / 18 · CHEAT SHEET</div>
+        <div class="nav-progress"><div class="nav-progress-fill" style="width: 100%"></div></div>
+        <div class="nav-arrows">
+          <button class="nav-btn" id="prev18">‹</button>
+          <button class="nav-btn" id="next18" disabled>›</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const TOTAL = 18;
+    let current = 1;
+
+    function show(n) {
+      if (n < 1 || n > TOTAL) return;
+      document.querySelectorAll('.slide').forEach(s => {
+        s.setAttribute('aria-hidden', s.dataset.slide == n ? 'false' : 'true');
+      });
+      current = n;
+      const active = document.querySelector(`.slide[data-slide="${n}"]`);
+      if (active) {
+        active.querySelectorAll('.pulse').forEach(el => {
+          el.style.animation = 'none';
+          void el.offsetWidth;
+          el.style.animation = '';
+        });
+        active.querySelectorAll('.countup[data-target]').forEach(el => animateCount(el));
+      }
+    }
+
+    function animateCount(el) {
+      const target = parseFloat(el.dataset.target);
+      if (isNaN(target)) return;
+      const original = el.textContent;
+      const startTime = performance.now();
+      const duration = 600;
+      // Extract prefix and suffix from original text
+      const m = original.match(/^([^\d\-−.]*)([\-−]?[\d.,]+)(.*)$/);
+      const prefix = m ? m[1] : '';
+      const suffix = m ? m[3] : '';
+      function step(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const val = target * eased;
+        const formatted = val >= 100 ? Math.round(val).toLocaleString() : val.toFixed(1);
+        el.textContent = prefix + formatted + suffix;
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = original;
+      }
+      requestAnimationFrame(step);
+    }
+
+    for (let i = 1; i <= TOTAL; i++) {
+      const prev = document.getElementById('prev' + i);
+      const next = document.getElementById('next' + i);
+      if (prev) prev.addEventListener('click', () => show(i - 1));
+      if (next) next.addEventListener('click', () => show(i + 1));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') show(current + 1);
+      if (e.key === 'ArrowLeft') show(current - 1);
+    });
+
+    // Run countups on the initial slide
+    document.querySelectorAll('.slide[aria-hidden="false"] .countup[data-target]').forEach(el => animateCount(el));
+
+    /* ────────────────────────────────────────
+       Show-me-how calculation animation
+       ───────────────────────────────────────── */
+    (function () {
+      const calcState = new Map(); // slideNum -> { timeouts, clones, ctaWrap, stage, btn }
+
+      function clearSlideState(slideNum) {
+        const st = calcState.get(slideNum);
+        if (!st) return;
+        st.timeouts.forEach(clearTimeout);
+        st.timeouts = [];
+        st.clones.forEach(c => c.remove());
+        st.clones = [];
+      }
+
+      function flyValue(sourceEl, destSlotEl, displayText, slideNum, onLanded) {
+        if (!sourceEl || !destSlotEl) { if (onLanded) onLanded(); return; }
+        const srcBox = sourceEl.getBoundingClientRect();
+        const destRect = destSlotEl.getBoundingClientRect();
+
+        const clone = document.createElement('div');
+        clone.className = 'fly-clone';
+        clone.textContent = displayText;
+        document.body.appendChild(clone);
+        calcState.get(slideNum).clones.push(clone);
+
+        clone.style.left = srcBox.left + 'px';
+        clone.style.top = srcBox.top + 'px';
+        clone.style.minHeight = Math.max(srcBox.height, 24) + 'px';
+
+        sourceEl.classList.add('dim');
+
+        const cloneRect = clone.getBoundingClientRect();
+        const dx = (destRect.left + destRect.width / 2) - (cloneRect.left + cloneRect.width / 2);
+        const dy = (destRect.top + destRect.height / 2) - (cloneRect.top + cloneRect.height / 2);
+
+        void clone.offsetWidth;
+        clone.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+
+        const landMs = 700;
+        const st = calcState.get(slideNum);
+        st.timeouts.push(setTimeout(() => {
+          destSlotEl.classList.add('filled');
+          const contentSpan = destSlotEl.querySelector('.slot-content');
+          if (contentSpan) contentSpan.textContent = displayText;
+          clone.remove();
+          st.clones = st.clones.filter(c => c !== clone);
+          if (onLanded) onLanded();
+        }, landMs));
+      }
+
+      function countUp(resultEl, targetNum, unit, duration) {
+        const startTs = performance.now();
+        const isInt = Number.isInteger(targetNum);
+        function tick(now) {
+          const elapsed = now - startTs;
+          const t = Math.min(1, elapsed / duration);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const current = targetNum * eased;
+          let display;
+          if (unit === '%') {
+            display = (isInt ? Math.round(current) : current.toFixed(1)) + '%';
+          } else if (unit === '$M') {
+            const abs = Math.abs(current);
+            const sign = current < 0 ? '−' : '';
+            display = sign + '$' + Math.round(abs).toLocaleString() + 'M';
+          } else {
+            display = current.toFixed(1) + unit;
+          }
+          resultEl.textContent = display;
+          if (t < 1) {
+            requestAnimationFrame(tick);
+          } else {
+            // Final value snap
+            if (unit === '%') {
+              resultEl.textContent = (isInt ? Math.round(targetNum) : targetNum.toFixed(1)) + '%';
+            } else if (unit === '$M') {
+              const abs = Math.abs(targetNum);
+              const sign = targetNum < 0 ? '−' : '';
+              resultEl.textContent = sign + '$' + Math.round(abs).toLocaleString() + 'M';
+            }
+            const eqRow = resultEl.closest('.equation-result');
+            if (eqRow) {
+              eqRow.classList.add('popped');
+              setTimeout(() => eqRow.classList.remove('popped'), 280);
+            }
+          }
+        }
+        requestAnimationFrame(tick);
+      }
+
+      function getSlideEl(slideNum) {
+        return document.querySelector(`.slide[data-slide="${slideNum}"]`);
+      }
+
+      function playAnimation(btn) {
+        const slideNum = btn.dataset.calcSlide;
+        const type = btn.dataset.calcType;
+        const slideEl = getSlideEl(slideNum);
+        if (!slideEl) return;
+        const stage = slideEl.querySelector(`#calc-stage-${slideNum}`);
+        const ctaWrap = btn.closest('.calc-cta-wrap');
+        if (!stage || !ctaWrap) return;
+
+        // Init state
+        calcState.set(slideNum, { timeouts: [], clones: [], ctaWrap, stage, btn });
+        const st = calcState.get(slideNum);
+
+        // Hide button, show stage
+        ctaWrap.style.display = 'none';
+        stage.classList.add('active');
+
+        // Reset stage internals
+        stage.querySelectorAll('.slot').forEach(s => {
+          s.classList.remove('visible', 'filled');
+          const c = s.querySelector('.slot-content');
+          if (c) c.textContent = '';
+        });
+        stage.querySelectorAll('.divider-line').forEach(d => d.classList.remove('visible'));
+        stage.querySelectorAll('.op-symbol').forEach(o => o.classList.remove('visible'));
+        stage.querySelectorAll('.equation-result').forEach(r => {
+          r.classList.remove('visible', 'popped');
+          const v = r.querySelector('.eq-result-value');
+          if (v) v.textContent = (type === 'divide' || type === 'twin-divide') ? '0%' : '—';
+        });
+        const resetBtn = stage.querySelector('.reset-btn');
+        if (resetBtn) resetBtn.classList.remove('visible');
+
+        if (type === 'divide') {
+          runDivide(slideNum, btn, stage);
+        } else if (type === 'twin-divide') {
+          runTwinDivide(slideNum, btn, stage);
+        } else if (type === 'multiply') {
+          runMultiply(slideNum, btn, stage);
+        } else if (type === 'growth') {
+          runGrowth(slideNum, btn, stage);
+        }
+      }
+
+      function runDivide(slideNum, btn, stage) {
+        const st = calcState.get(slideNum);
+        const numSlot = stage.querySelector('[data-role="num"]');
+        const denSlot = stage.querySelector('[data-role="den"]');
+        const divider = stage.querySelector('.divider-line');
+        const eqRow = stage.querySelector('.equation-result');
+        const resultEl = eqRow.querySelector('.eq-result-value');
+        const resetBtn = stage.querySelector('.reset-btn');
+
+        const srcNum = document.querySelector(btn.dataset.srcNum);
+        const srcDen = document.querySelector(btn.dataset.srcDen);
+        const numText = btn.dataset.srcNumText;
+        const denText = btn.dataset.srcDenText;
+        const resultNum = parseFloat(btn.dataset.resultNum);
+        const resultUnit = btn.dataset.resultUnit || '%';
+
+        st.timeouts.push(setTimeout(() => {
+          numSlot.classList.add('visible');
+          denSlot.classList.add('visible');
+          divider.classList.add('visible');
+        }, 0));
+
+        st.timeouts.push(setTimeout(() => {
+          flyValue(srcNum, numSlot, numText, slideNum);
+        }, 500));
+
+        st.timeouts.push(setTimeout(() => {
+          flyValue(srcDen, denSlot, denText, slideNum);
+        }, 1400));
+
+        st.timeouts.push(setTimeout(() => {
+          eqRow.classList.add('visible');
+        }, 2300));
+
+        st.timeouts.push(setTimeout(() => {
+          countUp(resultEl, resultNum, resultUnit, 800);
+        }, 2600));
+
+        st.timeouts.push(setTimeout(() => {
+          if (resetBtn) resetBtn.classList.add('visible');
+        }, 3500));
+      }
+
+      function runTwinDivide(slideNum, btn, stage) {
+        const st = calcState.get(slideNum);
+        const num1 = stage.querySelector('[data-role="num1"]');
+        const den1 = stage.querySelector('[data-role="den1"]');
+        const num2 = stage.querySelector('[data-role="num2"]');
+        const den2 = stage.querySelector('[data-role="den2"]');
+        const dividers = stage.querySelectorAll('.divider-line');
+        const eqRows = stage.querySelectorAll('.equation-result');
+        const resetBtn = stage.querySelector('.reset-btn');
+
+        const srcNum1 = document.querySelector(btn.dataset.srcNum1);
+        const srcDen1 = document.querySelector(btn.dataset.srcDen1);
+        const srcNum2 = document.querySelector(btn.dataset.srcNum2);
+        const srcDen2 = document.querySelector(btn.dataset.srcDen2);
+        const num1Text = btn.dataset.srcNum1Text;
+        const den1Text = btn.dataset.srcDen1Text;
+        const num2Text = btn.dataset.srcNum2Text;
+        const den2Text = btn.dataset.srcDen2Text;
+        const result1 = parseFloat(btn.dataset.result1Num);
+        const result2 = parseFloat(btn.dataset.result2Num);
+        const unit = btn.dataset.resultUnit || '%';
+
+        st.timeouts.push(setTimeout(() => {
+          [num1, den1, num2, den2].forEach(s => s.classList.add('visible'));
+          dividers.forEach(d => d.classList.add('visible'));
+        }, 0));
+
+        // Left: AR / Rev
+        st.timeouts.push(setTimeout(() => flyValue(srcNum1, num1, num1Text, slideNum), 500));
+        st.timeouts.push(setTimeout(() => flyValue(srcDen1, den1, den1Text, slideNum), 1200));
+        // Right: AP / Rev
+        st.timeouts.push(setTimeout(() => flyValue(srcNum2, num2, num2Text, slideNum), 1900));
+        st.timeouts.push(setTimeout(() => flyValue(srcDen2, den2, den2Text, slideNum), 2600));
+
+        st.timeouts.push(setTimeout(() => {
+          eqRows[0].classList.add('visible');
+          eqRows[1].classList.add('visible');
+        }, 3300));
+
+        st.timeouts.push(setTimeout(() => {
+          countUp(eqRows[0].querySelector('.eq-result-value'), result1, unit, 800);
+          countUp(eqRows[1].querySelector('.eq-result-value'), result2, unit, 800);
+        }, 3600));
+
+        st.timeouts.push(setTimeout(() => {
+          if (resetBtn) resetBtn.classList.add('visible');
+        }, 4500));
+      }
+
+      function runMultiply(slideNum, btn, stage) {
+        const st = calcState.get(slideNum);
+        const baseSlot = stage.querySelector('[data-role="base"]');
+        const rateSlot = stage.querySelector('[data-role="rate"]');
+        const op = stage.querySelector('[data-role="op"]');
+        const eqRow = stage.querySelector('.equation-result');
+        const resultEl = eqRow.querySelector('.eq-result-value');
+        const resetBtn = stage.querySelector('.reset-btn');
+
+        const src1 = document.querySelector(btn.dataset.src1);
+        const src2 = document.querySelector(btn.dataset.src2);
+        const text1 = btn.dataset.src1Text;
+        const text2 = btn.dataset.src2Text;
+        const resultNum = parseFloat(btn.dataset.resultNum);
+        const resultUnit = btn.dataset.resultUnit || '$M';
+
+        st.timeouts.push(setTimeout(() => {
+          baseSlot.classList.add('visible');
+          rateSlot.classList.add('visible');
+          op.classList.add('visible');
+        }, 0));
+
+        st.timeouts.push(setTimeout(() => {
+          flyValue(src1, baseSlot, text1, slideNum);
+        }, 500));
+
+        st.timeouts.push(setTimeout(() => {
+          flyValue(src2, rateSlot, text2, slideNum);
+        }, 1400));
+
+        st.timeouts.push(setTimeout(() => {
+          eqRow.classList.add('visible');
+        }, 2300));
+
+        st.timeouts.push(setTimeout(() => {
+          countUp(resultEl, resultNum, resultUnit, 800);
+        }, 2600));
+
+        st.timeouts.push(setTimeout(() => {
+          if (resetBtn) resetBtn.classList.add('visible');
+        }, 3500));
+      }
+
+      function runGrowth(slideNum, btn, stage) {
+        const st = calcState.get(slideNum);
+        const baseSlot = stage.querySelector('[data-role="base"]');
+        const rateSlot = stage.querySelector('[data-role="rate"]');
+        const op = stage.querySelector('[data-role="op"]');
+        const eqRow = stage.querySelector('.equation-result');
+        const resultEl = eqRow.querySelector('.eq-result-value');
+        const resetBtn = stage.querySelector('.reset-btn');
+
+        const src1 = document.querySelector(btn.dataset.src1);
+        const text1 = btn.dataset.src1Text;
+        const rate = parseFloat(btn.dataset.rate);
+        const result = btn.dataset.result;
+        const resultNum = parseFloat(btn.dataset.resultNum);
+
+        st.timeouts.push(setTimeout(() => {
+          baseSlot.classList.add('visible');
+          rateSlot.classList.add('visible');
+          op.classList.add('visible');
+        }, 0));
+
+        st.timeouts.push(setTimeout(() => {
+          flyValue(src1, baseSlot, text1, slideNum);
+        }, 500));
+
+        // For growth, the "rate" slot doesn't fly from anywhere — just appears
+        st.timeouts.push(setTimeout(() => {
+          rateSlot.classList.add('filled');
+          const c = rateSlot.querySelector('.slot-content');
+          if (c) c.textContent = '(1 + ' + rate + '%)';
+        }, 1400));
+
+        st.timeouts.push(setTimeout(() => {
+          eqRow.classList.add('visible');
+        }, 2100));
+
+        st.timeouts.push(setTimeout(() => {
+          countUp(resultEl, resultNum, '$M', 800);
+        }, 2400));
+
+        st.timeouts.push(setTimeout(() => {
+          if (resetBtn) resetBtn.classList.add('visible');
+        }, 3300));
+      }
+
+      function resetAnimation(stage, slideNum) {
+        clearSlideState(slideNum);
+        stage.classList.remove('active');
+        stage.querySelectorAll('.slot').forEach(s => {
+          s.classList.remove('visible', 'filled');
+          const c = s.querySelector('.slot-content');
+          if (c) c.textContent = '';
+        });
+        stage.querySelectorAll('.divider-line').forEach(d => d.classList.remove('visible'));
+        stage.querySelectorAll('.op-symbol').forEach(o => o.classList.remove('visible'));
+        stage.querySelectorAll('.equation-result').forEach(r => {
+          r.classList.remove('visible', 'popped');
+        });
+        stage.querySelectorAll('.reset-btn').forEach(r => r.classList.remove('visible'));
+        // Restore source pills on the slide
+        const slideEl = getSlideEl(slideNum);
+        if (slideEl) {
+          slideEl.querySelectorAll('.source-pill').forEach(p => p.classList.remove('dim'));
+        }
+        // Re-show button
+        const st = calcState.get(slideNum);
+        if (st && st.ctaWrap) st.ctaWrap.style.display = '';
+      }
+
+      // Wire up
+      document.querySelectorAll('.calc-cta[data-calc-slide]').forEach(btn => {
+        btn.addEventListener('click', () => playAnimation(btn));
+      });
+      document.querySelectorAll('.calc-stage .reset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const stage = btn.closest('.calc-stage');
+          const slideEl = stage.closest('.slide');
+          const slideNum = slideEl.dataset.slide;
+          resetAnimation(stage, slideNum);
+        });
+      });
+
+      // When slide changes, reset any active stage. Hook into nav buttons + keys.
+      function resetAllActive() {
+        document.querySelectorAll('.calc-stage.active').forEach(stage => {
+          const slideEl = stage.closest('.slide');
+          const slideNum = slideEl.dataset.slide;
+          resetAnimation(stage, slideNum);
+        });
+      }
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        b.addEventListener('click', resetAllActive, true);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') resetAllActive();
+      }, true);
+    })();
+  </script>
+</body>
+</html>
