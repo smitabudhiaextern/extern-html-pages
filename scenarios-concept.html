@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Bull, Base & Bear Scenarios Work</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Source+Serif+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #FDF8F8;
+    --title:        #1C1B1B;
+    --body:         #2a2929;
+    --slate:        #475569;
+    --muted:        #64748b;
+    --line:         #e5e7eb;
+    --highlight:    #DCE1FF;
+    --accent:       #001D69;
+    --nav-bg:       #001D69;
+    --white:        #ffffff;
+    --backdrop:     #F0F0FF;
+    --input-blue:   #0000CC;
+
+    --c-bull:        #11A77E;
+    --c-bull-soft:   #D9F4E5;
+    --c-bull-pale:   #ECFAF3;
+    --c-base:        #2563EB;
+    --c-base-soft:   #DCE5FB;
+    --c-base-pale:   #EEF3FD;
+    --c-bear:        #DC2626;
+    --c-bear-soft:   #FAD8DE;
+    --c-bear-pale:   #FDEDEF;
+    --c-amber:       #D97706;
+    --c-amber-soft:  #FBF0CB;
+    --c-amber-pale:  #FEF8E5;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: var(--backdrop);
+    font-family: 'Inter', sans-serif;
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #deck-wrapper {
+    width: 960px;
+    height: 540px;
+    position: relative;
+    overflow: hidden;
+    margin: 0;
+    background: var(--bg);
+    transform-origin: top left;
+  }
+
+  .slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 960px;
+    height: 540px;
+    background: var(--bg);
+    padding: 18px 32px 56px;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+  }
+  .slide.active { display: flex; }
+
+  /* ─────── TOP STRIP ─────── */
+  .top-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .section-pill {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--c-base);
+    background: var(--c-base-soft);
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+  .section-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    flex: 1;
+  }
+  .progress-bar {
+    flex: 1;
+    max-width: 220px;
+    height: 4px;
+    background: var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--c-base), var(--c-bull));
+    border-radius: 3px;
+  }
+
+  /* ─────── HEADING ─────── */
+  .slide-heading {
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  h2.slide-title {
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--title);
+    letter-spacing: -0.005em;
+    margin-bottom: 4px;
+  }
+  .slide-sub {
+    font-size: 13px;
+    color: var(--slate);
+    line-height: 1.45;
+    font-weight: 500;
+  }
+
+  /* ─────── BODY ─────── */
+  .slide-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 54% 46%;
+    gap: 22px;
+    min-height: 0;
+  }
+  .slide-body.single-col {
+    grid-template-columns: 1fr;
+  }
+  .col-text {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .col-visual {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ─────── PROSE ─────── */
+  p.lead {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--body);
+    margin-bottom: 2px;
+  }
+  p.lead strong { color: var(--title); font-weight: 600; }
+  p.lead em { color: var(--slate); font-style: italic; }
+  p.lead code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--c-base-soft);
+    color: var(--c-base);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  p.lead .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+  }
+
+  ul.bullets {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  ul.bullets li {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--body);
+    padding-left: 14px;
+    position: relative;
+  }
+  ul.bullets li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--c-base);
+  }
+  ul.bullets li strong { color: var(--title); font-weight: 600; }
+  ul.bullets li code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--c-base-soft);
+    color: var(--c-base);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* ─────── CALLOUT ─────── */
+  .callout {
+    background: var(--c-amber-pale);
+    border-left: 3px solid var(--c-amber);
+    padding: 8px 12px;
+    border-radius: 0 5px 5px 0;
+    margin-top: 4px;
+  }
+  .callout .co-h {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-amber);
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .callout p {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--body);
+    margin: 0;
+  }
+  .callout p strong { color: var(--title); font-weight: 600; }
+
+  /* Naomi quote callout */
+  .naomi-quote {
+    background: var(--c-base-pale);
+    border-left: 3px solid var(--c-base);
+    padding: 9px 12px;
+    border-radius: 0 5px 5px 0;
+    font-style: italic;
+    color: var(--body);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .naomi-quote .nq-head {
+    font-style: normal;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-base);
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* ─────── COVER ─────── */
+  .slide-cover {
+    padding: 50px 60px 80px;
+    justify-content: center;
+  }
+  .slide-cover .cover-eyebrow {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .slide-cover h1 {
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.18;
+    color: var(--title);
+    margin-bottom: 14px;
+    letter-spacing: -0.01em;
+    max-width: 760px;
+  }
+  .slide-cover .lede {
+    font-size: 15px;
+    color: var(--slate);
+    line-height: 1.55;
+    max-width: 720px;
+    margin-bottom: 22px;
+  }
+  .cover-toc {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+    max-width: 720px;
+  }
+  .cover-toc .toc-h {
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .cover-toc ol {
+    margin: 0; padding-left: 0;
+    list-style: none;
+    counter-reset: toc;
+  }
+  .cover-toc ol li {
+    counter-increment: toc;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--body);
+    border-bottom: 1px dashed var(--line);
+  }
+  .cover-toc ol li:last-child { border-bottom: none; }
+  .cover-toc ol li::before {
+    content: counter(toc) '.';
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--c-base);
+    font-weight: 700;
+    margin-right: 10px;
+  }
+  .cover-meta {
+    margin-top: 16px;
+    display: flex;
+    gap: 18px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .cover-meta i { margin-right: 5px; }
+
+  /* ─────── FORK VISUAL ─────── */
+  .fork-vis {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fv-cap {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .fork-flow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .fork-start {
+    background: var(--c-base-soft);
+    border: 2px solid var(--c-base);
+    border-radius: 7px;
+    padding: 9px 12px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .fork-start .fs-eyebrow {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-base);
+  }
+  .fork-start .fs-text {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--title);
+    margin-top: 1px;
+  }
+  .fork-arrow {
+    color: var(--muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .fork-ends {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+  }
+  .fork-end {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--fc, var(--slate));
+    border-radius: 5px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .fork-end.bull { --fc: var(--c-bull); }
+  .fork-end.base { --fc: var(--c-base); }
+  .fork-end.bear { --fc: var(--c-bear); }
+  .fork-end .fe-tag {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--fc);
+  }
+  .fork-end .fe-desc {
+    font-size: 10.5px;
+    color: var(--body);
+    margin-left: 6px;
+    flex: 1;
+    line-height: 1.3;
+  }
+  .fork-end .fe-price {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--title);
+  }
+
+  /* ─────── TIMELINE VISUAL ─────── */
+  .timeline-vis {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tlv-eyebrow {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-base);
+  }
+  .tlv-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+  }
+  .timeline-strip {
+    display: flex;
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .tl-cell {
+    flex: 1;
+    height: 30px;
+    background: var(--bg);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    border: 1px solid var(--line);
+  }
+  .tl-cell.forecast {
+    background: var(--c-base-soft);
+    border-color: var(--c-base);
+    color: var(--c-base);
+  }
+  .tl-cell.scn-bull { background: var(--c-bull-soft); border-color: var(--c-bull); color: var(--c-bull); }
+  .tl-cell.scn-base { background: var(--c-amber-soft); border-color: var(--c-amber); color: var(--c-amber); }
+  .tl-cell.scn-bear { background: var(--c-bear-soft); border-color: var(--c-bear); color: var(--c-bear); }
+  .tl-cell.muted-cell { opacity: 0.35; }
+  .timeline-out {
+    background: var(--bg);
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    color: var(--body);
+    line-height: 1.4;
+  }
+  .timeline-out strong { color: var(--title); }
+  .timeline-out .mono { font-family: 'JetBrains Mono', monospace; font-weight: 800; color: var(--c-base); }
+
+  /* ─────── COMPARE TABLE ─────── */
+  .compare-tbl {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 10.5px;
+  }
+  .compare-tbl .ct-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+  .compare-tbl .ct-row:last-child { border-bottom: none; }
+  .compare-tbl .ct-row > div {
+    padding: 6px 9px;
+    line-height: 1.4;
+    border-right: 1px solid var(--line);
+  }
+  .compare-tbl .ct-row > div:last-child { border-right: none; }
+  .compare-tbl .ct-row.head > div {
+    background: #f8fafc;
+    font-weight: 800;
+    color: var(--title);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .compare-tbl .ct-row.head .ct-left { background: var(--white); }
+  .compare-tbl .ct-row.head .ct-fc { background: var(--c-base-soft); color: var(--c-base); }
+  .compare-tbl .ct-row.head .ct-sc { background: var(--c-amber-soft); color: var(--c-amber); }
+  .compare-tbl .ct-row .ct-left {
+    background: #f8fafc;
+    font-weight: 700;
+    color: var(--title);
+    font-size: 10px;
+  }
+  .compare-tbl .ct-row .ct-fc strong { color: var(--c-base); }
+  .compare-tbl .ct-row .ct-sc strong { color: var(--c-amber); }
+
+  /* ─────── DRIVERS GRID ─────── */
+  .drivers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .driver-tile {
+    background: var(--c-bull-pale);
+    border: 1px solid var(--c-bull-soft);
+    border-left: 3px solid var(--c-bull);
+    border-radius: 6px;
+    padding: 7px 9px;
+  }
+  .driver-tile.locked {
+    background: #fafafa;
+    border-color: var(--line);
+    border-left-color: var(--muted);
+  }
+  .driver-tile .dt-icon {
+    font-size: 14px;
+    color: var(--c-bull);
+    margin-bottom: 2px;
+  }
+  .driver-tile.locked .dt-icon { color: var(--muted); }
+  .driver-tile .dt-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+  }
+  .driver-tile .dt-desc {
+    font-size: 9.5px;
+    color: var(--slate);
+    margin-top: 2px;
+    line-height: 1.35;
+  }
+  .driver-tile .dt-row {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--c-bull);
+    margin-top: 3px;
+    background: var(--c-bull-soft);
+    padding: 1px 5px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .driver-tile.locked .dt-row {
+    color: var(--muted);
+    background: #f1f5f9;
+  }
+  .group-label {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-bull);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .group-label.muted-label { color: var(--muted); }
+
+  /* ─────── EPS BLOCKS ─────── */
+  .eps-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .eps-row {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--ec, var(--slate));
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    gap: 10px;
+    align-items: center;
+  }
+  .eps-row.bull { --ec: var(--c-bull); }
+  .eps-row.base { --ec: var(--c-base); }
+  .eps-row.bear { --ec: var(--c-bear); }
+  .eps-tag {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ec);
+  }
+  .eps-desc {
+    font-size: 10.5px;
+    color: var(--body);
+    line-height: 1.35;
+  }
+  .eps-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--title);
+    text-align: right;
+  }
+  .eps-val.negative { color: var(--c-bear); }
+
+  /* ─────── PRICE TARGET ROWS ─────── */
+  .pt-formula {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 9px;
+    background: var(--c-base-soft);
+    border-radius: 7px;
+    color: var(--c-base);
+  }
+  .pt-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .pt-row {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--ptc, var(--slate));
+    border-radius: 6px;
+    padding: 7px 11px;
+    display: grid;
+    grid-template-columns: 50px 1fr 70px 60px;
+    gap: 8px;
+    align-items: center;
+  }
+  .pt-row.bull { --ptc: var(--c-bull); }
+  .pt-row.base { --ptc: var(--c-base); }
+  .pt-row.bear { --ptc: var(--c-bear); }
+  .pt-tag {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ptc);
+  }
+  .pt-math {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--slate);
+    font-weight: 600;
+  }
+  .pt-math .eps-x {
+    color: var(--ptc);
+    font-weight: 800;
+  }
+  .pt-result {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--title);
+    text-align: right;
+  }
+  .pt-result.negative { color: var(--c-bear); }
+  .pt-vs {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-align: right;
+    font-weight: 700;
+  }
+  .pt-vs.up { color: var(--c-bull); }
+  .pt-vs.down { color: var(--c-bear); }
+
+  /* ─────── OUTRO ─────── */
+  .slide-outro {
+    padding: 60px 80px 80px;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  .outro-icon {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--c-bull-soft);
+    color: var(--c-bull);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin-bottom: 16px;
+  }
+  .outro-title {
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--title);
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+  .outro-text {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.6;
+    max-width: 620px;
+    margin-bottom: 18px;
+  }
+  .outro-summary {
+    display: flex;
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .os-pill {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--osc, var(--accent));
+    border-radius: 8px;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .os-pill.p1 { --osc: var(--c-base); }
+  .os-pill.p2 { --osc: var(--c-amber); }
+  .os-pill.p3 { --osc: var(--c-bull); }
+  .os-pill.p4 { --osc: var(--accent); }
+  .os-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--osc);
+  }
+  .os-lbl {
+    font-size: 10.5px;
+    color: var(--slate);
+    margin-top: 2px;
+  }
+
+  /* ─────── NAV ─────── */
+  .deck-nav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 40px;
+    background: var(--nav-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    color: var(--white);
+    z-index: 10;
+  }
+  .nav-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--white);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Inter', sans-serif;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.2); }
+  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .nav-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .nav-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .nav-dot.active { background: var(--white); width: 18px; border-radius: 4px; }
+  .nav-counter {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- ════════════════ SLIDE 1: COVER ════════════════ -->
+  <section class="slide slide-cover active">
+    <div class="cover-eyebrow"><i class="ph-bold ph-book-open"></i> Scenario Analysis · Plain-Language Walkthrough</div>
+    <h1>How Bull, Base &amp; Bear scenarios actually work — and why analysts build them.</h1>
+    <p class="lede">By the end of this deck, you'll know what each scenario column does, what you change between them, and why having three numbers beats having one. Read in order, take your time.</p>
+    <div class="cover-toc">
+      <div class="toc-h">In this walkthrough</div>
+      <ol>
+        <li>Why one forecast isn't enough</li>
+        <li>Why analysts run a 5-year forecast AND scenarios — they're not the same thing</li>
+        <li>What actually changes between Bull, Base, and Bear (and what doesn't)</li>
+        <li>How three EPS numbers become three price targets</li>
+      </ol>
+    </div>
+    <div class="cover-meta">
+      <span><i class="ph-bold ph-list"></i>4 sections · 7 slides</span>
+      <span><i class="ph-bold ph-clock"></i>~7 min</span>
+      <span><i class="ph-bold ph-graduation-cap"></i>Companion to the Alight model</span>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 2: SECTION 1 ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 1 of 4</div>
+      <div class="section-label">Why one forecast isn't enough</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 25%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">Why one forecast isn't enough.</h2>
+      <div class="slide-sub">A single intrinsic value can't tell a portfolio manager what to do with it.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          When you built the 5-year forecast for Alight, you projected revenue, costs, and profit out to 2030. Those numbers fed into a DCF model, which gave you <strong>one intrinsic value: $9.50 per share</strong>. Clean answer to "what is Alight worth?"
+        </p>
+        <p class="lead">
+          The problem is that single number doesn't tell anyone <em>what to do with it</em>. Walk up to a portfolio manager and say "Alight is worth $9.50." Their first question: <em>"OK, but what if you're wrong? And if you're right, how right could you be?"</em>
+        </p>
+        <p class="lead">
+          The PM isn't being annoying. They have to decide how much money to put into the stock. A stock that might be worth between <span class="mono">$9</span> and <span class="mono">$10</span> is a very different bet from one that might be worth between <span class="mono">$5</span> and <span class="mono">$14</span>. The first is a small, controlled position. The second is a real swing.
+        </p>
+        <p class="lead">
+          A single forecast can't answer those questions. <strong>Scenarios can — that's what they exist to do.</strong> A scenario is a structured way of saying "here's what happens if things go well, here's what happens if they go badly, here's the most likely path." Three numbers instead of one.
+        </p>
+      </div>
+      <div class="col-visual">
+        <div class="fork-vis">
+          <div class="fv-cap">One forecast becomes three outcomes</div>
+          <div class="fork-flow">
+            <div class="fork-start">
+              <div class="fs-eyebrow">Today</div>
+              <div class="fs-text">ALIT @ $7</div>
+            </div>
+            <div class="fork-arrow"><i class="ph-bold ph-arrow-right"></i></div>
+            <div class="fork-ends">
+              <div class="fork-end bull">
+                <span class="fe-tag">Bull</span>
+                <span class="fe-desc">If things go really well</span>
+                <span class="fe-price">$14</span>
+              </div>
+              <div class="fork-end base">
+                <span class="fe-tag">Base</span>
+                <span class="fe-desc">If things go as expected</span>
+                <span class="fe-price">$9.50</span>
+              </div>
+              <div class="fork-end bear">
+                <span class="fe-tag">Bear</span>
+                <span class="fe-desc">If things go badly</span>
+                <span class="fe-price">$5</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="co-h"><i class="ph-fill ph-lightbulb"></i> Key insight</div>
+          <p>Investors don't pay for a guess. They pay for a guess <strong>with a range</strong>. Scenarios are how you turn a single $9.50 into a defensible $5–$14 range that a PM can actually trade on.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 3: SECTION 2A — Forecast ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 2 of 4 · Part A</div>
+      <div class="section-label">Two projections, two different jobs</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 40%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">First, what the 5-year forecast actually does.</h2>
+      <div class="slide-sub">It feeds the DCF model, which produces one intrinsic value. Long horizon. Single story.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          The 5-year forecast lives in columns <code>BL</code> through <code>BO</code>. It's a year-by-year prediction for 2026, 2027, 2028, 2029, and 2030.
+        </p>
+        <p class="lead">
+          Its job is to feed the <strong>DCF model</strong>. A DCF works by taking many years of future cash flows and discounting them back to today's value. That math <em>requires</em> a long runway — you can't run a DCF on a single year, because most of a company's value comes from cash flows several years out. So you need 5 years of projections building toward a terminal value.
+        </p>
+        <p class="lead">
+          The output of the 5-year forecast → DCF chain is <strong>one intrinsic value number</strong>. For Alight, that's $9.50. The DCF says: "based on all the cash this company will generate from 2026 through 2030 and beyond, here's what it's worth today."
+        </p>
+        <p class="lead">
+          <strong>Long horizon. Single story. One number out.</strong> That's the job the 5-year forecast does. It tells you what the company is <em>fundamentally worth</em>.
+        </p>
+      </div>
+      <div class="col-visual">
+        <div class="timeline-vis">
+          <div class="tlv-eyebrow"><i class="ph-bold ph-chart-line-up"></i> &nbsp;The 5-Year Forecast</div>
+          <div class="tlv-title">One story, projected 5 years out</div>
+          <div class="timeline-strip">
+            <div class="tl-cell forecast">26</div>
+            <div class="tl-cell forecast">27</div>
+            <div class="tl-cell forecast">28</div>
+            <div class="tl-cell forecast">29</div>
+            <div class="tl-cell forecast">30</div>
+          </div>
+          <div class="timeline-out">
+            Feeds the <strong>DCF model</strong>, which discounts cash flows back to today and produces one intrinsic value: <span class="mono">$9.50</span>
+          </div>
+        </div>
+        <div class="naomi-quote">
+          <div class="nq-head"><i class="ph-fill ph-chat-circle"></i> Naomi</div>
+          "The 5-year forecast tells me what the company is <em>worth</em>. That's one question — and it gets one number."
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 4: SECTION 2B — Scenarios ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 2 of 4 · Part B</div>
+      <div class="section-label">Two projections, two different jobs</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 50%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">Now, what Bull/Base/Bear scenarios do.</h2>
+      <div class="slide-sub">They feed the price target. Short horizon. Three stories. Three numbers out.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          Bull/Base/Bear scenarios live in columns <code>BQ</code>, <code>BR</code>, and <code>BS</code>. They all show FY2027 — <strong>same year, three sets of numbers</strong>.
+        </p>
+        <p class="lead">
+          Their job is to feed the <strong>price target</strong>. A price target answers a much narrower question than the DCF: "where could this stock trade in the next 12 to 18 months?" That's a short time horizon, so what matters is how the company performs in the <em>very next year</em> — because that's what the market will react to in the next two or three earnings cycles.
+        </p>
+        <p class="lead">
+          That's why Bull/Base/Bear only touches FY2027. There's no Bull/Base/Bear for 2028, 2029, or 2030 — those years are too far out to matter for a near-term trade.
+        </p>
+        <p class="lead">
+          <strong>Short horizon. Three stories. Three numbers out.</strong> That's the job scenarios do. They tell you what the stock <em>could trade for</em>, not what the company is worth.
+        </p>
+        <div class="naomi-quote">
+          <div class="nq-head"><i class="ph-fill ph-chat-circle"></i> Naomi</div>
+          "The 5-year forecast tells me what Alight is <em>worth</em>. The three scenarios tell me what the stock could <em>do</em>. Two questions. Two exercises."
+        </div>
+      </div>
+      <div class="col-visual">
+        <div class="compare-tbl">
+          <div class="ct-row head">
+            <div class="ct-left"></div>
+            <div class="ct-fc">5-Yr Forecast</div>
+            <div class="ct-sc">Bull/Base/Bear</div>
+          </div>
+          <div class="ct-row">
+            <div class="ct-left">Time horizon</div>
+            <div class="ct-fc">5 years</div>
+            <div class="ct-sc">1 year (FY27)</div>
+          </div>
+          <div class="ct-row">
+            <div class="ct-left">Stories</div>
+            <div class="ct-fc"><strong>One</strong></div>
+            <div class="ct-sc"><strong>Three</strong></div>
+          </div>
+          <div class="ct-row">
+            <div class="ct-left">Feeds</div>
+            <div class="ct-fc">DCF model</div>
+            <div class="ct-sc">Price target</div>
+          </div>
+          <div class="ct-row">
+            <div class="ct-left">Output</div>
+            <div class="ct-fc"><strong>$9.50</strong></div>
+            <div class="ct-sc"><strong>$5 / $9.50 / $14</strong></div>
+          </div>
+          <div class="ct-row">
+            <div class="ct-left">Columns</div>
+            <div class="ct-fc">BL → BO</div>
+            <div class="ct-sc">BQ, BR, BS</div>
+          </div>
+        </div>
+        <div class="callout">
+          <div class="co-h"><i class="ph-fill ph-lightbulb"></i> Key insight</div>
+          <p>Long-horizon <strong>fundamental value</strong> lives in the DCF. Near-term <strong>risk-reward</strong> lives in scenarios. Two tools, two jobs.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 5: SECTION 3 — What changes ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 3 of 4</div>
+      <div class="section-label">What changes between scenarios</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 70%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">What actually changes between Bull, Base, and Bear.</h2>
+      <div class="slide-sub">Most numbers look similar — that's the point. Only 5 cells flex; about 4 things stay locked.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          Open columns BQ, BR, BS and the first thing you'll notice is that <strong>most numbers look very similar</strong>. Tax rate is the same. Interest rate is the same. Stock-based comp is the same. That's not laziness — <em>that's the point</em>.
+        </p>
+        <p class="lead">
+          A well-built scenario only flexes inputs that the <strong>underlying story</strong> changes. If your Bull thesis is "Alight wins new clients because their AI offering is differentiated," then revenue growth and margins should improve. But the tax rate? It doesn't care about Alight's product strategy. The interest rate on existing debt? Doesn't change because they won a contract. So those stay locked across all three columns.
+        </p>
+        <p class="lead">
+          In Alight's model, <strong>only 5 inputs flex</strong> across scenarios — see right. Each one is tied to either the company's operating story or to how the stock itself trades. Everything else stays constant.
+        </p>
+        <div class="callout">
+          <div class="co-h"><i class="ph-fill ph-lightbulb"></i> Key insight</div>
+          <p>If you flex every input you can find, your scenarios become unauditable. Stick to the 4-5 cells that genuinely follow from your Bull/Bear narratives. <strong>A reviewer should be able to read your one-sentence thesis and see exactly which cells you changed because of it.</strong></p>
+        </div>
+      </div>
+      <div class="col-visual">
+        <div class="group-label"><i class="ph-fill ph-trend-up"></i> 5 drivers that flex with the story</div>
+        <div class="drivers-grid">
+          <div class="driver-tile">
+            <i class="ph-bold ph-trend-up dt-icon"></i>
+            <div class="dt-name">Recurring rev growth</div>
+            <div class="dt-desc">Subscription business growth</div>
+            <div class="dt-row">Row 117</div>
+          </div>
+          <div class="driver-tile">
+            <i class="ph-bold ph-percent dt-icon"></i>
+            <div class="dt-name">Gross margin</div>
+            <div class="dt-desc">Profit per $ of revenue</div>
+            <div class="dt-row">Row 45</div>
+          </div>
+          <div class="driver-tile">
+            <i class="ph-bold ph-buildings dt-icon"></i>
+            <div class="dt-name">SG&amp;A margin</div>
+            <div class="dt-desc">Overhead as % of rev</div>
+            <div class="dt-row">Row 46</div>
+          </div>
+          <div class="driver-tile">
+            <i class="ph-bold ph-currency-dollar dt-icon"></i>
+            <div class="dt-name">Buyback price</div>
+            <div class="dt-desc">Stock price assumption</div>
+            <div class="dt-row">Row 40</div>
+          </div>
+          <div class="driver-tile" style="grid-column: span 2;">
+            <i class="ph-bold ph-arrows-down-up dt-icon"></i>
+            <div class="dt-name">Shares repurchased</div>
+            <div class="dt-desc">How aggressively management buys back stock</div>
+            <div class="dt-row">Row 37</div>
+          </div>
+        </div>
+        <div class="group-label muted-label" style="margin-top: 8px;"><i class="ph-fill ph-lock-key"></i> What stays locked</div>
+        <div class="drivers-grid">
+          <div class="driver-tile locked">
+            <div class="dt-name" style="font-size: 10.5px;">Tax rate</div>
+            <div class="dt-desc">Set by law</div>
+          </div>
+          <div class="driver-tile locked">
+            <div class="dt-name" style="font-size: 10.5px;">Interest rate</div>
+            <div class="dt-desc">On existing debt</div>
+          </div>
+          <div class="driver-tile locked">
+            <div class="dt-name" style="font-size: 10.5px;">D&amp;A schedule</div>
+            <div class="dt-desc">Past investments</div>
+          </div>
+          <div class="driver-tile locked">
+            <div class="dt-name" style="font-size: 10.5px;">SBC %</div>
+            <div class="dt-desc">Comp policy</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 6: SECTION 4A — EPS values ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 4 of 4 · Part A</div>
+      <div class="section-label">From inputs to three EPS numbers</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 85%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">From five inputs to three EPS numbers.</h2>
+      <div class="slide-sub">Change the inputs. The income statement re-runs. Three EPS values fall out.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          Once you've changed those 5 inputs in each scenario column, the rest of Alight's income statement <strong>re-runs automatically</strong>. Revenue recalculates. Gross profit recalculates. Operating income recalculates. Net income recalculates. And finally, dividing net income by share count gives you the most important output of the whole exercise — <strong>EPS</strong> (earnings per share).
+        </p>
+        <p class="lead">
+          For Alight's FY2027 scenarios, the EPS values come out to <span class="mono" style="color: var(--c-bull);">$0.14</span> in Bull, <span class="mono" style="color: var(--c-base);">$0.10</span> in Base, and <span class="mono" style="color: var(--c-bear);">−$0.21</span> in Bear (see right).
+        </p>
+        <p class="lead">
+          Notice that the Bear EPS is <em>negative</em>. That's not a mistake. It's what happens when revenue falls 4% while gross margin compresses from 37% to 30%. Operating income flips negative, which drags net income — and therefore EPS — below zero.
+        </p>
+        <p class="lead">
+          <strong>This is exactly the kind of downside investors want to know about.</strong> A Bear case that doesn't surface real pain isn't really a Bear case.
+        </p>
+      </div>
+      <div class="col-visual">
+        <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;">
+          <div style="font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px;">FY2027 EPS · three scenarios</div>
+          <div class="eps-stack">
+            <div class="eps-row bull">
+              <div class="eps-tag">Bull</div>
+              <div class="eps-desc">If client wins accelerate &amp; margins expand</div>
+              <div class="eps-val">$0.14</div>
+            </div>
+            <div class="eps-row base">
+              <div class="eps-tag">Base</div>
+              <div class="eps-desc">Most likely path, no surprises</div>
+              <div class="eps-val">$0.10</div>
+            </div>
+            <div class="eps-row bear">
+              <div class="eps-tag">Bear</div>
+              <div class="eps-desc">Revenue falls, margin compresses</div>
+              <div class="eps-val negative">−$0.21</div>
+            </div>
+          </div>
+          <div style="margin-top: 10px; padding: 7px 10px; background: var(--bg); border-radius: 5px; font-size: 11px; color: var(--body); line-height: 1.4;">
+            <strong>Spread:</strong> <span class="mono" style="font-weight: 800;">$0.35</span> from Bear to Bull. That's the difference 4 input changes create across the income statement.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 7: SECTION 4B — Price target ════════════════ -->
+  <section class="slide">
+    <div class="top-strip">
+      <div class="section-pill">Section 4 of 4 · Part B</div>
+      <div class="section-label">How EPS becomes a price target</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 95%;"></div></div>
+    </div>
+    <div class="slide-heading">
+      <h2 class="slide-title">How three EPS numbers become three price targets.</h2>
+      <div class="slide-sub">EPS isn't the final answer. Multiply by the P/E multiple, and you get a price.</div>
+    </div>
+    <div class="slide-body">
+      <div class="col-text">
+        <p class="lead">
+          EPS is the <em>input</em> into the price target. The formula is straightforward:
+        </p>
+        <div class="pt-formula">Price target = EPS × P/E multiple</div>
+        <p class="lead">
+          The P/E multiple comes from comparable companies — what investors typically pay for $1 of earnings at a business like Alight. Suppose peers trade at roughly <strong>100×</strong> adjusted EPS (illustrative number — you'd derive the real multiple from your comps work).
+        </p>
+        <p class="lead">
+          That gives you the three price targets shown on the right. Quick note on the Bear case: P/E doesn't work on negative earnings, so when EPS is negative you switch to a different valuation method (typically <strong>EV/EBITDA</strong> or <strong>book value</strong>). Math is different, principle is the same.
+        </p>
+        <p class="lead">
+          From today's <span class="mono">$7</span> stock price, the PM now sees: <strong>$1 of downside, ~$3 of upside</strong>. That's a 3-to-1 risk-reward setup — positive enough to allocate to. If it were inverted (more downside than upside), they'd pass.
+        </p>
+        <div class="callout">
+          <div class="co-h"><i class="ph-fill ph-lightbulb"></i> Key insight</div>
+          <p>Scenarios don't tell you what the stock <em>will</em> do. They tell you what it <em>could</em> do — and what the right risk-reward setup looks like. <strong>That's the difference between a guess and an investable trade.</strong></p>
+        </div>
+      </div>
+      <div class="col-visual">
+        <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;">
+          <div style="font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px;">Price target math · from $7 today</div>
+          <div class="pt-stack">
+            <div class="pt-row bull">
+              <div class="pt-tag">Bull</div>
+              <div class="pt-math"><span class="eps-x">$0.14</span> × 100</div>
+              <div class="pt-result">$14</div>
+              <div class="pt-vs up">+100%</div>
+            </div>
+            <div class="pt-row base">
+              <div class="pt-tag">Base</div>
+              <div class="pt-math"><span class="eps-x">$0.10</span> × ~95</div>
+              <div class="pt-result">$9.50</div>
+              <div class="pt-vs up">+36%</div>
+            </div>
+            <div class="pt-row bear">
+              <div class="pt-tag">Bear</div>
+              <div class="pt-math"><span class="eps-x">−$0.21</span> · use EV/EBITDA</div>
+              <div class="pt-result negative">$5</div>
+              <div class="pt-vs down">−29%</div>
+            </div>
+          </div>
+          <div style="margin-top: 10px; padding: 7px 10px; background: var(--c-bull-pale); border-radius: 5px; font-size: 11px; color: var(--body); line-height: 1.4; border-left: 3px solid var(--c-bull);">
+            <strong>Risk/reward:</strong> ~3:1 upside-to-downside. <strong>That's a trade</strong> a PM can size.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SLIDE 8: OUTRO ════════════════ -->
+  <section class="slide slide-outro">
+    <div class="outro-icon"><i class="ph-fill ph-check-circle"></i></div>
+    <div class="outro-title">You're ready for the tour.</div>
+    <div class="outro-text">
+      Now you understand <strong>why</strong> scenarios exist and <strong>what</strong> changes between them. The next step is to see all of this in Alight's actual model — the next tour walks you through every cell in columns BQ, BR, and BS, one by one, so you can see how the structure works in practice.
+    </div>
+    <div class="outro-summary">
+      <div class="os-pill p1">
+        <div class="os-num">1</div>
+        <div class="os-lbl">forecast</div>
+      </div>
+      <div class="os-pill p2">
+        <div class="os-num">3</div>
+        <div class="os-lbl">scenarios</div>
+      </div>
+      <div class="os-pill p3">
+        <div class="os-num">5</div>
+        <div class="os-lbl">cells flex</div>
+      </div>
+      <div class="os-pill p4">
+        <div class="os-num">3</div>
+        <div class="os-lbl">price targets</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ NAV ════════════════ -->
+  <div class="deck-nav">
+    <button class="nav-btn" id="prevBtn" onclick="prev()"><i class="ph-bold ph-arrow-left"></i> Back</button>
+    <div class="nav-dots" id="navDots"></div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <span class="nav-counter" id="navCounter">1 / 8</span>
+      <button class="nav-btn" id="nextBtn" onclick="next()">Next <i class="ph-bold ph-arrow-right"></i></button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const totalSlides = slides.length;
+  let current = 0;
+
+  const navDots = document.getElementById('navDots');
+  for (let i = 0; i < totalSlides; i++) {
+    const d = document.createElement('div');
+    d.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    navDots.appendChild(d);
+  }
+
+  function show(i) {
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    document.querySelectorAll('.nav-dot').forEach((d, idx) => d.classList.toggle('active', idx === i));
+    document.getElementById('navCounter').textContent = `${i + 1} / ${totalSlides}`;
+    document.getElementById('prevBtn').disabled = i === 0;
+    document.getElementById('nextBtn').disabled = i === totalSlides - 1;
+    current = i;
+  }
+  function next() { if (current < totalSlides - 1) show(current + 1); }
+  function prev() { if (current > 0) show(current - 1); }
+  function goTo(i) { show(i); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  });
+
+  function scaleDeck() {
+    const wrapper = document.getElementById('deck-wrapper');
+    const designW = 960, designH = 540;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const fitScale = Math.min(vw / designW, vh / designH);
+    wrapper.style.transform = `scale(${fitScale})`;
+    const offsetX = Math.max(0, (vw - designW * fitScale) / 2);
+    const offsetY = Math.max(0, (vh - designH * fitScale) / 2);
+    wrapper.style.left = offsetX + 'px';
+    wrapper.style.top = offsetY + 'px';
+    wrapper.style.position = 'absolute';
+  }
+  window.addEventListener('resize', scaleDeck);
+  window.addEventListener('load', scaleDeck);
+  scaleDeck();
+
+  show(0);
+</script>
+</body>
+</html>
