@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Explorer — Six Files, One Story</title>
+<style>
+  :root {
+    --bg: #FDF8F8;
+    --title: #1C1B1B;
+    --body: #484646;
+    --shopify: #5E8E3E;
+    --shopify-tint: #E9F2E1;
+    --analytics: #2A9D8F;
+    --analytics-tint: #DEF1EE;
+    --meta: #1877F2;
+    --meta-tint: #DCE9FD;
+    --card: #FFFFFF;
+    --line: #ECE4E4;
+    --good: #2E7D32;
+    --good-bg: #E6F4E7;
+    --bad: #C0392B;
+    --bad-bg: #FBE9E7;
+    --warn-bg: #FFF4E0;
+    --warn-line: #E8A33D;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--body);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    padding: 24px 16px 56px;
+  }
+
+  .mono {
+    font-family: "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* ---- Progress ---- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .progress-label {
+    font-weight: 700;
+    color: var(--title);
+    font-size: 15px;
+  }
+  .dots {
+    display: flex;
+    gap: 9px;
+  }
+  .dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid #c9bcbc;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    transition: transform .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .dot:hover { transform: scale(1.18); }
+  .dot.active { background: var(--title); border-color: var(--title); }
+  .dot.done { background: #b7a9a9; border-color: #b7a9a9; }
+  .dot:focus-visible { outline: 3px solid #001D69; outline-offset: 2px; }
+
+  /* ---- Card / Screen ---- */
+  .screen {
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow: 0 6px 22px rgba(28,27,27,0.07);
+    padding: 26px 26px 28px;
+    border: 1px solid var(--line);
+    animation: fade .32s ease;
+  }
+  @keyframes fade {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .screen[hidden] { display: none; }
+
+  .file-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .file-name {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--title);
+  }
+  .pill {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 11px;
+    border-radius: 999px;
+    color: #fff;
+    letter-spacing: .2px;
+  }
+  .badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #F1EBEB;
+    color: var(--body);
+    border: 1px solid var(--line);
+  }
+  .src-shopify .pill { background: var(--shopify); }
+  .src-analytics .pill { background: var(--analytics); }
+  .src-meta .pill { background: var(--meta); }
+
+  .accent-bar {
+    height: 5px;
+    border-radius: 999px;
+    width: 100%;
+    margin: 14px 0 16px;
+  }
+  .src-shopify .accent-bar { background: var(--shopify); }
+  .src-analytics .accent-bar { background: var(--analytics); }
+  .src-meta .accent-bar { background: var(--meta); }
+
+  .whatis {
+    font-size: 15px;
+    color: var(--title);
+    margin: 0 0 16px;
+  }
+
+  /* ---- Table ---- */
+  .table-note {
+    font-size: 12.5px;
+    color: #8a7e7e;
+    margin: 0 0 6px;
+    font-style: italic;
+  }
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px;
+    min-width: 540px;
+  }
+  thead th {
+    text-align: left;
+    padding: 11px 12px;
+    background: #F7F1F1;
+    color: var(--title);
+    font-weight: 700;
+    white-space: nowrap;
+    border-bottom: 2px solid var(--line);
+  }
+  /* tooltip header */
+  .col-h {
+    position: relative;
+    cursor: help;
+  }
+  .col-h .lbl {
+    border-bottom: 1.5px dotted #9a8d8d;
+    padding-bottom: 1px;
+  }
+  .col-h .info {
+    font-size: 11px;
+    color: #001D69;
+    margin-left: 3px;
+    vertical-align: super;
+    font-weight: 700;
+  }
+  .col-h:focus-visible { outline: 3px solid #001D69; outline-offset: -2px; }
+  .tip {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    width: 230px;
+    max-width: 60vw;
+    background: var(--title);
+    color: #fff;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 9px 11px;
+    border-radius: 9px;
+    white-space: normal;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity .15s ease, transform .15s ease;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .tip::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 16px;
+    border: 6px solid transparent;
+    border-bottom-color: var(--title);
+  }
+  .col-h:hover .tip,
+  .col-h:focus .tip,
+  .col-h:focus-within .tip,
+  .col-h.show .tip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+  tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #FBF7F7; }
+  tbody tr:last-child td { border-bottom: none; }
+  .empty-cell {
+    color: #b0a4a4;
+    font-style: italic;
+    background: #F3EEEE;
+    border-radius: 5px;
+    padding: 1px 7px;
+    font-size: 11.5px;
+  }
+
+  /* ---- Answer lines ---- */
+  .answers {
+    margin: 18px 0 4px;
+    display: grid;
+    gap: 8px;
+  }
+  .ans {
+    font-size: 13.5px;
+    padding: 9px 13px;
+    border-radius: 10px;
+  }
+  .ans.can { background: var(--good-bg); color: #1f5b22; }
+  .ans.cant { background: var(--bad-bg); color: #8c2c20; }
+  .ans b { font-weight: 700; }
+
+  .watch {
+    margin-top: 14px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    border-left: 5px solid var(--warn-line);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 13.5px;
+    color: #7a5410;
+  }
+  .watch b { color: #8a5a08; }
+
+  /* ---- Quiz ---- */
+  .quiz {
+    margin-top: 18px;
+    border-top: 1px dashed var(--line);
+    padding-top: 16px;
+  }
+  .quiz-q {
+    font-weight: 700;
+    color: var(--title);
+    font-size: 14.5px;
+    margin: 0 0 12px;
+  }
+  .quiz-q .tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    background: #DCE1FF;
+    color: #001D69;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
+  .opts { display: grid; gap: 9px; }
+  .opt {
+    text-align: left;
+    font-size: 13.5px;
+    padding: 11px 14px;
+    border-radius: 11px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--body);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .08s;
+    font-family: inherit;
+  }
+  .opt:hover { border-color: #b7a9a9; transform: translateX(2px); }
+  .opt:focus-visible { outline: 3px solid #001D69; outline-offset: 2px; }
+  .opt .mark { font-weight: 700; margin-left: 6px; }
+  .opt.correct {
+    background: var(--good-bg);
+    border-color: var(--good);
+    color: #1f5b22;
+  }
+  .opt.wrong {
+    background: var(--bad-bg);
+    border-color: var(--bad);
+    color: #8c2c20;
+  }
+  .opt.dim { opacity: .55; }
+  .explain {
+    margin-top: 12px;
+    font-size: 13.5px;
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: #F2EEFE;
+    color: #4a3b86;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: #362a66; }
+
+  /* ---- Nav ---- */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .btn {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 11px 22px;
+    border-radius: 11px;
+    border: none;
+    cursor: pointer;
+    transition: transform .08s, opacity .15s, background .15s;
+  }
+  .btn:focus-visible { outline: 3px solid #001D69; outline-offset: 2px; }
+  .btn-back {
+    background: #F1EBEB;
+    color: var(--body);
+  }
+  .btn-back:hover { background: #E6DEDE; }
+  .btn-next {
+    background: #001D69;
+    color: #fff;
+  }
+  .btn-next:hover { transform: translateX(2px); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn:disabled:hover { transform: none; }
+
+  /* ---- Wrap screen ---- */
+  .wrap-screen {
+    text-align: center;
+    padding: 40px 26px 44px;
+  }
+  .wrap-screen h2 {
+    color: var(--title);
+    font-size: 26px;
+    margin: 0 0 18px;
+  }
+  .wrap-icons {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .wrap-icons span {
+    width: 38px; height: 38px;
+    border-radius: 9px;
+    display: inline-block;
+  }
+  .wrap-body {
+    font-size: 16px;
+    color: var(--body);
+    max-width: 580px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+  .wrap-body b { color: var(--title); }
+
+  @media (max-width: 560px) {
+    .screen { padding: 20px 16px 22px; }
+    .file-name { font-size: 17px; }
+    .btn { padding: 10px 16px; font-size: 13px; }
+    .tip { width: 200px; }
+  }
+
+  /* ---- Auto-tour ---- */
+  /* "what this file is" pop */
+  .whatis.pop {
+    animation: whatisPop 2s ease;
+    border-radius: 10px;
+  }
+  @keyframes whatisPop {
+    0%   { background: transparent; transform: scale(1); box-shadow: none; }
+    15%  { background: #DCE1FF; transform: scale(1.025); box-shadow: 0 6px 18px rgba(0,29,105,0.15); }
+    80%  { background: #DCE1FF; transform: scale(1.025); box-shadow: 0 6px 18px rgba(0,29,105,0.15); }
+    100% { background: transparent; transform: scale(1); box-shadow: none; }
+  }
+  .whatis {
+    padding: 2px 6px;
+    margin-left: -6px;
+    transition: background .3s ease, transform .3s ease;
+  }
+
+  /* highlighted column header + cells during tour */
+  thead th.tour-active {
+    background: #DCE1FF !important;
+    box-shadow: inset 0 0 0 2px #001D69;
+  }
+  tbody td.tour-col {
+    background: #EEF1FF !important;
+  }
+
+  /* the moving pointer/caret */
+  .tour-pointer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 0; height: 0;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 15px solid #001D69;
+    filter: drop-shadow(0 2px 3px rgba(0,29,105,0.4));
+    opacity: 0;
+    transform: translate(-50%, 0);
+    transition: left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), opacity .25s ease;
+    pointer-events: none;
+    z-index: 40;
+  }
+  .tour-pointer.on { opacity: 1; }
+  .tour-pointer::after {
+    content: "";
+    position: absolute;
+    left: -11px; top: 15px;
+    width: 22px; height: 22px;
+    background: #001D69;
+    border-radius: 50%;
+    opacity: .14;
+    animation: pointerPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pointerPulse {
+    0%,100% { transform: scale(.9); opacity: .14; }
+    50%     { transform: scale(1.5); opacity: 0; }
+  }
+  /* the table-scroll wrapper needs to host the absolute pointer */
+  .table-scroll { position: relative; }
+
+  /* tour controls */
+  .tour-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 4px;
+    flex-wrap: wrap;
+  }
+  .tour-controls .tc-label {
+    font-size: 12.5px;
+    color: #8a7e7e;
+    margin-right: 2px;
+  }
+  .tc-btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--title);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .08s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tc-btn:hover { border-color: #b7a9a9; background: #FBF7F7; }
+  .tc-btn:active { transform: scale(.96); }
+  .tc-btn:focus-visible { outline: 3px solid #001D69; outline-offset: 2px; }
+  .tc-status {
+    font-size: 12px;
+    color: #8a7e7e;
+    margin-left: 2px;
+  }
+
+  /* aria-live region — visually subtle caption, screen-reader friendly */
+  .tour-live {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* reduced-motion: static caption list under the table */
+  .tour-static {
+    display: none;
+    margin: 12px 0 4px;
+    gap: 6px;
+  }
+  .tour-static .tsi {
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding: 7px 11px;
+    border-radius: 9px;
+    background: #F7F4FF;
+    color: #4a3b86;
+  }
+  .tour-static .tsi b {
+    color: #001D69;
+    font-family: "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  }
+
+  /* "Show all" fast-forward: reuse the static caption list, force it visible */
+  .tour-static.show-all { display: grid; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tour-pointer { display: none !important; }
+    .whatis.pop { animation: none; background: #DCE1FF; }
+    .tour-static { display: grid; }
+    .tour-controls { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar" id="topbar">
+    <span class="progress-label" id="progressLabel">File 1 of 6</span>
+    <div class="dots" id="dots" role="tablist" aria-label="Jump to file"></div>
+  </div>
+
+  <div id="screens"></div>
+
+  <div class="nav">
+    <button class="btn btn-back" id="backBtn">◀ Back</button>
+    <button class="btn btn-next" id="nextBtn">Next ▶</button>
+  </div>
+
+</div>
+
+<script>
+/* ============ DATA ============ */
+const FILES = [
+  {
+    src: "shopify", srcLabel: "Shopify", name: "shopify_sales.csv", rows: "99 rows",
+    whatis: "What sold, and how much money each product made (totals for Jan–Jul 2025).",
+    note: "All 10 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"product_title", t:"The product name.", tour:1},
+      {k:"product_vendor", t:"Who makes it — \"Breaking Games\" on every row in this file."},
+      {k:"product_type", t:"Category — \"Game\" is a standalone game; \"Game Accessory\" is an add-on like an upgrade kit, tokens, or a mini-expansion that needs the base game to use.", tour:1},
+      {k:"net_items_sold", t:"Units sold over the whole period.", tour:1},
+      {k:"gross_sales", t:"Revenue before discounts and returns are taken out.", tour:1},
+      {k:"discounts", t:"Money taken OFF the sale — a reduction. In this export it's shown as a NEGATIVE number (a $420 discount appears as -420.04).", tour:1},
+      {k:"returns", t:"Refunds for items sent back — also NEGATIVE. 0 when nothing was returned."},
+      {k:"net_sales", t:"What's left after discounts and returns: net_sales = gross_sales − discounts − returns. (Since discounts and returns are stored as negatives, adding the columns lands on the same figure.)", tour:1},
+      {k:"taxes", t:"Tax collected on the product's sales."},
+      {k:"total_sales", t:"The final reported figure: net_sales + taxes.", tour:1}
+    ],
+    data: [
+      ["Dwellings of Eldervale 2nd Edition: Standard","Breaking Games","Game","129","$13,098.69","-$420.04","-$189.98","$12,488.67","$834.89","$13,323.56"],
+      ["Dwellings of Eldervale – LEGENDARY Upgrade Kit","Breaking Games","Game","175","$12,528.21","-$385.10","-$272.96","$11,870.15","$643.90","$12,514.05"],
+      ["Dwellings of Eldervale – DELUXE Upgrade Kit","Breaking Games","Game","89","$4,894.11","-$115.51","$0.00","$4,778.60","$236.21","$5,014.81"],
+      ["We're Doomed!","Breaking Games","Game","104","$3,745.00","-$56.01","-$105.00","$3,583.99","$226.48","$3,810.47"],
+      ["Dwellings of Eldervale – Treasure & Trove Tokens","Breaking Games","Game Accessory","127","$2,558.72","-$86.02","-$17.99","$2,454.71","$131.51","$2,586.22"]
+    ],
+    can: "Which products made the most money? How many units did each sell?",
+    cant: "Who bought them? When did each sale happen?",
+    watch: "Net sales means gross sales MINUS discounts and returns. But in this export, discounts and returns are stored as NEGATIVE numbers — so when you sum the columns (gross_sales + discounts + returns) you land on the same net figure. Same result, opposite sign convention: don't subtract a value that's already negative.",
+    q: "Reading the rows, which product brought in the most total sales?",
+    opts: ["We're Doomed!","Dwellings of Eldervale 2nd Edition: Standard","Dwellings of Eldervale – DELUXE Upgrade Kit"],
+    correct: 1,
+    explain: "$13,323.56 — the highest total_sales in the table. Always check the actual numbers, not the name."
+  },
+  {
+    src: "shopify", srcLabel: "Shopify", name: "shopify_orders.csv", rows: "254 rows (July only)",
+    whatis: "Individual sales with dates and order numbers — but July only.",
+    note: "All 12 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"day", t:"The order date (all rows here are in July).", tour:1},
+      {k:"sale_id", t:"Shopify's internal unique ID for this line — a long number you won't usually need."},
+      {k:"order_name", t:"The order number. It REPEATS — one row per item in the order.", tour:1},
+      {k:"product_title", t:"The item. BLANK on shipping-only or tax lines.", tour:1},
+      {k:"gross_sales", t:"Line revenue before discounts and returns are taken out.", tour:1},
+      {k:"discounts", t:"Money taken off this line — stored as a NEGATIVE number (a $2.01 discount shows as -2.01).", tour:1},
+      {k:"returns", t:"Refund amount if the item came back — also NEGATIVE. Most rows are 0; on a refund (like order 57782) the whole line goes negative."},
+      {k:"net_sales", t:"gross_sales − discounts − returns for this line, before tax. (Discounts and returns are stored negative, so summing the columns lands on the same figure.)", tour:1},
+      {k:"shipping_charges", t:"Shipping billed for the order — usually sits on its own row with a blank product_title.", tour:1},
+      {k:"return_fees", t:"A restocking/return fee. It's 0 on every row in this export, but it's a real column the system can populate."},
+      {k:"taxes", t:"Tax charged on this line."},
+      {k:"total_sales", t:"The final amount for the line: net_sales + shipping_charges + taxes.", tour:1}
+    ],
+    data: [
+      ["2025-07-05","18600171143215","BREAKING-GAMES-57838","Dwellings of Eldervale – Wooden Upgrade Treasure and Trove Tokens","$19.99","-$2.01","$0.00","$17.98","$0.00","$0.00","$1.26","$19.24"],
+      ["2025-07-05","18600171175983","BREAKING-GAMES-57838","Dwellings of Eldervale – Oracle Hex Tile","$6.99","-$0.69","$0.00","$6.30","$0.00","$0.00","$0.44","$6.74"],
+      ["2025-07-05","18600171208751","BREAKING-GAMES-57838",{empty:true},"$0.00","$0.00","$0.00","$0.00","$5.17","$0.00","$0.36","$5.53"],
+      ["2025-07-17","18660078714927","BREAKING-GAMES-57782","The Big Box of Magic","$0.00","$0.00","-$39.99","-$39.99","$0.00","$0.00","-$3.70","-$43.69"]
+    ],
+    can: "When did a sale happen? What items, shipping, and tax were on an order?",
+    cant: "Who placed the order? (no customer info in this file)",
+    watch: "One order = several rows: one per line item, plus separate rows for shipping (blank product_title). A refund shows the whole line as negative. And this file covers July ONLY.",
+    q: "Order BREAKING-GAMES-57838 shows up on 3 rows. Why?",
+    opts: ["A data error","Three separate orders","One order — one row per line, including a shipping row"],
+    correct: 2,
+    explain: "One row per line item: order 57838 has two product lines plus a separate shipping row (the one with a blank product_title)."
+  },
+  {
+    src: "shopify", srcLabel: "Shopify", name: "shopify_checkouts.csv", rows: "1,367 rows",
+    whatis: "Every cart — including the ones people started but never paid for.",
+    note: "All 32 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"name", t:"The cart/checkout reference. It REPEATS — one row per item in the cart.", tour:1},
+      {k:"email", t:"Synthetic placeholder (customer_001@example.com). Real emails were removed for privacy."},
+      {k:"customer_id", t:"A numeric ID standing in for the (anonymized) customer."},
+      {k:"customer_name", t:"Synthetic placeholder (\"Customer 001\") — real names were removed for privacy.", tour:1},
+      {k:"financial_status", t:"BLANK means the cart was ABANDONED (never paid). A value like \"paid\" would mean it converted.", tour:1},
+      {k:"fulfillment_status", t:"Whether it shipped. \"unfulfilled\" here — these were never paid, so never sent."},
+      {k:"accepts_marketing", t:"Did the shopper opt into marketing emails? yes / no."},
+      {k:"currency", t:"Currency of the cart — USD on every row."},
+      {k:"subtotal", t:"Value of the items before shipping and tax."},
+      {k:"shipping", t:"Shipping charged on the cart."},
+      {k:"taxes", t:"Tax on the cart."},
+      {k:"total", t:"Cart total: subtotal + shipping + tax.", tour:1},
+      {k:"discount_code", t:"The promo code used, if any. Blank when none was applied."},
+      {k:"discount_amount", t:"Dollar value of any discount. 0 when none."},
+      {k:"shipping_method", t:"The shipping option chosen. Blank when none was selected."},
+      {k:"created_at", t:"When the cart was started. Heads up: this file goes back YEARS, not just this period."},
+      {k:"lineitem_quantity", t:"How many of that item are in the cart. Watch for suspiciously high numbers — that's the bot trail.", tour:1},
+      {k:"lineitem_name", t:"The product in the cart. Real names are pipe-delimited and messy.", tour:1},
+      {k:"lineitem_price", t:"Price of a single unit of that item."},
+      {k:"lineitem_sku", t:"The product's stock-keeping code (BGZ…)."},
+      {k:"lineitem_discount", t:"Discount applied to that specific line item."},
+      {k:"billing_city", t:"Billing address city. Often blank in this export."},
+      {k:"billing_province", t:"Billing state/province code."},
+      {k:"billing_country", t:"Billing country code (AE = United Arab Emirates)."},
+      {k:"shipping_city", t:"Shipping address city."},
+      {k:"shipping_province", t:"Shipping state/province code."},
+      {k:"shipping_country", t:"Shipping country code."},
+      {k:"payment_method", t:"How they paid. Blank here — these carts were never paid."},
+      {k:"refunded_amount", t:"Amount refunded on the cart, if any."},
+      {k:"vendor", t:"The seller — \"Breaking Games\" on every row."},
+      {k:"risk_level", t:"Shopify's fraud-risk flag (Low / Medium / High).", tour:1},
+      {k:"source", t:"Where the checkout happened — \"web\" for the online store."}
+    ],
+    data: [
+      ["#44051427229743","customer_001@example.com","1","Customer 001",{empty:true},"unfulfilled","yes","USD","$60.00","$44.97","$0.00","$104.97",{empty:true},"$0.00","FedEx International Connect Plus®","2025-07-29 08:20:35 -0400","1","Expancity | Family Strategy City Building Game | 2-4 Players","$60.00","BGZ110192","$0.00","Barsha Heights","DU","AE","Barsha Heights","DU","AE",{empty:true},{empty:true},"Breaking Games","Low","web"],
+      ["#44051287375919","customer_002@example.com","2","Customer 002",{empty:true},"unfulfilled","no","USD","$2.00","$0.00","$0.00","$2.00",{empty:true},"$0.00",{empty:true},"2025-07-29 07:01:34 -0400","1","Sparkle*Kitty Princess Palette Card","$2.00","BGZ110342","$0.00",{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},"Breaking Games","Low","web"],
+      ["#44051150536751","customer_003@example.com","3","Customer 003",{empty:true},"unfulfilled","no","USD","$2.00","$0.00","$0.00","$2.00",{empty:true},"$0.00",{empty:true},"2025-07-29 05:35:03 -0400","1","Sparkle*Kitty Princess Palette Card","$2.00","BGZ110342","$0.00",{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},"Breaking Games","Low","web"],
+      ["#44050970542127","customer_004@example.com","4","Customer 004",{empty:true},"unfulfilled","no","USD","$2.00","$0.00","$0.00","$2.00",{empty:true},"$0.00",{empty:true},"2025-07-29 03:26:34 -0400","1","Sparkle*Kitty Princess Palette Card","$2.00","BGZ110342","$0.00",{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},{empty:true},"Breaking Games","Low","web"]
+    ],
+    can: "Who started a checkout, what was in it, and did they finish?",
+    cant: "Real customer identities (the people are anonymized).",
+    watch: "A blank financial_status = an abandoned cart — this file is your window into carts people didn't finish. Later, watch for carts with weirdly high quantities: that's the bot trail you'll chase in Week 5.",
+    q: "Customer 002 started a $2.00 cart. Looking at the status column, did they actually pay?",
+    opts: ["Yes","No — the cart was abandoned","You can't tell from this file"],
+    correct: 1,
+    explain: "financial_status is blank, which means abandoned — they started checkout but never paid."
+  },
+  {
+    src: "analytics", srcLabel: "Shopify Analytics", name: "referrals.csv", rows: "8,712 rows",
+    whatis: "Where every visitor to the site came from, page by page.",
+    note: "All 14 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"referrer", t:"Where the visit came from. BLANK = direct (typed the URL or a bookmark).", tour:1},
+      {k:"landing_page", t:"The first page they hit (\"/\" is the homepage).", tour:1},
+      {k:"pageviews", t:"How many times that page was viewed — page views, not unique visitors.", tour:1},
+      {k:"added_to_cart_rate", t:"Fraction of visits that added something to a cart (a fraction: 0.0030 = 0.30%)."},
+      {k:"pageviews_per_session", t:"Average number of pages viewed per visit."},
+      {k:"conversion_rate", t:"The FRACTION who bought — 0.0007 means 0.07%, NOT 0.07. Multiply by 100.", tour:1},
+      {k:"bounce_rate", t:"Fraction who left right away (0.9428 = 94%).", tour:1},
+      {k:"checkout_sessions", t:"Visits that reached checkout.", tour:1},
+      {k:"pageviews_previous_year", t:"Same metric for the year before — for year-over-year comparison."},
+      {k:"added_to_cart_rate_previous_year", t:"Last year's add-to-cart rate, for comparison."},
+      {k:"pageviews_per_session_previous_year", t:"Last year's pages-per-visit, for comparison."},
+      {k:"conversion_rate_previous_year", t:"Last year's conversion rate, for comparison."},
+      {k:"bounce_rate_previous_year", t:"Last year's bounce rate, for comparison."},
+      {k:"sessions_that_completed_checkout_previous_year", t:"Last year's count of completed checkouts."}
+    ],
+    data: [
+      ["facebook","/products/dwellings-of-eldervale-standard-edition-element","62,447","0.0030","1.14","0.0007","0.9428","41","16","0.0000","2.00","0.0000","0.6250","0"],
+      [{empty:true},"/","23,717","0.0199","2.00","0.0051","0.7879","61","27,039","0.0208","2.65","0.0064","0.6252","65"],
+      ["google","/","14,165","0.0440","3.60","0.0124","0.4225","49","16,922","0.0296","3.86","0.0103","0.3229","45"],
+      ["google","/products/dwellings-of-eldervale-standard-edition-element","9,183","0.0404","2.38","0.0106","0.6803","41","9,698","0.0298","2.98","0.0104","0.5087","34"]
+    ],
+    can: "Where do visitors come from? Which pages get traffic? Is Facebook even driving visits?",
+    cant: "Did a visit actually lead to a sale? (no link to orders — you bridge that in Week 4)",
+    watch: "Rates are FRACTIONS, not percentages. 0.0007 = 0.07%. Misreading this is the classic beginner mistake.",
+    q: "Of the rows shown, which source's visitors were the MOST likely to buy?",
+    opts: ["facebook","google → the homepage (/) row","direct (blank referrer)"],
+    correct: 1,
+    explain: "Compare conversion_rate: google's homepage row is 0.0124 (≈1.24%) — the highest. facebook's 0.0007 is the lowest."
+  },
+  {
+    src: "meta", srcLabel: "Meta", name: "meta_campaigns.csv", rows: "35 rows",
+    whatis: "What the Facebook & Instagram ad campaigns cost and did. This is where the $37,000 lives.",
+    note: "All 19 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"reporting_starts", t:"Start of the reporting window (2025-01-01 on every row)."},
+      {k:"reporting_ends", t:"End of the reporting window (2025-07-29 on every row)."},
+      {k:"campaign_name", t:"The campaign (Breaking Games' naming, pipes and all).", tour:1},
+      {k:"delivery_status", t:"active vs inactive — many campaigns ran $0.", tour:1},
+      {k:"results", t:"What the campaign was optimized for — and it VARIES (purchases, landing-page views…), so the number means different things per row.", tour:1},
+      {k:"result_indicator", t:"WHAT the results column is counting on that row (purchases vs landing-page views). Read this before trusting results."},
+      {k:"reach", t:"How many unique people saw the ads."},
+      {k:"frequency", t:"Average times each person saw it (impressions ÷ reach)."},
+      {k:"cost_per_result", t:"Spend ÷ results. Blank when there were no results."},
+      {k:"spend_usd", t:"Dollars spent.", tour:1},
+      {k:"impressions", t:"Times the ad was shown (one person can be counted many times).", tour:1},
+      {k:"cpm_usd", t:"Cost per 1,000 impressions."},
+      {k:"link_clicks", t:"Clicks through to the site.", tour:1},
+      {k:"shop_clicks", t:"Clicks on a shop/product link. Blank on every row here."},
+      {k:"cpc_usd", t:"Cost per link click (spend ÷ link_clicks).", tour:1},
+      {k:"ctr_link", t:"Link click-through rate, as a PERCENT: link_clicks ÷ impressions × 100 (0.84 = 0.84%). Note: a percent here, while Shopify's referrals file stores rates as fractions."},
+      {k:"clicks_all", t:"All clicks — including likes, comments, expands — not just link clicks."},
+      {k:"ctr_all", t:"Click-through rate counting all clicks (also a percent)."},
+      {k:"cpc_all_usd", t:"Cost per click counting all clicks."}
+    ],
+    data: [
+      ["2025-01-01","2025-07-29","DA | Sales","active",{empty:true},{empty:true},"275,587","3.70",{empty:true},"$12,917.08","1,019,145","$12.67","8,592",{empty:true},"$1.50","0.84","17,553","1.72","$0.74"],
+      ["2025-01-01","2025-07-29","*DA | Traffic TOF","active","39,419","actions:landing_page_view","1,199,431","2.45","$0.22","$8,634.89","2,944,482","$2.93","41,343",{empty:true},"$0.21","1.40","44,501","1.51","$0.19"],
+      ["2025-01-01","2025-07-29","* DA | Sales | Advantage Plus Campaign","active","97","actions:offsite_conversion.fb_pixel_purchase","175,168","2.58","$70.76","$6,863.81","452,387","$15.17","4,507",{empty:true},"$1.52","1.00","9,335","2.06","$0.74"],
+      ["2025-01-01","2025-07-29","DA | Sales | Black Friday","inactive",{empty:true},{empty:true},"0","0.00",{empty:true},"$0.00","0","$0.00",{empty:true},{empty:true},{empty:true},{empty:true},"0","0.00","$0.00"]
+    ],
+    can: "How much did we spend? Which campaigns ran? How many clicks and impressions?",
+    cant: "Which GAME did that spend actually sell? (no product link — that's the detective work ahead.)",
+    watch: "Add up spend_usd across this file and you get about $37,000 — the number in the story. A few campaigns carry it; many sit at $0. And 'results' isn't one consistent thing.",
+    q: "Which campaign spent the most money?",
+    opts: ["*DA | Traffic TOF","DA | Sales","DA | Sales | Black Friday"],
+    correct: 1,
+    explain: "DA | Sales spent $12,917.08 — the highest spend_usd shown. Black Friday spent $0 (inactive)."
+  },
+  {
+    src: "meta", srcLabel: "Meta", name: "meta_ad_sets.csv", rows: "8 rows",
+    whatis: "One level deeper than campaigns — which AUDIENCE each set of ads targeted.",
+    note: "All 19 columns. The tour stops on the key ones — hover any header for its meaning.",
+    cols: [
+      {k:"reporting_starts", t:"Start of the reporting window (2025-01-01)."},
+      {k:"reporting_ends", t:"End of the reporting window (2025-07-29)."},
+      {k:"ad_set_name", t:"The audience / targeting for a set of ads (a campaign contains several ad sets).", tour:1},
+      {k:"delivery_status", t:"active vs inactive.", tour:1},
+      {k:"results", t:"Purchases attributed to this ad set.", tour:1},
+      {k:"result_indicator", t:"What results counts here — purchases (fb_pixel_purchase) on these rows."},
+      {k:"reach", t:"Unique people who saw the ads."},
+      {k:"frequency", t:"Average times each person saw them."},
+      {k:"cost_per_result", t:"Spend ÷ results — the cost of one purchase."},
+      {k:"spend_usd", t:"Dollars spent on that audience.", tour:1},
+      {k:"impressions", t:"Times shown.", tour:1},
+      {k:"cpm_usd", t:"Cost per 1,000 impressions."},
+      {k:"link_clicks", t:"Clicks through to the site."},
+      {k:"shop_clicks", t:"Clicks on a shop/product link. Blank here."},
+      {k:"cpc_usd", t:"Cost per link click.", tour:1},
+      {k:"ctr_link", t:"Link click-through rate, as a percent."},
+      {k:"clicks_all", t:"All clicks, not just link clicks."},
+      {k:"ctr_all", t:"Click-through rate counting all clicks."},
+      {k:"cpc_all_usd", t:"Cost per click counting all clicks."}
+    ],
+    data: [
+      ["2025-01-01","2025-07-29","Broad","inactive","32","actions:offsite_conversion.fb_pixel_purchase","73,549","2.22","$50.81","$1,625.80","163,619","$9.94","1,448",{empty:true},"$1.12","0.88","2,711","1.66","$0.60"],
+      ["2025-01-01","2025-07-29","Interests | Family + Games | Exclude Buyers","inactive","50","actions:offsite_conversion.fb_pixel_purchase","104,823","2.31","$67.82","$3,390.92","242,010","$14.01","2,242",{empty:true},"$1.51","0.93","4,732","1.96","$0.72"],
+      ["2025-01-01","2025-07-29","Retargeting | All Retargeting exclude 30 purchase","active","79","actions:offsite_conversion.fb_pixel_purchase","130,659","3.38","$63.78","$5,038.86","441,790","$11.41","3,535",{empty:true},"$1.43","0.80","7,342","1.66","$0.69"],
+      ["2025-01-01","2025-07-29","Dwellings Stop Scrolling Test | Meta","inactive","10","actions:offsite_conversion.fb_pixel_purchase","30,020","2.59","$96.79","$967.87","77,604","$12.47","468",{empty:true},"$2.07","0.60","1,249","1.61","$0.77"]
+    ],
+    can: "Within a campaign, which AUDIENCE performed best?",
+    cant: "The big-picture spend total — that's the campaigns file.",
+    watch: "Only 8 rows — small, but it shows which targeting worked. 'Retargeting' means showing ads to people who already visited the site.",
+    q: "Which audience (ad set) drove the most results?",
+    opts: ["Broad","Retargeting","Dwellings Stop Scrolling Test"],
+    correct: 1,
+    explain: "Retargeting drove 79 results — the most. People who already visited the site convert best."
+  }
+];
+
+const TOTAL = FILES.length;
+const LAST = TOTAL; // wrap screen index
+
+/* ============ RENDER ============ */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function cell(v){
+  if (v && typeof v === "object" && v.empty) {
+    return '<span class="empty-cell">(empty)</span>';
+  }
+  return esc(v);
+}
+
+function buildFileScreen(f, idx){
+  const headCells = f.cols.map(c =>
+    `<th class="col-h${c.tour ? ' is-key' : ''}"${c.tour ? ' data-tour="1"' : ''} tabindex="0" aria-label="${esc(c.k)}: ${esc(c.t)}">
+        <span class="lbl mono">${esc(c.k)}</span><span class="info">ⓘ</span>
+        <span class="tip">${esc(c.t)}</span>
+     </th>`).join("");
+
+  const bodyRows = f.data.map(r =>
+    `<tr>${r.map(v => `<td>${cell(v)}</td>`).join("")}</tr>`).join("");
+
+  const optsHtml = f.opts.map((o,i) =>
+    `<button class="opt" data-i="${i}" onclick="answer(${idx},${i})">${esc(o)}<span class="mark"></span></button>`).join("");
+
+  return `
+  <section class="screen src-${f.src}" data-screen="${idx}" ${idx===0?'':'hidden'} role="group" aria-label="${esc(f.name)}">
+    <div class="file-header">
+      <span class="file-name mono">${esc(f.name)}</span>
+      <span class="pill">${esc(f.srcLabel)}</span>
+      <span class="badge">${esc(f.rows)}</span>
+    </div>
+    <div class="accent-bar"></div>
+    <p class="whatis">${esc(f.whatis)}</p>
+
+    ${f.note ? `<p class="table-note">${esc(f.note)}</p>` : ``}
+    <div class="table-scroll">
+      <div class="tour-pointer" aria-hidden="true"></div>
+      <table>
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+
+    <div class="tour-controls" aria-label="Guided tour controls">
+      <span class="tc-label">Guided tour:</span>
+      <button class="tc-btn tc-toggle" type="button" aria-label="Pause or play the guided tour">⏸ Pause</button>
+      <button class="tc-btn tc-skip" type="button" aria-label="Skip the tour and show all column explanations at once">Show all ⏭</button>
+      <button class="tc-btn tc-replay" type="button" aria-label="Replay the guided tour from the start">↻ Replay</button>
+      <span class="tc-status" aria-hidden="true"></span>
+    </div>
+
+    <div class="tour-static" aria-hidden="true">
+      ${f.cols.map(c => `<div class="tsi"><b>${esc(c.k)}</b> — ${esc(c.t)}</div>`).join("")}
+    </div>
+
+    <div class="tour-live" aria-live="polite"></div>
+
+    <div class="answers">
+      <div class="ans can"><b>✅ It can answer:</b> ${esc(f.can)}</div>
+      <div class="ans cant"><b>🚫 It can't answer:</b> ${esc(f.cant)}</div>
+    </div>
+
+    <div class="watch"><b>⚠️ Watch out:</b> ${esc(f.watch)}</div>
+
+    <div class="quiz">
+      <p class="quiz-q"><span class="tag">Quick check</span>${esc(f.q)}</p>
+      <div class="opts" id="opts-${idx}">${optsHtml}</div>
+      <div class="explain" id="explain-${idx}"></div>
+    </div>
+  </section>`;
+}
+
+function buildWrap(){
+  return `
+  <section class="screen wrap-screen" data-screen="${LAST}" hidden role="group" aria-label="Summary">
+    <div class="wrap-icons">
+      <span style="background:var(--shopify)"></span>
+      <span style="background:var(--shopify)"></span>
+      <span style="background:var(--shopify)"></span>
+      <span style="background:var(--analytics)"></span>
+      <span style="background:var(--meta)"></span>
+      <span style="background:var(--meta)"></span>
+    </div>
+    <h2>Six files, one story</h2>
+    <p class="wrap-body">Six files. About <b>10,500 rows</b>. Two separate systems (<b>Shopify</b> and <b>Meta</b>). And <b>not one shared ID</b> between them. Knowing what's in each file is this week's job — connecting them is next week's.</p>
+  </section>`;
+}
+
+const screensEl = document.getElementById("screens");
+screensEl.innerHTML = FILES.map(buildFileScreen).join("") + buildWrap();
+
+/* dots */
+const dotsEl = document.getElementById("dots");
+for (let i=0;i<TOTAL;i++){
+  const b = document.createElement("button");
+  b.className = "dot" + (i===0?" active":"");
+  b.setAttribute("role","tab");
+  b.setAttribute("aria-label","Go to file "+(i+1));
+  b.onclick = () => goTo(i);
+  dotsEl.appendChild(b);
+}
+
+/* ============ STATE / NAV ============ */
+let current = 0;
+const backBtn = document.getElementById("backBtn");
+const nextBtn = document.getElementById("nextBtn");
+const progressLabel = document.getElementById("progressLabel");
+
+function render(){
+  document.querySelectorAll(".screen").forEach(s => {
+    s.hidden = (+s.dataset.screen !== current);
+  });
+  // dots
+  [...dotsEl.children].forEach((d,i) => {
+    d.classList.toggle("active", i===current);
+    d.classList.toggle("done", i<current);
+  });
+  // progress label
+  if (current < TOTAL) {
+    progressLabel.textContent = `File ${current+1} of ${TOTAL}`;
+    dotsEl.style.visibility = "visible";
+  } else {
+    progressLabel.textContent = "Done — recap";
+    dotsEl.style.visibility = "hidden";
+  }
+  // buttons
+  backBtn.disabled = (current === 0);
+  nextBtn.textContent = (current === LAST) ? "Done" : "Next ▶";
+  nextBtn.disabled = (current === LAST);
+
+  // focus current screen for a11y
+  const cs = document.querySelector(`.screen[data-screen="${current}"]`);
+  if (cs) cs.scrollIntoView({block:"nearest"});
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+function goTo(i){
+  if (i < 0 || i > LAST) return;
+  stopTour();              // cancel any running tour before leaving the screen
+  current = i;
+  render();
+  startTourForCurrent();   // fresh tour on the screen we just landed on
+}
+backBtn.onclick = () => goTo(current-1);
+nextBtn.onclick = () => goTo(current+1);
+
+/* keyboard arrows */
+document.addEventListener("keydown", (e) => {
+  if (e.target.classList && e.target.classList.contains("opt")) return;
+  if (e.key === "ArrowRight") {
+    // While the tour is walking columns, Right-arrow jumps to the next column.
+    const t = (current < TOTAL) ? tours[current] : null;
+    if (t && advanceTour(t)) { e.preventDefault(); return; }
+    if(current<LAST) goTo(current+1);
+  }
+  if (e.key === "ArrowLeft")  { if(current>0)    goTo(current-1); }
+});
+
+/* tap-to-toggle tooltip on touch devices */
+document.querySelectorAll(".col-h").forEach(th => {
+  th.addEventListener("click", (e) => {
+    document.querySelectorAll(".col-h.show").forEach(o => { if(o!==th) o.classList.remove("show"); });
+    th.classList.toggle("show");
+  });
+});
+
+/* Manual hover/focus on a header pauses the auto-tour and shows that header's
+   tooltip; moving away resumes. Native :hover/:focus already render the tip. */
+document.querySelectorAll(".screen .col-h").forEach(th => {
+  const screen = th.closest(".screen");
+  const onEnter = () => {
+    const t = tours[+screen.dataset.screen];
+    if (t && t.running && !t.paused) { t.pausedByHover = true; pauseTour(t); }
+  };
+  const onLeave = () => {
+    const t = tours[+screen.dataset.screen];
+    if (t && t.pausedByHover) { t.pausedByHover = false; resumeTour(t); }
+  };
+  th.addEventListener("mouseenter", onEnter);
+  th.addEventListener("mouseleave", onLeave);
+  th.addEventListener("focus", onEnter);
+  th.addEventListener("blur", onLeave);
+
+  // Clicking the currently-active column header jumps to the next column.
+  th.addEventListener("click", () => {
+    const t = tours[+screen.dataset.screen];
+    if (!t || !t.running) return;
+    // hover may have paused it; releasing the hover-pause lets advance run
+    if (t.pausedByHover) { t.pausedByHover = false; t.paused = false; if (t.toggleBtn) t.toggleBtn.textContent = "⏸ Pause"; }
+    const tourCols = (t.tourIdx && t.tourIdx.length) ? t.tourIdx : t.headers.map((h,i)=>i);
+    if (t.headers.indexOf(th) === tourCols[t.step]) advanceTour(t);
+  });
+});
+
+/* ============ AUTO-TOUR ============ */
+const REDUCE_MOTION = window.matchMedia
+  && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// per-screen tour state, keyed by screen index
+const tours = {};
+
+function tipDwell(text){
+  // scale dwell to reading time: min 1.8s, +35ms/char, cap 3s
+  return Math.min(3000, Math.max(1800, 1800 + (text ? text.length : 0) * 35));
+}
+
+function getTour(idx){
+  if (tours[idx]) return tours[idx];
+  const screen = document.querySelector(`.screen[data-screen="${idx}"]`);
+  if (!screen || idx >= TOTAL) return null; // no tour on wrap screen
+  tours[idx] = {
+    idx,
+    screen,
+    whatis: screen.querySelector(".whatis"),
+    headers: [...screen.querySelectorAll(".col-h")],
+    tourIdx: [...screen.querySelectorAll(".col-h")].map((h,i)=> h.dataset.tour ? i : -1).filter(i=>i>=0),
+    pointer: screen.querySelector(".tour-pointer"),
+    live: screen.querySelector(".tour-live"),
+    toggleBtn: screen.querySelector(".tc-toggle"),
+    skipBtn: screen.querySelector(".tc-skip"),
+    staticEl: screen.querySelector(".tour-static"),
+    statusEl: screen.querySelector(".tc-status"),
+    scroller: screen.querySelector(".table-scroll"),
+    timer: null,
+    step: -1,        // -1 = not yet at columns (intro), 0..n-1 = columns, n = done
+    running: false,
+    paused: false,
+    pausedByHover: false,
+    bound: false
+  };
+  const t = tours[idx];
+  if (!t.bound) {
+    if (t.toggleBtn) t.toggleBtn.addEventListener("click", () => toggleTour(t));
+    if (t.skipBtn) t.skipBtn.addEventListener("click", () => showAllTour(t));
+    const rep = screen.querySelector(".tc-replay");
+    if (rep) rep.addEventListener("click", () => { stopTour(); startTourForCurrent(true); });
+    t.bound = true;
+  }
+  return t;
+}
+
+function clearHighlights(t){
+  t.headers.forEach(h => {
+    h.classList.remove("tour-active", "show");
+  });
+  t.screen.querySelectorAll("tbody td.tour-col").forEach(td => td.classList.remove("tour-col"));
+  if (t.pointer) t.pointer.classList.remove("on");
+}
+
+function setStatus(t, txt){
+  if (t.statusEl) t.statusEl.textContent = txt;
+}
+
+function highlightColumn(t, colIdx){
+  clearHighlights(t);
+  const th = t.headers[colIdx];
+  if (!th) return;
+  th.classList.add("tour-active", "show");
+
+  // highlight the cells in that column
+  const cellPos = colIdx; // header order matches td order
+  t.screen.querySelectorAll("tbody tr").forEach(tr => {
+    const td = tr.children[cellPos];
+    if (td) td.classList.add("tour-col");
+  });
+
+  // announce for screen readers
+  const tipText = th.querySelector(".tip");
+  const label = th.querySelector(".lbl");
+  if (t.live) t.live.textContent =
+    (label ? label.textContent + ": " : "") + (tipText ? tipText.textContent : "");
+
+  // move the pointer to the header (skipped under reduced motion via CSS display:none)
+  if (t.pointer && !REDUCE_MOTION) {
+    // make sure the active header is visible in the horizontal scroller
+    if (th.offsetLeft < t.scroller.scrollLeft ||
+        th.offsetLeft + th.offsetWidth > t.scroller.scrollLeft + t.scroller.clientWidth) {
+      t.scroller.scrollTo({ left: Math.max(0, th.offsetLeft - 16), behavior: "smooth" });
+    }
+    const x = th.offsetLeft + th.offsetWidth / 2 - t.scroller.scrollLeft;
+    const y = th.offsetTop + th.offsetHeight + 4;
+    t.pointer.style.left = x + "px";
+    t.pointer.style.top = y + "px";
+    t.pointer.classList.add("on");
+  }
+}
+
+function tourSchedule(t, delay, fn){
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => { t.timer = null; if (!t.paused) fn(); }, delay);
+}
+
+function runTourStep(t){
+  if (!t.running || t.paused) return;
+
+  if (t.step === -1) {
+    // intro: pop the "what this file is" line
+    if (t.whatis) {
+      t.whatis.classList.remove("pop");
+      void t.whatis.offsetWidth; // reflow to restart animation
+      t.whatis.classList.add("pop");
+    }
+    if (t.live) t.live.textContent = t.whatis ? t.whatis.textContent : "";
+    setStatus(t, "Reading the file…");
+    t.step = 0;
+    tourSchedule(t, 2000, () => runTourStep(t));
+    return;
+  }
+
+  const tourCols = (t.tourIdx && t.tourIdx.length) ? t.tourIdx : t.headers.map((h,i)=>i);
+  if (t.step >= tourCols.length) {
+    // settle at the end — clean resting state
+    finishTour(t);
+    return;
+  }
+
+  // walk a key column — t.step indexes the tour stops; colIdx is the real column
+  const colIdx = tourCols[t.step];
+  highlightColumn(t, colIdx);
+  setStatus(t, `Key column ${t.step + 1} of ${tourCols.length}`);
+  const tip = t.headers[colIdx].querySelector(".tip");
+  const dwell = tipDwell(tip ? tip.textContent : "");
+  tourSchedule(t, dwell, () => { t.step++; runTourStep(t); });
+}
+
+// Jump straight to the next column instead of waiting out the dwell.
+// Only acts while the tour is actively walking columns (step 0..n-1).
+// Returns true if it consumed the advance request.
+function advanceTour(t){
+  if (!t || !t.running || t.paused) return false;
+  const tourLen = (t.tourIdx && t.tourIdx.length) ? t.tourIdx.length : t.headers.length;
+  if (t.step < 0 || t.step >= tourLen) return false;
+  clearTimeout(t.timer); t.timer = null;
+  t.step++;
+  runTourStep(t);
+  return true;
+}
+
+function finishTour(t){
+  clearTimeout(t.timer); t.timer = null;
+  clearHighlights(t);
+  if (t.whatis) t.whatis.classList.remove("pop");
+  t.running = false;
+  t.paused = false;
+  if (t.live) t.live.textContent = "Tour complete.";
+  setStatus(t, "Done");
+  if (t.toggleBtn) t.toggleBtn.textContent = "↻ Play";
+  t._done = true;
+}
+
+// "Show all": stop the walk for this file and reveal every column explanation
+// at once as static, always-visible captions (reuses the reduced-motion list).
+function showAllTour(t){
+  clearTimeout(t.timer); t.timer = null;
+  clearHighlights(t);
+  if (t.whatis) t.whatis.classList.remove("pop");
+  t.running = false;
+  t.paused = false;
+  t.pausedByHover = false;
+  t._done = true;
+  if (t.staticEl) t.staticEl.classList.add("show-all");
+  if (t.toggleBtn) t.toggleBtn.textContent = "↻ Play";
+  setStatus(t, "Showing all");
+  if (t.live) t.live.textContent =
+    (t.whatis ? t.whatis.textContent + " " : "") +
+    "Column explanations are listed below the table.";
+}
+
+function pauseTour(t){
+  if (!t.running || t.paused) return;
+  t.paused = true;
+  clearTimeout(t.timer); t.timer = null;
+  if (t.toggleBtn) t.toggleBtn.textContent = "▶ Play";
+  setStatus(t, "Paused");
+}
+
+function resumeTour(t){
+  if (!t.running || !t.paused) return;
+  t.paused = false;
+  if (t.toggleBtn) t.toggleBtn.textContent = "⏸ Pause";
+  // re-run the current step (re-highlights the same column and reschedules its dwell)
+  runTourStep(t);
+}
+
+function toggleTour(t){
+  if (t._done || !t.running) {
+    // replay from start
+    stopTour();
+    startTourForCurrent(true);
+    return;
+  }
+  if (t.paused) resumeTour(t); else pauseTour(t);
+}
+
+// stop / reset whatever tour is on the current screen (called before navigating away)
+function stopTour(){
+  Object.values(tours).forEach(t => {
+    clearTimeout(t.timer); t.timer = null;
+    clearHighlights(t);
+    if (t.whatis) t.whatis.classList.remove("pop");
+    t.running = false;
+    t.paused = false;
+    t.pausedByHover = false;
+    t.step = -1;
+    t._done = false;
+    if (t.staticEl) t.staticEl.classList.remove("show-all");
+    if (t.toggleBtn) t.toggleBtn.textContent = "⏸ Pause";
+    if (t.statusEl) t.statusEl.textContent = "";
+    if (t.live) t.live.textContent = "";
+  });
+}
+
+function startTourForCurrent(force){
+  if (current >= TOTAL) return; // no tour on wrap screen
+  const t = getTour(current);
+  if (!t) return;
+
+  if (REDUCE_MOTION) {
+    // static fallback: captions are always visible via CSS; just announce intro.
+    if (t.live) t.live.textContent =
+      (t.whatis ? t.whatis.textContent + " " : "") +
+      "Column explanations are listed below the table.";
+    if (t.whatis) { t.whatis.classList.add("pop"); }
+    return;
+  }
+
+  t.running = true;
+  t.paused = false;
+  t.pausedByHover = false;
+  t.step = -1;
+  t._done = false;
+  if (t.toggleBtn) t.toggleBtn.textContent = "⏸ Pause";
+  runTourStep(t);
+}
+
+/* ============ QUIZ ============ */
+function answer(screenIdx, choice){
+  const f = FILES[screenIdx];
+  const optsBox = document.getElementById("opts-"+screenIdx);
+  const explainBox = document.getElementById("explain-"+screenIdx);
+  const buttons = [...optsBox.querySelectorAll(".opt")];
+
+  buttons.forEach((b,i) => {
+    b.classList.remove("correct","wrong","dim");
+    const mark = b.querySelector(".mark");
+    mark.textContent = "";
+    if (i === f.correct) {
+      b.classList.add("correct");
+      mark.textContent = " ✓";
+    } else if (i === choice) {
+      b.classList.add("wrong");
+      mark.textContent = " ✗";
+    } else {
+      b.classList.add("dim");
+    }
+  });
+
+  const right = (choice === f.correct);
+  explainBox.innerHTML = `<b>${right ? "Correct." : "Not quite."}</b> ${esc(f.explain)}`;
+  explainBox.classList.add("show");
+}
+window.answer = answer;
+
+render();
+startTourForCurrent(); // auto-tour on first load
+</script>
+</body>
+</html>
