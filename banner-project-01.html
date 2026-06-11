@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<!--
+  Breaking Games · Project 1 · "Meet the Mess" (Jess) — animated module banner.
+  (a) Source sprite: ../characters/jess.png  (512×576, 32×36 grid ×16, on solid #000000).
+  (b) The black background is KNOCKED OUT at runtime: jess.png is drawn to an offscreen
+      <canvas> and every near-black pixel (R<24 && G<24 && B<24) is set to alpha 0, so she
+      composites onto the gradient. Blink + talk frames are drawn as pixel-perfect overlay
+      patches on the same canvas (smoothing off) — no extra image files.
+  (c) The sprite is inlined below as a base64 data-URI (const JESS_SRC) for a fully portable
+      single file. To use the committed PNG instead, replace JESS_SRC with the relative path
+      "../characters/jess.png" (resolves once hosted alongside the PNG on extern-html-pages).
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Project 1 — Meet the Mess</title>
+<style>
+  :root{
+    --navy:#11315E;   /* structure, outlines, title, body text */
+    --blue:#1B6FC4;   /* secondary accent */
+    --sky:#5BB8E8;    /* light accent / motif props */
+    --amber:#E89B3C;  /* warm accent / motif props */
+    --gold:#F0C24B;   /* PROJECT 1 badge + shimmer ONLY */
+    --canvas:#FBF1E4; /* parchment — panel fill + gradient start */
+    --ink:#2B2622;    /* sprite outline / eye / mouth ink */
+    --blush:#E8889B;  /* sprite cheeks (baked into PNG) */
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:#0b1b33;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:18px;
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* Fixed-aspect, fluid: container-query units scale type + sprite together. */
+  .stage{ width:100%; max-width:1600px; container-type:inline-size; }
+  .banner{
+    position:relative; width:100%; aspect-ratio:4 / 1; overflow:hidden;
+    border-radius:0.95cqw;
+    background:linear-gradient(100deg, var(--canvas) 0%, #f0dcc0 26%, #355c8c 70%, var(--navy) 100%);
+    isolation:isolate;
+  }
+  /* gold hairline frame */
+  .banner::after{
+    content:""; position:absolute; inset:0.62cqw; border:0.14cqw solid var(--gold);
+    border-radius:0.6cqw; opacity:.7; pointer-events:none; z-index:5;
+  }
+
+  /* ── faint pixel motif props (ambience only) ───────────────────── */
+  .motif{ position:absolute; inset:0; z-index:1; pointer-events:none; }
+  .motif svg{ position:absolute; shape-rendering:crispEdges; }
+  .m-sheet1{ left:21.5cqw; top:3cqw;  width:9cqw;  opacity:.16; }
+  .m-sheet2{ left:1.5cqw;  top:1.6cqw; width:6.5cqw; opacity:.13; }
+  .m-db{     left:26.5cqw; top:14cqw;  width:5cqw;  opacity:.17; }
+  .m-cells{  left:1cqw;    bottom:1cqw;width:7cqw;  opacity:.13; }
+
+  /* ── Jess sprite stage (left third) ────────────────────────────── */
+  .sprite-slide{ position:absolute; left:6.4cqw; bottom:0; height:24cqw; z-index:3; will-change:transform; }
+  .sprite-bob{ height:100%; }
+  .sprite-sway{ height:100%; transform-origin:50% 100%; }
+  .sprite-canvas{
+    height:100%; width:auto; display:block;
+    image-rendering:pixelated; image-rendering:-moz-crisp-edges; image-rendering:crisp-edges;
+    filter:drop-shadow(0.25cqw 0.4cqw 0.4cqw rgba(8,18,34,.35));
+  }
+
+  /* ── Quest-briefing / speech panel (right two-thirds) ──────────── */
+  .panel{
+    position:absolute; left:31cqw; right:3.6cqw; top:3cqw; bottom:3cqw; z-index:4;
+    background:#FFFFFF; border:0.2cqw solid var(--navy); border-radius:1.1cqw;
+    padding:2.1cqw 2.6cqw; transform-origin:0% 50%; overflow:hidden;
+    box-shadow:0 0.5cqw 1.4cqw rgba(8,18,34,.22),
+               inset 0 0.2cqw 0 rgba(240,194,75,.6),   /* subtle gold outline highlight */
+               inset 0 -0.06cqw 0 rgba(240,194,75,.28);
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  /* repurposed shimmer: subtle gold accent sweep across the bubble */
+  .panel::after{
+    content:""; position:absolute; top:0; left:-40%; width:34%; height:100%;
+    background:linear-gradient(105deg, transparent, rgba(240,194,75,.16), transparent);
+    transform:skewX(-18deg); pointer-events:none; z-index:0;
+  }
+  .panel > *{ position:relative; z-index:1; }
+  /* speech tail pointing toward Jess */
+  .tail-out{ position:absolute; left:-1.7cqw; top:48%; width:0; height:0;
+    border-top:1.5cqw solid transparent; border-bottom:1.5cqw solid transparent;
+    border-right:1.7cqw solid var(--navy); z-index:4; }
+  .tail-in{ position:absolute; left:-1.25cqw; top:48%; width:0; height:0;
+    border-top:1.18cqw solid transparent; border-bottom:1.18cqw solid transparent;
+    border-right:1.35cqw solid #FFFFFF; z-index:6; }
+
+  .dialogue{
+    color:var(--navy); font-weight:600; font-size:2.35cqw; line-height:1.4;
+    letter-spacing:-0.01em; max-width:52cqw; text-wrap:pretty;
+    min-height:3.4cqw;
+  }
+  .caret{ color:var(--gold-deep, #B8862F); font-weight:700; opacity:0; margin-left:0.12em; }
+  .caret.show{ opacity:1; }
+
+  /* replay control (glyph only, unobtrusive) */
+  .replay{
+    position:absolute; right:0.9cqw; bottom:0.7cqw; z-index:7;
+    width:2.1cqw; height:2.1cqw; border-radius:50%;
+    border:0.12cqw solid rgba(17,49,94,.4); background:rgba(255,255,255,.55);
+    color:var(--navy); font-size:1.15cqw; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    opacity:.4; transition:opacity .2s, transform .2s;
+  }
+  .replay:hover{ opacity:.95; transform:rotate(-40deg); }
+
+  /* ── Idle motion (only when motion is welcome) ─────────────────── */
+  @media (prefers-reduced-motion: no-preference){
+    .sprite-bob{ animation:bob 3.6s ease-in-out .5s infinite; }
+    .sprite-sway{ animation:sway 6.5s ease-in-out .5s infinite; }
+    .panel::after{ animation:shimmer 5s ease-in-out 1.6s infinite; }
+
+    .intro .sprite-slide{ animation:slideIn .55s cubic-bezier(.16,.84,.34,1) both; }
+    .intro .panel{ animation:panelPop .5s cubic-bezier(.34,1.56,.64,1) .28s both; }
+    .intro .tail-out,.intro .tail-in{ animation:fadeIn .3s ease .5s both; }
+  }
+
+  @keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-0.55cqw); } }
+  @keyframes sway{ 0%,100%{ transform:rotate(-0.45deg); } 50%{ transform:rotate(0.45deg); } }
+  @keyframes shimmer{ 0%{ left:-60%; } 55%,100%{ left:130%; } }
+  @keyframes slideIn{ from{ transform:translateX(-135%); } to{ transform:translateX(0); } }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes panelPop{
+    0%{ transform:scale(.9); opacity:0; }
+    60%{ transform:scale(1.03); opacity:1; }
+    100%{ transform:scale(1); opacity:1; }
+  }
+  @keyframes stamp{
+    0%{ transform:scale(1.25); opacity:0; }
+    55%{ transform:scale(.92); opacity:1; }
+    100%{ transform:scale(1); opacity:1; }
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="banner" id="banner">
+      <!-- faint pixel ambience -->
+      <div class="motif" aria-hidden="true">
+        <svg class="m-sheet1" viewBox="0 0 90 70"><g fill="none" stroke="#E89B3C" stroke-width="2">
+          <rect x="2" y="2" width="86" height="66"/><line x1="2" y1="19" x2="88" y2="19"/>
+          <line x1="2" y1="36" x2="88" y2="36"/><line x1="2" y1="53" x2="88" y2="53"/>
+          <line x1="32" y1="2" x2="32" y2="68"/><line x1="60" y1="2" x2="60" y2="68"/></g>
+          <g fill="#E89B3C"><rect x="6" y="6" width="22" height="9"/><rect x="36" y="40" width="20" height="9"/></g></svg>
+        <svg class="m-sheet2" viewBox="0 0 65 60"><g fill="none" stroke="#5BB8E8" stroke-width="2">
+          <rect x="2" y="2" width="61" height="56"/><line x1="2" y1="22" x2="63" y2="22"/>
+          <line x1="2" y1="42" x2="63" y2="42"/><line x1="33" y1="2" x2="33" y2="58"/></g></svg>
+        <svg class="m-db" viewBox="0 0 50 56"><g fill="#5BB8E8">
+          <ellipse cx="25" cy="9" rx="22" ry="8"/><rect x="3" y="9" width="44" height="36"/>
+          <ellipse cx="25" cy="45" rx="22" ry="8"/></g>
+          <g fill="none" stroke="#11315E" stroke-width="2" opacity=".5"><ellipse cx="25" cy="22" rx="22" ry="8"/><ellipse cx="25" cy="34" rx="22" ry="8"/></g></svg>
+        <svg class="m-cells" viewBox="0 0 70 40"><g fill="#E89B3C">
+          <rect x="2" y="2" width="14" height="10"/><rect x="20" y="2" width="14" height="10"/>
+          <rect x="38" y="14" width="14" height="10"/><rect x="2" y="26" width="14" height="10"/>
+          <rect x="56" y="26" width="12" height="10"/></g></svg>
+      </div>
+
+      <!-- Jess -->
+      <div class="sprite-slide">
+        <div class="sprite-bob">
+          <div class="sprite-sway">
+            <canvas class="sprite-canvas" id="jess" width="512" height="576"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- briefing panel -->
+      <div class="tail-out"></div>
+      <div class="tail-in"></div>
+      <div class="panel" id="panel">
+        <p class="dialogue"><span id="line"></span><span class="caret" id="caret">▶</span></p>
+      </div>
+
+      <button class="replay" id="replay" type="button" title="Replay" aria-label="Replay intro">↻</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  const JESS_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAJACAIAAAB0QknBAAAJlElEQVR4nO3dP4sVVxyA4bnBIiKIhpXAssVaiERB06QJki5YKNgHQr6HTbDJFwnYC6awDSFF0uhCBLHYLZaFuEsMwmIaMWVsIoze8f55n6c+DOfOHXg5zfkNAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQMVv0BhjnyvlNr4yltbN7sOgtMMJHYxYDsD4EACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACizANYsNr9/lsbpyd9/v7Ri0mfz3yZH7BYTgAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUbNFb2DdXDm/OSyTnd2DUetv37g82V5YvB9++iP1PfN2TgAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFHmAczZ2PvTtzZOj1q/f/Ri1Pqbl86OWg9vuv/4+VJ9z+YBzJcTAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBA1IlFbwB4d3uHx14f78wJACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgyjwA3su9py8nfYO3LpwcVtnU7+fqmUkfz5pzAgCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiDIPgPR9/av+fvYOjyd9PuvNCQAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIMo8AN7LnbsPRq3//IuvUvMG7j19OWr9w99/HrX+u6+vjdwR/McJACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgyjyAFXPz0tlhmYy935/5vs+rZ5bre3v47NVke2H+nAAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKJmi97AurlyfnPU+q2N06PWn5n9M2r99rlTo9azWvYOj4dl8vfrj0et3z96MWr9zu7ByB3xNk4AAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRJxa9AYZJ7/e/+PrqpK/4yezRULpPf9nmK1zf+HKp/t+Hz15NthfmzwkAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACDKPIAVc//x81HrL3422VYIGPu9bW2cnmwvzJ8TAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlHkAC7Z/9GLS5z+ZPZr0+atu+9ypYZU9OPp1KH3PzJcTAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlHkAfFD3nr4ctf7WhZPDKqv9XlaLEwBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJR5AHxQY++7H3uf/rJxvz/LzAkAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBqtugNrJsr5zeHZbKzezBq/e0bl4dVdufug0mf//0310et3zs8HpbJ3d/2Ut8zb+cEABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQJQAAUQIAECUAAFECABAlAABRAgAQZR7AnE19f/qq34e+6vMGxho7D2Dsff3Lxve/WpwAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiTix6A7DOts+dWvQW4H85AQBECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARJkHMGc7uwfzfiQrbO/weCjx/a8WJwCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCjzANbc3o/XJn3+9re/TPp83s7/y/twAgCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiJoNMVPfn17z56O/Fr2FtE+vfrLoLayV7dh8CycAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCgBAIgSAIAoAQCIEgCAKAEAiBIAgCgBAIgSAICoE4veAMvF/f7r/X+ZH8CbnAAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKIEACBKAACiBAAgSgAAogQAIEoAAKLMA1hz7vfnfb4H8wPWmxMAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAECUAABECQBAlAAARAkAQJQAAEQJAMDQ9C8oJqapaTYvAwAAAABJRU5ErkJggg=="; // ← swap to "../characters/jess.png" to use the committed PNG
+
+  const DIALOGUE = "Welcome aboard. Want to meet our data?";
+
+  const allowMotion = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const banner  = document.getElementById('banner');
+  const canvas  = document.getElementById('jess');
+  const ctx     = canvas.getContext('2d');
+  const lineEl  = document.getElementById('line');
+  const caretEl = document.getElementById('caret');
+  const replay  = document.getElementById('replay');
+  ctx.imageSmoothingEnabled = false;
+
+  // palette tokens used for sprite patches
+  const SKIN='#7a4b2b', INK='#2B2622', WHITE='#FBF1E4';
+  const C=16; // grid cell size in source px (32×36 grid → 512×576)
+
+  // offscreen knocked-out base sprite
+  const base = document.createElement('canvas');
+  base.width = 512; base.height = 576;
+  const bctx = base.getContext('2d');
+  let ready = false;
+
+  function knockOutBlack(img){
+    bctx.imageSmoothingEnabled = false;
+    bctx.clearRect(0,0,512,576);
+    bctx.drawImage(img,0,0,512,576);
+    const id = bctx.getImageData(0,0,512,576);
+    const d = id.data;
+    for(let i=0;i<d.length;i+=4){
+      if(d[i]<24 && d[i+1]<24 && d[i+2]<24){ d[i+3]=0; }
+    }
+    bctx.putImageData(id,0,0);
+  }
+
+  // draw sprite with optional blink / talk overlay patches
+  function render(state){
+    state = state || {};
+    ctx.clearRect(0,0,512,576);
+    ctx.drawImage(base,0,0);
+    if(state.blink){
+      // eyes shut: fill eye cells with skin, lay a thin ink eyelid line
+      ctx.fillStyle = SKIN;
+      ctx.fillRect(12*C,14*C,2*C,2*C);   // left  eye cols12-13 rows14-15
+      ctx.fillRect(18*C,14*C,2*C,2*C);   // right eye cols18-19 rows14-15
+      ctx.fillStyle = INK;
+      ctx.fillRect(12*C,15*C, 2*C, 6);   // left  lid
+      ctx.fillRect(18*C,15*C, 2*C, 6);   // right lid
+    }
+    if(state.talk){
+      // mouth open: erase smile, draw ink oval + white inner glint
+      ctx.fillStyle = SKIN;
+      ctx.fillRect(14*C,21*C,4*C,2*C);              // erase smile + tooth
+      ctx.fillStyle = INK;
+      ctx.fillRect(15*C,20*C+8, 2*C, 2*C);          // open mouth (cols15-16)
+      ctx.fillStyle = WHITE;
+      ctx.fillRect(15*C+8, 22*C, C, 8);             // tooth glint
+    }
+  }
+
+  // ── intro + idle scheduling ──────────────────────────────────────
+  let timers = [];
+  let blinkTimer = null, talkTimer = null;
+  const clearTimers = ()=>{ timers.forEach(clearTimeout); timers=[]; if(talkTimer){clearInterval(talkTimer);talkTimer=null;} };
+  const later = (fn,ms)=>{ const t=setTimeout(fn,ms); timers.push(t); return t; };
+
+  function scheduleBlink(){
+    if(!allowMotion) return;
+    const next = 4000 + Math.random()*3000;
+    blinkTimer = setTimeout(function(){
+      render({blink:true, talk: talking});
+      setTimeout(()=>{ render({blink:false, talk: talking}); scheduleBlink(); }, 120);
+    }, next);
+  }
+
+  let talking = false;
+  function typewriter(){
+    lineEl.textContent = '';
+    caretEl.classList.remove('show');
+    let i = 0;
+    talking = true;
+    let mouthOpen = false;
+    talkTimer = setInterval(function(){
+      mouthOpen = !mouthOpen;
+      render({talk: mouthOpen});
+    }, 160);
+    function step(){
+      if(i <= DIALOGUE.length){
+        lineEl.textContent = DIALOGUE.slice(0,i);
+        i++;
+        later(step, 28);
+      } else {
+        talking = false;
+        if(talkTimer){ clearInterval(talkTimer); talkTimer=null; }
+        render({});                 // back to rest mouth
+        caretEl.classList.add('show');
+        blinkCaret();
+      }
+    }
+    later(step, 0);
+  }
+
+  function blinkCaret(){
+    if(!allowMotion){ caretEl.classList.add('show'); return; }
+    // gentle blink of the continue arrow
+    let on = true;
+    const tick = ()=>{ on=!on; caretEl.classList.toggle('show', on); later(tick, 540); };
+    later(tick, 540);
+  }
+
+  function runIntro(){
+    clearTimers();
+    if(blinkTimer){ clearTimeout(blinkTimer); blinkTimer=null; }
+    talking = false;
+    render({});
+    if(!allowMotion){
+      lineEl.textContent = DIALOGUE;     // static final state
+      caretEl.classList.add('show');
+      return;
+    }
+    banner.classList.remove('intro'); void banner.offsetWidth; banner.classList.add('intro');
+    later(typewriter, 1180);             // after slide + panel + badge settle
+    scheduleBlink();
+  }
+
+  // ── boot ─────────────────────────────────────────────────────────
+  const img = new Image();
+  img.onload = function(){
+    knockOutBlack(img);
+    ready = true;
+    render({});
+    runIntro();
+  };
+  img.onerror = function(){ /* sprite missing: panel/text still render */ };
+  img.src = JESS_SRC;
+
+  replay.addEventListener('click', function(){ if(ready) runIntro(); });
+  if(!allowMotion){ replay.style.display='none'; }
+})();
+</script>
+</body>
+</html>
