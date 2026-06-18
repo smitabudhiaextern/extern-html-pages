@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>So You Remember It: Three Quick Checks</title>
+<style>
+  :root {
+    --frame: #1C1B1B;
+    --slide-bg: #FDF8F8;
+    --title: #1C1B1B;
+    --body: #484646;
+    --accent: #001D69;
+    --highlight: #DCE1FF;
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Code", "Consolas", "Roboto Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--frame);
+    font-family: var(--font);
+  }
+
+  /* Center + letterbox the 16:9 stage */
+  #viewport {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--frame);
+  }
+
+  /* The 16:9 stage. Width/height set by JS to fit window. */
+  #stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--slide-bg);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+    /* Use container query units so all text scales with the stage. */
+    container-type: size;
+  }
+
+  /* Slides stack; only active is shown */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 7cqh 9cqw;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+  .slide.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  /* ---- Intro slide ---- */
+  .intro-title {
+    color: var(--title);
+    font-weight: 800;
+    font-size: 6.4cqh;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    max-width: 80cqw;
+    margin-bottom: 4cqh;
+  }
+  .intro-sub {
+    color: var(--body);
+    font-size: 3.2cqh;
+    line-height: 1.45;
+    max-width: 64cqw;
+  }
+
+  /* ---- Question slides ---- */
+  .q-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #FDF8F8;
+    font-weight: 700;
+    font-size: 2.3cqh;
+    letter-spacing: 0.04em;
+    padding: 1cqh 2.6cqw;
+    border-radius: 999px;
+    margin-bottom: 3.2cqh;
+    text-transform: uppercase;
+  }
+  .q-text {
+    color: var(--title);
+    font-weight: 700;
+    font-size: 4.4cqh;
+    line-height: 1.25;
+    max-width: 78cqw;
+    margin-bottom: 3cqh;
+  }
+
+  /* Inline code */
+  code.inline {
+    font-family: var(--mono);
+    background: rgba(0, 29, 105, 0.10);
+    color: #001241;
+    padding: 0.15em 0.42em;
+    border-radius: 5px;
+    font-size: 0.92em;
+    white-space: nowrap;
+  }
+
+  /* Multi-line SQL block */
+  pre.code-block {
+    font-family: var(--mono);
+    background: rgba(0, 29, 105, 0.07);
+    border: 1px solid rgba(0, 29, 105, 0.14);
+    color: #001241;
+    text-align: left;
+    padding: 2.4cqh 2.6cqw;
+    border-radius: 10px;
+    font-size: 2.6cqh;
+    line-height: 1.5;
+    max-width: 70cqw;
+    margin-bottom: 3cqh;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* Reveal button */
+  .reveal-btn {
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    background: var(--accent);
+    color: #FDF8F8;
+    font-family: var(--font);
+    font-weight: 600;
+    font-size: 2.7cqh;
+    padding: 1.5cqh 3.4cqw;
+    border-radius: 999px;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-shadow: 0 4px 14px rgba(0, 29, 105, 0.28);
+  }
+  .reveal-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 29, 105, 0.34); }
+  .reveal-btn:active { transform: translateY(0); }
+
+  /* Answer box — collapsed by default, animates open */
+  .answer-wrap {
+    width: 100%;
+    max-width: 78cqw;
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.4s ease, margin-top 0.4s ease, opacity 0.3s ease;
+    margin-top: 0;
+    opacity: 0;
+  }
+  .answer-wrap.open {
+    grid-template-rows: 1fr;
+    margin-top: 3cqh;
+    opacity: 1;
+  }
+  .answer-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+  .answer-box {
+    background: var(--highlight);
+    color: var(--body);
+    text-align: left;
+    padding: 2.6cqh 3cqw;
+    border-radius: 12px;
+    font-size: 2.85cqh;
+    line-height: 1.5;
+    max-height: 46cqh;
+    overflow-y: auto;
+  }
+  .answer-box code.inline {
+    background: rgba(0, 29, 105, 0.14);
+    white-space: normal;
+  }
+
+  /* ---- Navigation ---- */
+  .nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    width: 5.6cqh;
+    height: 5.6cqh;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: rgba(0, 29, 105, 0.08);
+    color: var(--accent);
+    font-size: 3.2cqh;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+  }
+  .nav-arrow:hover { background: rgba(0, 29, 105, 0.18); }
+  #prev { left: 2.4cqw; }
+  #next { right: 2.4cqw; }
+
+  .counter {
+    position: absolute;
+    bottom: 3cqh;
+    right: 3.4cqw;
+    z-index: 20;
+    color: var(--body);
+    font-size: 2.4cqh;
+    font-weight: 600;
+    opacity: 0.7;
+  }
+
+  /* Click zones for left/right navigation */
+  .click-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    z-index: 5;
+  }
+  #zone-left { left: 0; }
+  #zone-right { right: 0; }
+</style>
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage">
+      <!-- Click navigation zones (behind content; content gets higher z-index via interactives) -->
+      <div class="click-zone" id="zone-left"></div>
+      <div class="click-zone" id="zone-right"></div>
+
+      <!-- Slide 1: Intro -->
+      <section class="slide active" data-index="0">
+        <h1 class="intro-title">So You Remember It: Three Quick Checks</h1>
+        <p class="intro-sub">Don't peek. Answer each one in your head first, then open the reveal.</p>
+      </section>
+
+      <!-- Slide 2: Question 1 -->
+      <section class="slide" data-index="1">
+        <span class="q-badge">Question 1</span>
+        <p class="q-text">What does <code class="inline">ORDER BY</code> do to a result?</p>
+        <button class="reveal-btn" data-reveal>Reveal answer</button>
+        <div class="answer-wrap">
+          <div class="answer-inner">
+            <div class="answer-box">
+              It sorts the rows. <code class="inline">DESC</code> puts the largest values first, <code class="inline">ASC</code> (the default) puts the smallest first. It changes the order of the rows, never which rows or how many.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 3: Question 2 -->
+      <section class="slide" data-index="2">
+        <span class="q-badge">Question 2</span>
+        <p class="q-text">Fill in the blanks: the fixed keyword order is <code class="inline">SELECT</code> ... <code class="inline">FROM</code> ... <code class="inline">____</code> ... <code class="inline">____</code> ... <code class="inline">____</code>.</p>
+        <button class="reveal-btn" data-reveal>Reveal answer</button>
+        <div class="answer-wrap">
+          <div class="answer-inner">
+            <div class="answer-box">
+              <code class="inline">WHERE</code>, then <code class="inline">ORDER BY</code>, then <code class="inline">LIMIT</code>. You can drop any of those three, but you can never put them in a different order.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide 4: Question 3 -->
+      <section class="slide" data-index="3">
+        <span class="q-badge">Question 3</span>
+        <p class="q-text">What would this return?</p>
+        <pre class="code-block">SELECT product_title, total_sales
+FROM shopify_sales
+ORDER BY total_sales DESC
+LIMIT 3;</pre>
+        <button class="reveal-btn" data-reveal>Reveal answer</button>
+        <div class="answer-wrap">
+          <div class="answer-inner">
+            <div class="answer-box">
+              The three top-earning products by revenue across the whole catalog (no <code class="inline">WHERE</code>, so all 99 are in play): <code class="inline">Dwellings of Eldervale 2nd Edition: Standard</code> ($13,323.56), <code class="inline">Dwellings of Eldervale - LEGENDARY Upgrade Kit</code> ($12,514.05), and <code class="inline">Dwellings of Eldervale - DELUXE Upgrade Kit</code> ($5,014.81).
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Nav controls -->
+      <button class="nav-arrow" id="prev" aria-label="Previous slide">&#8249;</button>
+      <button class="nav-arrow" id="next" aria-label="Next slide">&#8250;</button>
+      <div class="counter"><span id="counter-current">1</span> / 4</div>
+    </div>
+  </div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var total = slides.length;
+    var current = 0;
+    var counterEl = document.getElementById('counter-current');
+
+    function show(index) {
+      current = (index + total) % total; // wrap-around
+      slides.forEach(function (s, i) {
+        s.classList.toggle('active', i === current);
+      });
+      counterEl.textContent = (current + 1).toString();
+    }
+
+    function next() { show(current + 1); }
+    function prev() { show(current - 1); }
+
+    // Arrow buttons
+    document.getElementById('next').addEventListener('click', function (e) {
+      e.stopPropagation();
+      next();
+    });
+    document.getElementById('prev').addEventListener('click', function (e) {
+      e.stopPropagation();
+      prev();
+    });
+
+    // Keyboard arrows
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') next();
+      else if (e.key === 'ArrowLeft') prev();
+    });
+
+    // Click zones (left half = back, right half = forward)
+    document.getElementById('zone-left').addEventListener('click', prev);
+    document.getElementById('zone-right').addEventListener('click', next);
+
+    // Reveal buttons — toggle, independent per slide, and stop nav propagation
+    document.querySelectorAll('[data-reveal]').forEach(function (btn) {
+      var slide = btn.closest('.slide');
+      var wrap = slide.querySelector('.answer-wrap');
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = wrap.classList.toggle('open');
+        btn.textContent = open ? 'Hide answer' : 'Reveal answer';
+      });
+    });
+
+    // Prevent clicks on the answer box from triggering navigation
+    document.querySelectorAll('.answer-wrap').forEach(function (wrap) {
+      wrap.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+
+    // ---- 16:9 stage sizing to fit window (letterboxed) ----
+    var stage = document.getElementById('stage');
+    var ASPECT = 16 / 9;
+    var MARGIN = 0.965; // small breathing room from edges
+
+    function resize() {
+      var w = window.innerWidth * MARGIN;
+      var h = window.innerHeight * MARGIN;
+      var targetW, targetH;
+      if (w / h > ASPECT) {
+        // window wider than 16:9 -> height-bound
+        targetH = h;
+        targetW = h * ASPECT;
+      } else {
+        // window taller/narrower -> width-bound
+        targetW = w;
+        targetH = w / ASPECT;
+      }
+      stage.style.width = Math.round(targetW) + 'px';
+      stage.style.height = Math.round(targetH) + 'px';
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    show(0); // first slide on load
+  })();
+</script>
+</body>
+</html>
