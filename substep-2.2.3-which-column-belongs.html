@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which Column Belongs?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.4cqw 3.4cqw 1.2cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- screen 0 two-card concept layout ---- */
+  .concept-2{display:flex;gap:2.6cqw;flex:1 1 auto;min-height:0;margin-top:1.6cqw;}
+  .concept-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .desc-card{
+    background:#fff;border:1.6px solid var(--line);border-radius:13px;
+    padding:1.8cqw 2.0cqw;flex:1 1 auto;display:flex;flex-direction:column;
+    box-shadow:0 5px 16px rgba(0,29,105,.08);
+  }
+  .desc-card.left{border-top:5px solid var(--accent);}
+  .desc-card.right{border-top:5px solid var(--body);}
+  .dc-head{display:flex;align-items:center;gap:1.2cqw;margin-bottom:.4cqw;}
+  .dc-head i{font-size:3.0cqw;}
+  .desc-card.left .dc-head i{color:var(--accent);}
+  .desc-card.right .dc-head i{color:var(--body);}
+  .dc-title{font-size:1.95cqw;font-weight:900;color:var(--ink);line-height:1.12;}
+  .dc-where{display:inline-flex;align-items:center;gap:.5cqw;font-size:1.4cqw;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-top:.9cqw;border-radius:6px;padding:.3cqw .9cqw;width:fit-content;}
+  .dc-where.dim{background:var(--hl);border:1.4px solid var(--accent);color:var(--accent);}
+  .dc-where.fact{background:#F4F1F1;border:1.4px solid var(--line);color:var(--body);}
+  .dc-list{list-style:none;margin-top:1.3cqw;display:flex;flex-direction:column;gap:.85cqw;}
+  .dc-list li{display:flex;align-items:center;gap:1.0cqw;font-size:1.62cqw;font-weight:700;color:var(--ink);}
+  .dc-list li i{font-size:1.7cqw;flex:0 0 auto;}
+  .desc-card.left .dc-list li i{color:var(--accent);}
+  .desc-card.right .dc-list li i{color:var(--body);}
+  .dc-list li code{font-family:'Inter',sans-serif;font-weight:800;}
+  .dc-foot{font-size:1.45cqw;font-weight:500;color:var(--body);line-height:1.36;margin-top:auto;padding-top:1.2cqw;}
+
+  /* ---- classify rows (active learning) ---- */
+  .classify-list{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
+  .classify-row{
+    background:#fff;border:1.6px solid var(--line);border-radius:11px;
+    padding:1.15cqw 1.6cqw;display:flex;align-items:center;gap:1.6cqw;
+    box-shadow:0 3px 10px rgba(0,29,105,.06);
+  }
+  .cr-label{flex:1.2;min-width:0;}
+  .cr-name{font-size:1.8cqw;font-weight:800;color:var(--ink);font-family:inherit;}
+  .cr-name code{font-family:'Inter',sans-serif;}
+  .cr-eg{font-size:1.34cqw;font-weight:600;color:var(--accent);}
+  .cr-sub{font-size:1.3cqw;font-weight:500;color:var(--body);line-height:1.3;margin-top:.3cqw;}
+  .cr-opts{display:flex;gap:1.0cqw;flex:0 0 auto;}
+  .cr-fb{flex:1.55;min-width:0;font-size:1.36cqw;font-weight:600;line-height:1.3;color:var(--accent);opacity:0;transition:opacity .2s;}
+  .cr-fb.show{opacity:1;}
+  .cr-fb.bad{color:var(--bad);}
+
+  /* classify buttons -- horizontal pair */
+  .copt{
+    background:#fff;border:1.8px solid var(--line);border-radius:9px;
+    padding:.85cqw 1.4cqw;font-family:inherit;font-size:1.45cqw;font-weight:700;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,color .15s,transform .08s;
+    display:flex;align-items:center;gap:.6cqw;white-space:nowrap;
+  }
+  .copt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .copt:active:not(:disabled){transform:scale(.985);}
+  .copt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .copt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .copt:disabled{cursor:default;}
+  .copt i{font-size:1.45cqw;}
+
+  /* ---- recap screen ---- */
+  .done-wrap{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.8cqw;}
+  .big-rule{font-size:3.0cqw;font-weight:900;color:var(--ink);line-height:1.18;letter-spacing:-.01em;}
+  .big-rule .d{color:var(--accent);}
+  .rule-split{display:flex;gap:2.4cqw;align-items:stretch;justify-content:center;width:100%;max-width:80cqw;}
+  .rule-chip{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:.7cqw;
+    background:#fff;border:1.6px solid var(--line);border-radius:13px;padding:1.7cqw 1.6cqw;
+    box-shadow:0 5px 16px rgba(0,29,105,.08);
+  }
+  .rule-chip.dim{border-top:5px solid var(--accent);}
+  .rule-chip.fact{border-top:5px solid var(--body);}
+  .rule-chip i{font-size:3.0cqw;}
+  .rule-chip.dim i{color:var(--accent);}
+  .rule-chip.fact i{color:var(--body);}
+  .rc-head{font-size:1.85cqw;font-weight:900;color:var(--ink);}
+  .rc-cols{font-size:1.5cqw;font-weight:700;color:var(--body);line-height:1.4;}
+  .rule-chip.dim .rc-cols b{color:var(--accent);}
+  .bridge{font-size:1.72cqw;font-weight:600;color:var(--body);line-height:1.4;max-width:76cqw;}
+  .bridge b{color:var(--accent);}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-columns" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Designing dim_product</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 (concept via pizza) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">The pizza</div>
+      <h1 class="title" style="font-size:3.0cqw;">Some fields describe it. Some change every order.</h1>
+      <p class="lead" style="font-size:1.6cqw;margin-top:.7cqw;">Think about a single pizza. A few facts about it never move &mdash; its name, its web address, its category. Other numbers change with every single order &mdash; how many you bought, what you paid, when. That split tells you exactly which column goes where.</p>
+      <div class="concept-2">
+        <div class="concept-col">
+          <div class="desc-card left">
+            <div class="dc-head"><i class="ph ph-fork-knife"></i></div>
+            <div class="dc-title">Describes the pizza</div>
+            <div class="dc-where dim"><i class="ph ph-cube" style="font-size:1.3cqw;"></i>goes on the MENU</div>
+            <ul class="dc-list">
+              <li><i class="ph ph-text-aa"></i><code>name</code></li>
+              <li><i class="ph ph-link-simple"></i><code>web slug</code></li>
+              <li><i class="ph ph-tag"></i><code>category</code></li>
+            </ul>
+            <div class="dc-foot">One value per pizza. Intrinsic and stable &mdash; it barely changes.</div>
+          </div>
+        </div>
+        <div class="concept-col">
+          <div class="desc-card right">
+            <div class="dc-head"><i class="ph ph-receipt"></i></div>
+            <div class="dc-title">Changes every order</div>
+            <div class="dc-where fact"><i class="ph ph-lightning" style="font-size:1.3cqw;"></i>goes on the ORDER</div>
+            <ul class="dc-list">
+              <li><i class="ph ph-stack"></i><code>quantity</code></li>
+              <li><i class="ph ph-currency-dollar"></i><code>amount paid</code></li>
+              <li><i class="ph ph-clock"></i><code>time</code></li>
+            </ul>
+            <div class="dc-foot">A new value every sale. Coupons, deals, timing &mdash; it shifts constantly.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 (active: pizza fields) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">The pizza menu &mdash; which fields belong?</div>
+      <h1 class="title" style="font-size:2.7cqw;">Menu or order?</h1>
+      <p class="lead" style="font-size:1.5cqw;margin-top:.5cqw;">Tap where each field belongs &mdash; you'll get instant feedback.</p>
+      <div class="classify-list" id="classify1" style="gap:1.1cqw;margin-top:1.1cqw;justify-content:center;"></div>
+    </section>
+
+    <!-- ============ SCREEN 2 (active: real dim_product) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Your dim_product &mdash; which columns belong?</div>
+      <h1 class="title" style="font-size:2.7cqw;">dim_product or fact?</h1>
+      <div class="classify-list" id="classify2" style="gap:1.0cqw;margin-top:1.0cqw;justify-content:center;"></div>
+    </section>
+
+    <!-- ============ SCREEN 3 (recap + bridge) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="done-wrap">
+        <div class="kicker">The rule</div>
+        <div class="big-rule"><span class="d">Describes the product &rarr; dimension.</span><br>Changes every sale &rarr; fact.</div>
+        <div class="rule-split">
+          <div class="rule-chip dim">
+            <i class="ph ph-cube"></i>
+            <div class="rc-head">dim_product keeps</div>
+            <div class="rc-cols"><b>title</b> &middot; <b>slug</b> &middot; <b>category</b></div>
+          </div>
+          <div class="rule-chip fact">
+            <i class="ph ph-lightning"></i>
+            <div class="rc-head">facts keep</div>
+            <div class="rc-cols">price &middot; units &middot; revenue</div>
+          </div>
+        </div>
+        <div class="bridge">So <b>dim_product</b> keeps the title, slug, and category &mdash; and leaves price, units, and revenue to the fact tables. Here are your real columns:</div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Next</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   CLASSIFY COMPONENT -- two-button classify with per-item feedback.
+   Locks correct answers green; wrong taps flash red + allow retry.
+   Button labels/icons are configurable per list (Menu/Order,
+   dim_product/fact table). onAllCorrect() fires once every item
+   in a list is correct.
+   ============================================================ */
+function buildClassify(containerEl, items, opts, onAllCorrect){
+  const A=opts.a, B=opts.b; // {key,label,icon}
+  const solved=items.map(()=>false);
+  items.forEach((item,idx)=>{
+    const row=document.createElement('div');
+    row.className='classify-row';
+    const eg=item.eg?`<span class="cr-eg"> &mdash; ${item.eg}</span>`:'';
+    const sub=item.sub?`<div class="cr-sub">${item.sub}</div>`:'';
+    row.innerHTML=
+      `<div class="cr-label"><div class="cr-name">${item.label}${eg}</div>${sub}</div>`
+      +`<div class="cr-opts">`
+      +`<button class="copt" type="button" data-pick="${A.key}"><i class="ph ${A.icon}"></i>${A.label}</button>`
+      +`<button class="copt" type="button" data-pick="${B.key}"><i class="ph ${B.icon}"></i>${B.label}</button>`
+      +`</div>`
+      +`<div class="cr-fb"></div>`;
+    containerEl.appendChild(row);
+
+    const fb=row.querySelector('.cr-fb');
+    const btns=row.querySelectorAll('.copt');
+
+    btns.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(solved[idx]) return;
+        const pick=btn.dataset.pick;
+        if(pick===item.answer){
+          btn.classList.remove('wrong');
+          btn.classList.add('correct');
+          solved[idx]=true;
+          btns.forEach(b=>{ b.disabled=true; });
+          fb.textContent=item.right;
+          fb.classList.remove('bad');
+          fb.classList.add('show');
+          if(solved.every(Boolean)) onAllCorrect();
+        } else {
+          btn.classList.add('wrong');
+          fb.textContent='Not quite — try again.';
+          fb.classList.add('show','bad');
+        }
+      });
+    });
+  });
+}
+
+/* SCREEN 1 -- pizza fields (confidence builder): Menu vs Order */
+buildClassify(document.getElementById('classify1'), [
+  {
+    label:'pizza name', answer:'menu',
+    right:'Right — the name is part of what the pizza IS. One value per pizza.'
+  },
+  {
+    label:'web slug', eg:'margherita-deluxe', answer:'menu',
+    right:"Yes — the web address is intrinsic to the pizza; it doesn't change sale to sale."
+  },
+  {
+    label:'quantity ordered', answer:'order',
+    right:'Correct — that\'s about one order, not the pizza itself. It changes every time.'
+  },
+  {
+    label:'amount paid', answer:'order',
+    right:'Right — coupons and deals mean the amount changes per order, so it lives on the order.'
+  },
+],
+{ a:{key:'menu', label:'Menu', icon:'ph-fork-knife'}, b:{key:'order', label:'Order', icon:'ph-receipt'} },
+()=>{ gate.s1=true; refreshNav(); });
+
+/* SCREEN 2 -- real dim_product (transfer): dim_product vs fact table */
+buildClassify(document.getElementById('classify2'), [
+  {
+    label:'product_title', answer:'dim',
+    right:'Right — the name describes the product. One row per product.'
+  },
+  {
+    label:'product_slug', answer:'dim',
+    right:"Yes — the slug is the product's web address; intrinsic and stable. It's the thread you'll use to match referral data later."
+  },
+  {
+    label:'price', answer:'fact',
+    right:'Careful one — the list price exists, but what\'s actually charged varies sale to sale (discounts, promos), so the amount lives on the fact, not dim_product.'
+  },
+  {
+    label:'units sold', answer:'fact',
+    right:'Right — units sold is an event total, not a property of the product. Fact table.'
+  },
+],
+{ a:{key:'dim', label:'dim_product', icon:'ph-cube'}, b:{key:'fact', label:'fact table', icon:'ph-lightning'} },
+()=>{ gate.s2=true; refreshNav(); });
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+const gate={s1:false, s2:false};
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  // last screen: nothing after -- Back still works, Next shows Done disabled
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+
+  nextLabel.textContent='Next';
+  if(current===1){ nextBtn.disabled=!gate.s1; return; }
+  if(current===2){ nextBtn.disabled=!gate.s2; return; }
+  nextBtn.disabled=false;
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current===1 && !gate.s1) return;
+  if(current===2 && !gate.s2) return;
+  if(current<screens.length-1) show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>

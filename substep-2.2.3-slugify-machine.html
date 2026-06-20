@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building the Slug</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.4cqw 3.4cqw 1.2cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- the messy-name "card" ---- */
+  .name-card{
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:12px;padding:1.8cqw 2.2cqw;box-shadow:0 4px 14px rgba(0,29,105,.08);
+    display:flex;flex-direction:column;gap:.7cqw;
+  }
+  .name-card .nc-label{font-size:1.35cqw;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--body);}
+  .name-card .nc-value{font-size:3.0cqw;font-weight:800;color:var(--ink);font-family:'Inter',monospace;word-break:break-word;line-height:1.15;}
+
+  /* small concept tiles on screen 0 */
+  .slug-anatomy{display:flex;gap:1.6cqw;margin-top:1.5cqw;flex-wrap:wrap;}
+  .anatomy-tile{
+    flex:1;min-width:0;background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:1.2cqw 1.4cqw;box-shadow:0 3px 10px rgba(0,29,105,.06);display:flex;align-items:flex-start;gap:1.0cqw;
+  }
+  .anatomy-tile i{font-size:2.4cqw;color:var(--accent);flex:0 0 auto;}
+  .anatomy-tile .at-txt{font-size:1.42cqw;font-weight:600;color:var(--body);line-height:1.32;}
+  .anatomy-tile .at-txt b{color:var(--ink);font-weight:800;}
+
+  /* ---- THE MACHINE (screen 1) ---- */
+  .machine-wrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;margin-top:1.0cqw;gap:1.2cqw;}
+  .working{
+    background:linear-gradient(180deg,#fff,#FAFAFE);
+    border:1.8px solid var(--accent);border-radius:13px;
+    padding:1.6cqw 2.0cqw;box-shadow:0 6px 18px rgba(0,29,105,.12);
+    display:flex;flex-direction:column;align-items:center;gap:.5cqw;text-align:center;
+  }
+  .working .w-label{font-size:1.3cqw;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--body);}
+  .working .w-string{
+    font-family:'Inter',monospace;font-size:3.2cqw;font-weight:800;color:var(--ink);
+    line-height:1.12;word-break:break-word;transition:transform .18s ease, color .18s ease;
+  }
+  .working .w-string.flash{color:var(--accent);transform:scale(1.06);}
+  .working .w-done{
+    font-size:1.55cqw;font-weight:800;color:var(--good);display:none;align-items:center;gap:.7cqw;margin-top:.3cqw;
+  }
+  .working .w-done.show{display:inline-flex;}
+  .working .w-done .slugval{font-family:'Inter',monospace;background:var(--good-bg);border:1.4px solid var(--good);border-radius:6px;padding:.15cqw .7cqw;}
+
+  /* operation buttons */
+  .ops{display:flex;gap:1.4cqw;}
+  .op{
+    flex:1;min-width:0;background:#fff;border:1.8px solid var(--line);border-radius:11px;
+    padding:1.1cqw 1.0cqw;font-family:inherit;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .08s;
+    display:flex;flex-direction:column;align-items:center;gap:.5cqw;text-align:center;
+  }
+  .op:hover:not(.done){border-color:var(--accent);background:#F0F1FA;}
+  .op:active:not(.done){transform:scale(.97);}
+  .op .op-head{display:flex;align-items:center;gap:.6cqw;font-size:1.6cqw;font-weight:800;color:var(--ink);}
+  .op .op-head i{font-size:1.7cqw;color:var(--accent);}
+  .op .op-sql{
+    font-family:'Inter',monospace;font-size:1.28cqw;font-weight:700;color:var(--body);
+    background:#F4F1F1;border:1px solid var(--line);border-radius:6px;padding:.3cqw .6cqw;line-height:1.2;
+    word-break:break-word;
+  }
+  .op.done{border-color:var(--good);background:var(--good-bg);cursor:default;}
+  .op.done .op-head{color:var(--good);}
+  .op.done .op-head i{color:var(--good);}
+  .op.done .op-sql{background:#fff;border-color:var(--good);color:var(--good);}
+
+  /* "your SQL so far" growing area */
+  .sql-build{
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:1.0cqw 1.4cqw;box-shadow:0 3px 10px rgba(0,29,105,.06);
+  }
+  .sql-build .sb-label{font-size:1.25cqw;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--body);margin-bottom:.5cqw;display:flex;align-items:center;gap:.6cqw;}
+  .sql-build .sb-label i{font-size:1.5cqw;color:var(--accent);}
+  .sql-frags{display:flex;flex-wrap:wrap;gap:.8cqw;min-height:2.4cqw;align-items:center;}
+  .sql-frag{
+    font-family:'Inter',monospace;font-size:1.32cqw;font-weight:700;color:var(--accent);
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:6px;padding:.3cqw .8cqw;
+  }
+  .sql-empty{font-size:1.35cqw;font-weight:500;font-style:italic;color:var(--body);}
+
+  /* ---- full SQL (screen 2) ---- */
+  .sql-block{
+    background:#0E1633;color:#EAEEFF;border-radius:12px;
+    padding:1.6cqw 2.0cqw;box-shadow:0 8px 22px rgba(0,29,105,.25);
+    font-family:'Inter',monospace;font-size:1.7cqw;line-height:1.55;font-weight:600;
+    white-space:pre;overflow:hidden;
+  }
+  .sql-block .kw{color:#9FB4FF;font-weight:800;}
+  .sql-block .fn{color:#7FE3B0;font-weight:800;}
+  .sql-block .str{color:#FFD27F;}
+  .sql-block .col{color:#EAEEFF;}
+
+  .transfer{
+    display:flex;align-items:center;gap:1.6cqw;margin-top:1.3cqw;flex-wrap:wrap;
+  }
+  .transfer .t-card{
+    flex:1;min-width:0;background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:1.1cqw 1.4cqw;box-shadow:0 3px 10px rgba(0,29,105,.06);
+  }
+  .transfer .t-label{font-size:1.2cqw;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--body);margin-bottom:.4cqw;}
+  .transfer .t-val{font-family:'Inter',monospace;font-size:1.55cqw;font-weight:800;color:var(--ink);word-break:break-word;line-height:1.2;}
+  .transfer .t-card.out .t-val{color:var(--good);}
+  .transfer .t-arrow{font-size:2.6cqw;color:var(--accent);flex:0 0 auto;}
+
+  .reassure{
+    margin-top:1.3cqw;font-size:1.5cqw;font-weight:600;line-height:1.4;color:var(--body);
+    background:var(--hl);border-left:4px solid var(--accent);border-radius:9px;padding:1.0cqw 1.4cqw;
+  }
+  .reassure b{color:var(--accent);}
+
+  /* ---- recap / done screen ---- */
+  .done-wrap{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.4cqw;}
+  .big-rule{font-size:2.7cqw;font-weight:900;color:var(--ink);line-height:1.18;letter-spacing:-.01em;max-width:78cqw;}
+  .big-rule .d{color:var(--accent);}
+  .recap-steps{display:flex;gap:1.4cqw;justify-content:center;flex-wrap:wrap;margin-top:.4cqw;}
+  .recap-chip{
+    display:inline-flex;align-items:center;gap:.7cqw;background:#fff;border:1.6px solid var(--line);
+    border-radius:50px;padding:.7cqw 1.5cqw;font-size:1.5cqw;font-weight:800;color:var(--ink);
+    box-shadow:0 3px 10px rgba(0,29,105,.06);
+  }
+  .recap-chip i{font-size:1.8cqw;color:var(--accent);}
+  .hint{font-size:1.45cqw;color:var(--body);font-weight:600;font-style:italic;max-width:64cqw;line-height:1.4;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-table" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Building the Slug</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 — what a slug is ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">The slug</div>
+      <h1 class="title" style="font-size:3.0cqw;">A slug is the clean web-address version of a name.</h1>
+      <p class="lead" style="font-size:1.6cqw;margin-top:.7cqw;">Lowercase, no spaces or punctuation, words joined by hyphens &mdash; the form you'd see in a URL. Take one of your messiest product names and let's clean it into a slug, one step at a time.</p>
+
+      <div class="name-card" style="margin-top:1.6cqw;">
+        <div class="nc-label">Product title</div>
+        <div class="nc-value">Sparkle*Kitty Nights: Deluxe</div>
+      </div>
+
+      <div class="slug-anatomy">
+        <div class="anatomy-tile"><i class="ph ph-text-aa"></i><div class="at-txt"><b>All lowercase</b> &mdash; no capital letters anywhere.</div></div>
+        <div class="anatomy-tile"><i class="ph ph-eraser"></i><div class="at-txt"><b>No punctuation</b> &mdash; symbols like * and : are stripped out.</div></div>
+        <div class="anatomy-tile"><i class="ph ph-minus"></i><div class="at-txt"><b>Hyphens for spaces</b> &mdash; words join with a single dash.</div></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 — THE MACHINE (active centerpiece) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">The machine</div>
+      <h1 class="title" style="font-size:2.7cqw;">Apply each step and watch the string change.</h1>
+      <p class="lead" style="font-size:1.45cqw;margin-top:.4cqw;">Tap the four operations in any order. Each one maps to a SQL function &mdash; you're building the query as you go.</p>
+
+      <div class="machine-wrap">
+        <div class="working">
+          <div class="w-label">Working string</div>
+          <div class="w-string" id="workStr">Sparkle*Kitty Nights: Deluxe</div>
+          <div class="w-done" id="workDone"><i class="ph ph-check-circle" style="font-size:1.9cqw;"></i>That's your slug: <span class="slugval">sparklekitty-nights-deluxe</span></div>
+        </div>
+
+        <div class="ops" id="ops">
+          <button class="op" type="button" data-op="lower">
+            <div class="op-head"><i class="ph ph-text-aa"></i>Lowercase</div>
+            <div class="op-sql">LOWER(...)</div>
+          </button>
+          <button class="op" type="button" data-op="star">
+            <div class="op-head"><i class="ph ph-asterisk"></i>Remove *</div>
+            <div class="op-sql">REPLACE(..., '*', '')</div>
+          </button>
+          <button class="op" type="button" data-op="colon">
+            <div class="op-head"><i class="ph ph-eraser"></i>Remove :</div>
+            <div class="op-sql">REPLACE(..., ':', '')</div>
+          </button>
+          <button class="op" type="button" data-op="space">
+            <div class="op-head"><i class="ph ph-minus"></i>Spaces &rarr; -</div>
+            <div class="op-sql">REPLACE(..., ' ', '-')</div>
+          </button>
+        </div>
+
+        <div class="sql-build">
+          <div class="sb-label"><i class="ph ph-code"></i>Your SQL so far</div>
+          <div class="sql-frags" id="sqlFrags"><span class="sql-empty">Tap an operation above to start stacking functions.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 — the full SQL, now readable ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">The query</div>
+      <h1 class="title" style="font-size:2.6cqw;">It's just those four steps, stacked.</h1>
+      <p class="lead" style="font-size:1.4cqw;margin-top:.4cqw;">SQLite has no slugify function, so you nest the functions you just used. Read it inside-out and you'll spot each step.</p>
+
+      <div class="sql-block" style="margin-top:1.1cqw;"><span class="kw">UPDATE</span> <span class="col">dim_product</span>
+<span class="kw">SET</span> <span class="col">product_slug</span> = <span class="fn">LOWER</span>(
+    <span class="fn">REPLACE</span>(<span class="fn">REPLACE</span>(<span class="fn">REPLACE</span>(<span class="col">product_title</span>, <span class="str">' '</span>, <span class="str">'-'</span>), <span class="str">':'</span>, <span class="str">''</span>), <span class="str">'*'</span>, <span class="str">''</span>)
+);</div>
+
+      <div class="transfer">
+        <div class="t-card">
+          <div class="t-label">A real title</div>
+          <div class="t-val">Dwellings of Eldervale 2nd Edition: Standard</div>
+        </div>
+        <i class="ph ph-arrow-right t-arrow"></i>
+        <div class="t-card out">
+          <div class="t-label">Its slug</div>
+          <div class="t-val">dwellings-of-eldervale-2nd-edition-standard</div>
+        </div>
+      </div>
+
+      <div class="reassure">This isn't perfect &mdash; a few odd titles will still need manual cleanup. A <b>~80&ndash;90% match rate</b> is plenty for analytics, and you'll fix the stragglers by hand.</div>
+    </section>
+
+    <!-- ============ SCREEN 3 — recap (no dead button) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="done-wrap">
+        <div class="kicker">The rule</div>
+        <div class="big-rule">A slug = <span class="d">lowercase</span> + <span class="d">no punctuation</span> + <span class="d">spaces become hyphens</span>.</div>
+        <div class="recap-steps">
+          <span class="recap-chip"><i class="ph ph-text-aa"></i>LOWER</span>
+          <span class="recap-chip"><i class="ph ph-eraser"></i>REPLACE punctuation</span>
+          <span class="recap-chip"><i class="ph ph-minus"></i>REPLACE spaces</span>
+        </div>
+        <div class="hint">Run it once across the whole column, then fix the handful of stragglers by hand. That's all a slug column takes.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Next</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   THE MACHINE — cumulative string transforms mapped to SQL.
+   The four ops COMMUTE for this example: applying them in any
+   order yields the same final slug. We re-derive the working
+   string from scratch every click off the set of applied ops,
+   so order never matters.
+   ============================================================ */
+const ORIGINAL='Sparkle*Kitty Nights: Deluxe';
+
+/* Each op: how it transforms a string, plus its SQL fragment tag. */
+const OPS={
+  lower: { sql:"LOWER", apply:s=>s.toLowerCase() },
+  star:  { sql:"REPLACE(…, '*', '')", apply:s=>s.split('*').join('') },
+  colon: { sql:"REPLACE(…, ':', '')", apply:s=>s.split(':').join('') },
+  space: { sql:"REPLACE(…, ' ', '-')", apply:s=>s.split(' ').join('-') },
+};
+/* Order used to DISPLAY the current string. Because the ops commute on
+   this example, the displayed result is the same regardless of the order
+   the student actually clicked. We apply removals/case/space in a fixed
+   internal order purely so the intermediate render is well-defined. */
+const APPLY_ORDER=['lower','star','colon','space'];
+
+const applied=new Set();
+const workStr=document.getElementById('workStr');
+const workDone=document.getElementById('workDone');
+const sqlFrags=document.getElementById('sqlFrags');
+const opButtons=[...document.querySelectorAll('#ops .op')];
+
+function deriveString(){
+  let s=ORIGINAL;
+  APPLY_ORDER.forEach(key=>{ if(applied.has(key)) s=OPS[key].apply(s); });
+  return s;
+}
+
+function redrawString(){
+  const next=deriveString();
+  workStr.textContent=next;
+  workStr.classList.add('flash');
+  setTimeout(()=>workStr.classList.remove('flash'), 200);
+}
+
+function redrawSQL(){
+  if(applied.size===0){
+    sqlFrags.innerHTML='<span class="sql-empty">Tap an operation above to start stacking functions.</span>';
+    return;
+  }
+  /* show fragments in click order */
+  let html='';
+  clickOrder.forEach(key=>{
+    html+=`<span class="sql-frag">${OPS[key].sql}</span>`;
+  });
+  sqlFrags.innerHTML=html;
+}
+
+const clickOrder=[];
+
+opButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const key=btn.dataset.op;
+    if(applied.has(key)) return;
+    applied.add(key);
+    clickOrder.push(key);
+
+    /* mark this op done */
+    btn.classList.add('done');
+    const head=btn.querySelector('.op-head');
+    if(!head.querySelector('.op-check')){
+      const chk=document.createElement('i');
+      chk.className='ph ph-check op-check';
+      chk.style.fontSize='1.6cqw';
+      head.appendChild(chk);
+    }
+
+    redrawString();
+    redrawSQL();
+
+    if(applied.size===4){
+      workDone.classList.add('show');
+      gate.machine=true;
+      refreshNav();
+    }
+  });
+});
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   (mirrors the sibling widget)
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+const gate={machine:false};
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  // last screen: nothing after, but Back still works
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+
+  nextLabel.textContent='Next';
+  if(current===1){ nextBtn.disabled=!gate.machine; return; }
+  nextBtn.disabled=false;
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current===1 && !gate.machine) return;
+  if(current<screens.length-1) show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
