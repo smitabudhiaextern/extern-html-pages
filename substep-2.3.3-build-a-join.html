@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build a Three-Table Join</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;--ink:#1C1B1B;--body:#484646;--bg:#FDF8F8;--hl:#DCE1FF;
+    --card:#FFFFFF;--line:#ECE6E6;--bad:#C5453B;--bad-bg:#FBE6E4;--good:#2E8B57;--good-bg:#E4F4EA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  .stage{
+    width:100%;max-width:960px;aspect-ratio:16/9;container-type:inline-size;overflow:hidden;
+    background:var(--bg);border-radius:18px;box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;display:flex;flex-direction:column;
+  }
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;padding:1.9cqw 3cqw;
+    background:var(--accent);color:#fff;flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{position:absolute;inset:0;padding:2.4cqw 3.4cqw 1.2cqw;display:none;flex-direction:column;min-height:0;}
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  .intro-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1.2cqw;max-width:76cqw;}
+  .intro-icon{width:6cqw;height:6cqw;color:var(--accent);}
+  .intro-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:11px;
+    padding:1.5cqw 1.9cqw;font-size:1.85cqw;font-weight:700;color:var(--accent);line-height:1.35;margin-top:.6cqw;
+  }
+  .intro-rule b{font-weight:900;}
+
+  .scenario{
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:11px;padding:1.2cqw 1.6cqw;box-shadow:0 4px 12px rgba(0,29,105,.07);display:block;
+  }
+  .scenario .who{font-size:1.3cqw;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:.55cqw;display:flex;align-items:center;gap:.7cqw;}
+  .scenario .q{font-size:1.74cqw;font-weight:800;color:var(--ink);line-height:1.3;display:block;}
+  .scenario .q em{font-style:italic;color:var(--accent);}
+
+  /* SQL box (assembles) + result-column chips */
+  .sqlbox{
+    background:#0E1B40;color:#E8ECF8;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:1.04cqw;line-height:1.6;border-radius:9px;padding:1.05cqw 1.25cqw;display:block;
+    white-space:pre;overflow:hidden;box-shadow:0 5px 14px rgba(0,29,105,.18);
+  }
+  .sqlbox .kw{color:#86A6FF;font-weight:700;}
+  .sqlbox .addline{display:none;color:#9BE6B4;}
+  .screen.revealed .sqlbox .addline{display:inline;}
+  .collabel{font-size:1.05cqw;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;}
+  .chips{display:flex;flex-wrap:wrap;gap:.55cqw;margin-top:.55cqw;}
+  .chip{
+    background:#EEF0FA;border:1.4px solid var(--line);border-radius:7px;padding:.4cqw .8cqw;
+    font-size:1.12cqw;font-weight:700;color:var(--accent);font-family:ui-monospace,Menlo,Consolas,monospace;
+    transition:all .25s;
+  }
+  .chip.new{opacity:.3;border-style:dashed;}
+  .screen.revealed .chip.new{opacity:1;border-style:solid;background:var(--good-bg);color:var(--good);border-color:var(--good);}
+
+  .split{display:flex;gap:2.2cqw;align-items:stretch;flex:1 1 auto;min-height:0;margin-top:.2cqw;}
+  .split-main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:.95cqw;}
+  .split-side{flex:0 0 40cqw;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.0cqw;}
+
+  .quiz-wrap{display:flex;flex-direction:column;justify-content:center;min-height:0;}
+  .opts{display:flex;flex-direction:column;gap:.65cqw;margin-top:.3cqw;}
+  .opt{
+    text-align:left;background:#fff;border:1.6px solid var(--line);border-radius:9px;
+    padding:.85cqw 1.4cqw;font-family:inherit;font-size:1.44cqw;font-weight:600;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,transform .08s;line-height:1.3;
+    display:flex;align-items:center;gap:1.0cqw;
+  }
+  .opt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .opt:active:not(:disabled){transform:scale(.995);}
+  .opt .mark{width:1.95cqw;height:1.95cqw;flex:0 0 auto;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;}
+  .opt .mark i{font-size:1.3cqw;color:#fff;display:none;}
+  .opt .otext{display:block;}
+  .opt .otext code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;}
+  .opt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .opt.correct .mark{border-color:var(--good);background:var(--good);}
+  .opt.correct .mark i.check{display:block;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .opt.wrong .mark{border-color:var(--bad);background:var(--bad);}
+  .opt.wrong .mark i.cross{display:block;}
+  .opt:disabled{cursor:default;}
+  .feedback{margin-top:.85cqw;font-size:1.38cqw;font-weight:600;line-height:1.38;padding:.9cqw 1.3cqw;border-radius:9px;display:none;}
+  .feedback.show{display:block;}
+  .feedback.good{background:var(--good-bg);color:var(--good);border-left:4px solid var(--good);}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad);border-left:4px solid var(--bad);}
+  .feedback b{color:inherit;font-weight:900;}
+  .feedback code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.06);padding:0 .25em;border-radius:3px;}
+
+  .recap-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .recap-grid{display:flex;flex-direction:column;gap:.65cqw;margin-top:.9cqw;flex:0 0 auto;}
+  .recap-item{background:#fff;border:1px solid var(--line);border-radius:9px;padding:.72cqw 1.4cqw;display:flex;align-items:baseline;gap:1.1cqw;box-shadow:0 3px 9px rgba(0,29,105,.05);}
+  .recap-item .term{font-size:1.42cqw;font-weight:900;color:var(--accent);flex:0 0 19cqw;display:block;}
+  .recap-item .mean{font-size:1.38cqw;font-weight:500;color:var(--body);line-height:1.3;display:block;}
+  .recap-item .mean code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:#F1F0F7;padding:0 .25em;border-radius:3px;color:var(--ink);}
+  .recap-rule{background:var(--hl);border:1.4px solid var(--accent);border-radius:10px;padding:1.1cqw 1.5cqw;margin-top:1.0cqw;font-size:1.52cqw;font-weight:800;color:var(--accent);line-height:1.34;display:block;flex:0 0 auto;}
+  .recap-rule b{font-weight:900;}
+  .recap-close{font-size:1.48cqw;font-weight:600;color:var(--body);line-height:1.4;margin-top:.95cqw;display:block;}
+  .recap-close b{color:var(--ink);}
+
+  .nav{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);}
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{font-family:inherit;font-size:1.6cqw;font-weight:700;padding:.9cqw 2.1cqw;border-radius:9px;cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;}
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-stack" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Build a Three-Table Join</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ===== SCREEN 0 (intro) ===== -->
+    <section class="screen active" data-screen="0">
+      <div class="intro-wrap">
+        <i class="ph-fill ph-stack intro-icon"></i>
+        <h1 class="title">Build a Three-Table Join</h1>
+        <p class="lead" style="margin-top:.3cqw;">You'll build one query that pulls facts from three tables — one station at a time. Start with the product list, then add each table and watch a new column appear.</p>
+        <div class="intro-rule">Every table you add is <b>one more JOIN</b>, and it brings <b>one more column</b>. That's all a multi-table join is.</div>
+      </div>
+    </section>
+
+    <!-- ===== SCREEN 1 (add sales) ===== -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Station 2 &middot; Add the sales numbers</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="0">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-list-numbers" style="font-size:1.3cqw;"></i> You have the menu</span>
+            <span class="q">Right now your query returns just the product list. To also see <em>how many of each product sold</em>, which table do you JOIN next?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title
+<span class="kw">FROM</span> dim_product dp<span class="addline">
+<span class="kw">LEFT JOIN</span> shopify_sales ss
+  <span class="kw">ON</span> dp.product_id = ss.product_id</span></div>
+          <div>
+            <span class="collabel">Result columns</span>
+            <div class="chips">
+              <span class="chip">product_title</span>
+              <span class="chip new">net_items_sold</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCREEN 2 (add pageviews / referrals) ===== -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Station 3 &middot; Add the pageviews</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="1">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-cursor-click" style="font-size:1.3cqw;"></i> You have menu + sales</span>
+            <span class="q">Now to also see <em>how many people looked at</em> each product's page, which table do you add?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title, ss.net_items_sold
+<span class="kw">FROM</span> dim_product dp
+<span class="kw">LEFT JOIN</span> shopify_sales ss
+  <span class="kw">ON</span> dp.product_id = ss.product_id<span class="addline">
+<span class="kw">LEFT JOIN</span> referrals r
+  <span class="kw">ON</span> r.landing_page <span class="kw">LIKE</span> '%'||dp.product_slug||'%'</span></div>
+          <div>
+            <span class="collabel">Result columns</span>
+            <div class="chips">
+              <span class="chip">product_title</span>
+              <span class="chip">net_items_sold</span>
+              <span class="chip new">pageviews</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCREEN 3 (read it back) ===== -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Read it back</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="2">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-eye" style="font-size:1.3cqw;"></i> The finished query</span>
+            <span class="q">You just joined <em>three</em> tables: <code>dim_product</code>, <code>shopify_sales</code>, <code>referrals</code>. How many JOIN lines did that take?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title,
+       ss.net_items_sold,
+       r.pageviews
+<span class="kw">FROM</span> dim_product dp
+<span class="kw">LEFT JOIN</span> shopify_sales ss
+  <span class="kw">ON</span> dp.product_id = ss.product_id
+<span class="kw">LEFT JOIN</span> referrals r
+  <span class="kw">ON</span> r.landing_page <span class="kw">LIKE</span> '%'||dp.product_slug||'%'</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCREEN 4 (recap) ===== -->
+    <section class="screen" data-screen="4">
+      <div class="recap-wrap">
+        <div class="kicker">Reading any multi-table query</div>
+        <h1 class="title" style="font-size:2.5cqw;">Three things that hold it together</h1>
+        <div class="recap-grid">
+          <div class="recap-item"><span class="term">Chain, one at a time</span><span class="mean">Start with one table, add a JOIN for each <em>additional</em> one. Three tables = two JOINs.</span></div>
+          <div class="recap-item"><span class="term">One <code>ON</code> per JOIN</span><span class="mean">Every JOIN needs its own <code>ON</code> saying how to match rows — by <code>product_id</code>, or by slug.</span></div>
+          <div class="recap-item"><span class="term">Aliases</span><span class="mean">Short names (<code>dp</code>, <code>ss</code>, <code>r</code>) keep a multi-table query readable and tell SQL which table each column came from.</span></div>
+        </div>
+        <span class="recap-rule"><b>To read one:</b> start at <code>FROM</code>, then take each JOIN in turn — which table, and matched how. One station at a time.</span>
+        <span class="recap-close">Read this way, you can follow a query <b>no matter how many tables it touches.</b></span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- SCREEN-READER FALLBACK -->
+<div class="sr-only">
+  <h2>Build a Three-Table Join (text version)</h2>
+  <p>You build one query across three tables, adding one table per JOIN.</p>
+  <ol>
+    <li>You start with dim_product (the product list). To also see how many of each product sold, you JOIN shopify_sales on product_id. Now each row also shows net_items_sold.</li>
+    <li>To also see how many people looked at each page, you JOIN referrals, matching the product_slug inside landing_page with LIKE. That match is loose, so on the real data many products show 0 pageviews — that's expected; it gets tightened in Project 3.</li>
+    <li>Three tables took two JOIN lines: you start from one table and chain a JOIN for each additional one. The short names dp, ss, r are aliases that keep the query readable.</li>
+  </ol>
+  <p>To read a multi-table query, start at FROM, then take each JOIN in turn: which table, and matched how.</p>
+</div>
+
+<script>
+const QUESTIONS=[
+  /* 0 -- add sales */
+  {
+    options:[
+      {text:"<code>shopify_sales</code> — the sales numbers", correct:true},
+      {text:"<code>referrals</code> — the website pageviews", correct:false,
+       tip:"Look again &mdash; referrals is the door-counter: how many <i>looked</i>, not how many sold. That's the next station."},
+      {text:"<code>meta_campaigns</code> — the ad campaigns", correct:false,
+       tip:"Look again &mdash; meta_campaigns is the ads station (is an ad running?), not sales numbers."}
+    ],
+    feedback:"Right. <b>shopify_sales</b> holds how many sold, linked by <code>product_id</code>. Adding it is <b>one JOIN</b> — and now every row also carries <code>net_items_sold</code>."
+  },
+  /* 1 -- add referrals */
+  {
+    options:[
+      {text:"<code>referrals</code> — the website pageviews", correct:true},
+      {text:"<code>shopify_sales</code> — the sales numbers", correct:false,
+       tip:"Look again &mdash; you already added sales. That's how many <i>bought</i>, not how many looked."},
+      {text:"<code>meta_campaigns</code> — the ad campaigns", correct:false,
+       tip:"Look again &mdash; that's the ads station. Pageviews live in referrals."}
+    ],
+    feedback:"Right — <b>referrals</b> holds pageviews. One heads-up: it links by matching the slug <i>inside</i> the landing-page text with <code>LIKE</code>, which is loose — so on the real data <b>many products come back with 0</b>. That's expected; you'll tighten it in Project 3."
+  },
+  /* 2 -- join count */
+  {
+    options:[
+      {text:"2 JOIN lines", correct:true},
+      {text:"3 JOIN lines", correct:false,
+       tip:"Close &mdash; you don't JOIN the first table to itself. You start with one table, then JOIN each <i>additional</i> one."},
+      {text:"1 JOIN line", correct:false,
+       tip:"Look again &mdash; one JOIN links only two tables. You linked three, so you need more than one."}
+    ],
+    feedback:"Right — <b>three tables, two JOINs.</b> You start from one table (<code>dim_product</code>) and chain a JOIN for each <i>additional</i> table. The short names <code>dp</code>, <code>ss</code>, <code>r</code> are aliases — they keep a query this size readable."
+  }
+];
+
+const checkSVG='<i class="ph-bold ph-check check"></i>';
+const crossSVG='<i class="ph-bold ph-x cross"></i>';
+const cleared=QUESTIONS.map(()=>false);
+
+document.querySelectorAll('.quiz-wrap[data-q]').forEach(wrap=>{
+  const qi=+wrap.dataset.q;
+  const q=QUESTIONS[qi];
+  const optsEl=wrap.querySelector('.opts');
+  const fb=wrap.querySelector('.feedback');
+
+  q.options.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt';btn.type='button';btn.dataset.i=i;
+    btn.innerHTML='<span class="mark">'+checkSVG+crossSVG+'</span><span class="otext">'+o.text+'</span>';
+    btn.addEventListener('click', ()=>{
+      if(cleared[qi]) return;
+      if(o.correct){
+        btn.classList.add('correct');
+        optsEl.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+        fb.className='feedback good show';
+        fb.innerHTML=q.feedback;
+        cleared[qi]=true;
+        wrap.closest('.screen').classList.add('revealed');  // reveal the new JOIN line + column chip
+        refreshNav();
+      } else {
+        btn.classList.add('wrong');
+        btn.disabled=true;
+        fb.className='feedback bad show';
+        fb.innerHTML=o.tip;
+      }
+    });
+    optsEl.appendChild(btn);
+  });
+});
+
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+const screenGate=[null,0,1,2,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{d.classList.toggle('on', i===current);d.classList.toggle('done', i<current);});
+  if(current===screens.length-1){nextLabel.textContent='Done';nextBtn.disabled=true;return;}
+  if(current===0){nextLabel.textContent='Start';nextBtn.disabled=false;return;}
+  nextLabel.textContent='Next';
+  const g=screenGate[current];
+  nextBtn.disabled=(g!==null && !cleared[g]);
+}
+function show(i){current=i;screens.forEach((s,si)=>s.classList.toggle('active', si===i));refreshNav();}
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  const g=screenGate[current];
+  if(g!==null && !cleared[g]) return;
+  show(current+1);
+});
+backBtn.addEventListener('click', ()=>{ if(current>0) show(current-1); });
+refreshNav();
+</script>
+</body>
+</html>
