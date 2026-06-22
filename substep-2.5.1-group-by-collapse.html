@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The GROUP BY Collapse Machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --g1:#E7ECFF;       /* group tint A */
+    --g1-line:#9FB1F0;
+    --g2:#FFF0E2;       /* group tint B */
+    --g2-line:#F0BC86;
+    --g3:#E4F4EA;       /* group tint C */
+    --g3-line:#86CFA3;
+    --g4:#F3E8FB;       /* group tint D */
+    --g4-line:#C79BE6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.2cqw 3.4cqw 1.1cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.2cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.85cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- intro screen ---- */
+  .intro-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1cqw;max-width:78cqw;}
+  .intro-icon{width:5.6cqw;height:5.6cqw;color:var(--accent);}
+  .intro-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:11px;
+    padding:1.4cqw 1.8cqw;font-size:1.8cqw;font-weight:700;color:var(--accent);line-height:1.35;margin-top:.4cqw;
+    display:block;
+  }
+  .intro-rule b{font-weight:900;}
+
+  /* ---- the collapse machine ---- */
+  .machine{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+  .machine-head{display:block;}
+  .machine-q{font-size:1.95cqw;font-weight:800;color:var(--ink);line-height:1.28;display:block;}
+  .machine-q em{font-style:normal;color:var(--accent);}
+  .machine-sub{font-size:1.45cqw;font-weight:500;color:var(--body);line-height:1.35;margin-top:.4cqw;display:block;}
+
+  .sql-pill{
+    display:inline-block;background:#0E1A3C;color:#DCE6FF;border-radius:7px;
+    padding:.35cqw 1cqw;font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    font-size:1.4cqw;font-weight:600;letter-spacing:.01em;white-space:nowrap;
+  }
+  .sql-pill .kw{color:#8FB4FF;font-weight:700;}
+
+  /* table of raw + collapsed rows */
+  .sheet{
+    width:100%;border-collapse:separate;border-spacing:0;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;font-size:1.5cqw;
+    box-shadow:0 5px 16px rgba(0,29,105,.08);
+  }
+  .sheet th{
+    background:#F0F1FA;color:var(--ink);text-align:left;
+    font-weight:800;padding:.7cqw 1.3cqw;font-size:1.42cqw;
+    border-bottom:2px solid var(--line);user-select:none;
+  }
+  .sheet th.num{text-align:right;}
+  .sheet td{
+    padding:.5cqw 1.3cqw;border-bottom:1px solid var(--line);
+    font-weight:600;color:var(--body);vertical-align:middle;
+  }
+  .sheet td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .sheet tr:last-child td{border-bottom:none;}
+  .sheet td.prod{font-weight:800;color:var(--ink);}
+  .price{color:var(--accent);font-weight:800;}
+
+  /* group tints applied to raw rows so you can SEE which rows fold together */
+  tr.tint-0 td{background:var(--g1);}
+  tr.tint-1 td{background:var(--g2);}
+  tr.tint-2 td{background:var(--g3);}
+  tr.tint-3 td{background:var(--g4);}
+  /* collapsed-summary rows */
+  tr.sum-0 td{background:var(--g1);box-shadow:inset 0 0 0 1px var(--g1-line);}
+  tr.sum-1 td{background:var(--g2);box-shadow:inset 0 0 0 1px var(--g2-line);}
+  tr.sum-2 td{background:var(--g3);box-shadow:inset 0 0 0 1px var(--g3-line);}
+  tr.sum-3 td{background:var(--g4);box-shadow:inset 0 0 0 1px var(--g4-line);}
+  tr.sumrow td{font-weight:800;color:var(--ink);}
+  .countpill{
+    display:inline-block;background:#fff;border:1.3px solid var(--accent);color:var(--accent);
+    border-radius:20px;padding:.05cqw .7cqw;font-size:1.25cqw;font-weight:800;margin-left:.6cqw;
+  }
+
+  /* the two-pane collapse layout */
+  .collapse-panes{display:flex;gap:2.2cqw;align-items:flex-start;flex:0 0 auto;}
+  .pane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:.55cqw;min-height:0;}
+  .pane-label{
+    font-size:1.32cqw;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--accent);display:flex;align-items:center;gap:.6cqw;flex-wrap:wrap;flex:0 0 auto;
+  }
+  .pane-label .n{
+    background:var(--hl);border-radius:5px;padding:.05cqw .6cqw;font-weight:900;color:var(--accent);
+  }
+  /* "Collapsed" status badge that lives in the OUTPUT pane's header strip
+     (not over the table rows). Hidden until the collapse runs. */
+  .pane-label .status-badge{
+    display:none;align-items:center;gap:.4cqw;
+    background:var(--good-bg);color:var(--good);border:1.3px solid var(--good);
+    border-radius:20px;padding:.05cqw .7cqw;font-weight:800;letter-spacing:.04em;
+  }
+  .pane-out.shown .pane-label .status-badge{display:inline-flex;}
+
+  /* The collapse-machine source/output tables fold 8 rows into a fixed
+     stage, so they get tighter rows + a slightly smaller font than the
+     predict-screen sheet, and never grow past their pane. */
+  .machine .sheet{font-size:1.34cqw;}
+  .machine .sheet th{padding:.32cqw 1.1cqw;font-size:1.26cqw;}
+  .machine .sheet td{padding:.2cqw 1.1cqw;}
+  .pane-arrow{
+    flex:0 0 auto;align-self:center;display:flex;flex-direction:column;align-items:center;
+    color:var(--accent);
+  }
+  .pane-arrow i{font-size:3cqw;}
+  .pane-arrow .lbl{font-size:1.15cqw;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
+
+  /* collapsed pane hidden until clicked */
+  .pane-out{opacity:0;transition:opacity .45s ease;}
+  .pane-out.shown{opacity:1;}
+  .pane-arrow{opacity:0;transition:opacity .45s ease;}
+  .pane-arrow.shown{opacity:1;}
+
+  .collapse-btn{
+    align-self:flex-start;margin-top:.5cqw;flex:0 0 auto;
+    font-family:inherit;font-size:1.4cqw;font-weight:800;padding:.55cqw 1.6cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);background:var(--accent);color:#fff;
+    display:inline-flex;align-items:center;gap:.7cqw;transition:transform .08s,opacity .2s;
+  }
+  .collapse-btn:hover{transform:translateY(-1px);}
+  .collapse-btn:disabled{opacity:.4;cursor:default;transform:none;}
+
+  /* reveal teaching note under the machine */
+  .teach{
+    margin-top:.5cqw;flex:0 0 auto;font-size:1.3cqw;font-weight:600;line-height:1.3;
+    padding:.65cqw 1.2cqw;border-radius:9px;background:var(--hl);color:var(--accent);
+    border-left:4px solid var(--accent);display:none;
+  }
+  .teach.show{display:block;}
+  .teach b{color:var(--ink);font-weight:900;}
+
+  /* small sample note */
+  .note-illustrative{font-size:1.3cqw;font-weight:700;color:var(--body);font-style:italic;display:flex;align-items:center;gap:.6cqw;}
+  .note-illustrative i{font-size:1.5cqw;color:var(--accent);font-style:normal;}
+
+  /* ---- MCQ (reusable) ---- */
+  .quiz-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;}
+  .qcount{font-size:1.4cqw;font-weight:800;color:var(--accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.5cqw;}
+  .qtext{font-size:1.95cqw;font-weight:800;color:var(--ink);line-height:1.28;display:block;}
+  .qtext .em{color:var(--accent);}
+  .qtext code{font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:#EEF1FB;color:var(--accent);padding:.05em .35em;border-radius:5px;}
+  .opts{display:flex;flex-direction:column;gap:.8cqw;margin-top:1.2cqw;}
+  .opt{
+    text-align:left;background:#fff;border:1.6px solid var(--line);border-radius:9px;
+    padding:1cqw 1.6cqw;font-family:inherit;font-size:1.6cqw;font-weight:600;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,transform .08s;line-height:1.3;
+    display:flex;align-items:center;gap:1.1cqw;
+  }
+  .opt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .opt:active:not(:disabled){transform:scale(.995);}
+  .opt .mark{width:2.1cqw;height:2.1cqw;flex:0 0 auto;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;}
+  .opt .mark i{font-size:1.4cqw;color:#fff;display:none;}
+  .opt .otext{display:block;}
+  .opt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .opt.correct .mark{border-color:var(--good);background:var(--good);}
+  .opt.correct .mark i.check{display:block;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .opt.wrong .mark{border-color:var(--bad);background:var(--bad);}
+  .opt.wrong .mark i.cross{display:block;}
+  .opt:disabled{cursor:default;}
+  .feedback{
+    margin-top:1.1cqw;font-size:1.5cqw;font-weight:600;line-height:1.4;
+    padding:1cqw 1.4cqw;border-radius:9px;display:none;
+  }
+  .feedback.show{display:block;}
+  .feedback.good{background:var(--good-bg);color:var(--good);border-left:4px solid var(--good);}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad);border-left:4px solid var(--bad);}
+  .feedback b{color:inherit;font-weight:900;}
+  .feedback .note{color:var(--ink);font-weight:700;}
+
+  /* split: BG sample table beside the MCQ */
+  .split{display:flex;gap:2.2cqw;align-items:stretch;flex:1 1 auto;min-height:0;}
+  .split-main{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .split-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:.6cqw;}
+
+  /* ---- recap screen ---- */
+  .recap-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .recap-grid{display:flex;flex-direction:column;gap:.65cqw;margin-top:1cqw;flex:0 0 auto;}
+  .recap-item{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:.75cqw 1.4cqw;display:flex;align-items:baseline;gap:1.1cqw;
+    box-shadow:0 3px 9px rgba(0,29,105,.05);
+  }
+  .recap-item .term{font-size:1.5cqw;font-weight:900;color:var(--accent);flex:0 0 26cqw;display:block;}
+  .recap-item .term code{font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:.92em;font-weight:800;background:#EEF1FB;color:var(--accent);padding:.05em .35em;border-radius:5px;}
+  .recap-item .mean{font-size:1.46cqw;font-weight:500;color:var(--body);line-height:1.3;display:block;}
+  .recap-item .mean code{font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:#EEF1FB;color:var(--accent);padding:.05em .35em;border-radius:5px;}
+  .recap-close{font-size:1.55cqw;font-weight:600;color:var(--body);line-height:1.4;margin-top:1cqw;display:block;}
+  .recap-close b{color:var(--ink);}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.2cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-stack" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">The GROUP BY Collapse Machine</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 (intro) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">Step 5 &middot; GROUP BY</div>
+      <div class="intro-wrap">
+        <i class="ph-fill ph-stack intro-icon"></i>
+        <h1 class="title">GROUP BY collapses rows into answers.</h1>
+        <p class="lead" style="margin-top:.2cqw;">A plain query hands you back every single row. But Mike doesn't want 99 rows &mdash; he wants <em>one number per category</em>. GROUP BY is the operator that folds all the rows sharing a value into a single summary row.</p>
+        <span class="intro-rule">You'll watch <b>8 pizza orders fold into 3 groups</b> &mdash; then do the same to real Breaking Games sales.</span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 (pizza predict) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Pizza shop &middot; Predict first</div>
+      <div class="quiz-wrap" data-q="0">
+        <span class="qtext">Tony's till logged <span class="em">8 orders</span> today. You run <span class="sql-pill"><span class="kw">GROUP BY</span> pizza_type</span>. How many rows come back?</span>
+        <div class="note-illustrative" style="margin-top:.8cqw;"><i class="ph ph-info"></i>Same-coloured rows share a pizza type &mdash; those are what fold together.</div>
+        <div class="split" style="margin-top:.5cqw;">
+          <div class="split-side" style="flex:1.15 1 0;">
+            <table class="sheet" id="pizzaRaw"></table>
+          </div>
+          <div class="split-main" style="flex:1 1 0;">
+            <div class="opts"></div>
+            <div class="feedback"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 (pizza collapse machine) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Pizza shop &middot; Watch it collapse</div>
+      <div class="machine">
+        <span class="machine-q">Three pizza types &rarr; <em>three summary rows.</em> Hit the button and watch the 8 rows fold.</span>
+        <span class="machine-sub"><span class="sql-pill"><span class="kw">SELECT</span> pizza_type, <span class="kw">COUNT</span>(*), <span class="kw">SUM</span>(amount) <span class="kw">FROM</span> orders <span class="kw">GROUP BY</span> pizza_type</span></span>
+        <div class="collapse-panes" style="margin-top:1cqw;">
+          <div class="pane">
+            <span class="pane-label"><i class="ph-fill ph-rows"></i> 8 raw orders <span class="n">8 rows</span></span>
+            <table class="sheet" id="pizzaRaw2"></table>
+          </div>
+          <div class="pane-arrow" id="pizzaArrow">
+            <i class="ph-bold ph-arrow-right"></i>
+            <span class="lbl">collapse</span>
+          </div>
+          <div class="pane pane-out" id="pizzaOutPane">
+            <span class="pane-label"><i class="ph-fill ph-stack"></i> 3 groups <span class="n">3 rows</span><span class="status-badge"><i class="ph-bold ph-check"></i> Collapsed</span></span>
+            <table class="sheet" id="pizzaOut"></table>
+          </div>
+        </div>
+        <button class="collapse-btn" id="pizzaBtn" type="button"><i class="ph-bold ph-arrows-in-line-vertical"></i> Run GROUP BY</button>
+        <div class="teach" id="pizzaTeach">
+          <b>That's the collapse.</b> Every row sharing a <b>pizza_type</b> folded into one. <b>COUNT(*)</b> tallied how many folded in; <b>SUM(amount)</b> added their dollars. 8 rows in, 3 groups out &mdash; one row per distinct type.
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 (BG collapse machine) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Breaking Games &middot; Same move, real sales</div>
+      <div class="machine">
+        <span class="machine-q">Now a sample of <em>shopify_sales</em>. Group by <span class="sql-pill"><span class="kw">GROUP BY</span> product_type</span> and the products fold into type totals.</span>
+        <div class="note-illustrative" style="margin-top:.6cqw;"><i class="ph ph-info"></i>A clean 8-row sample of the real table &mdash; <b>Game</b>, <b>Game Accessory</b>, and <b>Toy</b>.</div>
+        <div class="collapse-panes" style="margin-top:.8cqw;">
+          <div class="pane">
+            <span class="pane-label"><i class="ph-fill ph-rows"></i> 8 product rows <span class="n">8 rows</span></span>
+            <table class="sheet" id="bgRaw"></table>
+          </div>
+          <div class="pane-arrow" id="bgArrow">
+            <i class="ph-bold ph-arrow-right"></i>
+            <span class="lbl">collapse</span>
+          </div>
+          <div class="pane pane-out" id="bgOutPane">
+            <span class="pane-label"><i class="ph-fill ph-stack"></i> 3 type groups <span class="n">3 rows</span><span class="status-badge"><i class="ph-bold ph-check"></i> Collapsed</span></span>
+            <table class="sheet" id="bgOut"></table>
+          </div>
+        </div>
+        <button class="collapse-btn" id="bgBtn" type="button"><i class="ph-bold ph-arrows-in-line-vertical"></i> Run GROUP BY</button>
+        <div class="teach" id="bgTeach">
+          Same machine, real data. The <b>SUM(total_sales)</b> per type is exactly what Mike needs to compare categories &mdash; one honest number per group instead of a wall of rows.
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 (gated MCQ: 99 -> 6) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="kicker">Scale it up &middot; Pick one</div>
+      <div class="quiz-wrap" data-q="1">
+        <span class="qtext">The full <code>shopify_sales</code> table has <span class="em">99 rows</span>. You run <code>GROUP BY product_type</code> on <span class="em">all</span> of it. How many rows come back?</span>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 5 (recap) ============ -->
+    <section class="screen" data-screen="5">
+      <div class="recap-wrap">
+        <div class="kicker">What GROUP BY just taught you</div>
+        <h1 class="title" style="font-size:2.6cqw;">Rows in, one summary row per group out.</h1>
+        <div class="recap-grid">
+          <div class="recap-item"><span class="term">GROUP BY column</span><span class="mean">Folds every row sharing that value into a single group.</span></div>
+          <div class="recap-item"><span class="term"><code>COUNT(*)</code></span><span class="mean">How many rows folded into each group.</span></div>
+          <div class="recap-item"><span class="term">SUM / AVG / MIN / MAX</span><span class="mean">How to combine the other columns inside each group.</span></div>
+          <div class="recap-item"><span class="term">Row count out</span><span class="mean">= the number of <b>distinct</b> values &mdash; not the row count in.</span></div>
+        </div>
+        <span class="recap-close">Real data is messy: <b>Game</b> and <b>game</b> count as different groups, and blanks form their own. That's why 99 rows became <b>6</b>, not 4 &mdash; next you'll pick the right aggregation for each question.</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>The GROUP BY Collapse Machine &mdash; text version</h2>
+  <p>GROUP BY collapses every row that shares a value into one summary row per group. A plain query returns every row; GROUP BY returns one row per distinct value.</p>
+  <h3>Pizza round</h3>
+  <p>Tony's till logged 8 orders today: Margherita $12, Pepperoni $15, Margherita $12, Hawaiian $14, Pepperoni $15, Margherita $12, Hawaiian $14, Pepperoni $15. Running GROUP BY pizza_type returns 3 rows, because there are 3 distinct pizza types. Margherita: 3 orders, $36. Pepperoni: 3 orders, $45. Hawaiian: 2 orders, $28. COUNT(*) counts how many rows folded into each group; SUM(amount) adds their dollars.</p>
+  <h3>Breaking Games round</h3>
+  <p>An 8-row sample of shopify_sales with product types Game, Game Accessory, and Toy collapses under GROUP BY product_type into 3 type groups, each with its SUM(total_sales). This is exactly how Mike compares categories.</p>
+  <h3>Scale-up question</h3>
+  <p>The full shopify_sales table has 99 rows. GROUP BY product_type returns 6 rows, not 4. It is the count of distinct product_type values, not the row count. On the real (messy) data there are 6 distinct values: Game, Game Accessory, a lowercase game (which counts separately from Game), Toy, Gift, and a blank type shared by 4 rows. So 99 rows collapse to 6 groups.</p>
+  <h3>Recap</h3>
+  <ul>
+    <li>GROUP BY column: folds every row sharing that value into one group.</li>
+    <li>COUNT(*): how many rows folded into each group.</li>
+    <li>SUM, AVG, MIN, MAX: how to combine the other columns inside each group.</li>
+    <li>Rows out = the number of distinct values, not the row count in.</li>
+  </ul>
+</div>
+
+<script>
+/* ============================================================
+   PIZZA DATA -- 8 orders, 3 distinct types. tint index = group.
+   ============================================================ */
+const PIZZA=[
+  {type:'Margherita', amt:12, g:0},
+  {type:'Pepperoni',  amt:15, g:1},
+  {type:'Margherita', amt:12, g:0},
+  {type:'Hawaiian',   amt:14, g:2},
+  {type:'Pepperoni',  amt:15, g:1},
+  {type:'Margherita', amt:12, g:0},
+  {type:'Hawaiian',   amt:14, g:2},
+  {type:'Pepperoni',  amt:15, g:1},
+];
+/* collapsed pizza groups (order matches first-appearance) */
+const PIZZA_OUT=[
+  {type:'Margherita', n:3, sum:36, g:0},
+  {type:'Pepperoni',  n:3, sum:45, g:1},
+  {type:'Hawaiian',   n:2, sum:28, g:2},
+];
+
+/* ============================================================
+   BREAKING GAMES sample -- 8 honest rows, 3 product types.
+   Numbers are illustrative for the sample (real totals differ).
+   ============================================================ */
+const BG=[
+  {prod:'Dwellings of Eldervale', type:'Game',           sales:420, g:0},
+  {prod:'POOP: The Game',         type:'Game',           sales:118, g:0},
+  {prod:'Sparkle Kitty Nights',   type:'Game',           sales:96,  g:0},
+  {prod:'Quokka Dash',            type:'Game',           sales:54,  g:0},
+  {prod:'Deluxe Card Sleeves',    type:'Game Accessory', sales:38,  g:1},
+  {prod:'Token Storage Tray',     type:'Game Accessory', sales:22,  g:1},
+  {prod:'Dice Tower',             type:'Game Accessory', sales:31,  g:1},
+  {prod:'Plush Quokka',           type:'Toy',            sales:17,  g:2},
+];
+const BG_OUT=[
+  {type:'Game',           n:4, sum:688, g:0},
+  {type:'Game Accessory', n:3, sum:91,  g:1},
+  {type:'Toy',            n:1, sum:17,  g:2},
+];
+
+const money=n=>'$'+n.toLocaleString('en-US');
+
+/* ---- renderers ---- */
+function renderPizzaRaw(elId, tinted){
+  let h='<thead><tr><th>pizza_type</th><th class="num">amount</th></tr></thead><tbody>';
+  PIZZA.forEach(r=>{
+    h+=`<tr class="${tinted?'tint-'+r.g:''}"><td class="prod">${r.type}</td><td class="num price">${money(r.amt)}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById(elId).innerHTML=h;
+}
+function renderPizzaOut(){
+  let h='<thead><tr><th>pizza_type</th><th class="num">count</th><th class="num">sum</th></tr></thead><tbody>';
+  PIZZA_OUT.forEach(r=>{
+    h+=`<tr class="sumrow sum-${r.g}"><td class="prod">${r.type}</td><td class="num">${r.n}</td><td class="num price">${money(r.sum)}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('pizzaOut').innerHTML=h;
+}
+function renderBgRaw(){
+  let h='<thead><tr><th>product</th><th>product_type</th><th class="num">sales</th></tr></thead><tbody>';
+  BG.forEach(r=>{
+    h+=`<tr class="tint-${r.g}"><td class="prod">${r.prod}</td><td>${r.type}</td><td class="num price">${money(r.sales)}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('bgRaw').innerHTML=h;
+}
+function renderBgOut(){
+  let h='<thead><tr><th>product_type</th><th class="num">count</th><th class="num">SUM(sales)</th></tr></thead><tbody>';
+  BG_OUT.forEach(r=>{
+    h+=`<tr class="sumrow sum-${r.g}"><td class="prod">${r.type}</td><td class="num">${r.n}</td><td class="num price">${money(r.sum)}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('bgOut').innerHTML=h;
+}
+
+renderPizzaRaw('pizzaRaw', true);
+renderPizzaRaw('pizzaRaw2', true);
+renderPizzaOut();
+renderBgRaw();
+renderBgOut();
+
+/* ---- collapse buttons ---- */
+function wireCollapse(btnId, paneId, arrowId, teachId){
+  const btn=document.getElementById(btnId);
+  btn.addEventListener('click', ()=>{
+    document.getElementById(paneId).classList.add('shown');
+    document.getElementById(arrowId).classList.add('shown');
+    document.getElementById(teachId).classList.add('show');
+    btn.disabled=true;
+    btn.innerHTML='<i class="ph-bold ph-check"></i> Done';
+  });
+}
+wireCollapse('pizzaBtn','pizzaOutPane','pizzaArrow','pizzaTeach');
+wireCollapse('bgBtn','bgOutPane','bgArrow','bgTeach');
+
+/* ============================================================
+   MCQ DATA -- single-pick, predict-then-reveal, gated.
+   Wrong picks get an encouraging, teaching tip.
+   ============================================================ */
+const QUESTIONS=[
+  /* 0 -- pizza: 8 orders -> 3 rows */
+  {
+    options:[
+      {text:"8 rows — one per order", correct:false,
+       tip:"Not quite — look again. That's what a plain SELECT gives you. GROUP BY's whole job is to FOLD the duplicates away, so you'll get fewer rows, not all 8."},
+      {text:"3 rows — one per pizza type", correct:true},
+      {text:"1 row — everything in a single total", correct:false,
+       tip:"So close in spirit! That would happen with no GROUP BY column at all. Here we grouped BY pizza_type, so you get one row per distinct type — and there are 3 types."}
+    ],
+    feedback:"Yes &mdash; <b>3 rows</b>, one per distinct pizza type (Margherita, Pepperoni, Hawaiian). The count out equals the number of <b>distinct values</b> in the column you grouped by. Hit Next to watch the 8 rows actually fold."
+  },
+  /* 1 -- BG: 99 rows -> 6 */
+  {
+    options:[
+      {text:"99 — same as the rows that went in", correct:false,
+       tip:"Not quite — look again. GROUP BY collapses; it never returns the raw row count. Rows out = the number of distinct product_type values, which is far fewer than 99."},
+      {text:"3 — like the clean sample you just saw", correct:false,
+       tip:"Reasonable guess from the sample! But the sample was tidied. The REAL column is messier than 3 clean types — a couple of extra values sneak in. Look one option down."},
+      {text:"6 — the number of distinct product_type values", correct:true},
+      {text:"4 — Game, Game Accessory, Toy, and blanks", correct:false,
+       tip:"Very close — you spotted the blank group, nice. But two more distinct values hide in the real data. Think about casing and a stray category. The true count is just above 4."}
+    ],
+    feedback:"Right &mdash; <b>6 rows</b>. Rows out = distinct values, and the real column has 6 of them. <span class=\"note\">The data's a little messy:</span> <b>Game</b> and <b>game</b> (lowercase) count as <b>separate</b> groups, 4 rows have a <b>blank</b> type, and there's a stray <b>Gift</b>. That's Game, game, Game Accessory, Toy, Gift, and blank &mdash; 6 groups from 99 rows."
+  }
+];
+
+/* ---- MCQ renderer ---- */
+const checkSVG='<i class="ph-bold ph-check check"></i>';
+const crossSVG='<i class="ph-bold ph-x cross"></i>';
+const cleared=QUESTIONS.map(()=>false);
+
+document.querySelectorAll('.quiz-wrap[data-q]').forEach(wrap=>{
+  const qi=+wrap.dataset.q;
+  const q=QUESTIONS[qi];
+  const optsEl=wrap.querySelector('.opts');
+  const fb=wrap.querySelector('.feedback');
+
+  q.options.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt';
+    btn.type='button';
+    btn.dataset.i=i;
+    btn.innerHTML='<span class="mark">'+checkSVG+crossSVG+'</span><span class="otext">'+o.text+'</span>';
+    btn.addEventListener('click', ()=>{
+      if(cleared[qi]) return;
+      if(o.correct){
+        btn.classList.add('correct');
+        optsEl.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+        fb.className='feedback good show';
+        fb.innerHTML=q.feedback;
+        cleared[qi]=true;
+        refreshNav();
+      } else {
+        btn.classList.add('wrong');
+        btn.disabled=true;
+        fb.className='feedback bad show';
+        fb.innerHTML=o.tip;
+      }
+    });
+    optsEl.appendChild(btn);
+  });
+});
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   Screen 0 intro (free). 1 = pizza MCQ (gate q0). 2 = pizza collapse.
+   3 = BG collapse. 4 = gated MCQ (gate q1). 5 = recap.
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+/* map each screen index -> the question index it gates on (or null) */
+const screenGate=[null,0,null,null,1,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  const g=screenGate[current];
+  nextBtn.disabled=(g!==null && !cleared[g]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  const g=screenGate[current];
+  if(g!==null && !cleared[g]) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
