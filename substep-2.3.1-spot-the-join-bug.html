@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spot the JOIN Bug</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.4cqw 3.4cqw 1.2cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- intro screen ---- */
+  .intro-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1.2cqw;max-width:74cqw;}
+  .intro-icon{width:6cqw;height:6cqw;color:var(--accent);}
+  .intro-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:11px;
+    padding:1.5cqw 1.9cqw;font-size:1.85cqw;font-weight:700;color:var(--accent);line-height:1.35;margin-top:.6cqw;
+  }
+  .intro-rule b{font-weight:900;}
+
+  /* ---- scenario card (prose, BLOCK not flex) ---- */
+  .scenario{
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:11px;padding:1.3cqw 1.7cqw;box-shadow:0 4px 12px rgba(0,29,105,.07);
+    display:block;
+  }
+  .scenario .who{
+    font-size:1.35cqw;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+    margin-bottom:.6cqw;display:flex;align-items:center;gap:.7cqw;
+  }
+  .scenario .q{font-size:1.78cqw;font-weight:800;color:var(--ink);line-height:1.3;display:block;}
+  .scenario .q em{font-style:italic;color:var(--accent);}
+
+  /* ---- SQL box + result nugget (side column) ---- */
+  .sqlbox{
+    background:#0E1B40;color:#E8ECF8;
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:1.18cqw;line-height:1.55;border-radius:9px;
+    padding:1.1cqw 1.3cqw;display:block;white-space:pre;overflow:hidden;
+    box-shadow:0 5px 14px rgba(0,29,105,.18);
+  }
+  .sqlbox .kw{color:#86A6FF;font-weight:700;}
+  .sqlbox .note{color:#FFB4AC;font-weight:700;}
+  .sqlbox .miss{color:#FFB4AC;font-weight:800;text-decoration:underline;text-decoration-style:wavy;}
+  .resultnote{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:.95cqw 1.25cqw;font-size:1.3cqw;font-weight:600;color:var(--body);line-height:1.4;display:block;
+  }
+  .resultnote b{color:var(--bad);font-weight:900;}
+  .resultnote .ok{color:var(--good);font-weight:900;}
+  .resultnote .cmp{display:block;margin-top:.5cqw;font-size:1.22cqw;}
+  .resultnote .cmp:first-child{margin-top:0;}
+  .resultnote .lbl{display:inline-block;font-size:1.02cqw;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-right:.5cqw;}
+  .resultnote .neq{display:block;margin-top:.55cqw;font-size:1.22cqw;font-weight:800;color:var(--bad);}
+
+  /* split layout: question + MCQ on the left, query + result on the right */
+  .split{display:flex;gap:2.2cqw;align-items:stretch;flex:1 1 auto;min-height:0;margin-top:.2cqw;}
+  .split-main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.0cqw;}
+  .split-side{flex:0 0 39cqw;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.0cqw;}
+
+  /* MCQ (reusable) */
+  .quiz-wrap{display:flex;flex-direction:column;justify-content:center;min-height:0;}
+  .opts{display:flex;flex-direction:column;gap:.7cqw;margin-top:.3cqw;}
+  .opt{
+    text-align:left;background:#fff;border:1.6px solid var(--line);border-radius:9px;
+    padding:.9cqw 1.4cqw;font-family:inherit;font-size:1.48cqw;font-weight:600;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,transform .08s;line-height:1.3;
+    display:flex;align-items:center;gap:1.0cqw;
+  }
+  .opt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .opt:active:not(:disabled){transform:scale(.995);}
+  .opt .mark{width:2.0cqw;height:2.0cqw;flex:0 0 auto;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;}
+  .opt .mark i{font-size:1.3cqw;color:#fff;display:none;}
+  .opt .otext{display:block;}
+  .opt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .opt.correct .mark{border-color:var(--good);background:var(--good);}
+  .opt.correct .mark i.check{display:block;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .opt.wrong .mark{border-color:var(--bad);background:var(--bad);}
+  .opt.wrong .mark i.cross{display:block;}
+  .opt:disabled{cursor:default;}
+  .feedback{
+    margin-top:.9cqw;font-size:1.42cqw;font-weight:600;line-height:1.38;
+    padding:.95cqw 1.3cqw;border-radius:9px;display:none;
+  }
+  .feedback.show{display:block;}
+  .feedback.good{background:var(--good-bg);color:var(--good);border-left:4px solid var(--good);}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad);border-left:4px solid var(--bad);}
+  .feedback b{color:inherit;font-weight:900;}
+  .feedback code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:rgba(0,0,0,.06);padding:0 .25em;border-radius:3px;}
+
+  /* ---- recap / done screen ---- */
+  .recap-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .recap-grid{display:flex;flex-direction:column;gap:.65cqw;margin-top:.9cqw;flex:0 0 auto;}
+  .recap-item{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:.75cqw 1.4cqw;display:flex;align-items:baseline;gap:1.1cqw;
+    box-shadow:0 3px 9px rgba(0,29,105,.05);
+  }
+  .recap-item .term{font-size:1.45cqw;font-weight:900;color:var(--accent);flex:0 0 20cqw;display:block;}
+  .recap-item .mean{font-size:1.4cqw;font-weight:500;color:var(--body);line-height:1.3;display:block;}
+  .recap-item .mean code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:#F1F0F7;padding:0 .25em;border-radius:3px;color:var(--ink);}
+  .recap-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:10px;
+    padding:1.1cqw 1.5cqw;margin-top:1.0cqw;font-size:1.55cqw;font-weight:800;color:var(--accent);
+    line-height:1.34;display:block;flex:0 0 auto;
+  }
+  .recap-rule b{font-weight:900;}
+  .recap-close{font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.4;margin-top:.95cqw;display:block;}
+  .recap-close b{color:var(--ink);}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.6cqw;font-weight:700;padding:.9cqw 2.1cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-bug" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Spot the JOIN Bug</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 (intro) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="intro-wrap">
+        <i class="ph-fill ph-magnifying-glass intro-icon"></i>
+        <h1 class="title">Spot the JOIN Bug</h1>
+        <p class="lead" style="margin-top:.3cqw;">A JOIN can run without a single error and still hand you the wrong rows. Here are the three traps where almost every JOIN quietly breaks.</p>
+        <div class="intro-rule">The dangerous JOIN bugs <b>don't crash</b>. The query runs, returns rows, and the rows are wrong. Learn to catch all three.</div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 (Trap 1: missing ON) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Trap 1 &middot; The query that explodes</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="0">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-warning-circle" style="font-size:1.35cqw;"></i> Your query</span>
+            <span class="q">You join products to their sales, but leave out one keyword. It runs fine and returns <em>9,801 rows</em> &mdash; from just 99 products. What happened?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title,
+       ss.net_items_sold
+<span class="kw">FROM</span> dim_product dp
+<span class="kw">JOIN</span> shopify_sales ss<span class="miss">;</span>   <span class="note">&larr; no ON</span></div>
+          <div class="resultnote">Expected: <span class="ok">~99 rows</span>. Got: <b>9,801 rows</b>.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 (Trap 2: WHERE kills the LEFT JOIN) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Trap 2 &middot; The rows that vanish</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="1">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-warning-circle" style="font-size:1.35cqw;"></i> Your query</span>
+            <span class="q">You want <em>every</em> product, including ones with no sales. You write a LEFT JOIN &mdash; but the no-sales products disappear anyway. Why?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title,
+       ss.net_items_sold
+<span class="kw">FROM</span> dim_product dp
+<span class="kw">LEFT JOIN</span> shopify_sales ss
+  <span class="kw">ON</span> dp.product_id = ss.product_id
+<span class="miss">WHERE</span> ss.net_items_sold &gt; 0<span class="note"> &larr; trap</span></div>
+          <div class="resultnote">Expected: <span class="ok">all 99</span>, blanks included. Got: <b>only the ones that sold</b>.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 (Trap 3: wrong / mismatched column) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Trap 3 &middot; The match that fails</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="2">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-warning-circle" style="font-size:1.35cqw;"></i> Your query</span>
+            <span class="q">You match products to their orders by joining on <em>product_title</em>. It runs &mdash; but almost nothing matches. What's wrong?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="sqlbox"><span class="kw">SELECT</span> dp.product_title,
+       so.order_name
+<span class="kw">FROM</span> dim_product dp
+<span class="kw">JOIN</span> shopify_orders so
+  <span class="kw">ON</span> dp.product_title = <span class="miss">so.product_title</span></div>
+          <div class="resultnote">
+            <span class="cmp"><span class="lbl">dim_product</span>Dwellings of Eldervale 2nd Edition</span>
+            <span class="cmp"><span class="lbl">shopify_orders</span>Dwellings of Eldervale 2nd Ed. &ndash; Standard | Board Game</span>
+            <span class="neq">not equal &rarr; no match</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 (recap) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="recap-wrap">
+        <div class="kicker">Three traps, one habit</div>
+        <h1 class="title" style="font-size:2.6cqw;">How to catch a silent JOIN bug</h1>
+        <div class="recap-grid">
+          <div class="recap-item"><span class="term">Missing <code>ON</code></span><span class="mean">Every row &times; every row = a Cartesian product. The row count explodes. Always include <code>ON</code>.</span></div>
+          <div class="recap-item"><span class="term">WHERE on the right</span><span class="mean">After a LEFT JOIN it drops the NULL rows, silently becoming an INNER JOIN. Allow NULLs or filter in the <code>ON</code>.</span></div>
+          <div class="recap-item"><span class="term">Wrong column</span><span class="mean">Join on a clean shared key (<code>product_id</code>), not messy text written differently in each table.</span></div>
+        </div>
+        <span class="recap-rule"><b>The rule:</b> way MORE rows than expected &rarr; you're joining on duplicates. Way FEWER &rarr; your <code>ON</code> is too strict. Almost every JOIN bug is one of those two.</span>
+        <span class="recap-close">Run these checks in your head before you trust a JOIN &mdash; <b>a query running clean doesn't mean it's right.</b></span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>Spot the JOIN Bug &mdash; three ways a JOIN quietly breaks (text version)</h2>
+  <ol>
+    <li>You join dim_product to shopify_sales but leave out the ON clause. It returns 9,801 rows from 99 products. Why? Answer: With no ON, SQL pairs every left row with every right row &mdash; a Cartesian product, 99 &times; 99 = 9,801. It never errors. Always include ON.</li>
+    <li>You write a LEFT JOIN to keep products with no sales, then add WHERE ss.net_items_sold &gt; 0. The no-sales products vanish. Why? Answer: WHERE runs after the join. A no-sales product has net_items_sold = NULL, and NULL &gt; 0 is false, so it's filtered out &mdash; silently turning the LEFT JOIN back into an INNER JOIN. Allow NULLs or filter inside the ON.</li>
+    <li>You join dim_product to shopify_orders on product_title and almost nothing matches. Why? Answer: Both columns mean "the product," but the text differs &mdash; dim_product has the clean title, shopify_orders has a long SEO title. Join on the clean shared key (product_id), not the messy text. This is exactly why you built product_id in Step 2.</li>
+  </ol>
+  <p>The rule: way more rows than expected means you're joining on duplicates; way fewer means your ON is too strict. Almost every JOIN bug is one of those two.</p>
+</div>
+
+<script>
+/* ============================================================
+   QUESTION DATA -- single-pick, predict-then-reveal.
+   Wrong pick shows a teaching tip and stays retryable.
+   ============================================================ */
+const QUESTIONS=[
+  /* 0 -- missing ON / Cartesian product */
+  {
+    options:[
+      {text:"SQLite hit an error and returned junk", correct:false,
+       tip:"Look again &mdash; SQLite didn't error. It happily runs a JOIN with no ON. That's exactly why this bug is so easy to miss."},
+      {text:"Every product got paired with every sales row — 99 × 99 = 9,801", correct:true},
+      {text:"It returned each of the 99 products twice", correct:false,
+       tip:"Look again &mdash; it's not doubling. With no ON, each of the 99 products pairs with all 99 sales rows: 99 × 99 = 9,801."}
+    ],
+    feedback:"Yes. With no <b>ON</b>, SQL pairs every left row with every right row — a <b>Cartesian product</b> (99 × 99 = 9,801). It never throws an error, so the row count is your only clue. Always give a JOIN an <code>ON</code> clause."
+  },
+  /* 1 -- WHERE turns LEFT into INNER */
+  {
+    options:[
+      {text:"The LEFT JOIN itself is written wrong", correct:false,
+       tip:"Look again &mdash; the JOIN is correct. The problem is the line right after it. Read the WHERE."},
+      {text:"WHERE runs after the join and drops the NULL rows — turning it back into an INNER JOIN", correct:true},
+      {text:"SQLite ignores LEFT and treats every JOIN the same", correct:false,
+       tip:"Look again &mdash; SQLite respects LEFT JOIN. It's the WHERE removing the no-sales rows, not the JOIN."}
+    ],
+    feedback:"Right. <b>WHERE runs after the join.</b> A no-sales product has <code>net_items_sold = NULL</code>, and <code>NULL &gt; 0</code> is false — so it gets filtered out, silently undoing your LEFT JOIN. To keep the blanks, allow NULLs (<code>OR ss.product_id IS NULL</code>) or filter inside the <code>ON</code>."
+  },
+  /* 2 -- wrong / mismatched column */
+  {
+    options:[
+      {text:"Both columns mean “the product,” but they're written differently — join on the clean product_id key instead", correct:true},
+      {text:"JOIN can only match numbers, not text", correct:false,
+       tip:"Look again &mdash; JOIN matches text fine. The issue is these two text values aren't equal: orders uses a long SEO title."},
+      {text:"shopify_orders is empty", correct:false,
+       tip:"Look again &mdash; shopify_orders has 254 rows. They exist; they just don't match because the titles are written differently."}
+    ],
+    feedback:"Right. Both columns refer to the product, but <b>they're not the same text</b> — dim_product has the clean title, shopify_orders has a long SEO title. Matching them as equals drops almost every row. This is exactly why you built a clean <b>product_id</b> in Step 2: join on the shared key, never the messy text."
+  }
+];
+
+/* ============================================================
+   MCQ RENDERER
+   ============================================================ */
+const checkSVG='<i class="ph-bold ph-check check"></i>';
+const crossSVG='<i class="ph-bold ph-x cross"></i>';
+const cleared=QUESTIONS.map(()=>false);
+
+document.querySelectorAll('.quiz-wrap[data-q]').forEach(wrap=>{
+  const qi=+wrap.dataset.q;
+  const q=QUESTIONS[qi];
+  const optsEl=wrap.querySelector('.opts');
+  const fb=wrap.querySelector('.feedback');
+
+  q.options.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt';
+    btn.type='button';
+    btn.dataset.i=i;
+    btn.innerHTML='<span class="mark">'+checkSVG+crossSVG+'</span><span class="otext">'+o.text+'</span>';
+    btn.addEventListener('click', ()=>{
+      if(cleared[qi]) return;
+      if(o.correct){
+        btn.classList.add('correct');
+        optsEl.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+        fb.className='feedback good show';
+        fb.innerHTML=q.feedback;
+        cleared[qi]=true;
+        refreshNav();
+      } else {
+        btn.classList.add('wrong');
+        btn.disabled=true;
+        fb.className='feedback bad show';
+        fb.innerHTML=o.tip;
+      }
+    });
+    optsEl.appendChild(btn);
+  });
+});
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   Screen 0 = intro (free). 1..3 = gated questions. 4 = recap.
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+const screenGate=[null,0,1,2,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  const g=screenGate[current];
+  nextBtn.disabled=(g!==null && !cleared[g]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  const g=screenGate[current];
+  if(g!==null && !cleared[g]) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
