@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spot the Lie — The Verification Reflex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --warn:#B8791C;
+    --warn-bg:#FCF1DF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.2cqw 3.4cqw 1.1cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.2cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.85cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- screen 1: the number ---- */
+  .number-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1cqw;}
+  .chat-card{
+    background:var(--card);border:1px solid var(--line);border-radius:13px;
+    box-shadow:0 8px 22px rgba(0,29,105,.10);overflow:hidden;max-width:74cqw;
+  }
+  .chat-head{
+    display:flex;align-items:center;gap:1cqw;background:#0E1A3C;color:#DCE6FF;
+    padding:1cqw 1.6cqw;font-size:1.4cqw;font-weight:700;letter-spacing:.04em;
+  }
+  .chat-head i{font-size:1.9cqw;color:#8FB4FF;}
+  .chat-body{padding:1.6cqw 1.8cqw;}
+  .chat-line{font-size:1.85cqw;font-weight:600;color:var(--body);line-height:1.4;}
+  .chat-line .prod{color:var(--ink);font-weight:800;}
+  .bignum{
+    font-size:5.4cqw;font-weight:900;color:var(--accent);line-height:1;letter-spacing:-.02em;
+    margin-top:1cqw;font-variant-numeric:tabular-nums;display:block;
+  }
+  .bignum-sub{font-size:1.5cqw;font-weight:700;color:var(--body);margin-top:.3cqw;display:block;}
+  .looks-fine{
+    display:inline-flex;align-items:center;gap:.7cqw;margin-top:1.3cqw;
+    font-size:1.7cqw;font-weight:800;color:var(--ink);
+  }
+  .looks-fine i{font-size:2cqw;color:var(--warn);}
+
+  /* ---- screen 2: predict gate (two big buttons) ---- */
+  .predict-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1.2cqw;}
+  .predict-q{font-size:2.5cqw;font-weight:900;color:var(--ink);line-height:1.2;letter-spacing:-.01em;}
+  .predict-q .em{color:var(--accent);}
+  .predict-sub{font-size:1.7cqw;font-weight:500;color:var(--body);line-height:1.4;}
+  .recall-num{
+    display:inline-flex;align-items:center;gap:.6cqw;background:#0E1A3C;color:#DCE6FF;border-radius:8px;
+    padding:.5cqw 1.2cqw;font-size:1.55cqw;font-weight:800;margin-top:.4cqw;align-self:flex-start;
+    font-variant-numeric:tabular-nums;
+  }
+  .recall-num i{color:#8FB4FF;font-size:1.7cqw;}
+  .predict-btns{display:flex;gap:1.6cqw;margin-top:.8cqw;}
+  .pbtn{
+    flex:1 1 0;text-align:left;background:#fff;border:2px solid var(--line);border-radius:12px;
+    padding:1.5cqw 1.8cqw;font-family:inherit;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .08s;
+    display:flex;align-items:center;gap:1.2cqw;
+  }
+  .pbtn:hover:not(.locked){border-color:var(--accent);background:#F0F1FA;transform:translateY(-2px);}
+  .pbtn .picon{
+    width:3.6cqw;height:3.6cqw;flex:0 0 auto;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:2cqw;
+  }
+  .pbtn.right .picon{background:var(--good-bg);color:var(--good);}
+  .pbtn.off .picon{background:var(--warn-bg);color:var(--warn);}
+  .pbtn .ptext{display:flex;flex-direction:column;gap:.2cqw;}
+  .pbtn .pmain{font-size:1.9cqw;font-weight:900;color:var(--ink);line-height:1.1;}
+  .pbtn .psub{font-size:1.35cqw;font-weight:600;color:var(--body);line-height:1.25;}
+  .pbtn.chosen{border-color:var(--accent);background:var(--hl);}
+  .pbtn.locked{cursor:default;}
+  .pbtn.dimmed{opacity:.45;}
+  .predict-ack{
+    display:none;margin-top:.5cqw;font-size:1.55cqw;font-weight:700;line-height:1.35;
+    padding:1cqw 1.4cqw;border-radius:9px;background:var(--hl);color:var(--accent);border-left:4px solid var(--accent);
+  }
+  .predict-ack.show{display:block;}
+  .predict-ack b{color:var(--ink);font-weight:900;}
+
+  /* ---- table (shared) ---- */
+  .sheet{
+    width:100%;border-collapse:separate;border-spacing:0;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;font-size:1.4cqw;
+    box-shadow:0 5px 16px rgba(0,29,105,.08);
+  }
+  .sheet th{
+    background:#F0F1FA;color:var(--ink);text-align:left;
+    font-weight:800;padding:.5cqw 1.2cqw;font-size:1.3cqw;
+    border-bottom:2px solid var(--line);user-select:none;
+  }
+  .sheet th.num{text-align:right;}
+  .sheet td{
+    padding:.42cqw 1.2cqw;border-bottom:1px solid var(--line);
+    font-weight:600;color:var(--body);vertical-align:middle;
+  }
+  .sheet td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .sheet tr:last-child td{border-bottom:none;}
+  .sheet td.page{font-weight:800;color:var(--ink);}
+  .sheet .src{display:inline-flex;align-items:center;gap:.5cqw;}
+  .sheet .src i{font-size:1.4cqw;color:var(--accent);}
+  .price{color:var(--accent);font-weight:800;}
+  /* all rows are the SAME page -> tint them identically to make the trap visible */
+  tr.samepage td{background:#E7ECFF;}
+
+  /* ---- screen 3: the grain trap ---- */
+  .trap-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .trap-head{font-size:1.95cqw;font-weight:900;color:var(--ink);line-height:1.2;letter-spacing:-.01em;display:block;}
+  .trap-head .em{color:var(--accent);}
+  .trap-sub{font-size:1.45cqw;font-weight:500;color:var(--body);line-height:1.35;margin-top:.4cqw;display:block;}
+  .trap-split{display:flex;gap:2cqw;align-items:stretch;flex:1 1 auto;min-height:0;margin-top:.9cqw;}
+  .trap-tableside{flex:1.35 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .trap-callside{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:.9cqw;}
+  .trap-callout{
+    background:var(--bad-bg);border:1.4px solid var(--bad);border-radius:11px;
+    padding:1.2cqw 1.5cqw;
+  }
+  .trap-callout .ttitle{
+    display:flex;align-items:center;gap:.7cqw;font-size:1.6cqw;font-weight:900;color:var(--bad);line-height:1.15;
+  }
+  .trap-callout .ttitle i{font-size:2cqw;}
+  .trap-callout .tbody{font-size:1.45cqw;font-weight:600;color:var(--ink);line-height:1.38;margin-top:.6cqw;}
+  .trap-callout .tbody b{color:var(--bad);font-weight:900;}
+  .multiplier{
+    display:flex;align-items:center;gap:.8cqw;font-size:1.45cqw;font-weight:700;color:var(--body);
+  }
+  .multiplier .chip{
+    background:#0E1A3C;color:#DCE6FF;border-radius:8px;padding:.4cqw 1cqw;
+    font-weight:900;font-variant-numeric:tabular-nums;
+  }
+  .multiplier .chip.bad{background:var(--bad);color:#fff;}
+
+  /* ---- screen 4: verify the right way ---- */
+  .fix-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .fix-head{font-size:1.95cqw;font-weight:900;color:var(--ink);line-height:1.2;letter-spacing:-.01em;display:block;}
+  .fix-head .em{color:var(--accent);}
+  .fix-flow{display:flex;align-items:center;gap:1.4cqw;flex:1 1 auto;min-height:0;margin-top:1cqw;}
+  .fix-box{
+    flex:1 1 0;min-width:0;background:#fff;border:1.5px solid var(--line);border-radius:12px;
+    padding:1.3cqw 1.5cqw;display:flex;flex-direction:column;gap:.6cqw;height:100%;justify-content:center;
+    box-shadow:0 5px 16px rgba(0,29,105,.07);
+  }
+  .fix-box .stepn{
+    font-size:1.2cqw;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);
+    display:flex;align-items:center;gap:.6cqw;
+  }
+  .fix-box .stepn .num{background:var(--hl);border-radius:6px;padding:.05cqw .65cqw;color:var(--accent);}
+  .fix-box .fmain{font-size:1.7cqw;font-weight:900;color:var(--ink);line-height:1.2;}
+  .fix-box .fsub{font-size:1.32cqw;font-weight:600;color:var(--body);line-height:1.3;}
+  .fix-box .fsql{
+    background:#0E1A3C;color:#DCE6FF;border-radius:7px;padding:.5cqw .9cqw;
+    font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:1.18cqw;font-weight:600;line-height:1.4;
+  }
+  .fix-box .fsql .kw{color:#8FB4FF;font-weight:700;}
+  .fix-arrow{flex:0 0 auto;color:var(--accent);display:flex;flex-direction:column;align-items:center;gap:.2cqw;}
+  .fix-arrow i{font-size:2.8cqw;}
+  .fix-arrow .albl{font-size:1.05cqw;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
+  .fix-result{
+    background:var(--good-bg);border:1.5px solid var(--good);
+  }
+  .fix-result .bignum2{
+    font-size:3cqw;font-weight:900;color:var(--good);line-height:1;font-variant-numeric:tabular-nums;
+  }
+  .fix-result .stepn{color:var(--good);}
+  .fix-result .stepn .num{background:var(--good);color:#fff;}
+  .fix-note{
+    flex:0 0 auto;margin-top:1cqw;font-size:1.4cqw;font-weight:700;line-height:1.35;
+    padding:.85cqw 1.3cqw;border-radius:9px;background:var(--hl);color:var(--accent);border-left:4px solid var(--accent);
+  }
+  .fix-note b{color:var(--ink);font-weight:900;}
+
+  /* ---- screen 5: the reflex ---- */
+  .reflex-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .reflex-cards{display:flex;gap:1.6cqw;flex:1 1 auto;min-height:0;margin-top:1.1cqw;}
+  .reflex-card{
+    flex:1 1 0;min-width:0;background:#fff;border:1.5px solid var(--line);border-radius:13px;
+    padding:1.5cqw 1.4cqw;display:flex;flex-direction:column;align-items:flex-start;gap:.7cqw;
+    box-shadow:0 6px 18px rgba(0,29,105,.07);
+    opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease,border-color .3s;
+  }
+  .reflex-card.lit{opacity:1;transform:none;border-color:var(--accent);}
+  .reflex-card .ricon{
+    width:5cqw;height:5cqw;border-radius:12px;background:var(--hl);
+    display:flex;align-items:center;justify-content:center;font-size:2.8cqw;color:var(--accent);
+  }
+  .reflex-card .rnum{font-size:1.2cqw;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
+  .reflex-card .rtitle{font-size:1.75cqw;font-weight:900;color:var(--ink);line-height:1.15;}
+  .reflex-card .rbody{font-size:1.38cqw;font-weight:600;color:var(--body);line-height:1.34;}
+  .reflex-close{
+    flex:0 0 auto;margin-top:1.1cqw;font-size:1.65cqw;font-weight:700;color:var(--ink);line-height:1.35;
+    display:flex;align-items:center;gap:.8cqw;
+  }
+  .reflex-close i{font-size:2.1cqw;color:var(--good);}
+  .reflex-close .quietnote{display:block;font-size:1.3cqw;font-weight:600;color:var(--body);margin-top:.3cqw;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.2cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-magnifying-glass" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Spot the Lie</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 (the number) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">Step 6 &middot; Trust, but verify</div>
+      <div class="number-wrap">
+        <div class="chat-card">
+          <div class="chat-head"><i class="ph-fill ph-sparkle"></i> Claude &middot; your analysis</div>
+          <div class="chat-body">
+            <span class="chat-line"><span class="prod">Dwellings of Eldervale</span> pulled this much traffic driving its sales:</span>
+            <span class="bignum">2,184,000</span>
+            <span class="bignum-sub">pageviews to its landing page</span>
+          </div>
+        </div>
+        <span class="looks-fine"><i class="ph-fill ph-check-circle"></i> Looks like a real number. Big game, big launch &mdash; sure.</span>
+        <p class="lead" style="margin-top:.4cqw;font-weight:700;color:var(--ink);">So &mdash; is it right, or is it wrong? <span style="color:var(--accent);">Commit on the next screen.</span></p>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 (predict gate) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Predict first &middot; You must pick</div>
+      <div class="predict-wrap">
+        <span class="predict-q">Before you verify anything &mdash; <span class="em">what's your gut say?</span></span>
+        <span class="recall-num"><i class="ph-fill ph-sparkle"></i> Claude said: 2,184,000 pageviews</span>
+        <span class="predict-sub">There's no penalty for guessing. Committing first is the whole point &mdash; it's what makes the reveal stick.</span>
+        <div class="predict-btns" id="predictBtns">
+          <button class="pbtn right" type="button" data-pick="right">
+            <span class="picon"><i class="ph-fill ph-check"></i></span>
+            <span class="ptext"><span class="pmain">Looks right</span><span class="psub">Plausible for a flagship game.</span></span>
+          </button>
+          <button class="pbtn off" type="button" data-pick="off">
+            <span class="picon"><i class="ph-fill ph-warning"></i></span>
+            <span class="ptext"><span class="pmain">Something's off</span><span class="psub">That feels way too high.</span></span>
+          </button>
+        </div>
+        <div class="predict-ack" id="predictAck"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 (the grain trap) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="trap-wrap">
+        <div class="kicker">Habit 3 &middot; Check the grain</div>
+        <span class="trap-head">Here's what Claude actually summed: <span class="em">one page, over and over.</span></span>
+        <span class="trap-sub">The <code style="font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;background:#EEF1FB;color:var(--accent);padding:.05em .35em;border-radius:5px;">referrals</code> table lists the same landing page <b>once per traffic source</b>. Same page, five rows.</span>
+        <div class="trap-split">
+          <div class="trap-tableside">
+            <table class="sheet" id="trapTable"></table>
+          </div>
+          <div class="trap-callside">
+            <div class="trap-callout">
+              <span class="ttitle"><i class="ph-fill ph-warning-octagon"></i> The grain broke</span>
+              <span class="tbody">Join products to <b>referrals</b> and <b>SUM(pageviews)</b> without folding first, and this page's traffic gets added <b>once per source</b> &mdash; counted over and over.</span>
+            </div>
+            <div class="multiplier">
+              <span class="chip">1 page</span>
+              <i class="ph-bold ph-x" style="color:var(--bad);"></i>
+              <span class="chip bad">dozens of sources</span>
+              <i class="ph-bold ph-equals"></i>
+              <span class="chip bad">massively inflated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 (verify the right way) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="fix-wrap">
+        <div class="kicker">Habit 2 &middot; Cross-check a second way</div>
+        <span class="fix-head">The fix is one move: <span class="em">fold to one row per page first, then sum.</span></span>
+        <div class="fix-flow">
+          <div class="fix-box">
+            <span class="stepn"><span class="num">1</span> Collapse the grain</span>
+            <span class="fmain">One row per landing page</span>
+            <span class="fsub">Add up each page's sources into a single pageviews number.</span>
+            <span class="fsql"><span class="kw">SELECT</span> page, <span class="kw">SUM</span>(pageviews)<br><span class="kw">FROM</span> referrals <span class="kw">GROUP BY</span> page</span>
+          </div>
+          <div class="fix-arrow">
+            <i class="ph-bold ph-arrow-right"></i>
+            <span class="albl">then join</span>
+          </div>
+          <div class="fix-box fix-result">
+            <span class="stepn"><span class="num">2</span> Now it's honest</span>
+            <span class="fmain">Join that to the product</span>
+            <span class="bignum2">38,200</span>
+            <span class="fsub">Suppose the folded figure lands here &mdash; the same shape of number, minus the double-count.</span>
+          </div>
+        </div>
+        <div class="fix-note">Same data, one extra step. <b>2,184,000 &rarr; 38,200.</b> The inflation was the grain, not the game. <i>(Illustrative numbers &mdash; you'll run this on your own table and see your real figure.)</i></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 (the reflex) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="reflex-wrap">
+        <div class="kicker">The verification reflex</div>
+        <h1 class="title" style="font-size:2.5cqw;">Never trust an aggregate you can't check a second way.</h1>
+        <div class="reflex-cards" id="reflexCards">
+          <div class="reflex-card" data-card="0">
+            <span class="ricon"><i class="ph-fill ph-hand-pointing"></i></span>
+            <span class="rnum">Habit 1</span>
+            <span class="rtitle">Hand-count a subset</span>
+            <span class="rbody">Take a few rows, add them yourself, and compare to what Claude reported.</span>
+          </div>
+          <div class="reflex-card" data-card="1">
+            <span class="ricon"><i class="ph-fill ph-arrows-split"></i></span>
+            <span class="rnum">Habit 2</span>
+            <span class="rtitle">Cross-check a second way</span>
+            <span class="rbody">Reach the same number by a different aggregation path. If they disagree, dig in.</span>
+          </div>
+          <div class="reflex-card" data-card="2">
+            <span class="ricon"><i class="ph-fill ph-stack"></i></span>
+            <span class="rnum">Habit 3</span>
+            <span class="rtitle">Check the grain</span>
+            <span class="rbody">Ask: is each event counted exactly once? Or does a join repeat rows before the SUM?</span>
+          </div>
+        </div>
+        <span class="reflex-close"><i class="ph-fill ph-check-circle"></i> That's exactly what you just did. <span class="quietnote">A plausible number isn't a verified number. Run all three on your own traffic figures before you trust them.</span></span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>Spot the Lie &mdash; the verification reflex (text version)</h2>
+  <p>This is a self-contained, hypothetical worked example using illustrative sample numbers. It demonstrates the method only. You will run the real verification on your own data.</p>
+  <h3>The number</h3>
+  <p>Suppose Claude tells you the game Dwellings of Eldervale pulled 2,184,000 pageviews to its landing page driving its sales. It looks like a real, plausible number. Is it right or wrong?</p>
+  <h3>Predict</h3>
+  <p>Commit before continuing: does it look right, or is something off? The honest answer is that it is wildly inflated.</p>
+  <h3>The grain trap</h3>
+  <p>The referrals (traffic) table lists the same landing page once per traffic source: Facebook, Google, Instagram, newsletter, and direct each get their own row for the SAME page. If you join products to referrals and SUM pageviews without first aggregating to one row per page, that page's traffic is added once per source &mdash; counted over and over. One page times dozens of sources equals a massively inflated total that still looks plausible.</p>
+  <h3>Verify the right way</h3>
+  <p>Fix it in one move: first GROUP BY page to fold each page's sources into a single SUM(pageviews), then join that one-row-per-page result to the product. Suppose the corrected figure lands around 38,200 &mdash; the same shape of number without the double-count. These are illustrative numbers; run it on your own table to get your real figure.</p>
+  <h3>The reflex</h3>
+  <ul>
+    <li>Hand-count a subset: add a few rows yourself and compare to Claude.</li>
+    <li>Cross-check a second way: reach the same number by a different aggregation path.</li>
+    <li>Check the grain: is each event counted exactly once, or does a join repeat rows before the SUM?</li>
+  </ul>
+  <p>Never trust an aggregate you can't check a second way.</p>
+</div>
+
+<script>
+/* ============================================================
+   GRAIN-TRAP SAMPLE -- 5 rows, ALL the same landing page,
+   one row per traffic source. Illustrative numbers only.
+   ============================================================ */
+const TRAP=[
+  {src:'Facebook',  icon:'ph-facebook-logo',   views:512000},
+  {src:'Google',    icon:'ph-google-logo',     views:684000},
+  {src:'Instagram', icon:'ph-instagram-logo',  views:421000},
+  {src:'Newsletter',icon:'ph-envelope-simple', views:338000},
+  {src:'Direct',    icon:'ph-cursor-click',    views:229000},
+];
+const money=n=>n.toLocaleString('en-US');
+
+function renderTrap(){
+  let h='<thead><tr><th>landing_page</th><th>traffic_source</th><th class="num">pageviews</th></tr></thead><tbody>';
+  TRAP.forEach(r=>{
+    h+=`<tr class="samepage"><td class="page">/dwellings-of-eldervale</td>`+
+       `<td><span class="src"><i class="ph ${r.icon}"></i>${r.src}</span></td>`+
+       `<td class="num price">${money(r.views)}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('trapTable').innerHTML=h;
+}
+renderTrap();
+
+/* ============================================================
+   PREDICT GATE -- must pick one of two buttons to unlock Next.
+   Either choice unlocks (this is a predict beat, not a quiz);
+   each gets a tailored acknowledgement.
+   ============================================================ */
+let predicted=false;
+const predictBtns=document.getElementById('predictBtns');
+const predictAck=document.getElementById('predictAck');
+const ACK={
+  right:"<b>Locked in:</b> \"Looks right.\" Most people land here &mdash; the number is plausible, which is exactly what makes it dangerous. Watch what's hiding underneath it.",
+  off:"<b>Locked in:</b> \"Something's off.\" Good instinct &mdash; but a gut feeling isn't proof. Next you'll see <i>exactly why</i> it's inflated, so you can show it, not just sense it."
+};
+predictBtns.querySelectorAll('.pbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(predicted) return;
+    predicted=true;
+    const pick=btn.dataset.pick;
+    predictBtns.querySelectorAll('.pbtn').forEach(b=>{
+      b.classList.add('locked');
+      if(b===btn) b.classList.add('chosen'); else b.classList.add('dimmed');
+    });
+    predictAck.innerHTML=ACK[pick];
+    predictAck.classList.add('show');
+    refreshNav();
+  });
+});
+
+/* ============================================================
+   REFLEX CARDS -- light up in sequence when screen 4 opens.
+   ============================================================ */
+let reflexLit=false;
+function litReflex(){
+  if(reflexLit) return;
+  reflexLit=true;
+  const cards=[...document.querySelectorAll('.reflex-card')];
+  cards.forEach((c,i)=>setTimeout(()=>c.classList.add('lit'), 180+i*260));
+}
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   0 = the number (free). 1 = predict gate (gated on predict).
+   2 = grain trap. 3 = verify. 4 = reflex.
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+/* screen index -> gate: 'predict' means must commit; null = free */
+const screenGate=[null,'predict',null,null,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function gateClear(g){
+  if(g===null) return true;
+  if(g==='predict') return predicted;
+  return true;
+}
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  nextBtn.disabled=!gateClear(screenGate[current]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  if(i===screens.length-1) litReflex();
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  if(!gateClear(screenGate[current])) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
