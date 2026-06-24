@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where the Revenue Lives — The Long Tail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --warn:#B8791C;
+    --warn-bg:#FCF1DF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2cqw 3.4cqw 1.1cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.2cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.8cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.6cqw;}
+
+  /* ---- shared headline bits ---- */
+  .head{font-size:2.4cqw;font-weight:900;color:var(--ink);line-height:1.15;letter-spacing:-.01em;display:block;}
+  .head .em{color:var(--accent);}
+  .sub{font-size:1.55cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.4cqw;display:block;}
+
+  /* ============================================================
+     CHART (shared between screen 0, 1, 2)
+     ============================================================ */
+  .chart-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-top:.8cqw;}
+  .chart-card{
+    flex:1 1 auto;min-height:0;background:var(--card);border:1px solid var(--line);border-radius:13px;
+    box-shadow:0 8px 22px rgba(0,29,105,.10);padding:1.2cqw 1.6cqw 0.6cqw;
+    display:flex;flex-direction:column;position:relative;overflow:hidden;
+  }
+  .chart-svg{flex:1 1 auto;width:100%;height:100%;display:block;min-height:0;}
+  /* axis + grid */
+  .grid-line{stroke:var(--line);stroke-width:1;}
+  .axis-line{stroke:#C9C2C2;stroke-width:1.4;}
+  .axis-lbl{fill:var(--body);font-size:9px;font-weight:700;font-family:'Inter',sans-serif;}
+  .axis-title{fill:var(--accent);font-size:9.5px;font-weight:800;font-family:'Inter',sans-serif;letter-spacing:.04em;}
+  /* the curve */
+  .curve-area{fill:rgba(0,29,105,.10);}
+  .curve-line{fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;}
+  /* tail highlight band (screen 1) */
+  .tail-band{fill:rgba(184,121,28,.16);opacity:0;transition:opacity .4s ease;}
+  .tail-band.show{opacity:1;}
+  .tail-curve{fill:none;stroke:var(--warn);stroke-width:3;stroke-linecap:round;opacity:0;transition:opacity .4s ease;}
+  .tail-curve.show{opacity:1;}
+  .tail-cap{
+    fill:var(--warn);font-size:9.5px;font-weight:800;font-family:'Inter',sans-serif;
+    opacity:0;transition:opacity .4s ease;
+  }
+  .tail-cap.show{opacity:1;}
+  /* cut line + buckets (screen 2) */
+  .cut-line{stroke:var(--accent);stroke-width:2.4;stroke-dasharray:5 4;}
+  .cut-dot{fill:#fff;stroke:var(--accent);stroke-width:2.4;}
+  .bucket{opacity:.85;}
+  .bucket-reorder{fill:rgba(46,139,87,.20);}
+  .bucket-maybe{fill:rgba(184,121,28,.20);}
+  .bucket-skip{fill:rgba(72,70,70,.12);}
+  .bucket-lbl{font-size:8px;font-weight:800;font-family:'Inter',sans-serif;text-anchor:middle;}
+  .cliff-note{fill:var(--accent);font-size:9px;font-weight:800;font-family:'Inter',sans-serif;}
+
+  /* caption strip under chart */
+  .cap-strip{
+    flex:0 0 auto;margin-top:.7cqw;font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.35;
+    display:flex;align-items:center;gap:.7cqw;
+  }
+  .cap-strip i{font-size:1.9cqw;color:var(--accent);flex:0 0 auto;}
+  .cap-strip b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     SCREEN 1 — predict gate (three options)
+     ============================================================ */
+  .q-layout{flex:1 1 auto;min-height:0;display:flex;gap:2cqw;margin-top:.7cqw;}
+  .q-chartside{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;}
+  .q-askside{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .q-chartside .chart-card{padding:1cqw 1.2cqw .4cqw;}
+  .predict-q{font-size:1.95cqw;font-weight:900;color:var(--ink);line-height:1.2;letter-spacing:-.01em;}
+  .predict-q .em{color:var(--accent);}
+  .predict-hint{font-size:1.3cqw;font-weight:600;color:var(--body);line-height:1.3;margin-top:.4cqw;}
+  .opts{display:flex;flex-direction:column;gap:.85cqw;margin-top:1cqw;}
+  .opt{
+    text-align:left;background:#fff;border:2px solid var(--line);border-radius:11px;
+    padding:1.05cqw 1.3cqw;font-family:inherit;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .08s;
+    display:flex;align-items:center;gap:1cqw;
+  }
+  .opt:hover:not(.locked){border-color:var(--accent);background:#F0F1FA;transform:translateY(-2px);}
+  .opt .obadge{
+    width:2.9cqw;height:2.9cqw;flex:0 0 auto;border-radius:50%;background:var(--hl);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:1.5cqw;font-weight:900;
+  }
+  .opt .otext{font-size:1.45cqw;font-weight:700;color:var(--ink);line-height:1.25;}
+  .opt.locked{cursor:default;}
+  .opt.dimmed{opacity:.4;}
+  .opt.right{border-color:var(--good);background:var(--good-bg);}
+  .opt.right .obadge{background:var(--good);color:#fff;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);}
+  .opt.wrong .obadge{background:var(--bad);color:#fff;}
+  .predict-ack{
+    display:none;margin-top:.9cqw;font-size:1.42cqw;font-weight:700;line-height:1.35;
+    padding:.9cqw 1.3cqw;border-radius:9px;background:var(--hl);color:var(--accent);border-left:4px solid var(--accent);
+  }
+  .predict-ack.show{display:block;}
+  .predict-ack b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     SCREEN 2 — draw your cuts
+     ============================================================ */
+  .cut-readout{
+    flex:0 0 auto;margin-top:.7cqw;background:#0E1A3C;color:#DCE6FF;border-radius:10px;
+    padding:1cqw 1.4cqw;font-size:1.55cqw;font-weight:700;line-height:1.35;
+    display:flex;align-items:baseline;gap:.5cqw;flex-wrap:wrap;font-variant-numeric:tabular-nums;
+  }
+  .cut-readout .big{color:#fff;font-weight:900;font-size:1.85cqw;}
+  .cut-readout .dim{color:#9FB4E8;font-weight:600;}
+  .slider-row{
+    flex:0 0 auto;margin-top:.9cqw;display:flex;align-items:center;gap:1.2cqw;
+  }
+  .slider-row .slbl{font-size:1.3cqw;font-weight:800;color:var(--accent);white-space:nowrap;}
+  .slider-row .slbl .rk{font-variant-numeric:tabular-nums;}
+  input[type=range].cut-slider{
+    -webkit-appearance:none;appearance:none;flex:1 1 auto;height:.9cqw;border-radius:99px;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) var(--fill,30%),#E2DDDD var(--fill,30%),#E2DDDD 100%);
+    outline:none;cursor:pointer;
+  }
+  input[type=range].cut-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:2.6cqw;height:2.6cqw;border-radius:50%;
+    background:#fff;border:.5cqw solid var(--accent);cursor:pointer;box-shadow:0 2px 6px rgba(0,29,105,.3);
+  }
+  input[type=range].cut-slider::-moz-range-thumb{
+    width:2.6cqw;height:2.6cqw;border-radius:50%;background:#fff;border:.5cqw solid var(--accent);
+    cursor:pointer;box-shadow:0 2px 6px rgba(0,29,105,.3);
+  }
+  .cut-close{
+    flex:0 0 auto;margin-top:.8cqw;font-size:1.5cqw;font-weight:700;color:var(--ink);line-height:1.35;
+    display:flex;align-items:center;gap:.7cqw;
+  }
+  .cut-close i{font-size:2cqw;color:var(--good);flex:0 0 auto;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.2cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-chart-line-up" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Where the Revenue Lives</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 — see the curve ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">The shape of the catalog</div>
+      <span class="head">Stack up every game by the money it made.</span>
+      <div class="chart-wrap">
+        <div class="chart-card">
+          <svg class="chart-svg" id="chart0" viewBox="0 0 480 240" preserveAspectRatio="none"></svg>
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-info"></i>
+          <span>This is all <b>99 games</b>, ranked best&rarr;worst left to right. The line is the <b>running share of total revenue</b>. It shoots up&hellip; then flattens.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 — long-tail question (GATED) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Predict first &middot; You must pick</div>
+      <div class="q-layout">
+        <div class="q-chartside">
+          <div class="chart-card">
+            <svg class="chart-svg" id="chart1" viewBox="0 0 480 240" preserveAspectRatio="none"></svg>
+          </div>
+        </div>
+        <div class="q-askside">
+          <span class="predict-q">The <span class="em">long tail</span> is the flat stretch on the right of this curve. What does it tell you?</span>
+          <span class="predict-hint">Pick one to unlock the rest. No penalty &mdash; committing first is what makes it stick.</span>
+          <div class="opts" id="opts">
+            <button class="opt" type="button" data-correct="1" data-key="a">
+              <span class="obadge">A</span>
+              <span class="otext">A few games make almost all the money &mdash; and most games barely sell.</span>
+            </button>
+            <button class="opt" type="button" data-correct="0" data-key="b">
+              <span class="obadge">B</span>
+              <span class="otext">Sales are spread evenly across the whole catalog.</span>
+            </button>
+            <button class="opt" type="button" data-correct="0" data-key="c">
+              <span class="obadge">C</span>
+              <span class="otext">The games at the bottom just need more time to catch up.</span>
+            </button>
+          </div>
+          <div class="predict-ack" id="predictAck"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 — draw your cuts ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Your call &middot; Draw the cuts</div>
+      <span class="head" style="font-size:2cqw;">Slide the cut line. <span class="em">Where do you stop reordering?</span></span>
+      <div class="chart-wrap">
+        <div class="chart-card" style="flex:1 1 auto;">
+          <svg class="chart-svg" id="chart2" viewBox="0 0 480 230" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="cut-readout" id="cutReadout"></div>
+        <div class="slider-row">
+          <span class="slbl">Cut at rank <span class="rk" id="rankOut">13</span></span>
+          <input type="range" class="cut-slider" id="cutSlider" min="1" max="99" value="13" step="1"
+                 aria-label="Cut line: how many top games to reorder">
+        </div>
+        <span class="cut-close"><i class="ph-fill ph-target"></i> Where you draw that line is the spine of your reprint call.</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>Where the revenue lives — the long tail (text version)</h2>
+  <p>This interactive uses Breaking Games' real Shopify sales data: 99 games, $61,085.33 in total revenue.</p>
+  <h3>See the curve</h3>
+  <p>Rank all 99 games by revenue, best to worst, and plot the running share of total revenue. The curve climbs steeply on the left, then flattens into a long flat tail on the right. The top 3 games already make 50.5% of all revenue; the top 10 make 74.5%; the top 25 make 89.3%. After about rank 13 the curve has nearly flattened — that bend is the cliff.</p>
+  <h3>The long-tail question</h3>
+  <p>The long tail is the flat stretch on the right. Correct reading (A): a few games make almost all the money, and most games barely sell. Not B (sales are not spread evenly) and not C (the bottom games are not about to catch up — together they make almost nothing).</p>
+  <h3>Draw your cuts</h3>
+  <p>Slide a cut line across the ranked games. Top N games make X% of revenue; the other 99 minus N make the rest. Three buckets shade the x-axis: Reorder heavy (the steep front), Maybe (the bend), Skip / let it ride (the flat tail). Where you draw that line is the spine of your reprint call.</p>
+</div>
+
+<script>
+/* ============================================================
+   REAL DATA — cumulative % of total revenue at each rank (1..99).
+   Pulled from breaking_games.db, shopify_sales, sorted DESC.
+   99 games · total $61,085.33 · top3 50.5% · top10 74.5% · top25 89.3%.
+   ============================================================ */
+const CUM=[21.81,42.3,50.51,56.75,60.98,64.12,67.19,70.03,72.27,74.5,76.58,78.66,80.19,81.55,82.79,83.91,84.79,85.55,86.14,86.71,87.27,87.8,88.34,88.82,89.29,89.74,90.13,90.49,90.85,91.2,91.54,91.88,92.19,92.49,92.79,93.09,93.38,93.64,93.88,94.13,94.38,94.62,94.82,95.02,95.2,95.38,95.55,95.72,95.89,96.05,96.2,96.36,96.51,96.65,96.8,96.95,97.09,97.23,97.35,97.48,97.6,97.72,97.83,97.94,98.05,98.15,98.25,98.35,98.45,98.55,98.64,98.73,98.82,98.9,98.99,99.07,99.15,99.22,99.29,99.35,99.42,99.48,99.53,99.57,99.62,99.66,99.7,99.75,99.78,99.82,99.85,99.89,99.92,99.94,99.96,99.98,99.99,100.0,100.0];
+const N=CUM.length;            // 99
+const TOTAL_REV=61085.33;
+
+/* ---- chart geometry (in viewBox units) ---- */
+const VB_W=480;
+const PAD_L=34, PAD_R=10, PAD_T=14, PAD_B=24;
+function plotW(vbW){return vbW-PAD_L-PAD_R;}
+function plotH(vbH){return vbH-PAD_T-PAD_B;}
+// x for a given rank (1..N): rank 1 sits at left edge of plot, rank N at right
+function xAt(rank,vbW){
+  const w=plotW(vbW);
+  return PAD_L + (w*(rank-1)/(N-1));
+}
+// y for a cumulative pct (0..100): 0% at bottom, 100% at top
+function yAt(pct,vbH){
+  const h=plotH(vbH);
+  return PAD_T + h*(1 - pct/100);
+}
+
+/* Build the curve path. Curve starts at (rank1, CUM[0]); we also anchor
+   the area down to the baseline at both ends. */
+function curvePoints(vbW,vbH){
+  let pts=[];
+  for(let r=1;r<=N;r++){
+    pts.push([xAt(r,vbW), yAt(CUM[r-1],vbH)]);
+  }
+  return pts;
+}
+function lineD(pts){
+  return pts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+}
+function areaD(pts,vbH){
+  const base=yAt(0,vbH);
+  const first=pts[0], last=pts[pts.length-1];
+  return 'M'+first[0].toFixed(1)+' '+base.toFixed(1)+' '+
+         pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+
+         ' L'+last[0].toFixed(1)+' '+base.toFixed(1)+' Z';
+}
+
+/* Common axis + grid + curve. opts: {tail:false, cut:false} */
+function drawChart(svg,vbW,vbH,opts){
+  opts=opts||{};
+  const pts=curvePoints(vbW,vbH);
+  const base=yAt(0,vbH);
+  let g='';
+
+  // horizontal grid lines at 0,25,50,75,100%
+  [0,25,50,75,100].forEach(pct=>{
+    const y=yAt(pct,vbH);
+    g+=`<line class="grid-line" x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${vbW-PAD_R}" y2="${y.toFixed(1)}"/>`;
+    g+=`<text class="axis-lbl" x="${PAD_L-5}" y="${(y+3).toFixed(1)}" text-anchor="end">${pct}%</text>`;
+  });
+
+  // y-axis title
+  g+=`<text class="axis-title" x="${PAD_L-26}" y="${PAD_T-4}">cum. % of revenue</text>`;
+  // x-axis baseline
+  g+=`<line class="axis-line" x1="${PAD_L}" y1="${base.toFixed(1)}" x2="${vbW-PAD_R}" y2="${base.toFixed(1)}"/>`;
+  // x ticks: rank 1, 25, 50, 75, 99
+  [1,25,50,75,99].forEach(r=>{
+    const x=xAt(r,vbW);
+    g+=`<line class="grid-line" x1="${x.toFixed(1)}" y1="${base.toFixed(1)}" x2="${x.toFixed(1)}" y2="${(base+3).toFixed(1)}"/>`;
+    g+=`<text class="axis-lbl" x="${x.toFixed(1)}" y="${(base+13).toFixed(1)}" text-anchor="middle">${r===1?'#1':'#'+r}</text>`;
+  });
+  g+=`<text class="axis-title" x="${(PAD_L+plotW(vbW)/2).toFixed(1)}" y="${(base+22).toFixed(1)}" text-anchor="middle">99 games, ranked best &#8594; worst</text>`;
+
+  // area + curve
+  g+=`<path class="curve-area" d="${areaD(pts,vbH)}"/>`;
+  g+=`<path class="curve-line" d="${lineD(pts)}"/>`;
+
+  // cliff marker around rank 13 (80% crossing) — only on screen 0
+  if(opts.cliff){
+    const cr=13;
+    const cx=xAt(cr,vbW), cy=yAt(CUM[cr-1],vbH);
+    g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3" fill="#001D69"/>`;
+    g+=`<text class="cliff-note" x="${(cx+5).toFixed(1)}" y="${(cy+10).toFixed(1)}">the cliff &middot; ~#13</text>`;
+  }
+
+  // tail band + tail-curve overlay (screen 1, toggled by .show)
+  if(opts.tail){
+    const tailStart=26; // tail begins ~rank 26 (curve is basically flat by here, ~89%+)
+    const xs=xAt(tailStart,vbW), xe=xAt(N,vbW);
+    g+=`<rect class="tail-band" id="tailBand" x="${xs.toFixed(1)}" y="${PAD_T}" width="${(xe-xs).toFixed(1)}" height="${plotH(vbH).toFixed(1)}"/>`;
+    // re-draw tail segment of the curve in warn color
+    let tp=[];
+    for(let r=tailStart;r<=N;r++) tp.push([xAt(r,vbW),yAt(CUM[r-1],vbH)]);
+    g+=`<path class="tail-curve" id="tailCurve" d="${lineD(tp)}"/>`;
+    g+=`<text class="tail-cap" id="tailCap" x="${((xs+xe)/2).toFixed(1)}" y="${(yAt(50,vbH)).toFixed(1)}" text-anchor="middle">these ~70 games together</text>`;
+    g+=`<text class="tail-cap" id="tailCap2" x="${((xs+xe)/2).toFixed(1)}" y="${(yAt(50,vbH)+12).toFixed(1)}" text-anchor="middle">make almost nothing</text>`;
+  }
+
+  // cut line + buckets placeholders (screen 2) — filled by updateCut()
+  if(opts.cut){
+    g+=`<g id="bucketsG"></g>`;
+    g+=`<line class="cut-line" id="cutLineEl" x1="0" y1="${PAD_T}" x2="0" y2="${base.toFixed(1)}"/>`;
+    g+=`<circle class="cut-dot" id="cutDotEl" r="3.4" cx="0" cy="0"/>`;
+  }
+
+  svg.innerHTML=g;
+}
+
+/* ---- render the three charts ---- */
+const c0=document.getElementById('chart0');
+const c1=document.getElementById('chart1');
+const c2=document.getElementById('chart2');
+drawChart(c0,480,240,{cliff:true});
+drawChart(c1,480,240,{tail:true});
+drawChart(c2,480,230,{cut:true});
+
+/* ============================================================
+   SCREEN 1 — predict gate (3 options). Must pick to unlock Next.
+   On pick: lock, mark correct/incorrect, reveal the tail band.
+   ============================================================ */
+let predicted=false;
+const optsEl=document.getElementById('opts');
+const predictAck=document.getElementById('predictAck');
+const ACK={
+  a:"<b>Exactly.</b> The top few games carry the catalog &mdash; top 3 alone make <b>50.5%</b> of revenue, top 10 make <b>74.5%</b>. The long flat tail is most of the games making almost nothing.",
+  b:"<b>Not quite.</b> If sales were even, the line would climb in a straight diagonal. It doesn't &mdash; it spikes early and flattens. <b>A</b> is the read: a few games make almost all the money.",
+  c:"<b>Tempting, but no.</b> The flat tail isn't \"about to catch up\" &mdash; those games together make almost nothing. <b>A</b> is the read: a few games make almost all the money."
+};
+function revealTail(){
+  ['tailBand','tailCurve','tailCap','tailCap2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.add('show');
+  });
+}
+optsEl.querySelectorAll('.opt').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(predicted) return;
+    predicted=true;
+    const key=btn.dataset.key;
+    const isRight=btn.dataset.correct==='1';
+    optsEl.querySelectorAll('.opt').forEach(b=>{
+      b.classList.add('locked');
+      if(b===btn){
+        b.classList.add(isRight?'right':'wrong');
+      }else if(b.dataset.correct==='1'){
+        b.classList.add('right');     // always reveal the correct one
+      }else{
+        b.classList.add('dimmed');
+      }
+    });
+    predictAck.innerHTML=ACK[key];
+    predictAck.classList.add('show');
+    revealTail();
+    refreshNav();
+  });
+});
+
+/* ============================================================
+   SCREEN 2 — cut slider. Moves vertical line, shades 3 buckets,
+   updates live readout with REAL cumulative numbers.
+   ============================================================ */
+const cutSlider=document.getElementById('cutSlider');
+const rankOut=document.getElementById('rankOut');
+const cutReadout=document.getElementById('cutReadout');
+const VB2_W=480, VB2_H=230;
+
+// bucket boundaries (in ranks): reorder-heavy front, maybe bend, skip tail
+const B_REORDER_END=10;   // 1..10  (steep front)
+const B_MAYBE_END=25;     // 11..25 (the bend)
+// 26..99 = skip / let it ride (flat tail)
+
+function fmtPct(p){return p.toFixed(1)+'%';}
+
+function updateCut(){
+  const n=parseInt(cutSlider.value,10);
+  rankOut.textContent=n;
+  // slider fill
+  const fill=((n-1)/(N-1))*100;
+  cutSlider.style.setProperty('--fill', fill.toFixed(1)+'%');
+
+  const base=yAt(0,VB2_H);
+  // cut line position
+  const x=xAt(n,VB2_W);
+  const yCurve=yAt(CUM[n-1],VB2_H);
+  const lineEl=document.getElementById('cutLineEl');
+  const dotEl=document.getElementById('cutDotEl');
+  lineEl.setAttribute('x1',x.toFixed(1)); lineEl.setAttribute('x2',x.toFixed(1));
+  dotEl.setAttribute('cx',x.toFixed(1)); dotEl.setAttribute('cy',yCurve.toFixed(1));
+
+  // buckets on x-axis (thin bands just above baseline)
+  const bandY=PAD_T;
+  const bandH=plotH(VB2_H);
+  const xR1=xAt(1,VB2_W), xR2=xAt(B_REORDER_END,VB2_W);
+  const xM2=xAt(B_MAYBE_END,VB2_W);
+  const xEnd=xAt(N,VB2_W);
+  const lblY=base-3;
+  let bg='';
+  bg+=`<rect class="bucket bucket-reorder" x="${xR1.toFixed(1)}" y="${bandY}" width="${(xR2-xR1).toFixed(1)}" height="${bandH.toFixed(1)}"/>`;
+  bg+=`<rect class="bucket bucket-maybe" x="${xR2.toFixed(1)}" y="${bandY}" width="${(xM2-xR2).toFixed(1)}" height="${bandH.toFixed(1)}"/>`;
+  bg+=`<rect class="bucket bucket-skip" x="${xM2.toFixed(1)}" y="${bandY}" width="${(xEnd-xM2).toFixed(1)}" height="${bandH.toFixed(1)}"/>`;
+  bg+=`<text class="bucket-lbl" fill="#2E8B57" x="${((xR1+xR2)/2).toFixed(1)}" y="${lblY.toFixed(1)}">Reorder heavy</text>`;
+  bg+=`<text class="bucket-lbl" fill="#B8791C" x="${((xR2+xM2)/2).toFixed(1)}" y="${lblY.toFixed(1)}">Maybe</text>`;
+  bg+=`<text class="bucket-lbl" fill="#484646" x="${((xM2+xEnd)/2).toFixed(1)}" y="${lblY.toFixed(1)}">Skip / let it ride</text>`;
+  document.getElementById('bucketsG').innerHTML=bg;
+
+  // readout — REAL numbers
+  const topPct=CUM[n-1];
+  const restPct=100-topPct;
+  const restCount=N-n;
+  cutReadout.innerHTML=
+    `<span>Top <span class="big">${n}</span> game${n===1?'':'s'} = <span class="big">${fmtPct(topPct)}</span> of revenue</span>`+
+    `<span class="dim">&nbsp;&middot;&nbsp;</span>`+
+    `<span class="dim">the other ${restCount} game${restCount===1?'':'s'} = the remaining ${fmtPct(restPct)}</span>`;
+}
+cutSlider.addEventListener('input', updateCut);
+updateCut();
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   0 = see the curve (free). 1 = long-tail Q (gated on pick).
+   2 = draw your cuts (last screen).
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+/* screen index -> gate: 'predict' means must commit; null = free */
+const screenGate=[null,'predict',null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function gateClear(g){
+  if(g===null) return true;
+  if(g==='predict') return predicted;
+  return true;
+}
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  nextBtn.disabled=!gateClear(screenGate[current]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  if(!gateClear(screenGate[current])) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
