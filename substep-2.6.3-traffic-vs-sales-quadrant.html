@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Traffic vs Sales — The Quadrant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --warn:#B8791C;
+    --warn-bg:#FCF1DF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2cqw 3.4cqw 1.1cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.2cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.8cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.6cqw;}
+
+  /* ---- shared headline bits ---- */
+  .head{font-size:2.4cqw;font-weight:900;color:var(--ink);line-height:1.15;letter-spacing:-.01em;display:block;}
+  .head .em{color:var(--accent);}
+  .sub{font-size:1.55cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.4cqw;display:block;}
+
+  /* ============================================================
+     QUADRANT (shared between screen 0 and screen 2)
+     A CSS grid: 2 cols (traffic low | high) x 2 rows (sales high | low).
+     Axis labels live in a frame wrapper around the grid.
+     ============================================================ */
+  .quad-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-top:.8cqw;}
+
+  /* frame holds the y-axis label column + the plot, plus the x-axis label under it */
+  .quad-frame{
+    flex:1 1 auto;min-height:0;
+    display:grid;
+    grid-template-columns:2.4cqw 1fr;
+    grid-template-rows:1fr 2.2cqw;
+    gap:.5cqw;
+  }
+  .yaxis{
+    grid-column:1;grid-row:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .yaxis span{
+    writing-mode:vertical-rl;transform:rotate(180deg);
+    font-size:1.4cqw;font-weight:800;letter-spacing:.04em;color:var(--accent);
+    text-transform:uppercase;white-space:nowrap;
+  }
+  .xaxis{
+    grid-column:2;grid-row:2;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.4cqw;font-weight:800;letter-spacing:.04em;color:var(--accent);
+    text-transform:uppercase;
+  }
+  .plot{
+    grid-column:2;grid-row:1;min-height:0;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:1cqw;
+  }
+
+  /* each quadrant cell */
+  .cell{
+    background:var(--card);border:1.6px solid var(--line);border-radius:12px;
+    box-shadow:0 6px 16px rgba(0,29,105,.08);
+    padding:.9cqw 1.1cqw;
+    display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;
+  }
+  .cell .cell-tag{
+    display:flex;align-items:center;gap:.6cqw;
+    font-size:1.35cqw;font-weight:900;letter-spacing:.02em;
+  }
+  .cell .cell-tag i{font-size:1.7cqw;flex:0 0 auto;}
+  .cell .cell-action{
+    font-size:1.18cqw;font-weight:600;color:var(--body);line-height:1.3;margin-top:.25cqw;
+  }
+  /* color accents per quadrant */
+  .cell.flagship .cell-tag{color:var(--good);}
+  .cell.flagship i{color:var(--good);}
+  .cell.hidden .cell-tag{color:var(--accent);}
+  .cell.hidden i{color:var(--accent);}
+  .cell.investigate .cell-tag{color:var(--warn);}
+  .cell.investigate i{color:var(--warn);}
+  .cell.ride .cell-tag{color:var(--body);}
+  .cell.ride i{color:var(--body);}
+
+  /* tile that sits inside a cell on the reveal screen */
+  .tile{
+    margin-top:auto;background:#F6F8FF;border:1.4px solid var(--hl);border-radius:9px;
+    padding:.55cqw .8cqw;
+    opacity:0;transform:translateY(6px);transition:opacity .45s ease,transform .45s ease;
+  }
+  .tile.show{opacity:1;transform:translateY(0);}
+  .tile .tname{font-size:1.28cqw;font-weight:900;color:var(--ink);line-height:1.18;}
+  .tile .tstats{
+    font-size:1.12cqw;font-weight:600;color:var(--body);margin-top:.2cqw;
+    font-variant-numeric:tabular-nums;display:flex;gap:1cqw;flex-wrap:wrap;
+  }
+  .tile .tstats b{color:var(--accent);font-weight:900;}
+
+  /* caption strip under quadrant */
+  .cap-strip{
+    flex:0 0 auto;margin-top:.7cqw;font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.35;
+    display:flex;align-items:center;gap:.7cqw;
+  }
+  .cap-strip i{font-size:1.9cqw;color:var(--accent);flex:0 0 auto;}
+  .cap-strip b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     SCREEN 1 — predict gate (four game options)
+     ============================================================ */
+  .q-layout{flex:1 1 auto;min-height:0;display:flex;gap:2cqw;margin-top:.7cqw;}
+  .q-askside{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .q-optside{flex:1.05 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .predict-q{font-size:1.85cqw;font-weight:900;color:var(--ink);line-height:1.22;letter-spacing:-.01em;}
+  .predict-q .em{color:var(--accent);}
+  .predict-hint{font-size:1.3cqw;font-weight:600;color:var(--body);line-height:1.3;margin-top:.5cqw;}
+  .opts{display:flex;flex-direction:column;gap:.7cqw;margin-top:.3cqw;}
+  .opt{
+    text-align:left;background:#fff;border:2px solid var(--line);border-radius:11px;
+    padding:.85cqw 1.2cqw;font-family:inherit;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .08s;
+    display:flex;align-items:center;gap:1cqw;
+  }
+  .opt:hover:not(.locked){border-color:var(--accent);background:#F0F1FA;transform:translateY(-2px);}
+  .opt .obadge{
+    width:2.7cqw;height:2.7cqw;flex:0 0 auto;border-radius:50%;background:var(--hl);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:1.4cqw;font-weight:900;
+  }
+  .opt .owrap{display:flex;flex-direction:column;min-width:0;}
+  .opt .oname{font-size:1.4cqw;font-weight:800;color:var(--ink);line-height:1.18;}
+  .opt .ostats{
+    font-size:1.12cqw;font-weight:600;color:var(--body);margin-top:.12cqw;
+    font-variant-numeric:tabular-nums;
+  }
+  .opt .ostats b{color:var(--accent);font-weight:900;}
+  .opt.locked{cursor:default;}
+  .opt.dimmed{opacity:.4;}
+  .opt.right{border-color:var(--good);background:var(--good-bg);}
+  .opt.right .obadge{background:var(--good);color:#fff;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);}
+  .opt.wrong .obadge{background:var(--bad);color:#fff;}
+  .predict-ack{
+    display:none;margin-top:.8cqw;font-size:1.4cqw;font-weight:700;line-height:1.35;
+    padding:.85cqw 1.2cqw;border-radius:9px;background:var(--hl);color:var(--accent);border-left:4px solid var(--accent);
+  }
+  .predict-ack.show{display:block;}
+  .predict-ack b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     SCREEN 3 — takeaway
+     ============================================================ */
+  .take-list{
+    flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:1cqw;margin-top:.6cqw;
+  }
+  .take-row{
+    display:flex;align-items:flex-start;gap:1.2cqw;
+    background:var(--card);border:1.5px solid var(--line);border-radius:11px;
+    box-shadow:0 5px 14px rgba(0,29,105,.07);padding:1cqw 1.4cqw;
+  }
+  .take-row i{font-size:2.3cqw;flex:0 0 auto;margin-top:.1cqw;}
+  .take-row.flagship i{color:var(--good);}
+  .take-row.investigate i{color:var(--warn);}
+  .take-row.hidden i{color:var(--accent);}
+  .take-row.ride i{color:var(--body);}
+  .take-row .trtext{font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.35;}
+  .take-row .trtext b{color:var(--ink);font-weight:900;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.2cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-squares-four" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Traffic vs Sales</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 — teach the grid (passive) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">Two axes, four kinds of game</div>
+      <span class="head">A bestseller list only sees <span class="em">what sold</span>. Add traffic, and four kinds of game split apart.</span>
+      <div class="quad-wrap">
+        <div class="quad-frame">
+          <div class="yaxis"><span>&larr; Sales (units) &rarr;</span></div>
+          <div class="plot">
+            <!-- top-left: low traffic, high sales -->
+            <div class="cell hidden">
+              <span class="cell-tag"><i class="ph-fill ph-gem"></i>Hidden winner</span>
+              <span class="cell-action">Sells well on barely any clicks. Promote it &mdash; give it the traffic.</span>
+            </div>
+            <!-- top-right: high traffic, high sales -->
+            <div class="cell flagship">
+              <span class="cell-tag"><i class="ph-fill ph-crown-simple"></i>Flagship</span>
+              <span class="cell-action">Lots of clicks, lots of sales. Keep reordering &mdash; this is the engine.</span>
+            </div>
+            <!-- bottom-left: low traffic, low sales -->
+            <div class="cell ride">
+              <span class="cell-tag"><i class="ph-fill ph-pause"></i>Let it ride</span>
+              <span class="cell-action">Few clicks, few sales. Nothing to fix &mdash; leave it as is.</span>
+            </div>
+            <!-- bottom-right: high traffic, low sales -->
+            <div class="cell investigate">
+              <span class="cell-tag"><i class="ph-fill ph-magnifying-glass"></i>Investigate</span>
+              <span class="cell-action">Tons of clicks, almost no sales. Don't cut it &mdash; find out what's off.</span>
+            </div>
+          </div>
+          <div class="xaxis">&larr; Traffic (pageviews) &rarr;</div>
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-info"></i>
+          <span>Traffic runs left&rarr;right, sales runs bottom&rarr;top. Each corner is a <b>different move</b>. Next, you'll place four real games.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 — predict (GATED) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Predict first &middot; You must pick</div>
+      <div class="q-layout">
+        <div class="q-askside">
+          <span class="predict-q">One of these four is getting <span class="em">tons of clicks but barely selling</span> &mdash; the one Mike needs to investigate. Which is it?</span>
+          <span class="predict-hint">Compare pageviews against units. Pick one to unlock the rest &mdash; no penalty, committing first is what makes it stick.</span>
+          <div class="predict-ack" id="predictAck"></div>
+        </div>
+        <div class="q-optside">
+          <div class="opts" id="opts">
+            <button class="opt" type="button" data-correct="0" data-key="a">
+              <span class="obadge">A</span>
+              <span class="owrap">
+                <span class="oname">We're Doomed!</span>
+                <span class="ostats"><b>20,316</b> pageviews &middot; <b>104</b> units</span>
+              </span>
+            </button>
+            <button class="opt" type="button" data-correct="1" data-key="b">
+              <span class="obadge">B</span>
+              <span class="owrap">
+                <span class="oname">Suddenly Stoned</span>
+                <span class="ostats"><b>4,112</b> pageviews &middot; <b>12</b> units</span>
+              </span>
+            </button>
+            <button class="opt" type="button" data-correct="0" data-key="c">
+              <span class="obadge">C</span>
+              <span class="owrap">
+                <span class="oname">Dwellings of Eldervale &ndash; Oracle Hex Tile</span>
+                <span class="ostats"><b>793</b> pageviews &middot; <b>178</b> units</span>
+              </span>
+            </button>
+            <button class="opt" type="button" data-correct="0" data-key="d">
+              <span class="obadge">D</span>
+              <span class="owrap">
+                <span class="oname">Master Thief</span>
+                <span class="ostats"><b>639</b> pageviews &middot; <b>18</b> units</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 — the reveal ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">All four, placed</div>
+      <span class="head" style="font-size:2cqw;">Each game lands in its corner &mdash; and each corner is a <span class="em">move</span>.</span>
+      <div class="quad-wrap">
+        <div class="quad-frame">
+          <div class="yaxis"><span>&larr; Sales (units) &rarr;</span></div>
+          <div class="plot">
+            <!-- top-left: low traffic, high sales -->
+            <div class="cell hidden">
+              <span class="cell-tag"><i class="ph-fill ph-gem"></i>Hidden winner &middot; promote it</span>
+              <div class="tile" data-tile="hidden">
+                <div class="tname">Dwellings of Eldervale &ndash; Oracle Hex Tile</div>
+                <div class="tstats"><span><b>793</b> views</span><span><b>178</b> units</span></div>
+              </div>
+            </div>
+            <!-- top-right: high traffic, high sales -->
+            <div class="cell flagship">
+              <span class="cell-tag"><i class="ph-fill ph-crown-simple"></i>Flagship &middot; keep reordering</span>
+              <div class="tile" data-tile="flagship">
+                <div class="tname">We're Doomed!</div>
+                <div class="tstats"><span><b>20,316</b> views</span><span><b>104</b> units</span></div>
+              </div>
+            </div>
+            <!-- bottom-left: low traffic, low sales -->
+            <div class="cell ride">
+              <span class="cell-tag"><i class="ph-fill ph-pause"></i>Let it ride</span>
+              <div class="tile" data-tile="ride">
+                <div class="tname">Master Thief</div>
+                <div class="tstats"><span><b>639</b> views</span><span><b>18</b> units</span></div>
+              </div>
+            </div>
+            <!-- bottom-right: high traffic, low sales -->
+            <div class="cell investigate">
+              <span class="cell-tag"><i class="ph-fill ph-magnifying-glass"></i>Investigate &middot; don't cut</span>
+              <div class="tile" data-tile="investigate">
+                <div class="tname">Suddenly Stoned</div>
+                <div class="tstats"><span><b>4,112</b> views</span><span><b>12</b> units</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="xaxis">&larr; Traffic (pageviews) &rarr;</div>
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-eye"></i>
+          <span>A bestseller list only sees the <b>top row</b> (high sales). The quadrant catches the other two &mdash; the one to <b>investigate</b> and the one to <b>promote</b>.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 — takeaway ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">The takeaway</div>
+      <span class="head" style="font-size:2.2cqw;">Lining up <span class="em">traffic against sales</span> turns a flat "what sold" list into four clear moves.</span>
+      <div class="take-list">
+        <div class="take-row flagship">
+          <i class="ph-fill ph-crown-simple"></i>
+          <span class="trtext"><b>Reorder the flagships.</b> High traffic, high sales &mdash; these carry the catalog, so keep them in stock.</span>
+        </div>
+        <div class="take-row investigate">
+          <i class="ph-fill ph-magnifying-glass"></i>
+          <span class="trtext"><b>Investigate the high-traffic flops.</b> Lots of clicks, almost no sales &mdash; don't cut them, find out why.</span>
+        </div>
+        <div class="take-row hidden">
+          <i class="ph-fill ph-gem"></i>
+          <span class="trtext"><b>Promote the hidden winners.</b> Selling well on barely any traffic &mdash; give them the clicks and watch them climb.</span>
+        </div>
+        <div class="take-row ride">
+          <i class="ph-fill ph-pause"></i>
+          <span class="trtext"><b>Let the rest ride.</b> Low traffic, low sales &mdash; nothing to fix, leave them be.</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>Traffic vs sales — the quadrant (text version)</h2>
+  <p>This interactive uses four real Breaking Games games. Put traffic (pageviews) on the horizontal axis and sales (units) on the vertical axis, and four kinds of game separate out.</p>
+  <h3>The four quadrants</h3>
+  <p>High traffic and high sales is a Flagship — keep reordering. High traffic but low sales is one to Investigate — don't cut it, something's off. Low traffic but high sales is a Hidden winner — promote it. Low traffic and low sales — let it ride.</p>
+  <h3>Predict</h3>
+  <p>Which game gets tons of clicks but barely sells? We're Doomed! has 20,316 pageviews and 104 units (flagship). Suddenly Stoned has 4,112 pageviews and 12 units — high traffic, almost no sales — this is the one to investigate. Dwellings of Eldervale Oracle Hex Tile has 793 pageviews and 178 units (hidden winner). Master Thief has 639 pageviews and 18 units (let it ride). Correct answer: Suddenly Stoned.</p>
+  <h3>The reveal</h3>
+  <p>We're Doomed! lands top-right (flagship, keep reordering). Suddenly Stoned lands bottom-right (investigate, don't cut). Dwellings of Eldervale Oracle Hex Tile lands top-left (hidden winner, promote it). Master Thief lands bottom-left (let it ride). A bestseller list only sees the top row, high sales; the quadrant catches the other two — investigate and promote.</p>
+  <h3>Takeaway</h3>
+  <p>Reorder the flagships, investigate the high-traffic flops, promote the hidden winners, and let the rest ride.</p>
+</div>
+
+<script>
+/* ============================================================
+   SCREEN 1 — predict gate (4 game options). Must pick to unlock Next.
+   On pick: lock, mark correct/incorrect, show one tailored line.
+   Correct = Suddenly Stoned (B): 4,112 views, 12 units.
+   ============================================================ */
+let predicted=false;
+const optsEl=document.getElementById('opts');
+const predictAck=document.getElementById('predictAck');
+const ACK={
+  a:"<b>Not quite.</b> <b>We're Doomed!</b> has huge traffic <em>and</em> huge sales (20,316 views &rarr; 104 units). That's a <b>flagship</b>, not a flop. The one to investigate is <b>Suddenly Stoned</b> &mdash; 4,112 views, only 12 units.",
+  b:"<b>Exactly.</b> <b>Suddenly Stoned</b> pulls 4,112 pageviews but moves only 12 units. Lots of traffic, almost no sales &mdash; so <b>don't cut it</b>. Find out why: bad photos, wrong price, out of stock? That's a fixable problem hiding in plain sight.",
+  c:"<b>Other way around.</b> <b>Dwellings of Eldervale</b> sells 178 units on just 793 views &mdash; that's a <b>hidden winner</b> to promote. The high-traffic-but-barely-selling one is <b>Suddenly Stoned</b> (4,112 views, 12 units).",
+  d:"<b>Not this one.</b> <b>Master Thief</b> is low on both &mdash; 639 views, 18 units &mdash; so you just let it ride. The high-traffic flop is <b>Suddenly Stoned</b>: 4,112 views but only 12 units."
+};
+optsEl.querySelectorAll('.opt').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(predicted) return;
+    predicted=true;
+    const key=btn.dataset.key;
+    const isRight=btn.dataset.correct==='1';
+    optsEl.querySelectorAll('.opt').forEach(b=>{
+      b.classList.add('locked');
+      if(b===btn){
+        b.classList.add(isRight?'right':'wrong');
+      }else if(b.dataset.correct==='1'){
+        b.classList.add('right');     // always reveal the correct one
+      }else{
+        b.classList.add('dimmed');
+      }
+    });
+    predictAck.innerHTML=ACK[key];
+    predictAck.classList.add('show');
+    refreshNav();
+  });
+});
+
+/* ============================================================
+   SCREEN 2 — reveal animation: stagger the tiles in when shown.
+   ============================================================ */
+let revealed=false;
+function revealTiles(){
+  if(revealed) return;
+  revealed=true;
+  const tiles=[...document.querySelectorAll('#screens .tile')];
+  tiles.forEach((t,i)=>{
+    setTimeout(()=>t.classList.add('show'), 140*i);
+  });
+}
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   0 = teach grid (free). 1 = predict (gated on pick).
+   2 = reveal. 3 = takeaway (last screen).
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+/* screen index -> gate: 'predict' means must commit; null = free */
+const screenGate=[null,'predict',null,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function gateClear(g){
+  if(g===null) return true;
+  if(g==='predict') return predicted;
+  return true;
+}
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  nextBtn.disabled=!gateClear(screenGate[current]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  if(i===2) revealTiles();
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  if(!gateClear(screenGate[current])) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
