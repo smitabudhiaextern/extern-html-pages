@@ -39,6 +39,7 @@
   }
 
   .card {
+    position: relative;
     background: var(--white);
     border: 1px solid #E8E8EC;
     border-radius: 18px;
@@ -116,7 +117,6 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 8px;
-    margin: 0 0 16px;
   }
 
   .chip {
@@ -134,9 +134,7 @@
     white-space: nowrap;
   }
 
-  .chip:focus {
-    outline: none;
-  }
+  .chip:focus { outline: none; }
 
   .chip.important {
     background: var(--highlight);
@@ -155,7 +153,6 @@
     animation-delay: 0.85s;
   }
 
-  /* Hover / focus lift + ring */
   .chip:hover,
   .chip:focus-visible {
     transform: translateY(-2px);
@@ -171,7 +168,6 @@
     box-shadow: 0 0 0 3px rgba(154, 154, 154, 0.28), 0 6px 12px rgba(0, 0, 0, 0.1);
   }
 
-  /* Staggered light-up for the 12 important chips */
   .chip.important:nth-child(1)  { animation-delay: 0.00s, 0.00s; }
   .chip.important:nth-child(2)  { animation-delay: 0.07s, 0.07s; }
   .chip.important:nth-child(3)  { animation-delay: 0.14s, 0.14s; }
@@ -201,32 +197,53 @@
     100% { box-shadow: 0 0 0 0 rgba(0, 29, 105, 0.0); }
   }
 
-  .panel {
-    background: var(--bg);
-    border: 1px solid #ECE7E7;
+  /* ── Centered, clamped tooltip ─────────────────────────── */
+  .tooltip {
+    position: absolute;
+    z-index: 30;
+    max-width: 290px;
+    min-width: 160px;
+    background: var(--accent);
+    color: #fff;
     border-radius: 12px;
-    padding: 14px 16px;
-    min-height: 72px;
-    font-size: 0.88rem;
+    padding: 12px 15px;
+    box-shadow: 0 12px 30px rgba(0, 29, 105, 0.30);
+    text-align: center;
+    font-size: 0.85rem;
     line-height: 1.5;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    pointer-events: none;
   }
 
-  .panel .panel-default {
-    color: var(--body);
-    font-style: italic;
+  .tooltip.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
   }
 
-  .panel .panel-name {
-    font-family: var(--mono);
-    font-weight: 600;
-    color: var(--accent);
-    font-size: 0.92rem;
-  }
-
-  .panel .panel-desc {
-    color: var(--body);
+  .tooltip .tt-name {
     display: block;
-    margin-top: 5px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #fff;
+    margin-bottom: 5px;
+  }
+
+  .tooltip .tt-desc {
+    display: block;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .tooltip .tt-arrow {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    transform: rotate(45deg);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -236,9 +253,8 @@
       transition: none !important;
     }
     .chip:hover,
-    .chip:focus-visible {
-      transform: none !important;
-    }
+    .chip:focus-visible { transform: none !important; }
+    .tooltip { transition: none !important; }
   }
 </style>
 </head>
@@ -247,7 +263,7 @@
     <div class="card">
       <span class="eyebrow">🗂 The table you'll work with</span>
       <h1><span class="mono">meta_campaigns</span> — 19 columns</h1>
-      <p class="subtitle">The highlighted ones are what you'll lean on.</p>
+      <p class="subtitle">The highlighted ones are what you'll lean on. Hover any column to see what it means.</p>
 
       <div class="legend">
         <div class="legend-item">
@@ -285,40 +301,82 @@
         <div class="chip secondary" tabindex="0" role="button" data-name="cpc_all_usd" data-desc="Cost per click counting all clicks.">cpc_all_usd</div>
       </div>
 
-      <div class="panel" id="panel" aria-live="polite">
-        <span class="panel-default">Hover a column to see what it means.</span>
+      <div class="tooltip" id="tip" role="tooltip" aria-hidden="true">
+        <span class="tt-name" id="tipName"></span>
+        <span class="tt-desc" id="tipDesc"></span>
+        <span class="tt-arrow" id="tipArrow"></span>
       </div>
     </div>
   </div>
 
   <script>
     (function () {
-      var panel = document.getElementById('panel');
+      var card = document.querySelector('.card');
+      var tip = document.getElementById('tip');
+      var tipName = document.getElementById('tipName');
+      var tipDesc = document.getElementById('tipDesc');
+      var tipArrow = document.getElementById('tipArrow');
       var chips = document.querySelectorAll('.chip');
+      var PAD = 10, GAP = 10;
 
-      function showInfo(chip) {
-        var name = chip.getAttribute('data-name');
-        var desc = chip.getAttribute('data-desc');
-        var nameSpan = document.createElement('span');
-        nameSpan.className = 'panel-name';
-        nameSpan.textContent = name;
-        var descSpan = document.createElement('span');
-        descSpan.className = 'panel-desc';
-        descSpan.textContent = desc;
-        panel.innerHTML = '';
-        panel.appendChild(nameSpan);
-        panel.appendChild(descSpan);
+      function showTip(chip) {
+        tipName.textContent = chip.getAttribute('data-name');
+        tipDesc.textContent = chip.getAttribute('data-desc');
+        tip.classList.add('show');
+        tip.setAttribute('aria-hidden', 'false');
+
+        var cardRect = card.getBoundingClientRect();
+        var chipRect = chip.getBoundingClientRect();
+        var tipW = tip.offsetWidth;
+        var tipH = tip.offsetHeight;
+
+        var chipLeft = chipRect.left - cardRect.left;
+        var chipTop = chipRect.top - cardRect.top;
+        var chipCenterX = chipLeft + chipRect.width / 2;
+
+        // Horizontal: center on the chip, clamped inside the card
+        var left = chipCenterX - tipW / 2;
+        var maxLeft = card.clientWidth - tipW - PAD;
+        if (left < PAD) left = PAD;
+        if (left > maxLeft) left = maxLeft;
+
+        // Vertical: prefer below the chip; flip above if it would overflow the card bottom
+        var below = true;
+        var top = chipTop + chipRect.height + GAP;
+        if (top + tipH > card.clientHeight - PAD) {
+          top = chipTop - tipH - GAP;
+          below = false;
+        }
+
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+
+        // Arrow points at the chip's center, even if the tip is shifted
+        var arrowX = chipCenterX - left - 6;
+        if (arrowX < 12) arrowX = 12;
+        if (arrowX > tipW - 24) arrowX = tipW - 24;
+        tipArrow.style.left = arrowX + 'px';
+        if (below) {
+          tipArrow.style.top = '-6px';
+          tipArrow.style.bottom = 'auto';
+        } else {
+          tipArrow.style.bottom = '-6px';
+          tipArrow.style.top = 'auto';
+        }
+      }
+
+      function hideTip() {
+        tip.classList.remove('show');
+        tip.setAttribute('aria-hidden', 'true');
       }
 
       for (var i = 0; i < chips.length; i++) {
-        chips[i].addEventListener('mouseenter', function () { showInfo(this); });
-        chips[i].addEventListener('focus', function () { showInfo(this); });
-        // Keyboard activation (Enter / Space) for role="button"
+        chips[i].addEventListener('mouseenter', function () { showTip(this); });
+        chips[i].addEventListener('mouseleave', hideTip);
+        chips[i].addEventListener('focus', function () { showTip(this); });
+        chips[i].addEventListener('blur', hideTip);
         chips[i].addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            showInfo(this);
-          }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showTip(this); }
         });
       }
     })();
