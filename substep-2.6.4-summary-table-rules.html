@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What makes a good summary table — three rules</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --warn:#B8791C;
+    --warn-bg:#FCF1DF;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2cqw 3.4cqw 1.1cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.2cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.8cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.6cqw;}
+
+  /* ---- shared headline bits ---- */
+  .head{font-size:2.4cqw;font-weight:900;color:var(--ink);line-height:1.15;letter-spacing:-.01em;display:block;}
+  .head .em{color:var(--accent);}
+  .sub{font-size:1.55cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:.4cqw;display:block;}
+
+  /* monospace treatment for code-y labels (column names, sql) */
+  .mono{font-family:var(--mono);font-weight:700;letter-spacing:-.01em;}
+
+  /* ============================================================
+     INTRO (screen 0) — three rule cards, static
+     ============================================================ */
+  .intro-rules{
+    flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:1cqw;margin-top:.9cqw;
+  }
+  .irow{
+    display:flex;align-items:center;gap:1.2cqw;
+    background:var(--card);border:1.5px solid var(--line);border-radius:11px;
+    box-shadow:0 5px 14px rgba(0,29,105,.07);padding:1cqw 1.4cqw;
+  }
+  .irow .inum{
+    width:2.9cqw;height:2.9cqw;flex:0 0 auto;border-radius:50%;
+    background:var(--hl);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:1.5cqw;font-weight:900;
+  }
+  .irow i{font-size:2.2cqw;color:var(--accent);flex:0 0 auto;}
+  .irow .itext{font-size:1.55cqw;font-weight:600;color:var(--body);line-height:1.3;}
+  .irow .itext b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     RULE SCREENS — shared stage area
+     ============================================================ */
+  .demo-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-top:.8cqw;}
+  .demo-stage{
+    flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;gap:2.4cqw;
+  }
+
+  /* generic table look (summary row + payoff table) */
+  table.sumtab{border-collapse:separate;border-spacing:0;width:100%;
+    font-variant-numeric:tabular-nums;background:var(--card);
+    border:1.6px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 8px 20px rgba(0,29,105,.10);}
+  table.sumtab th{
+    background:var(--accent);color:#fff;text-align:left;
+    font-family:var(--mono);font-weight:700;font-size:1.2cqw;letter-spacing:-.01em;
+    padding:.7cqw 1.1cqw;white-space:nowrap;
+  }
+  table.sumtab td{
+    padding:.7cqw 1.1cqw;font-size:1.35cqw;font-weight:700;color:var(--ink);
+    border-top:1.4px solid var(--line);white-space:nowrap;
+  }
+  table.sumtab td.gname{font-weight:900;}
+  table.sumtab td.num{font-variant-numeric:tabular-nums;}
+  table.sumtab td b{color:var(--accent);}
+
+  /* ---- RULE 1 — raw rows collapsing into one summary row ---- */
+  .collapse-col{display:flex;flex-direction:column;align-items:center;gap:1cqw;width:100%;max-width:74cqw;}
+  .raw-stack{display:flex;flex-direction:column;gap:.55cqw;width:100%;align-items:center;}
+  .raw-row{
+    display:flex;align-items:center;gap:.9cqw;width:62cqw;max-width:100%;
+    background:#F6F8FF;border:1.4px solid var(--hl);border-radius:9px;
+    padding:.55cqw 1.1cqw;
+    font-size:1.25cqw;font-weight:600;color:var(--body);
+    transition:opacity .55s ease,transform .55s ease;
+  }
+  .raw-row .rtag{font-family:var(--mono);font-weight:700;color:var(--accent);}
+  .raw-row .rgame{font-weight:800;color:var(--ink);}
+  .raw-row .rnum{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;color:var(--body);}
+  /* collapse state: rows slide down + fade toward the merge point */
+  .collapsing .raw-row{opacity:0;transform:translateY(3.2cqw) scale(.96);}
+  .collapsing .raw-row:nth-child(1){transition-delay:0s;}
+  .collapsing .raw-row:nth-child(2){transition-delay:.08s;}
+  .collapsing .raw-row:nth-child(3){transition-delay:.16s;}
+  .collapsing .raw-row:nth-child(4){transition-delay:.24s;}
+
+  .merge-arrow{
+    font-size:2.6cqw;color:var(--accent);
+    opacity:0;transform:translateY(-4px);transition:opacity .4s ease .35s,transform .4s ease .35s;
+  }
+  .collapsing .merge-arrow{opacity:1;transform:translateY(0);}
+
+  .summary-one{
+    width:62cqw;max-width:100%;
+    opacity:0;transform:translateY(8px) scale(.97);
+    transition:opacity .55s ease .5s,transform .55s ease .5s;
+  }
+  .collapsing .summary-one{opacity:1;transform:translateY(0) scale(1);}
+
+  /* ---- RULE 2 & 3 — a column sliding into an existing table ---- */
+  .tab-scroller{display:flex;align-items:center;gap:1.6cqw;width:100%;justify-content:center;}
+  .qbubble{
+    max-width:26cqw;background:var(--hl);color:var(--accent);
+    border-radius:12px;border-bottom-left-radius:3px;
+    padding:.9cqw 1.2cqw;font-size:1.45cqw;font-weight:800;line-height:1.3;
+    box-shadow:0 6px 16px rgba(0,29,105,.12);position:relative;
+    opacity:0;transform:translateX(-10px);transition:opacity .45s ease,transform .45s ease;
+  }
+  .qbubble.show{opacity:1;transform:translateX(0);}
+  .qbubble .qsmall{display:block;font-size:1.05cqw;font-weight:700;color:var(--accent);opacity:.8;margin-top:.3cqw;text-transform:uppercase;letter-spacing:.06em;}
+
+  /* the column that slides in: target a th/td with .newcol */
+  .newcol{
+    opacity:0;
+    /* width collapses to 0 then expands — gives a "slide in from the side" feel */
+    max-width:0;padding-left:0 !important;padding-right:0 !important;
+    transition:opacity .5s ease,max-width .55s ease,padding .55s ease;
+  }
+  .sliding .newcol{
+    opacity:1;max-width:30cqw;
+    padding-left:1.1cqw !important;padding-right:1.1cqw !important;
+  }
+  table.sumtab th.newcol{background:var(--good);}
+  table.sumtab td.newcol{color:var(--good);font-weight:900;}
+
+  /* the "math behind the column" line under rule 2 */
+  .math-note{
+    opacity:0;transform:translateY(6px);transition:opacity .5s ease .35s,transform .5s ease .35s;
+    font-size:1.3cqw;font-weight:600;color:var(--body);line-height:1.35;margin-top:1.1cqw;text-align:center;
+  }
+  .sliding .math-note{opacity:1;transform:translateY(0);}
+  .math-note .mono{color:var(--accent);}
+  .math-note b{color:var(--good);font-weight:900;}
+
+  /* ---- RULE 3 — slow JOIN badge collapsing into instant column ---- */
+  .slow-col{display:flex;flex-direction:column;align-items:center;gap:1cqw;}
+  .slow-badge{
+    display:flex;align-items:center;gap:.9cqw;
+    background:var(--warn-bg);border:1.5px solid #EBCF94;border-radius:10px;
+    padding:.7cqw 1.1cqw;max-width:34cqw;
+    transition:opacity .5s ease,transform .5s ease;
+  }
+  .slow-badge .spin{
+    width:1.9cqw;height:1.9cqw;flex:0 0 auto;border-radius:50%;
+    border:.35cqw solid #EBCF94;border-top-color:var(--warn);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .slow-badge .scode{font-family:var(--mono);font-weight:700;font-size:1.15cqw;color:var(--warn);line-height:1.25;}
+  .slow-badge .stag{
+    margin-left:auto;font-size:.95cqw;font-weight:900;text-transform:uppercase;letter-spacing:.06em;
+    color:#fff;background:var(--warn);padding:.2cqw .6cqw;border-radius:5px;
+  }
+  /* on slide: the slow badge fades/collapses upward, the instant column arrives below */
+  .sliding .slow-badge{opacity:0;transform:translateY(-1.2cqw) scale(.95);}
+  .slow-arrow{font-size:2.2cqw;color:var(--accent);opacity:0;transition:opacity .4s ease .25s;}
+  .sliding .slow-arrow{opacity:1;}
+
+  /* caption strip under demo (matches the quadrant's cap-strip) */
+  .cap-strip{
+    flex:0 0 auto;margin-top:.7cqw;font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.35;
+    display:flex;align-items:center;gap:.7cqw;
+  }
+  .cap-strip i{font-size:1.9cqw;color:var(--accent);flex:0 0 auto;}
+  .cap-strip b{color:var(--ink);font-weight:900;}
+
+  /* ============================================================
+     PAYOFF (screen 4)
+     ============================================================ */
+  .payoff-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:1.1cqw;margin-top:.7cqw;}
+  .payoff-tab{display:flex;justify-content:center;}
+  .payoff-tab table.sumtab{width:auto;min-width:62cqw;}
+  /* stagger the payoff cells in */
+  .payoff-tab td.fill{opacity:0;transform:translateY(5px);transition:opacity .45s ease,transform .45s ease;}
+  .payoff-tab.lit td.fill{opacity:1;transform:translateY(0);}
+  .payoff-line{
+    text-align:center;font-size:1.6cqw;font-weight:600;color:var(--body);line-height:1.35;
+  }
+  .payoff-line b{color:var(--ink);font-weight:900;}
+  .payoff-line .em{color:var(--accent);font-weight:900;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.2cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-table" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Summary table &middot; three rules</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 — intro (free) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">What makes a good summary table</div>
+      <span class="head">A good summary table follows <span class="em">three rules</span>.</span>
+      <span class="sub">Get these right and every future question is a quick look-up &mdash; no re-querying, no recomputing.</span>
+      <div class="intro-rules">
+        <div class="irow">
+          <span class="inum">1</span>
+          <i class="ph-fill ph-rows"></i>
+          <span class="itext"><b>One row per game.</b> Collapse every raw sale down to a single line.</span>
+        </div>
+        <div class="irow">
+          <span class="inum">2</span>
+          <i class="ph-fill ph-question"></i>
+          <span class="itext"><b>Columns are the questions you'd ask.</b> If you'll ask it, store it &mdash; don't redo the math.</span>
+        </div>
+        <div class="irow">
+          <span class="inum">3</span>
+          <i class="ph-fill ph-database"></i>
+          <span class="itext"><b>Bake in the heavy stuff.</b> Run the expensive join once, keep the answer.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 — Rule 1: one row per game ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Rule 1 &middot; One row per game</div>
+      <span class="head" style="font-size:2cqw;">Many raw sales rows for one game collapse into <span class="em">one summary row</span>.</span>
+      <div class="demo-wrap">
+        <div class="demo-stage">
+          <div class="collapse-col" id="collapseCol">
+            <div class="raw-stack">
+              <div class="raw-row"><span class="rtag">sale #1</span><span class="rgame">We're Doomed!</span><span class="rnum">1 unit &middot; $36.64</span></div>
+              <div class="raw-row"><span class="rtag">sale #2</span><span class="rgame">We're Doomed!</span><span class="rnum">2 units &middot; $73.28</span></div>
+              <div class="raw-row"><span class="rtag">sale #3</span><span class="rgame">We're Doomed!</span><span class="rnum">1 unit &middot; $36.64</span></div>
+              <div class="raw-row"><span class="rtag">sale #4 &hellip;</span><span class="rgame">We're Doomed!</span><span class="rnum">+100 more</span></div>
+            </div>
+            <i class="ph-fill ph-arrow-down merge-arrow"></i>
+            <div class="summary-one">
+              <table class="sumtab">
+                <thead><tr><th>game</th><th>units</th><th>revenue</th></tr></thead>
+                <tbody><tr><td class="gname">We're Doomed!</td><td class="num"><b>104</b></td><td class="num"><b>$3,810</b></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-rows"></i>
+          <span>Each game gets <b>exactly one row</b> &mdash; not one row per sale.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 — Rule 2: columns are questions ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Rule 2 &middot; Columns are the questions you'd ask</div>
+      <span class="head" style="font-size:2cqw;">A question you'll ask a lot? Make it a <span class="em">column</span> &mdash; filled in, not recomputed.</span>
+      <div class="demo-wrap">
+        <div class="demo-stage">
+          <div class="tab-scroller" id="rule2Scroller">
+            <div class="qbubble" id="aovBubble">
+              "What's the average order value?"
+              <span class="qsmall">asked over and over</span>
+            </div>
+            <table class="sumtab">
+              <thead><tr><th>game</th><th>units</th><th>revenue</th><th class="newcol">aov</th></tr></thead>
+              <tbody><tr>
+                <td class="gname">We're Doomed!</td>
+                <td class="num"><b>104</b></td>
+                <td class="num"><b>$3,810.47</b></td>
+                <td class="num newcol">$36.64</td>
+              </tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="math-note" id="aovMath">
+          <span class="mono">revenue &divide; units</span> &rarr; $3,810.47 &divide; 104 = <b>$36.64</b>. Stored once, not redone every time you ask.
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-question"></i>
+          <span>If it's a question you'll ask, make it a <b>column</b> &mdash; not a sum you redo every time.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 — Rule 3: bake in the heavy stuff ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Rule 3 &middot; Bake in the heavy stuff</div>
+      <span class="head" style="font-size:2cqw;">Ran a slow join to get it? Run it <span class="em">once</span> and store the answer.</span>
+      <div class="demo-wrap">
+        <div class="demo-stage">
+          <div class="tab-scroller" id="rule3Scroller">
+            <div class="slow-col">
+              <div class="slow-badge" id="slowBadge">
+                <div class="spin"></div>
+                <span class="scode">JOIN referrals &hellip;<br>ON name LIKE '%slug%'</span>
+                <span class="stag">slow</span>
+              </div>
+              <i class="ph-fill ph-arrow-down slow-arrow"></i>
+            </div>
+            <table class="sumtab">
+              <thead><tr><th>game</th><th>units</th><th>revenue</th><th>aov</th><th class="newcol">pageviews</th></tr></thead>
+              <tbody><tr>
+                <td class="gname">We're Doomed!</td>
+                <td class="num"><b>104</b></td>
+                <td class="num"><b>$3,810</b></td>
+                <td class="num">$36.64</td>
+                <td class="num newcol">20,316</td>
+              </tr></tbody>
+            </table>
+          </div>
+        </div>
+        <span class="cap-strip">
+          <i class="ph-fill ph-database"></i>
+          <span>If you'd run an expensive join to get it ten times, run it <b>once</b> and store the answer.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 — payoff (last) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="kicker">The payoff</div>
+      <span class="head" style="font-size:2.2cqw;">One row per game, every column filled in &mdash; <span class="em">the whole answer at a glance</span>.</span>
+      <div class="payoff-wrap">
+        <div class="payoff-tab" id="payoffTab">
+          <table class="sumtab">
+            <thead><tr><th>game</th><th>units</th><th>revenue</th><th>aov</th><th>pageviews</th></tr></thead>
+            <tbody><tr>
+              <td class="gname">We're Doomed!</td>
+              <td class="num fill"><b>104</b></td>
+              <td class="num fill"><b>$3,810</b></td>
+              <td class="num fill">$36.64</td>
+              <td class="num fill">20,316</td>
+            </tr></tbody>
+          </table>
+        </div>
+        <div class="payoff-line">
+          Now every question is a <b>quick look-up</b> &mdash; that's the table you'll <span class="em">design next</span>.
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK
+     ============================================================ -->
+<div class="sr-only">
+  <h2>What makes a good summary table — three rules (text version)</h2>
+  <p>A good summary table for Breaking Games follows three rules. Get them right and every future question becomes a quick look-up instead of a fresh query.</p>
+  <h3>Rule 1 — One row per game</h3>
+  <p>Breaking Games has many raw sales rows for a single game. For example, We're Doomed! has over a hundred individual sales. The summary table collapses all of those into one row: We're Doomed! has 104 units and $3,810 in revenue. Each game gets exactly one row, not one row per sale.</p>
+  <h3>Rule 2 — Columns are the questions you'd ask</h3>
+  <p>A question you ask a lot, like "what's the average order value?", should be a stored column rather than math you redo each time. For We're Doomed!, revenue $3,810.47 divided by 104 units equals an average order value of $36.64. Store it as an aov column, filled in once.</p>
+  <h3>Rule 3 — Bake in the heavy stuff</h3>
+  <p>Pageviews come from a slow, expensive join that matches referral traffic to games by slug, written as JOIN referrals ON name LIKE percent slug percent. Instead of running that slow join every time, run it once and store the result as a ready pageviews column. We're Doomed! has 20,316 pageviews.</p>
+  <h3>The payoff</h3>
+  <p>The finished summary table has one row per game with all columns filled in: game, units, revenue, aov, and pageviews. We're Doomed!: 104 units, $3,810 revenue, $36.64 average order value, 20,316 pageviews. Now every question is a quick look-up — that is the table you will design next.</p>
+</div>
+
+<script>
+/* ============================================================
+   ANIMATION TRIGGERS — each fired from show(i), like the
+   quadrant's revealTiles(). Each guards with a "done" flag so
+   re-visiting a screen doesn't re-fire mid-state.
+   ============================================================ */
+
+/* RULE 1 — raw rows collapse + summary row rises */
+let r1done=false;
+function animateRule1(){
+  if(r1done) return; r1done=true;
+  const col=document.getElementById('collapseCol');
+  /* small delay so the screen is painted before the transition kicks */
+  setTimeout(()=>col.classList.add('collapsing'), 220);
+}
+
+/* RULE 2 — question bubble fades in, then the aov column slides in */
+let r2done=false;
+function animateRule2(){
+  if(r2done) return; r2done=true;
+  const bubble=document.getElementById('aovBubble');
+  const scroller=document.getElementById('rule2Scroller');
+  setTimeout(()=>bubble.classList.add('show'), 200);
+  setTimeout(()=>scroller.classList.add('sliding'), 650);
+}
+
+/* RULE 3 — slow JOIN badge collapses, instant pageviews column slides in */
+let r3done=false;
+function animateRule3(){
+  if(r3done) return; r3done=true;
+  const scroller=document.getElementById('rule3Scroller');
+  setTimeout(()=>scroller.classList.add('sliding'), 450);
+}
+
+/* PAYOFF — stagger the filled cells in */
+let r4done=false;
+function animatePayoff(){
+  if(r4done) return; r4done=true;
+  const tab=document.getElementById('payoffTab');
+  setTimeout(()=>tab.classList.add('lit'), 200);
+}
+
+/* ============================================================
+   SCREEN NAVIGATION + progress dots
+   0 = intro (free, Next = "Start").
+   1 = Rule 1, 2 = Rule 2, 3 = Rule 3 — each fires its animation.
+   4 = payoff (last screen, Next = "Done", disabled).
+   No gates — student controls the pace with Back/Next.
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+  nextLabel.textContent='Next';
+  nextBtn.disabled=false;
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  if(i===1) animateRule1();
+  if(i===2) animateRule2();
+  if(i===3) animateRule3();
+  if(i===4) animatePayoff();
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
