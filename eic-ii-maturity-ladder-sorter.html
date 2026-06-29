@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<!--
+  EIC II — Maturity-Ladder Sorter (Project 2, Step 1, Training 2.1.3:
+  "How to Read a Technology's Maturity Stage")
+  The hands-on active beat (predict-then-reveal) for an otherwise passive read.
+  Notion-embeddable 960x540 canvas (Mode A) + mandatory scale-to-fit script.
+
+  HOW TO SWAP CONTENT: edit ONLY the two config blocks below — `RUNGS` (the five
+  ladder stages) and `CARDS` (the four technology scenarios). The screens and
+  reveal logic are data-driven, so nothing else needs to change.
+
+  Rung wording is pulled verbatim from the Project 2 worked example §2
+  (we-p2-technology-solutions-research.md, "The Maturity Ladder").
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Place It on the Ladder — EIC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  :root {
+    --color-bg: #FDF8F8;
+    --color-surface-highlight: #DCE1FF;
+    --color-accent: #001D69;
+    --color-title: #1C1B1B;
+    --color-body: #484646;
+    --color-white: #FFFFFF;
+    --color-border: #E7E3EC;
+    /* semantic rung progression: cool/early -> warm/established */
+    --rung-1: #7C3AED; --rung-1-tint: #EDE9FE; /* Research */
+    --rung-2: #2563EB; --rung-2-tint: #DBEAFE; /* Pilot */
+    --rung-3: #0EA5A4; --rung-3-tint: #CCFBF1; /* Early commercial */
+    --rung-4: #D97706; --rung-4-tint: #FEF3C7; /* Scaling */
+    --rung-5: #10B981; --rung-5-tint: #D1FAE5; /* Mature */
+    --color-correct: #10B981; --color-correct-tint: #D1FAE5;
+    --color-miss: #DC2626; --color-miss-tint: #FECACA;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #EFEAF0;
+    font-family: 'Inter', sans-serif;
+  }
+  #stage {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: flex-start; justify-content: center;
+  }
+  #deck-wrapper {
+    width: 960px; height: 540px;
+    position: relative; overflow: hidden;
+    background: var(--color-bg);
+  }
+
+  .screen {
+    position: absolute; top: 0; left: 0;
+    width: 960px; height: 540px;
+    padding: 30px 48px;
+    display: flex; flex-direction: column;
+  }
+  .screen[aria-hidden="true"] { display: none; }
+
+  /* top label */
+  .brandbar {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--color-accent);
+    margin-bottom: 12px;
+  }
+  .brandbar i { font-size: 15px; }
+
+  /* INTRO */
+  #screen-intro { justify-content: center; padding: 30px 64px; }
+  .intro-icon {
+    width: 60px; height: 60px; border-radius: 16px;
+    background: var(--color-surface-highlight);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-accent); font-size: 30px; margin-bottom: 18px;
+  }
+  .intro h1 { font-size: 32px; font-weight: 800; color: var(--color-title); line-height: 1.12; margin-bottom: 12px; }
+  .intro p { font-size: 16px; color: var(--color-body); line-height: 1.55; max-width: 660px; margin-bottom: 9px; }
+  .intro .meta { font-size: 13.5px; color: #8a8693; margin-bottom: 24px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--color-accent); color: #fff;
+    border: none; border-radius: 8px; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600;
+    padding: 13px 24px; transition: transform .08s ease, box-shadow .15s ease;
+    box-shadow: 0 2px 10px rgba(0,29,105,.18);
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(0,29,105,.26); }
+  .btn:disabled { opacity: .45; cursor: default; box-shadow: none; transform: none; }
+  .btn.ghost { background: transparent; color: var(--color-accent); box-shadow: none; padding: 11px 14px; font-weight: 600; }
+  .btn.ghost:hover { transform: none; background: rgba(0,29,105,.06); }
+
+  /* PLAY SCREEN — left scenario column + right ladder */
+  .qtop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .qcount { font-size: 12.5px; font-weight: 700; color: var(--color-accent); letter-spacing: .04em; }
+  .progress-track { height: 6px; border-radius: 99px; background: #E7E1EA; overflow: hidden; margin-bottom: 14px; width: 100%; }
+  .progress-fill { height: 100%; background: var(--color-accent); border-radius: 99px; transition: width .3s ease; }
+
+  .play-body { display: flex; gap: 22px; flex: 1; min-height: 0; }
+  .play-left { width: 290px; flex-shrink: 0; display: flex; flex-direction: column; }
+  .play-right { flex: 1; display: flex; flex-direction: column; }
+
+  .scen-label { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent); margin-bottom: 8px; }
+  .scen-card {
+    background: var(--color-white); border: 1.5px solid var(--color-surface-highlight);
+    border-radius: 13px; padding: 16px 17px; box-shadow: 0 2px 10px rgba(0,29,105,.06);
+    margin-bottom: 12px;
+  }
+  .scen-card .scen-icon {
+    width: 40px; height: 40px; border-radius: 11px; margin-bottom: 11px;
+    background: var(--color-surface-highlight); color: var(--color-accent);
+    display: flex; align-items: center; justify-content: center; font-size: 21px;
+  }
+  .scen-card p { font-size: 15px; color: var(--color-title); line-height: 1.5; }
+
+  .instruct { font-size: 13.5px; color: var(--color-body); line-height: 1.45; }
+  .instruct b { color: var(--color-title); font-weight: 700; }
+
+  /* reveal box (replaces instruction after a pick) */
+  .reveal {
+    border-radius: 12px; padding: 12px 14px; margin-top: auto;
+    display: none; flex-direction: column; gap: 6px;
+  }
+  .reveal.show { display: flex; }
+  .reveal.correct { background: var(--color-correct-tint); }
+  .reveal.miss { background: var(--color-miss-tint); }
+  .reveal-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; }
+  .reveal.correct .reveal-head { color: #0c7a55; }
+  .reveal.miss .reveal-head { color: #b01818; }
+  .reveal .tell { font-size: 13px; color: var(--color-title); line-height: 1.45; }
+  .reveal .tell b { font-weight: 700; }
+  .next-row { margin-top: 13px; display: flex; }
+
+  .ladder-title { font-size: 13px; font-weight: 700; color: var(--color-title); margin-bottom: 9px; }
+  .ladder { display: flex; flex-direction: column-reverse; gap: 7px; }
+  .rung {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--color-white); border: 1.5px solid var(--color-border);
+    border-radius: 11px; padding: 9px 13px; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: border-color .12s ease, background .12s ease, transform .06s ease, box-shadow .12s ease;
+  }
+  .rung:hover { transform: translateX(3px); box-shadow: 0 2px 9px rgba(0,29,105,.10); }
+  .rung .badge {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800;
+  }
+  .rung .rung-text { flex: 1; min-width: 0; }
+  .rung .rung-name { font-size: 14px; font-weight: 700; color: var(--color-title); line-height: 1.15; }
+  .rung .rung-def { font-size: 11.5px; color: var(--color-body); line-height: 1.3; margin-top: 1px; }
+  .rung .mark { width: 22px; flex-shrink: 0; text-align: center; font-size: 19px; opacity: 0; }
+
+  /* rung accent colors (applied via data-rung) */
+  .rung[data-rung="1"] .badge { background: var(--rung-1-tint); color: var(--rung-1); }
+  .rung[data-rung="2"] .badge { background: var(--rung-2-tint); color: var(--rung-2); }
+  .rung[data-rung="3"] .badge { background: var(--rung-3-tint); color: var(--rung-3); }
+  .rung[data-rung="4"] .badge { background: var(--rung-4-tint); color: var(--rung-4); }
+  .rung[data-rung="5"] .badge { background: var(--rung-5-tint); color: var(--rung-5); }
+  .rung[data-rung="1"]:hover { border-color: var(--rung-1); }
+  .rung[data-rung="2"]:hover { border-color: var(--rung-2); }
+  .rung[data-rung="3"]:hover { border-color: var(--rung-3); }
+  .rung[data-rung="4"]:hover { border-color: var(--rung-4); }
+  .rung[data-rung="5"]:hover { border-color: var(--rung-5); }
+
+  /* post-reveal states (no hover transform once answered) */
+  .ladder.answered .rung { cursor: default; }
+  .ladder.answered .rung:hover { transform: none; box-shadow: none; }
+  .rung.is-correct { border-color: var(--color-correct); background: var(--color-correct-tint); }
+  .rung.is-correct .mark { opacity: 1; color: var(--color-correct); }
+  .rung.is-wrong { border-color: var(--color-miss); background: var(--color-miss-tint); }
+  .rung.is-wrong .mark { opacity: 1; color: var(--color-miss); }
+  .rung.dim { opacity: .5; }
+
+  /* END / TAKEAWAY */
+  #screen-end { justify-content: center; padding: 30px 64px; }
+  .end-icon {
+    width: 60px; height: 60px; border-radius: 16px;
+    background: var(--color-surface-highlight);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-accent); font-size: 30px; margin-bottom: 18px;
+  }
+  .end h2 { font-size: 27px; font-weight: 800; color: var(--color-title); line-height: 1.15; margin-bottom: 14px; max-width: 700px; }
+  .end .score { font-size: 14px; font-weight: 700; color: var(--color-accent); margin-bottom: 16px; }
+  .takeaway {
+    display: flex; gap: 13px; align-items: flex-start;
+    background: var(--color-surface-highlight); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 20px; max-width: 720px;
+  }
+  .takeaway i { color: var(--color-accent); font-size: 22px; margin-top: 1px; flex-shrink: 0; }
+  .takeaway p { font-size: 15.5px; color: var(--color-title); line-height: 1.5; }
+  .takeaway b { font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="deck-wrapper">
+
+    <!-- INTRO -->
+    <section class="screen intro" id="screen-intro" aria-hidden="false">
+      <div class="intro-icon"><i class="ph-bold ph-steps"></i></div>
+      <h1>Place it on the ladder</h1>
+      <p>In energy, a working prototype is the start, not the finish. The skill is reading how far a technology has gotten past the lab and into paying, real-world use. That's its maturity stage.</p>
+      <p>You'll read four short technology descriptions, one at a time. For each, predict which rung of the maturity ladder it sits on, then see the answer and the one signal that gives it away.</p>
+      <p class="meta">Four quick calls. The point isn't a perfect score — it's learning to spot the tell.</p>
+      <div><button class="btn" id="startBtn">Start <i class="ph-bold ph-arrow-right"></i></button></div>
+    </section>
+
+    <!-- PLAY -->
+    <section class="screen" id="screen-play" aria-hidden="true">
+      <div class="brandbar"><i class="ph-bold ph-steps"></i> Place it on the ladder</div>
+      <div class="qtop"><span class="qcount" id="qcount">1 of 4</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:25%"></div></div>
+
+      <div class="play-body">
+        <!-- LEFT: scenario + instruction/reveal -->
+        <div class="play-left">
+          <div class="scen-label">The technology</div>
+          <div class="scen-card">
+            <div class="scen-icon"><i class="ph-bold ph-flask"></i></div>
+            <p id="scenText">Scenario goes here.</p>
+          </div>
+          <div class="instruct" id="instruct"><b>Read the technology.</b> Which rung is it on? Click your pick on the ladder.</div>
+          <div class="reveal" id="reveal">
+            <div class="reveal-head" id="revealHead"><i class="ph-bold ph-check-circle"></i> <span>Right</span></div>
+            <div class="tell" id="revealTell"></div>
+          </div>
+          <div class="next-row" id="nextRow" style="display:none;">
+            <button class="btn" id="nextBtn">Next <i class="ph-bold ph-arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- RIGHT: the always-visible ladder -->
+        <div class="play-right">
+          <div class="ladder-title">The maturity ladder — low to high</div>
+          <div class="ladder" id="ladder"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- END -->
+    <section class="screen end" id="screen-end" aria-hidden="true">
+      <div class="end-icon"><i class="ph-bold ph-target"></i></div>
+      <h2 id="endHead">You've got the read.</h2>
+      <div class="score" id="endScore"></div>
+      <div class="takeaway">
+        <i class="ph-bold ph-lightbulb"></i>
+        <p>The tell is always the same question: <b>how far past the lab and into paying, repeated, real-world use has this technology gotten?</b> Lab-only is Research. A few real wells is a Pilot. First paying customers is Early commercial. Many proven, fast-growing deployments is Scaling.</p>
+      </div>
+      <div><button class="btn ghost" id="restartBtn"><i class="ph-bold ph-arrow-counter-clockwise"></i> Start over</button></div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — edit ONLY these two blocks to swap content.
+   ============================================================ */
+
+/* The five rungs of the maturity ladder. `id` orders them low (1) -> high (5).
+   Definitions are verbatim from the Project 2 worked example §2. */
+const RUNGS = [
+  { id: 1, name: "Research",         def: "Promising in labs or simulation; not yet running on real wells.",  icon: "ph-flask" },
+  { id: 2, name: "Pilot",            def: "Running on a handful of real wells with an operator; results being measured.", icon: "ph-test-tube" },
+  { id: 3, name: "Early commercial", def: "Selling to paying operators; small but real deployments and revenue.", icon: "ph-handshake" },
+  { id: 4, name: "Scaling",          def: "Many paying deployments; proven results; expanding fast.", icon: "ph-trend-up" },
+  { id: 5, name: "Mature",           def: "Established, widely adopted, incremental improvement.", icon: "ph-buildings" }
+];
+
+/* The four technology scenarios. Each: a one-line real-world status (the "tell"
+   the student learns to read), the correctRung id, and the explanation. */
+const CARDS = [
+  {
+    icon: "ph-flask",
+    desc: "An enhanced-recovery method that so far runs only in a university lab on simulated wells — no real well has tried it yet.",
+    correctRung: 1,
+    tell: "Lab and simulation only, with zero field use. No real well has run it, so it can't be past Research."
+  },
+  {
+    icon: "ph-test-tube",
+    desc: "A well-stimulation treatment that two operators are now running on a handful of real wells, carefully measuring the production results.",
+    correctRung: 2,
+    tell: "It's on a few real wells, but the results are still being measured. That's a Pilot — past the lab, not yet selling broadly."
+  },
+  {
+    icon: "ph-cpu",
+    desc: "An AI field-simulation tool just signed its first few paying operators; its big speed claims are real demos but not yet proven on live fields.",
+    correctRung: 3,
+    tell: "First paying customers make it Early commercial. The claims aren't field-proven yet, so it isn't Scaling."
+  },
+  {
+    icon: "ph-trend-up",
+    desc: "A digital-oilfield optimization platform sold to dozens of paying operators, expanding fast, with measured production uplift across fields.",
+    correctRung: 4,
+    tell: "Many paying deployments, proven uplift, and fast expansion. That's Scaling — real and repeated, but still actively growing, not yet Mature."
+  }
+];
+
+/* ============================================================
+   ENGINE — no need to edit below this line.
+   ============================================================ */
+const screens = {
+  intro: document.getElementById('screen-intro'),
+  play:  document.getElementById('screen-play'),
+  end:   document.getElementById('screen-end')
+};
+const elQcount   = document.getElementById('qcount');
+const elProgress = document.getElementById('progressFill');
+const elScen     = document.getElementById('scenText');
+const elScenIcon = document.querySelector('#screen-play .scen-icon i');
+const elLadder   = document.getElementById('ladder');
+const elInstruct = document.getElementById('instruct');
+const elReveal   = document.getElementById('reveal');
+const elRevealHead = document.getElementById('revealHead');
+const elRevealTell = document.getElementById('revealTell');
+const elNextRow  = document.getElementById('nextRow');
+const elNextBtn  = document.getElementById('nextBtn');
+const elEndScore = document.getElementById('endScore');
+
+let cardIndex = 0;
+let answered  = false;
+let correctCount = 0;
+
+const rungById = id => RUNGS.find(r => r.id === id);
+
+function buildLadder() {
+  // render once; the column-reverse CSS puts rung 5 (Mature) on top
+  elLadder.innerHTML = '';
+  RUNGS.forEach(r => {
+    const b = document.createElement('button');
+    b.className = 'rung';
+    b.dataset.rung = r.id;
+    b.innerHTML = `
+      <span class="badge"><i class="ph-bold ${r.icon}"></i></span>
+      <span class="rung-text">
+        <span class="rung-name">${r.name}</span>
+        <span class="rung-def">${r.def}</span>
+      </span>
+      <span class="mark"></span>`;
+    b.addEventListener('click', () => pick(r.id));
+    elLadder.appendChild(b);
+  });
+}
+
+function renderCard() {
+  const card = CARDS[cardIndex];
+  answered = false;
+  elQcount.textContent = `${cardIndex + 1} of ${CARDS.length}`;
+  elProgress.style.width = `${((cardIndex + 1) / CARDS.length) * 100}%`;
+  elScen.textContent = card.desc;
+  elScenIcon.className = `ph-bold ${card.icon}`;
+
+  // reset interaction state
+  elInstruct.style.display = 'block';
+  elReveal.className = 'reveal';
+  elNextRow.style.display = 'none';
+  elLadder.classList.remove('answered');
+  elLadder.querySelectorAll('.rung').forEach(r => {
+    r.classList.remove('is-correct', 'is-wrong', 'dim');
+    r.querySelector('.mark').innerHTML = '';
+  });
+
+  elNextBtn.innerHTML = (cardIndex === CARDS.length - 1)
+    ? 'See the takeaway <i class="ph-bold ph-arrow-right"></i>'
+    : 'Next <i class="ph-bold ph-arrow-right"></i>';
+
+  show('play');
+}
+
+function pick(rungId) {
+  if (answered) return;            // predict only once
+  answered = true;
+  const card = CARDS[cardIndex];
+  const isRight = rungId === card.correctRung;
+  if (isRight) correctCount++;
+
+  elLadder.classList.add('answered');
+  elLadder.querySelectorAll('.rung').forEach(r => {
+    const id = Number(r.dataset.rung);
+    const mark = r.querySelector('.mark');
+    if (id === card.correctRung) {
+      r.classList.add('is-correct');
+      mark.innerHTML = '<i class="ph-bold ph-check-circle"></i>';
+    } else if (id === rungId) {
+      r.classList.add('is-wrong');
+      mark.innerHTML = '<i class="ph-bold ph-x-circle"></i>';
+    } else {
+      r.classList.add('dim');
+    }
+  });
+
+  // swap instruction for the reveal
+  elInstruct.style.display = 'none';
+  const correctName = rungById(card.correctRung).name;
+  if (isRight) {
+    elReveal.className = 'reveal show correct';
+    elRevealHead.innerHTML = `<i class="ph-bold ph-check-circle"></i> <span>Right — that's ${correctName}.</span>`;
+  } else {
+    elReveal.className = 'reveal show miss';
+    elRevealHead.innerHTML = `<i class="ph-bold ph-arrow-bend-up-right"></i> <span>Close — it's ${correctName}.</span>`;
+  }
+  elRevealTell.innerHTML = `<b>The tell:</b> ${card.tell}`;
+  elNextRow.style.display = 'flex';
+}
+
+function next() {
+  if (cardIndex < CARDS.length - 1) {
+    cardIndex++;
+    renderCard();
+  } else {
+    showEnd();
+  }
+}
+
+function showEnd() {
+  elEndScore.textContent = `You read ${correctCount} of ${CARDS.length} correctly.`;
+  show('end');
+}
+
+function show(name) {
+  Object.values(screens).forEach(s => s.setAttribute('aria-hidden', 'true'));
+  screens[name].setAttribute('aria-hidden', 'false');
+}
+
+function start() {
+  cardIndex = 0;
+  correctCount = 0;
+  renderCard();
+}
+
+document.getElementById('startBtn').addEventListener('click', start);
+elNextBtn.addEventListener('click', next);
+document.getElementById('restartBtn').addEventListener('click', () => show('intro'));
+
+/* ---- MANDATORY viewport scale-to-fit (Notion embeds are 700-900px wide) ---- */
+function scaleDeck() {
+  const wrapper = document.getElementById('deck-wrapper');
+  const scaleX = window.innerWidth / 960;
+  const scaleY = window.innerHeight / 540;
+  const scale = Math.min(scaleX, scaleY, 1);   // scale DOWN only
+  wrapper.style.transform = `scale(${scale})`;
+  wrapper.style.transformOrigin = 'top center';
+}
+window.addEventListener('resize', scaleDeck);
+scaleDeck();
+
+buildLadder();
+</script>
+</body>
+</html>
