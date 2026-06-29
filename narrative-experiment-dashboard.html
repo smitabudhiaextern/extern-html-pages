@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Narrative Content Experiment — Decision Dashboard</title>
+<!-- charts are pure HTML/CSS — no external dependency -->
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --green:#16a34a; --green-soft:#dcfce7; --amber:#d97706; --amber-soft:#fef3c7;
+    --red:#dc2626; --red-soft:#fee2e2; --grey-soft:#f1f5f9;
+    --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5;}
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 22px 80px;}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  h2{font-size:18px;margin:0 0 14px;letter-spacing:-.01em}
+  h3{font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+  .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--grey-soft);color:var(--muted);border:1px solid var(--line);font-weight:600}
+  .pill.live{background:var(--accent-soft);color:var(--accent);border-color:#dbeafe}
+  .pill.warn{background:var(--amber-soft);color:var(--amber);border-color:#fde68a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:18px}
+  .verdict{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .verdict .big{flex:1 1 260px}
+  .vtag{display:inline-block;font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase;padding:6px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber);margin-bottom:10px}
+  .vtag.go{background:var(--green-soft);color:var(--green)}
+  .verdict p{margin:8px 0 0;font-size:14px;color:#334155}
+  .scorecards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;flex:2 1 420px}
+  .sc{border:1px solid var(--line);border-radius:11px;padding:12px 13px;background:#fff}
+  .sc .lab{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  .sc .val{font-size:22px;font-weight:800;margin:5px 0 2px}
+  .sc .delta{font-size:12px;font-weight:700}
+  .sc .note{font-size:11px;color:var(--muted);margin-top:3px}
+  .up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--muted)}
+  .flag{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .f-green{background:var(--green)} .f-amber{background:var(--amber)} .f-red{background:var(--red)} .f-grey{background:#cbd5e1}
+  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .tab{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .subtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .subtab{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:600;font-size:12px;cursor:pointer}
+  .subtab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .qview{display:none}
+  .qview.active{display:block}
+  .funnel-prog{margin-bottom:20px}
+  .funnel-prog .fp-t{font-weight:800;font-size:14px;margin-bottom:10px}
+  .stage{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+  .stage .sname{font-size:12px;color:var(--muted);font-weight:600}
+  .bar{height:17px;border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;font-weight:700;color:#fff;margin-bottom:3px;white-space:nowrap;min-width:34px}
+  .bar.t{background:var(--accent)}
+  .bar.c{background:#94a3b8}
+  .bar.d{background:#ef4444}
+  .bar.dc{background:#fca5a5;color:#7f1d1d}
+  .bar.na{background:#f1f5f9;color:var(--muted);padding-left:6px}
+  .do-banner{border:1px solid #bbf7d0;background:#f0fdf4;border-radius:14px;padding:16px 18px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .do-banner h3{color:#15803d;margin:0}
+  .do-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:12px}
+  .do-card{border:1px solid #86efac;background:#fff;border-radius:11px;padding:12px 14px}
+  .do-name{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  .do-val{font-size:24px;font-weight:800;color:#15803d;margin:3px 0}
+  .do-delta{font-size:12px;font-weight:700;color:#15803d}
+  .qpct{font-size:15px;font-weight:700;margin:6px 0 14px}
+  .qp-pos{color:#15803d}.qp-mix{color:#b45309}.qp-neg{color:#b91c1c}
+  .toggles{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--muted)}
+  .toggles label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .grp{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-right:7px;vertical-align:middle}
+  .grp.test{background:var(--accent-soft);color:var(--accent)}
+  .grp.ctrl{background:var(--grey-soft);color:var(--muted)}
+  .sig{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .sig.s{background:var(--green-soft);color:var(--green)}
+  .sig.b{background:var(--amber-soft);color:var(--amber)}
+  .sig.n{background:var(--grey-soft);color:var(--muted)}
+  .sig.x{background:var(--red-soft);color:var(--red)}
+  .prog-block{margin-bottom:22px}
+  .prog-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .prog-head .t{font-weight:800;font-size:15px}
+  .prog-head .s{font-size:12px;color:var(--muted)}
+  .sigcol{display:none}
+  body.show-sig .sigcol{display:table-cell}
+  .sigwrap{display:none;margin-top:4px}
+  body.show-sig .sigwrap{display:block}
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.qgrid{grid-template-columns:1fr}}
+  @media(max-width:680px){ table{display:block;overflow-x:auto;white-space:nowrap} }
+  .quote{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 13px;border-radius:0 8px 8px 0;margin:9px 0;font-size:13px;color:#1e293b}
+  .quote .who{display:block;margin-top:5px;font-size:11px;color:var(--muted);font-weight:700}
+  .chartbox{position:relative;height:230px}
+  .hb-row{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;margin-bottom:8px}
+  .hb-lab{font-size:11px;color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hb-track{display:flex;height:20px;border-radius:4px;overflow:hidden;background:var(--grey-soft)}
+  .hb-track>div{color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;min-width:16px}
+  .hb-empty{color:var(--muted);font-size:11px;padding-left:8px;display:flex;align-items:center;background:transparent}
+  .hb-legend{display:flex;gap:16px;font-size:11px;color:var(--muted);margin-top:10px}
+  .hb-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:middle}
+  .tb-row{margin-bottom:10px}
+  .tb-lab{font-size:12px;color:#334155;margin-bottom:3px}
+  .note-list{margin:0;padding-left:18px;font-size:13px;color:#334155}
+  .note-list li{margin-bottom:7px}
+  .rec{font-size:14px;color:#1e293b}
+  .rec ol{padding-left:18px}
+  .rec li{margin-bottom:7px}
+  .branch{padding:11px 13px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px;font-size:13px;color:var(--muted)}
+  .branch.fired{background:var(--amber-soft);border-color:#fde68a;color:#92400e;font-weight:700}
+  .branch .arrow{float:right;font-weight:800}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .small{font-size:12px;color:var(--muted)}
+  .view{display:none}
+  .view.active{display:block}
+  footer{margin-top:26px;font-size:12px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body class="show-sig">
+<div class="wrap">
+
+  <h1>Narrative Content Experiment — Decision Dashboard</h1>
+  <p class="sub">Does narrative-driven content (relatable protagonist, workplace artifacts, failure post-mortems) beat the definition-first format? · Driver: Smita Budhia · Approver: Priya Dasgupta-Yeung</p>
+  <div class="badges">
+    <span class="pill live">Quant: Mixpanel dashboard · snapshot Jun 9 / Jun 17 2026</span>
+    <span class="pill warn">Qual: outreach data is PRE-update — refresh Monday</span>
+    <span class="pill" id="asof">As of Jun 27 2026</span>
+  </div>
+
+  <!-- ===================== VERDICT ===================== -->
+  <div class="card">
+    <div class="verdict">
+      <div class="big">
+        <span class="vtag go">Verdict: Mixed → lean positive · Conditional GO</span>
+        <h2 style="margin-top:4px">Drop-off improved; other metrics flat — expand cautiously, tighten the dialogue</h2>
+        <p><strong>Drop-off is lower for every narrative cohort, and ~86% of feedback is positive (0% negative).</strong> Orientation, Project&nbsp;1 and completion haven't improved — they're confounded by cohort maturity. The case rests on retention + sentiment, not completion. DDoc <strong>"Mixed, lean positive."</strong></p>
+      </div>
+      <div class="scorecards" id="scorecards"></div>
+    </div>
+    <div class="legend">
+      <span><i class="flag f-green"></i>Clears / beats control</span>
+      <span><i class="flag f-amber"></i>Mixed or not significant</span>
+      <span><i class="flag f-red"></i>Below control</span>
+      <span><i class="flag f-grey"></i>Not yet readable (immature)</span>
+    </div>
+  </div>
+
+  <!-- ===================== TABS ===================== -->
+  <div class="tabs">
+    <div class="tab active" data-view="quant">Quantitative</div>
+    <div class="tab" data-view="qual">Qualitative</div>
+    <div class="tab" data-view="limits">Limitations</div>
+    <div class="tab" data-view="rec">Recommendation</div>
+  </div>
+
+  <!-- ===================== QUANT ===================== -->
+  <section class="view active" id="view-quant">
+    <div class="do-banner">
+      <h3>Headline metric · Drop-off (cancellation) rate</h3>
+      <p class="small" style="margin:6px 0 0">The one metric that clearly improved — every narrative cohort drops out less than its control (lower = better). <em>Partly a maturity effect (newer cohorts have had less time to cancel) — confirm as cohorts age.</em></p>
+      <div id="dropoffBanner"></div>
+    </div>
+    <div class="subtabs">
+      <div class="subtab active" data-q="funnel">Funnels</div>
+      <div class="subtab" data-q="forest">Effect plot</div>
+      <div class="subtab" data-q="table">Detailed tables</div>
+    </div>
+    <div class="qview active" id="q-funnel">
+      <div class="card">
+        <h2>Conversion funnel — narrative vs control</h2>
+        <p class="small">Where does narrative help, and where's the leak? Blue = narrative · grey = control (pooled peers for Hydro/Attronica, past cohorts for Yinan). Completion is matured-cohort only. The <strong style="color:#ef4444">red row</strong> is drop-off (cancellation) — <strong>lower = better</strong>.</p>
+        <div id="quantFunnels"></div>
+      </div>
+    </div>
+    <div class="qview" id="q-forest">
+      <div class="card">
+        <h2>Effect plot — narrative's advantage (pts, ±95% CI)</h2>
+        <p class="small">Right of zero = narrative better (cancellation is flipped so right is always better). A whisker that crosses zero is not statistically significant. Completion omitted (no valid test); Yinan Project 1 omitted (immature).</p>
+        <div id="quantForest"></div>
+        <div class="legend"><span><i class="flag f-green"></i>significant advantage</span><span><i class="flag f-red"></i>significant disadvantage</span><span><i class="flag f-amber"></i>not significant</span></div>
+      </div>
+    </div>
+    <div class="qview" id="q-table">
+      <div class="toggles">
+        <label><input type="checkbox" id="sigToggle" checked> Show significance (two-proportion z-tests)</label>
+        <span class="small">Δ = treatment minus control (pp). Each program shows every control lens you asked for.</span>
+      </div>
+      <div class="card" id="quantBlocks"></div>
+    </div>
+  </section>
+
+  <!-- ===================== QUAL ===================== -->
+  <section class="view" id="view-qual">
+    <div class="card">
+      <h2>Qualitative signal — student feedback on the story format</h2>
+      <p class="small">Coded from your Slack DM outreach (two questions: Q1 story format, Q2 interactive tools). Mapped against the DDoc risk list. <strong>This is the pre-update snapshot</strong> — Yinan openers went out today, replies pending.</p>
+      <div id="qualPct"></div>
+      <div class="qgrid">
+        <div>
+          <h3>Sentiment on format (substantive replies)</h3>
+          <div id="sentChart"></div>
+        </div>
+        <div>
+          <h3>What students actually say (Hydro themes)</h3>
+          <div id="themeChart"></div>
+        </div>
+      </div>
+      <h3 style="margin-top:22px">Representative quotes</h3>
+      <div class="qgrid">
+        <div>
+          <div class="quote">"This storytelling format truly suited me best" — said explicitly vs. the non-narrative Outamation externship she'd done before.<span class="who">Hydro · Bridget</span></div>
+          <div class="quote">Following Maya through the job felt "almost simulating a real world experience."<span class="who">Hydro · Barisua</span></div>
+          <div class="quote">"Keep it, but maybe tighten the dialogue in a couple of spots."<span class="who">Hydro · Christopher</span></div>
+          <div class="quote">"Don't cut the story… But tighten it." — wants a short setup scene, then clean technical steps.<span class="who">Hydro · Sam</span></div>
+        </div>
+        <div>
+          <div class="quote">The journey of being a junior FP&amp;A analyst "makes the numbers come alive instead of just being a guided exercise."<span class="who">Attronica · Nicolette</span></div>
+          <div class="quote">"It feels as though I am doing the exact same work as though I were in that role." Tools "definitely not just cool but skippable."<span class="who">Attronica · Brandon</span></div>
+          <div class="quote" style="border-left-color:var(--amber);background:var(--amber-soft)">Toward the end "I just had to skim… it added a lot of volume to what we had to assimilate."<span class="who">Hydro · Gbemileke (constructive)</span></div>
+        </div>
+      </div>
+      <h3 style="margin-top:22px">Coded responses (raw evidence behind the chart)</h3>
+      <div id="codedTables"></div>
+
+      <h3 style="margin-top:20px">Risk-list check (from the DDoc)</h3>
+      <ul class="note-list">
+        <li><strong>"Narrative feels forced"</strong> — <span class="up">not materializing.</span> No respondent called it forced; the recurring note is the story runs <em>long</em>, a dosage issue, not authenticity.</li>
+        <li><strong>"Protagonist not relatable"</strong> — <span class="up">opposite.</span> Maya (Hydro) and Niel/Neil (Attronica) are repeatedly praised as mentors who make the work click.</li>
+        <li><strong>"Scenarios feel inauthentic"</strong> — <span class="up">opposite.</span> Multiple "felt like shadowing a real practitioner" comments.</li>
+        <li><strong>The real, actionable finding:</strong> <span style="color:var(--amber);font-weight:700">tighten the dialogue.</span> ~6 of ~12 Hydro respondents skim long story sections to reach the technical work. This is your "narrative-lite" direction.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== LIMITATIONS ===================== -->
+  <section class="view" id="view-limits">
+    <div class="card">
+      <h2>Limitations &amp; confounds — read before deciding</h2>
+      <ul class="note-list">
+        <li><strong>No internal baseline for Hydro &amp; Attronica.</strong> Both launched in 2026 as narrative-native, so there is no before/after within the same program. Every Hydro/Attronica comparison is <em>cross-program</em> and therefore confounded by subject matter, instructor, and learner self-selection. Treat their results as directional, not causal.</li>
+        <li><strong>The internal Yinan control is confounded by maturity, not just immaturity.</strong> The two narrative cohorts (#539 May 24, #562 Jun 21, n=262) are the <em>newest</em> Yinan cohorts; every standard-format control cohort started earlier (Jan–Apr). So it's a time-based before/after, and Yinan's own cohorts show a clear recency gradient — newer cohorts read lower on Project 1/completion simply because they've had less time. So narrative's lower Project 1 (0%, immature) and Orientation (Δ−6.1) are largely maturity artifacts, not format effects. A fair internal read needs either (a) #539/#562 to mature, or (b) a <strong>fixed-age metric</strong> ("% completing Project 1 within N days of registration") measured at equal cohort age — which this dashboard does not yet expose. <strong>Launch-date matching can't rescue this</strong>: there is no standard-format Yinan cohort from the same window.</li>
+        <li><strong>The primary metric definition changed.</strong> The DDoc's gate was "Project 1 within <em>7 days of registration</em>" (16%→32%). The dashboard now measures "Project 1 by the program's own <em>deadline</em>." These are not the same number, so results can't be held directly against the 16%/32% targets.</li>
+        <li><strong>"P1 by deadline" is not comparable across programs.</strong> Each program sets its own due date; Hydro &amp; Attronica never set one (inferred as start+8 days, a tight window). That's why their by-deadline rates read low. Cross-program reads lean on Orientation, raw Project 1, cancellation, and matured completion instead.</li>
+        <li><strong>Controls differ by program.</strong> Hydro uses an enrollment-weighted pool of 4 technical peers (so no single program — e.g. Pfizer — distorts the benchmark); Attronica is compared only to Yinan's standard cohorts (closest finance match, your call); Yinan is a before/after vs its own past cohorts. The cross-program z-tests are valid two-sample tests <strong>but remain cross-program</strong> — a significant gap can still reflect subject matter or self-selection. <strong>Significant ≠ caused by the narrative format.</strong></li>
+        <li><strong>Completion is shown but not significance-tested.</strong> Matured-cohort completion uses a smaller, unstated denominator than enrollment, so a z-test on it would be unreliable — it's reported as a descriptive delta only.</li>
+        <li><strong>Qualitative N is small and self-selected.</strong> ~12 substantive Hydro replies, ~2 Attronica, 0 Yinan so far. Responders skew engaged. Strong as direction, not proof.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== RECOMMENDATION ===================== -->
+  <section class="view" id="view-rec">
+    <div class="card">
+      <h2>Final verdict against the DDoc decision framework</h2>
+      <p class="small">The DDoc (§11) pre-committed to three branches and a set of success gates. Here is where today's first-version data lands. Metric note: the DDoc's primary gate was "Project 1 within <em>7 days</em>"; the dashboard now reports "Project 1 by <em>deadline</em>" — so the 7-day gate can't be read directly yet.</p>
+
+      <h3>Decision branch (DDoc §11)</h3>
+      <div class="branch">Positive → "improve within success thresholds" → expand to 3–5 externship pilot, build playbook, train content team</div>
+      <div class="branch fired">Mixed (lean positive) → "drop-off (retention) clearly improved + sentiment strong; completion/engagement gains modest or unconfirmed" → keep what works, build "narrative-lite," expand cautiously <span class="arrow">◀ we are here</span></div>
+      <div class="branch">Negative → "no measurable improvement" → pause narrative expansion</div>
+
+      <h3 style="margin-top:20px">Success-criteria status</h3>
+      <table>
+        <thead><tr><th>DDoc gate</th><th class="num">Baseline</th><th class="num">Target</th><th>Today's read</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Project 1 completion — <strong>7-day</strong></td>
+            <td class="num">16%</td><td class="num">≥25% (→32%)</td>
+            <td>Metric replaced by "by-deadline": Hydro 11.2% · Attronica 11.0% · Yinan 16.6% — not comparable to the 7-day baseline</td>
+            <td><i class="flag f-amber"></i>Can't assess — restore 7-day metric</td>
+          </tr>
+          <tr>
+            <td>Project 1 completion — <strong>lifetime</strong></td>
+            <td class="num">42%</td><td class="num">≥48%</td>
+            <td>Narrative cohorts mostly immature; certificate completion (matured) Hydro 15.3%, Attronica 0/2 closed</td>
+            <td><i class="flag f-grey"></i>Pending maturity</td>
+          </tr>
+          <tr>
+            <td>Month-1 / module engagement</td>
+            <td class="num">TBD</td><td class="num">≥15% lift</td>
+            <td>Orientation Δ vs control: Hydro +2.9 (borderline) · Attronica ~flat · Yinan narrative −6.1 (maturity-confounded)</td>
+            <td><i class="flag f-amber"></i>Mixed — not meeting +15%</td>
+          </tr>
+          <tr>
+            <td>Guardrail — no decline</td>
+            <td class="num">—</td><td class="num">—</td>
+            <td>Cancellation significantly <strong>lower</strong> (Attronica vs Yinan standard cohorts, p&lt;0.001); retention improved</td>
+            <td><i class="flag f-green"></i>Held / improved</td>
+          </tr>
+          <tr>
+            <td>Secondary — "rated more engaging"</td>
+            <td class="num">—</td><td class="num">qual</td>
+            <td>Strongly supported in Hydro &amp; Attronica replies; DDoc risks (forced, unrelatable) not materializing</td>
+            <td><i class="flag f-green"></i>Supported</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="small" style="margin-top:12px"><strong>Why "Mixed, lean positive":</strong> the format clears the engagement/retention and qualitative gates (significantly lower cancellation, strong sentiment, no authenticity problems), but the primary completion gates can't yet be confirmed — blocked by the metric change and cohort immaturity, not by the format failing. That is the textbook DDoc "Mixed" branch, tilted positive.</p>
+    </div>
+    <div class="card rec">
+      <h2>Recommendation</h2>
+      <p><strong>Right now the case for narrative rests on two things — drop-off and sentiment — not on completion.</strong></p>
+      <ol>
+        <li><strong>Drop-off is the one metric that clearly improved.</strong> Every narrative cohort cancels less than its control: Attronica 20.6% vs Yinan 32.4% (−11.8 pts, p&lt;0.001), Hydro 29.3% vs tech peers 34.7% (−5.4, p&lt;0.001), Yinan narrative 21.0% vs its past cohorts 32.4% (−11.4). <em>Caveat: newer cohorts have had less time to drop — part of this is maturity; confirm as they age.</em></li>
+        <li><strong>Qualitative sentiment is strongly positive:</strong> ~86% of substantive replies positive, 0% negative, ~14% mixed — and the mixed ones all say "keep it, just tighten the dialogue." No one called the story forced or inauthentic.</li>
+        <li><strong>The other metrics have not improved.</strong> Orientation is flat-to-slightly-lower, Project 1 reads lower (maturity-confounded), and completion is too early to call. This is not yet a completion-gains story.</li>
+      </ol>
+      <p><strong>Verdict: Conditional GO (DDoc "Mixed, lean positive").</strong> Expand the pilot and adopt "narrative-lite" now. Standardize only once maturity-fair data confirms the drop-off gain and shows movement on completion.</p>
+      <h3 style="margin-top:16px">Next steps</h3>
+      <ol>
+        <li><strong>Expand to the 3–5 externship pilot</strong> (DDoc positive branch), prioritizing programs where we can set a proper P1 deadline and, ideally, run a clean internal cohort split like Yinan.</li>
+        <li><strong>Adopt "narrative-lite" now:</strong> keep the protagonist and workplace framing, but tighten dialogue — short setup scene → clean technical steps. This is the single most-requested change and costs little.</li>
+        <li><strong>Fix the measurement before the next read:</strong> set explicit P1 due dates on narrative programs, and report against the DDoc's 7-day metric <em>and</em> the by-deadline metric so we're comparing like-for-like.</li>
+        <li><strong>Get a maturity-fair metric before the next read.</strong> Every narrative cohort (Yinan #539/#562, Attronica's 2 cohorts) is among the newest in its program, so current snapshot rates conflate format with cohort age. Ask the team for a fixed-age metric — "% completing Orientation / Project 1 within N days of registration" — measured at equal cohort age. That, not launch-date matching, is what makes the quant comparison valid.</li>
+        <li><strong>Re-read once the narrative cohorts mature (≈3+ weeks)</strong> and qualitative replies land.</li>
+        <li><strong>Decision gate:</strong> proceed to standardization only if, on maturity-matched data, narrative shows a non-trivial lift on at least two of {fixed-age P1, lifetime P1 completion, cancellation} against both internal and peer controls.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    Built from the live Externship Performance Dashboard (Mixpanel) + Slack outreach sheets. Numbers are stored in the <code>DATA</code> object at the top of this file's script — edit there to refresh on Monday.
+  </footer>
+</div>
+
+<script>
+/* =========================================================================
+   DATA — edit these to refresh (e.g. Monday's pull). Everything else renders.
+   Rates are percentages. n = enrollment (or matured n where noted).
+   ========================================================================= */
+const DATA = {
+  asOf: "Jun 27 2026",
+
+  // --- treatment programs (narrative) ---
+  treatments: {
+    hydro:    { label:"Hydroficient IoT Cyber", domain:"Technical", n:1491, orient:78.4, p1:22.3, p1dl:11.2, complete:15.3, maturedClosed:"3/6", cancel:29.3 },
+    attronica:{ label:"Attronica FP&A",          domain:"Finance",   n:373,  orient:71.8, p1:19.6, p1dl:11.0, complete:null, maturedClosed:"0/2", cancel:20.6 },
+    yinan562: { label:"Yinan narrative (#539 + #562)", domain:"Finance", n:262, orient:72.5, p1:0.0, p1dl:null, complete:null, maturedClosed:"0/2", cancel:21.0, immature:true }
+  },
+
+  // --- controls ---
+  yinanControl: { label:"Yinan standard cohorts #401–#501 (internal control)", n:1622, orient:78.6, p1:31.4, cancel:32.4, complete:8.0 },
+
+  technicalPeers: [ // for Hydro
+    { label:"Pfizer Advanced — Doc Insights", n:1281, orient:78.6, p1:34.6, p1dl:25.6, complete:5.9, cancel:23.6 },
+    { label:"Outamation AI Workflow",         n:1474, orient:76.3, p1:27.6, p1dl:16.0, complete:3.6, cancel:41.2 },
+    { label:"Wayfair AI Agent",               n:684,  orient:74.7, p1:24.3, p1dl:19.4, complete:6.4, cancel:33.6 },
+    { label:"TruBridge Health Data",          n:1512, orient:71.2, p1:24.6, p1dl:14.5, complete:8.3, cancel:38.2 }
+  ],
+  financePeers: [ // Attronica is compared ONLY to Yinan's standard (non-narrative) cohorts — closest finance match
+    { label:"Yinan — standard cohorts (excl. narrative)", n:1622, orient:78.6, p1:31.4, p1dl:16.6, complete:8.0, cancel:32.4 }
+  ],
+
+  // --- qualitative (PRE-update snapshot) ---
+  qual: {
+    hydro:    { positive:10, mixed:2, negative:0, label:"Hydro" },
+    attronica:{ positive:2,  mixed:0, negative:0, label:"Attronica" },
+    yinan:    { positive:0,  mixed:0, negative:0, label:"Yinan (pending)" },
+    hydroThemes: {
+      "Feels like a real job / shadowing": 6,
+      "Tighten dialogue / skim to technical": 6,
+      "Improved understanding & retention": 3,
+      "Beats non-narrative format (explicit)": 1,
+      "Want more AI interactivity": 1
+    },
+    // coded substantive story-format replies (edit/extend on Monday as more land)
+    coded: {
+      hydro: [
+        {name:"Bridget", sent:"positive", theme:"Beats non-narrative (Outamation); felt like shadowing", quote:"this storytelling format truly suited me best"},
+        {name:"Christopher", sent:"positive", theme:"Frame of reference; tighten dialogue", quote:"Keep it, but maybe tighten the dialogue in a couple of spots"},
+        {name:"Razan", sent:"positive", theme:"Felt like a real job; read all dialogue", quote:"helped the externship feel like a job I am working in physically"},
+        {name:"Barisua", sent:"positive", theme:"Apply skills to a real situation", quote:"almost simulating a real world experience"},
+        {name:"Vimbainashe", sent:"positive", theme:"Like a real senior; skims when pressured", quote:"it's like you have a real senior you are conversing with"},
+        {name:"Deborah", sent:"positive", theme:"Perspective / visual learning", quote:"this externship did an amazing job"},
+        {name:"Mason", sent:"positive", theme:"Good mentor; wants more AI interactivity", quote:"Maya was a great mentor… add more AI to communicate"},
+        {name:"Cindy", sent:"positive", theme:"Works; asks AI when stuck", quote:"I think it's perfect"},
+        {name:"Joseph", sent:"positive", theme:"Helps learning", quote:"this way of learning helps"},
+        {name:"Min", sent:"positive", theme:"Completed; enjoyed; suggested concise story", quote:"Really enjoyed the experience"},
+        {name:"Sam", sent:"mixed", theme:"Keep but tighten; tie story to action", quote:"Don't cut the story… But tighten it"},
+        {name:"Gbemileke", sent:"mixed", theme:"Liked instructor; dialogue repetitive, too much volume", quote:"it added a lot of volume to what we had to assimilate"}
+      ],
+      attronica: [
+        {name:"Brandon", sent:"positive", theme:"Felt like the real role; tools not skippable", quote:"it feels as though I am doing the exact same work as though I were in that role"},
+        {name:"Nicolette", sent:"positive", theme:"Numbers come alive; resume-worthy; add explore-questions", quote:"makes the numbers come alive instead of just being a guided exercise"}
+      ],
+      yinan: []
+    }
+  }
+};
+
+/* ---------- helpers ---------- */
+const median = arr => { const s=[...arr].filter(v=>v!=null).sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length? (s.length%2? s[m] : (s[m-1]+s[m])/2) : null; };
+const fmt = v => v==null ? "—" : (Math.round(v*10)/10).toFixed(1)+"%";
+const peerMedian = (peers,key) => median(peers.map(p=>p[key]));
+// enrollment-weighted pooled peer rate + total n — a valid aggregate control for a two-sample test
+function peerPooled(peers,key){ let num=0,den=0; peers.forEach(p=>{ if(p[key]!=null && p.n){ num+=p[key]*p.n; den+=p.n; }}); return den? {rate:num/den, n:den} : {rate:null, n:0}; }
+// 95% CI half-width (pts) for the difference of two proportions (unpooled SE)
+function ci95(p1,n1,p2,n2){ if(p1==null||p2==null||!n1||!n2) return null; const a=p1/100,b=p2/100; const se=Math.sqrt(a*(1-a)/n1 + b*(1-b)/n2); return 1.96*se*100; }
+
+// two-proportion z-test; returns {z,p} or null. cancellation is "lower is better" but we report raw direction.
+function ztest(p1,n1,p2,n2){
+  if(p1==null||p2==null||!n1||!n2) return null;
+  const a=p1/100,b=p2/100;
+  const pool=(a*n1+b*n2)/(n1+n2);
+  const se=Math.sqrt(pool*(1-pool)*(1/n1+1/n2));
+  if(se===0) return null;
+  const z=(a-b)/se;
+  // normal two-sided p
+  const pval=2*(1-normcdf(Math.abs(z)));
+  return {z, p:pval};
+}
+function normcdf(x){ // Abramowitz-Stegun (guarded so it is correct for negative x in isolation)
+  if(x<0) return 1-normcdf(-x);
+  const t=1/(1+0.2316419*x);
+  const d=0.3989423*Math.exp(-x*x/2);
+  let p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));
+  return 1-p;
+}
+function sigBadge(res, immature, betterIsLower, delta){
+  if(immature) return '<span class="sig n">immature — not interpretable</span>';
+  if(!res) return '<span class="sig n">no test</span>';
+  const favorable = betterIsLower ? delta<0 : delta>0;
+  const p=res.p;
+  let cls, txt;
+  if(p<0.05){ cls = favorable? 's':'x'; txt = (favorable?'sig. better':'sig. worse'); }
+  else if(p<0.10){ cls='b'; txt='borderline'; }
+  else { cls='n'; txt='not sig.'; }
+  return `<span class="sig ${cls}">${txt} · z=${res.z.toFixed(1)}, p=${p<0.001?'<0.001':p.toFixed(2)}</span>`;
+}
+function deltaSpan(d, betterIsLower){
+  if(d==null) return '<span class="flat">—</span>';
+  const favorable = betterIsLower ? d<0 : d>0;
+  const cls = Math.abs(d)<0.5 ? 'flat' : (favorable?'up':'down');
+  const sign = d>0?'+':'';
+  return `<span class="${cls}">${sign}${d.toFixed(1)}</span>`;
+}
+
+/* ---------- scorecards (headline) ---------- */
+function renderScorecards(){
+  const T=DATA.treatments, tp=DATA.technicalPeers, fp=DATA.financePeers;
+  const finCancel=peerPooled(fp,'cancel').rate, techComplete=peerPooled(tp,'complete').rate, techP1=peerPooled(tp,'p1').rate;
+  const d=(a,b)=>{const x=a-b;return (x>0?'+':'')+x.toFixed(1)+' pts';};
+  const cards=[
+    { lab:"Drop-off · Attronica", val:fmt(T.attronica.cancel), flag:'f-green', sub:`${d(T.attronica.cancel,finCancel)} vs Yinan · significant` },
+    { lab:"Completion · Hydro", val:fmt(T.hydro.complete), flag:'f-green', sub:`${d(T.hydro.complete,techComplete)} vs peers · descriptive` },
+    { lab:"Project 1 · Hydro", val:fmt(T.hydro.p1), flag:'f-amber', sub:`${d(T.hydro.p1,techP1)} vs peers · confounded` },
+    { lab:"Yinan #539+#562", val:"maturing", flag:'f-grey', sub:`P1 immature · orientation −6.1 (early)` }
+  ];
+  document.getElementById('scorecards').innerHTML = cards.map(c=>`
+    <div class="sc">
+      <div class="lab"><i class="flag ${c.flag}"></i>${c.lab}</div>
+      <div class="val">${c.val}</div>
+      <div class="note">${c.sub}</div>
+    </div>`).join('');
+}
+
+/* ---------- quant program blocks ---------- */
+function row(grpClass,grpTxt,name,vals,deltas,sigs){
+  const cells = vals.map(v=>`<td class="num">${v}</td>`).join('');
+  return `<tr>
+    <td><span class="grp ${grpClass}">${grpTxt}</span>${name}</td>
+    ${cells}
+  </tr>`;
+}
+function comparisonBlock(opts){
+  // opts: title, sub, metrics:[{key,label,betterIsLower}], test:{...,n}, controls:[{label,...,n,internal}], testImmature
+  const {title,sub,metrics,test,controls}=opts;
+  const testImmature = opts.testImmature ?? test.immature ?? false;
+  let head = `<th>Group</th>` + metrics.map(m=>`<th class="num">${m.label}</th>`).join('');
+  // test row
+  const tn = test.n!=null ? test.n.toLocaleString() : '—';
+  let rows = `<tr>
+    <td><span class="grp test">TEST</span>${test.label} <span class="small">(n=${tn})</span></td>
+    ${metrics.map(m=>`<td class="num">${fmt(test[m.key])}</td>`).join('')}
+  </tr>`;
+  // control rows
+  controls.forEach(c=>{
+    rows += `<tr>
+      <td><span class="grp ctrl">${c.internal?'INT':'PEER'}</span>${c.label} <span class="small">(n=${c.n? c.n.toLocaleString():'—'})</span></td>
+      ${metrics.map(m=>`<td class="num">${fmt(c[m.key])}</td>`).join('')}
+    </tr>`;
+  });
+  // benchmark: internal control (valid causal test) OR enrollment-weighted pooled peers (valid two-sample, but cross-program)
+  const isInternal = controls.length===1 && controls[0].internal;
+  const benchmark={}, benchNm={};
+  metrics.forEach(m=>{
+    if(isInternal){ benchmark[m.key]=controls[0][m.key]; benchNm[m.key]=controls[0].n; }
+    else { const pp=peerPooled(controls,m.key); benchmark[m.key]=pp.rate; benchNm[m.key]=pp.n; }
+  });
+  let deltaCells = metrics.map(m=>{
+    if(testImmature && m.key!=='orient') return `<td class="num"><span class="flat">—</span><div class="sigwrap"><span class="sig n">immature</span></div></td>`;
+    const d = (test[m.key]==null||benchmark[m.key]==null)? null : (test[m.key]-benchmark[m.key]);
+    let badge='';
+    if(m.noTest){
+      badge = `<div class="sigwrap"><span class="sig n">descriptive — matured n n/a, not tested</span></div>`;
+    } else if(d!=null){
+      const res = ztest(test[m.key], test.n, benchmark[m.key], benchNm[m.key]);
+      const ci = ci95(test[m.key], test.n, benchmark[m.key], benchNm[m.key]);
+      const ciTxt = ci!=null ? ` <span class="small">±${ci.toFixed(1)} CI</span>` : '';
+      badge = res ? `<div class="sigwrap">${sigBadge(res,false,m.betterIsLower,d)}${ciTxt}</div>` : '';
+    }
+    return `<td class="num">${deltaSpan(d, m.betterIsLower)}${badge}</td>`;
+  }).join('');
+  const benchLabel = isInternal ? 'internal control' : 'pooled peers';
+  const method = isInternal
+    ? 'two-proportion z-test vs internal control — the only design here that isolates the format'
+    : 'two-proportion z-test vs enrollment-weighted pooled peers · ±95% CI on the gap · cross-program, so significant ≠ caused by narrative';
+  rows += `<tr style="background:var(--grey-soft)">
+    <td><strong>Δ test − ${benchLabel}</strong><div class="sigwrap small" style="font-weight:400">${method}</div></td>
+    ${deltaCells}
+  </tr>`;
+  return `<div class="prog-block">
+    <div class="prog-head"><span class="t">${title}</span><span class="s">${sub}</span></div>
+    <table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+function renderQuant(){
+  const T=DATA.treatments;
+  const metricsTech=[
+    {key:'orient',label:'Orientation',betterIsLower:false},
+    {key:'p1',label:'Project 1',betterIsLower:false},
+    {key:'complete',label:'Completion (matured)',betterIsLower:false,noTest:true},
+    {key:'cancel',label:'Cancellation',betterIsLower:true}
+  ];
+  const metricsYinan=[
+    {key:'orient',label:'Orientation',betterIsLower:false},
+    {key:'p1',label:'Project 1',betterIsLower:false}
+  ];
+  let html='';
+  html += comparisonBlock({
+    title:"Hydroficient IoT Cyber — narrative (whole program)",
+    sub:"No internal baseline · cross-program technical peers (median)",
+    metrics:metricsTech,
+    test:{label:T.hydro.label, n:T.hydro.n, orient:T.hydro.orient, p1:T.hydro.p1, complete:T.hydro.complete, cancel:T.hydro.cancel},
+    controls:DATA.technicalPeers.map(p=>({...p,internal:false}))
+  });
+  html += comparisonBlock({
+    title:"Attronica FP&A — narrative (whole program)",
+    sub:"No internal baseline · compared only to Yinan standard cohorts (closest finance peer)",
+    metrics:metricsTech,
+    test:{label:T.attronica.label, n:T.attronica.n, orient:T.attronica.orient, p1:T.attronica.p1, complete:T.attronica.complete, cancel:T.attronica.cancel},
+    controls:DATA.financePeers.map(p=>({...p,internal:false}))
+  });
+  html += comparisonBlock({
+    title:"Yinan narrative (#539 + #562) vs past Yinan cohorts",
+    sub:"Before/after within one program (#401–#501 = past cohorts) · Orientation & cancellation readable now; P1/completion fair once #539/#562 mature",
+    metrics:metricsYinan,
+    test:{label:T.yinan562.label, n:T.yinan562.n, orient:T.yinan562.orient, p1:T.yinan562.p1, immature:T.yinan562.immature},
+    controls:[{...DATA.yinanControl, internal:true}]
+  });
+  document.getElementById('quantBlocks').innerHTML = html;
+}
+
+/* ---------- charts ---------- */
+function renderCharts(){
+  const q=DATA.qual;
+  // Sentiment — stacked bars scaled by reply volume (pure HTML/CSS, no library)
+  const progs=[q.hydro,q.attronica,q.yinan];
+  const maxTot=Math.max(1,...progs.map(p=>p.positive+p.mixed+p.negative));
+  const seg=(n,color)=> n>0?`<div style="width:${(n/maxTot*100).toFixed(1)}%;background:${color}">${n}</div>`:'';
+  let s='';
+  progs.forEach(p=>{
+    const tot=p.positive+p.mixed+p.negative;
+    s+=`<div class="hb-row"><div class="hb-lab">${p.label}</div><div class="hb-track">`+
+       (tot? seg(p.positive,'#16a34a')+seg(p.mixed,'#d97706')+seg(p.negative,'#dc2626') : `<div class="hb-empty">no replies yet</div>`)+
+       `</div></div>`;
+  });
+  s+=`<div class="hb-legend"><span><i style="background:#16a34a"></i>positive</span><span><i style="background:#d97706"></i>mixed</span><span><i style="background:#dc2626"></i>negative</span></div>`;
+  document.getElementById('sentChart').innerHTML=s;
+  // Hydro themes — horizontal bars, label above
+  const th=q.hydroThemes, max=Math.max(1,...Object.values(th));
+  let t='';
+  Object.entries(th).forEach(([k,v])=>{
+    t+=`<div class="tb-row"><div class="tb-lab">${k}</div><div class="hb-track" style="height:15px"><div style="width:${(v/max*100).toFixed(1)}%;background:#2563eb">${v}</div></div></div>`;
+  });
+  document.getElementById('themeChart').innerHTML=t;
+}
+
+/* ---------- qualitative coded table ---------- */
+function renderQualTable(){
+  const c=DATA.qual.coded;
+  const sc={positive:'s',mixed:'b',negative:'x'};
+  const block=(title,arr,note)=>{
+    if(!arr||!arr.length) return `<div class="prog-block"><div class="prog-head"><span class="t">${title}</span><span class="s">${note||''}</span></div><p class="small" style="margin:6px 0">No story-format replies yet.</p></div>`;
+    const rows=arr.map(r=>`<tr>
+      <td>${r.name}</td>
+      <td><span class="sig ${sc[r.sent]||'n'}">${r.sent}</span></td>
+      <td class="small">${r.theme}</td>
+      <td class="small">&ldquo;${r.quote}&rdquo;</td>
+    </tr>`).join('');
+    return `<div class="prog-block"><div class="prog-head"><span class="t">${title}</span><span class="s">${note||''}</span></div>
+      <table><thead><tr><th>Student</th><th>Sentiment</th><th>Theme</th><th>Quote</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  document.getElementById('codedTables').innerHTML =
+    block("Hydroficient IoT Cyber", c.hydro, `${c.hydro.length} story-format replies + ~15 general check-ins`) +
+    block("Attronica FP&A", c.attronica, `${c.attronica.length} story-format replies (early) + ~8 general check-ins`) +
+    block("Yinan Value Investing", c.yinan, "openers sent 2026-06-26 — replies pending");
+}
+
+/* ---------- quant funnels ---------- */
+function renderFunnels(){
+  const T=DATA.treatments;
+  const techNames=DATA.technicalPeers.map(p=>p.label.split(' — ')[0].split(' AI')[0]).join(", ");
+  const finNames=DATA.financePeers.map(p=>p.label.replace(' (Eric Ries)','').replace(' — standard cohorts (excl. narrative)',' (standard)')).join(", ");
+  const items=[
+    {label:"Hydroficient IoT Cyber", test:T.hydro, ctrlName:"pooled tech peers", members:"Pooled tech peers = "+techNames+" (enrollment-weighted)", ctl:k=>peerPooled(DATA.technicalPeers,k).rate},
+    {label:"Attronica FP&A", test:T.attronica, ctrlName:"Yinan (standard cohorts)", members:"Control = Yinan standard cohorts #401–#501 (closest finance benchmark)", ctl:k=>peerPooled(DATA.financePeers,k).rate},
+    {label:"Yinan narrative (#539 + #562)", test:T.yinan562, ctrlName:"past Yinan cohorts", members:"Control = past Yinan cohorts #401, #422, #446, #478, #501 (same program)", ctl:k=>DATA.yinanControl[k]}
+  ];
+  const stages=[['orient','Orientation'],['p1','Project 1'],['complete','Completion'],['cancel','Dropped · cancelled (lower = better)']];
+  const bar=(val,cls,immature,isComplete)=> (val==null)
+    ? `<div class="bar na">${immature?'immature — not yet at deadline':(isComplete?'n/a — cohort not matured':'—')}</div>`
+    : `<div class="bar ${cls}" style="width:${Math.min(Math.max(val,4),100)}%">${fmt(val)}</div>`;
+  let html='';
+  items.forEach(it=>{
+    let rows=`<div class="stage"><div class="sname">Enrollment</div><div><div class="bar t" style="width:100%">100%</div><div class="bar c" style="width:100%">100%</div></div></div>`;
+    stages.forEach(([k,name])=>{
+      const tImm = it.test.immature && (k==='p1'||k==='complete');
+      const tv = tImm ? null : it.test[k];
+      const cv = it.ctl(k);
+      const tCls = k==='cancel'?'d':'t', cCls = k==='cancel'?'dc':'c';
+      rows += `<div class="stage"><div class="sname">${name}</div><div>${bar(tv,tCls,tImm,k==='complete')}${bar(cv==null?null:cv,cCls,false,k==='complete')}</div></div>`;
+    });
+    html += `<div class="funnel-prog"><div class="fp-t">${it.label} <span class="small" style="font-weight:400">· blue = narrative, grey = ${it.ctrlName}</span></div><div class="small" style="margin:-3px 0 10px;color:var(--muted)">${it.members}</div>${rows}</div>`;
+  });
+  document.getElementById('quantFunnels').innerHTML=html;
+}
+
+/* ---------- quant effect (forest) plot ---------- */
+function buildComparisons(){
+  const T=DATA.treatments, out=[];
+  const push=(prog,test,controls,metrics,internal)=>{
+    metrics.forEach(m=>{
+      let bench,bn;
+      if(internal){ bench=controls[0][m.key]; bn=controls[0].n; }
+      else { const pp=peerPooled(controls,m.key); bench=pp.rate; bn=pp.n; }
+      const tv=test[m.key];
+      const immature=!!(test.immature && m.key!=='orient');
+      let delta=null,adv=null,ci=null,res=null;
+      if(!immature && tv!=null && bench!=null){
+        delta=tv-bench; adv=m.betterIsLower? -delta:delta; ci=ci95(tv,test.n,bench,bn);
+        if(!m.noTest) res=ztest(tv,test.n,bench,bn);
+      }
+      out.push({prog,metric:m.label,key:m.key,tv,bench,delta,adv,ci,res,immature,noTest:!!m.noTest,betterIsLower:!!m.betterIsLower});
+    });
+  };
+  const mTech=[{key:'orient',label:'Orientation'},{key:'p1',label:'Project 1'},{key:'cancel',label:'Cancellation',betterIsLower:true}];
+  push('Hydro',{label:'Hydro',n:T.hydro.n,orient:T.hydro.orient,p1:T.hydro.p1,cancel:T.hydro.cancel},DATA.technicalPeers,mTech,false);
+  push('Attronica',{label:'Attronica',n:T.attronica.n,orient:T.attronica.orient,p1:T.attronica.p1,cancel:T.attronica.cancel},DATA.financePeers,mTech,false);
+  push('Yinan #562',{label:'Yinan',n:T.yinan562.n,orient:T.yinan562.orient,p1:T.yinan562.p1,immature:T.yinan562.immature},[DATA.yinanControl],[{key:'orient',label:'Orientation'},{key:'p1',label:'Project 1'}],true);
+  return out;
+}
+function renderForest(){
+  const rows=buildComparisons().filter(r=>!r.immature && !r.noTest && r.adv!=null);
+  const maxAbs=Math.max(10,...rows.map(r=>Math.abs(r.adv)+(r.ci||0)));
+  const dom=Math.ceil(maxAbs/5)*5;
+  const W=720, padL=200, x0=padL, x1=W-30, H=42+rows.length*36;
+  const sx=v=> x0 + (v+dom)/(2*dom)*(x1-x0);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="font-family:inherit">`;
+  for(let t=-dom;t<=dom;t+=dom/2){ const x=sx(t); svg+=`<line x1="${x}" y1="26" x2="${x}" y2="${H-14}" stroke="${t===0?'#94a3b8':'#eef2f7'}" stroke-width="${t===0?1.5:1}"/><text x="${x}" y="18" font-size="10" fill="#94a3b8" text-anchor="middle">${t>0?'+':''}${t}</text>`; }
+  svg+=`<text x="${x1}" y="${H-2}" font-size="10" fill="#16a34a" text-anchor="end">narrative better ▶</text>`;
+  svg+=`<text x="${x0}" y="${H-2}" font-size="10" fill="#dc2626" text-anchor="start">◀ narrative worse</text>`;
+  rows.forEach((r,i)=>{
+    const y=42+i*36, sig=r.res && r.res.p<0.05;
+    const color=!sig? '#d97706' : (r.adv>0?'#16a34a':'#dc2626');
+    const cx=sx(r.adv), cxL=sx(r.adv-(r.ci||0)), cxR=sx(r.adv+(r.ci||0));
+    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#0f172a">${r.prog} · ${r.metric}</text>`;
+    svg+=`<line x1="${cxL}" y1="${y}" x2="${cxR}" y2="${y}" stroke="${color}" stroke-width="2"/>`;
+    svg+=`<line x1="${cxL}" y1="${y-4}" x2="${cxL}" y2="${y+4}" stroke="${color}" stroke-width="2"/>`;
+    svg+=`<line x1="${cxR}" y1="${y-4}" x2="${cxR}" y2="${y+4}" stroke="${color}" stroke-width="2"/>`;
+    svg+=`<circle cx="${cx}" cy="${y}" r="5" fill="${color}"/>`;
+    svg+=`<text x="${x1}" y="${y-9}" font-size="10" fill="${color}" text-anchor="end">${r.adv>0?'+':''}${r.adv.toFixed(1)} ±${(r.ci||0).toFixed(1)}${sig?'':' n.s.'}</text>`;
+  });
+  svg+=`</svg>`;
+  document.getElementById('quantForest').innerHTML=svg;
+}
+
+/* ---------- drop-off headline ---------- */
+function renderDropoff(){
+  const T=DATA.treatments;
+  const rows=[
+    {name:"Hydroficient", t:T.hydro.cancel, c:peerPooled(DATA.technicalPeers,'cancel').rate, ctl:"pooled tech peers"},
+    {name:"Attronica", t:T.attronica.cancel, c:peerPooled(DATA.financePeers,'cancel').rate, ctl:"Yinan standard"},
+    {name:"Yinan narrative", t:T.yinan562.cancel, c:DATA.yinanControl.cancel, ctl:"past Yinan cohorts"}
+  ];
+  document.getElementById('dropoffBanner').innerHTML = `<div class="do-wrap">`+rows.map(r=>{
+    const d=(r.t!=null&&r.c!=null)? r.t-r.c : null;
+    const dtxt = d==null?'—':`${d>0?'+':''}${d.toFixed(1)} pts vs ${r.ctl} (${fmt(r.c)})`;
+    return `<div class="do-card"><div class="do-name">${r.name}</div><div class="do-val">${fmt(r.t)}</div><div class="do-delta">${dtxt}</div></div>`;
+  }).join('')+`</div>`;
+}
+
+/* ---------- qualitative % ---------- */
+function renderQualPct(){
+  const q=DATA.qual.coded, all=[...q.hydro,...q.attronica,...q.yinan], n=all.length;
+  const el=document.getElementById('qualPct');
+  if(!n){ el.innerHTML=''; return; }
+  const c=s=>all.filter(r=>r.sent===s).length, pct=x=>Math.round(x/n*100);
+  el.innerHTML=`<div class="qpct"><span class="qp-pos">${pct(c('positive'))}% positive</span> · <span class="qp-mix">${pct(c('mixed'))}% mixed (constructive)</span> · <span class="qp-neg">${pct(c('negative'))}% negative</span> <span class="small" style="font-weight:400">· of ${n} substantive replies (Hydro + Attronica; Yinan pending)</span></div>`;
+}
+
+/* ---------- interactions ---------- */
+let _chartsDone=false;
+document.querySelectorAll('.subtab').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.qview').forEach(x=>x.classList.remove('active'));
+  s.classList.add('active');
+  document.getElementById('q-'+s.dataset.q).classList.add('active');
+}));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('view-'+t.dataset.view).classList.add('active');
+  if(t.dataset.view==='qual' && !_chartsDone){ renderCharts(); _chartsDone=true; }
+}));
+document.getElementById('sigToggle').addEventListener('change',e=>{
+  document.body.classList.toggle('show-sig', e.target.checked);
+});
+
+/* ---------- init ---------- */
+document.getElementById('asof').textContent = "As of "+DATA.asOf;
+renderScorecards();
+renderQuant();
+renderFunnels();
+renderForest();
+renderDropoff();
+renderQualTable();
+renderQualPct();
+renderCharts();
+</script>
+</body>
+</html>
