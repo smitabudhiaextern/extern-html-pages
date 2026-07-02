@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Connect spend to traffic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FDF8F8;
+    --highlight: #DCE1FF;
+    --accent: #001D69;
+    --title: #1C1B1B;
+    --body: #484646;
+    --white: #FFFFFF;
+    --grey-text: #6E6E73;
+    --grey-surface: #F1F1F4;
+    --grey-border: #E2E2E6;
+    --ok: #1B7A5A;
+    --ok-bg: #E9F5EF;
+    --ok-border: #BFE3D3;
+    --warn: #9A6700;
+    --warn-bg: #FBF1DA;
+    --warn-border: #ECD6A6;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: transparent; margin: 0; padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--body); -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 14px; }
+  .card {
+    position: relative; background: var(--white);
+    border: 1px solid #E8E8EC; border-radius: 18px;
+    padding: 22px 26px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
+  }
+  .eyebrow {
+    display: inline-block; font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--accent); background: var(--highlight);
+    padding: 5px 12px; border-radius: 999px; margin: 0 0 10px;
+  }
+  h1 { font-size: 1.24rem; font-weight: 800; color: var(--title); margin: 0 0 6px; line-height: 1.3; }
+  .lead { font-size: 0.9rem; line-height: 1.55; color: var(--body); margin: 0 0 16px; }
+  .lead b { color: var(--title); font-weight: 700; }
+
+  /* Tracker */
+  .trackbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--grey-border);
+  }
+  .dots { display: flex; gap: 8px; }
+  .dot {
+    width: 11px; height: 11px; border-radius: 999px;
+    background: var(--grey-surface); border: 1.5px solid var(--grey-border);
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .dot.done { background: var(--ok); border-color: var(--ok); }
+  .dot.current { border-color: var(--accent); transform: scale(1.25); }
+  .progress { font-size: 0.78rem; font-weight: 700; color: var(--grey-text); }
+  .progress b { color: var(--accent); }
+
+  /* Flyer / source card */
+  .src {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg); border: 1px solid var(--grey-border);
+    border-left: 4px solid var(--accent); border-radius: 12px;
+    padding: 13px 16px; margin: 0 0 8px;
+  }
+  .src .se { font-size: 1.7rem; line-height: 1; }
+  .src .st { font-size: 0.9rem; font-weight: 700; color: var(--title); }
+  .src .ss { font-size: 0.78rem; color: var(--grey-text); }
+
+  .arrowdown { text-align: center; color: var(--grey-border); font-size: 1.1rem; margin: 2px 0; }
+
+  /* Customer grid (matching screen) */
+  .cust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 4px; }
+  .cust {
+    background: var(--white); border: 1.5px solid var(--grey-border);
+    border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .cust:hover { box-shadow: inset 0 0 0 2px rgba(0,29,105,.12); }
+  .cust .ce { font-size: 2rem; line-height: 1.1; }
+  .cust .cn { font-size: 0.86rem; font-weight: 700; color: var(--title); margin-top: 4px; }
+  .cust .cd { font-size: 0.72rem; color: var(--grey-text); }
+  .cust.guess { border-color: var(--warn-border); border-style: dashed; background: var(--warn-bg); }
+  .cust .tag {
+    display: none; margin-top: 7px; font-size: 0.66rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .03em; color: var(--warn);
+  }
+  .cust.guess .tag { display: block; }
+
+  .note {
+    margin: 14px 0 0; padding: 13px 15px; border-radius: 12px;
+    font-size: 0.86rem; line-height: 1.55;
+  }
+  .note.warn { background: var(--warn-bg); color: #7A5200; border: 1px solid var(--warn-border); }
+  .note.hl { background: var(--highlight); color: var(--accent); }
+  .note.ok { background: var(--ok-bg); color: var(--body); border: 1px solid var(--ok-border); }
+  .note b { font-weight: 800; }
+
+  /* Totals + divide */
+  .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 0; }
+  .tbox {
+    background: var(--bg); border: 1.5px solid var(--grey-border);
+    border-radius: 14px; padding: 16px 14px; text-align: center;
+  }
+  .tbox .te { font-size: 1.7rem; line-height: 1; }
+  .tbox .tv { font-size: 1.5rem; font-weight: 800; color: var(--accent); margin-top: 4px; }
+  .tbox .tl { font-size: 0.76rem; color: var(--grey-text); margin-top: 2px; }
+  .result {
+    margin: 12px 0 0; padding: 16px; border-radius: 14px; text-align: center;
+    background: var(--ok-bg); border: 1px solid var(--ok-border);
+  }
+  .result .req { font-size: 1.05rem; font-weight: 700; color: var(--title); }
+  .result .rbig { font-size: 1.9rem; font-weight: 800; color: var(--ok); margin-top: 4px; }
+  .result .rcap { font-size: 0.82rem; color: var(--body); margin-top: 8px; line-height: 1.5; }
+
+  /* Can / cannot list */
+  .cc { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 0; }
+  .cc-row { display: flex; gap: 11px; align-items: flex-start; padding: 13px 15px; border-radius: 12px; font-size: 0.88rem; line-height: 1.5; }
+  .cc-row.can { background: var(--ok-bg); border: 1px solid var(--ok-border); }
+  .cc-row.cant { background: #FBEDED; border: 1px solid #F3C9C9; }
+  .cc-row .cci { font-size: 1.2rem; flex: none; }
+  .cc-row .cct b { color: var(--title); }
+
+  /* Nav + buttons */
+  .nav { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
+  .nav .hint { font-size: 0.78rem; color: var(--grey-text); }
+  .btn {
+    font-family: inherit; font-size: 0.86rem; font-weight: 700;
+    padding: 9px 18px; border-radius: 10px; cursor: pointer;
+    border: 1.5px solid var(--grey-border); background: var(--white); color: var(--title);
+    transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn.ghost { visibility: hidden; }
+  .center { text-align: center; margin: 4px 0 0; }
+
+  @media (max-width: 520px) { .totals { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { .btn:hover, .dot { transition: none !important; transform: none !important; } }
+</style>
+</head>
+<body>
+  <div class="wrap"><div class="card" id="stage"></div></div>
+  <script>
+    var CUSTOMERS = [
+      { e: '🧑', n: 'Sue' },
+      { e: '👩', n: 'Ali' },
+      { e: '🧔', n: 'Mo' }
+    ];
+
+    // State
+    var idx = 0;              // 0 match-fail, 1 divide pizza, 2 divide facebook, 3 recap
+    var tapped = [];          // customer indices tapped on screen 0
+    var divided1 = false;
+    var divided2 = false;
+
+    // Inert deep-link for QA: ?idx=1&rev=1
+    (function () {
+      var q = new URLSearchParams(location.search);
+      if (q.has('idx')) {
+        idx = parseInt(q.get('idx'), 10) || 0;
+        tapped = idx >= 1 ? [0] : [];
+        divided1 = idx >= 2;
+        divided2 = idx >= 3;
+        if (q.get('rev') === '1') {
+          if (idx === 0) tapped = [0];
+          if (idx === 1) divided1 = true;
+          if (idx === 2) divided2 = true;
+        }
+      }
+    })();
+
+    var stage = document.getElementById('stage');
+
+    function dots() {
+      var h = '<div class="dots">';
+      for (var i = 0; i < 4; i++) {
+        var c = 'dot';
+        if (i < idx) c += ' done';
+        if (i === idx) c += ' current';
+        h += '<span class="' + c + '"></span>';
+      }
+      return h + '</div>';
+    }
+
+    function nav(enabled, label, showBack, hint) {
+      var back = showBack ? '<button class="btn" data-nav="back">&larr; Back</button>'
+                          : '<button class="btn ghost">&larr; Back</button>';
+      var h = enabled ? '' : '<span class="hint">' + (hint || '') + '</span>';
+      var next = label
+        ? (enabled ? '<button class="btn primary" data-nav="next">' + label + '</button>'
+                   : '<button class="btn primary" disabled>' + label + '</button>')
+        : '<button class="btn ghost">x</button>';
+      return '<div class="nav">' + back + h + next + '</div>';
+    }
+
+    function renderMatch() {
+      var h = '';
+      h += '<span class="eyebrow">🧩 Connect the money to the sale</span>';
+      h += '<div class="trackbar">' + dots() + '<span class="progress">Pizza first</span></div>';
+      h += '<h1>Which customer did the flyer bring in?</h1>';
+      h += '<p class="lead">Tony\'s Pizza spent <b>$200 on flyers</b> last month. These three people ordered this week. Tap the one the flyer brought in.</p>';
+      h += '<div class="src"><span class="se">🪧</span><div><div class="st">Flyer campaign</div><div class="ss">$200 spent</div></div></div>';
+      h += '<div class="arrowdown">↓ which one?</div>';
+      h += '<div class="cust-grid">';
+      for (var i = 0; i < CUSTOMERS.length; i++) {
+        var g = tapped.indexOf(i) !== -1 ? ' guess' : '';
+        h += '<div class="cust' + g + '" data-cust="' + i + '"><div class="ce">' + CUSTOMERS[i].e + '</div><div class="cn">' + CUSTOMERS[i].n + '</div><div class="cd">ordered a $30 pizza</div><div class="tag">the flyer? · a guess</div></div>';
+      }
+      h += '</div>';
+      if (tapped.length) {
+        h += '<div class="note warn">Every pick is just a shrug. Nobody wrote down which customer saw the flyer, so <b>you can\'t match one flyer to one person.</b> Tap the others if you like — same problem every time.</div>';
+      }
+      h += nav(tapped.length > 0, 'So what CAN you do? &rarr;', false, 'Tap a customer to try.');
+      stage.innerHTML = h;
+    }
+
+    function renderDividePizza() {
+      var h = '';
+      h += '<span class="eyebrow">🧩 Connect the money to the sale</span>';
+      h += '<div class="trackbar">' + dots() + '<span class="progress">Pizza</span></div>';
+      h += '<h1>But you can divide the totals</h1>';
+      h += '<p class="lead">You can\'t name the customer, and you don\'t need to. Add up <b>both sides</b> and divide.</p>';
+      h += '<div class="totals">';
+      h += '<div class="tbox"><div class="te">🪧</div><div class="tv">$200</div><div class="tl">spent on flyers</div></div>';
+      h += '<div class="tbox"><div class="te">👣</div><div class="tv">37</div><div class="tl">flyer visits (people who wrote "flyer")</div></div>';
+      h += '</div>';
+      if (!divided1) {
+        h += '<div class="center"><button class="btn primary" data-divide="1" style="margin-top:12px;">Divide the totals ➗</button></div>';
+      } else {
+        h += '<div class="result"><div class="req">$200 ÷ 37 visits =</div><div class="rbig">$5.40 per flyer visit</div><div class="rcap">You connected the money to the traffic through the <b>bucket</b>, not the person. That is a directional signal, not a sale-by-sale story.</div></div>';
+      }
+      h += nav(divided1, 'Now the real data &rarr;', true, 'Tap "Divide the totals" to see it.');
+      stage.innerHTML = h;
+    }
+
+    function renderDivideFB() {
+      var h = '';
+      h += '<span class="eyebrow">🧩 Connect the money to the sale</span>';
+      h += '<div class="trackbar">' + dots() + '<span class="progress">Real data</span></div>';
+      h += '<h1>Same move, real data: Facebook</h1>';
+      h += '<p class="lead">Facebook is just a bigger flyer. You still can\'t tie one ad to one visit, but you can divide the totals for your whole <b>Paid Social</b> channel.</p>';
+      h += '<div class="totals">';
+      h += '<div class="tbox"><div class="te">📘</div><div class="tv">$37,200</div><div class="tl">spent on Facebook ads</div></div>';
+      h += '<div class="tbox"><div class="te">👣</div><div class="tv">81,000</div><div class="tl">Facebook visits (your Paid Social channel)</div></div>';
+      h += '</div>';
+      if (!divided2) {
+        h += '<div class="center"><button class="btn primary" data-divide="2" style="margin-top:12px;">Divide the totals ➗</button></div>';
+      } else {
+        h += '<div class="result"><div class="req">$37,200 ÷ 81,000 visits ≈</div><div class="rbig">$0.46 per Facebook visit</div><div class="rcap">Exactly the flyer move, at scale. The channel you built in <b>dim_referrer</b> is what let you add up "all Facebook traffic" in the first place.</div></div>';
+      }
+      h += nav(divided2, 'What it means &rarr;', true, 'Tap "Divide the totals" to see it.');
+      stage.innerHTML = h;
+    }
+
+    function renderRecap() {
+      var h = '';
+      h += '<span class="eyebrow">🧩 Connect the money to the sale</span>';
+      h += '<div class="trackbar">' + dots() + '<span class="progress">Done</span></div>';
+      h += '<h1>What that $0.46 is, and isn\'t</h1>';
+      h += '<p class="lead">The number is honest only if you say it carefully.</p>';
+      h += '<div class="cc">';
+      h += '<div class="cc-row can"><span class="cci">✅</span><span class="cct"><b>You CAN say:</b> "About $0.46 per Facebook visit." It is the average cost of a visit — a directional signal.</span></div>';
+      h += '<div class="cc-row cant"><span class="cci">🚫</span><span class="cct"><b>You CANNOT say:</b> "Facebook drove $X in sales." You still can\'t see which visit became a purchase.</span></div>';
+      h += '</div>';
+      h += '<div class="note hl">That careful version is the number Mike asked for. Next you\'ll write the SQL that produces it.</div>';
+      h += nav(false, null, true, '');
+      stage.innerHTML = h;
+    }
+
+    function render() {
+      if (idx === 0) renderMatch();
+      else if (idx === 1) renderDividePizza();
+      else if (idx === 2) renderDivideFB();
+      else renderRecap();
+    }
+
+    stage.addEventListener('click', function (e) {
+      var cust = e.target.closest ? e.target.closest('[data-cust]') : null;
+      var div  = e.target.closest ? e.target.closest('[data-divide]') : null;
+      var n    = e.target.closest ? e.target.closest('[data-nav]') : null;
+      if (cust) {
+        var ci = parseInt(cust.getAttribute('data-cust'), 10);
+        if (tapped.indexOf(ci) === -1) tapped.push(ci);
+        render();
+      } else if (div) {
+        if (div.getAttribute('data-divide') === '1') divided1 = true; else divided2 = true;
+        render();
+      } else if (n) {
+        var dir = n.getAttribute('data-nav');
+        if (dir === 'next' && idx < 3) idx++;
+        else if (dir === 'back' && idx > 0) idx--;
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
