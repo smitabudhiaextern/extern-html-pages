@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<!--
+  EIC Heritage — Focus-Area Explorer ("the life of a well")
+  A clickable cutaway well. Beginner explores four zones (FIND IT / DRILL IT / MILK IT / THE BRAIN)
+  and the 13 missions inside them.
+
+  SELF-CONTAINED: inline CSS + vanilla JS + inline SVG. ZERO external requests (no CDN, no web
+  fonts, no external images). System font stack. Fixed 960x540, never scrolls in any state.
+
+  TO EDIT CONTENT: everything lives in the ZONES data object below. Edit that and the UI re-renders.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EIC Heritage Focus-Area Explorer</title>
+<style>
+  :root{
+    --bg:#FDF8F8; --ink:#1C1B1B; --body:#484646; --accent:#001D69;
+    --hl:#DCE1FF; --white:#FFFFFF; --line:#ECE6EE; --muted:#8A8693;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+  }
+  #stage{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;}
+  #wrapper{
+    width:960px;height:540px;position:relative;overflow:hidden;
+    background:var(--bg);transform-origin:top center;
+  }
+
+  /* ---- title bar ---- */
+  .titlebar{height:50px;display:flex;align-items:center;gap:11px;padding:0 24px;border-bottom:1px solid var(--line);}
+  .tb-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .tb-mark svg{width:17px;height:17px;}
+  .tb-title{font-size:14.5px;font-weight:800;color:var(--ink);letter-spacing:.1px;}
+  .tb-title span{font-weight:500;color:var(--muted);}
+
+  /* ---- main split ---- */
+  .main{display:flex;height:490px;}
+  .left{width:366px;flex-shrink:0;border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:14px 16px;}
+  .left svg.well{width:100%;height:100%;}
+  .right{flex:1;padding:22px 28px;overflow:hidden;position:relative;}
+  #panel{height:100%;}
+
+  /* ---- SVG zone interaction ---- */
+  .zone{cursor:pointer;}
+  .zone .tint{fill:var(--hl);opacity:0;transition:opacity .14s ease;pointer-events:none;}
+  .zone .frame{fill:none;stroke:var(--accent);stroke-width:0;pointer-events:none;transition:stroke-width .12s ease;}
+  .zone .bar{fill:var(--accent);opacity:0;pointer-events:none;transition:opacity .12s ease;}
+  .zone .hit{pointer-events:all;}
+  .zone .chip-g{pointer-events:none;}
+  .zone:hover .tint{opacity:.42;}
+  .zone.is-selected .tint{opacity:.55;}
+  .zone.is-selected .frame{stroke-width:2.5;}
+  .zone.is-selected .bar{opacity:1;}
+  .zone.is-selected{filter:drop-shadow(0 0 5px rgba(0,29,105,.42));}
+
+  /* ---- level 0 ---- */
+  .l0{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;max-width:420px;}
+  .l0-ico{width:46px;height:46px;border-radius:13px;background:var(--hl);color:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+  .l0-ico svg{width:23px;height:23px;}
+  .l0-lead{font-size:21px;font-weight:800;color:var(--ink);margin-bottom:9px;line-height:1.15;}
+  .l0-sub{font-size:14px;color:var(--body);line-height:1.55;}
+
+  /* ---- shared kicker ---- */
+  .kicker{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .zpill{font-size:10.5px;font-weight:800;letter-spacing:1px;color:var(--accent);background:var(--hl);padding:4px 10px;border-radius:99px;white-space:nowrap;}
+  .mnum{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
+
+  /* ---- level 1 ---- */
+  .lane-row{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
+  .lane-ico{width:26px;height:26px;color:var(--accent);flex-shrink:0;}
+  .lane-ico svg{width:24px;height:24px;}
+  .lane{font-size:19px;font-weight:800;color:var(--ink);line-height:1.15;}
+  .about{font-size:12.5px;color:var(--body);line-height:1.5;margin-bottom:12px;}
+  .mcards{display:flex;flex-direction:column;gap:8px;margin-bottom:11px;}
+  .mcard{display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;background:var(--white);border:1.5px solid #EAE4EE;border-radius:11px;padding:9px 13px;font-family:inherit;transition:border-color .12s ease,background .12s ease,transform .06s ease;}
+  .mcard:hover{border-color:var(--accent);background:#F7F5FF;transform:translateX(2px);}
+  .mc-txt{flex:1;min-width:0;}
+  .mc-name{font-size:13px;font-weight:700;color:var(--ink);line-height:1.2;margin-bottom:2px;}
+  .mc-hook{font-size:11.5px;color:#6A6672;line-height:1.3;}
+  .mc-arrow{width:20px;height:20px;color:var(--accent);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .mc-arrow svg{width:18px;height:18px;}
+  .laneif{display:flex;align-items:flex-start;gap:9px;background:var(--hl);border-radius:10px;padding:9px 12px;}
+  .laneif .li-ico{flex-shrink:0;color:var(--accent);margin-top:1px;}
+  .laneif .li-ico svg{width:16px;height:16px;}
+  .laneif p{font-size:11.5px;color:var(--ink);line-height:1.42;}
+  .laneif b{font-weight:800;}
+
+  /* ---- level 2 ---- */
+  .l2{height:100%;display:flex;flex-direction:column;}
+  .backbtn{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;background:transparent;border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:var(--accent);padding:2px 0;margin-bottom:9px;}
+  .backbtn svg{width:16px;height:16px;}
+  .backbtn:hover{text-decoration:underline;}
+  .m-name{font-size:18px;font-weight:800;color:var(--ink);line-height:1.15;margin-bottom:3px;}
+  .m-detail{font-size:11px;color:var(--muted);line-height:1.35;margin-bottom:10px;}
+  .story{flex:1;}
+  .story p{font-size:12.5px;color:var(--body);line-height:1.5;margin-bottom:8px;}
+  .story p:last-child{margin-bottom:0;}
+  .giant{display:flex;align-items:flex-start;gap:11px;background:#F4F2FA;border:1px solid #E4DEEE;border-radius:11px;padding:11px 13px;margin-top:6px;}
+  .giant-ico{width:30px;height:30px;border-radius:8px;background:var(--hl);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .giant-ico svg{width:17px;height:17px;}
+  .giant-k{font-size:9.5px;font-weight:800;letter-spacing:1px;color:var(--muted);margin-bottom:2px;}
+  .giant-n{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.25;}
+  .hpill{font-size:9.5px;font-weight:700;color:var(--accent);background:var(--hl);padding:2px 7px;border-radius:99px;margin-left:6px;white-space:nowrap;}
+  .giant-extra{font-size:11px;color:#6A6672;margin-top:3px;line-height:1.3;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wrapper">
+
+    <!-- TITLE BAR -->
+    <div class="titlebar">
+      <div class="tb-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 7 6 10.5A6 6 0 0 1 6 13.5C6 10 9 7 12 3z"/></svg>
+      </div>
+      <div class="tb-title">EIC Heritage's focus areas <span>&middot; the life of a well</span></div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <!-- LEFT: the clickable well -->
+      <div class="left">
+        <svg class="well" viewBox="0 0 360 480" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Cutaway of a well with clickable zones">
+          <defs>
+            <clipPath id="wellclip"><rect x="12" y="12" width="288" height="458" rx="14"/></clipPath>
+          </defs>
+
+          <!-- ===== ART (non-interactive) ===== -->
+          <g pointer-events="none">
+            <g clip-path="url(#wellclip)">
+              <!-- sky -->
+              <rect x="12" y="12" width="288" height="140" fill="#EDF0FF"/>
+              <!-- ground + strata -->
+              <rect x="12" y="152" width="288" height="318" fill="#E9E4F0"/>
+              <rect x="12" y="248" width="288" height="120" fill="#E3DDEC"/>
+              <rect x="12" y="386" width="288" height="84" fill="#DAD2E6"/>
+              <g stroke="#D0C8DC" stroke-width="1.4" fill="none" opacity="0.8">
+                <line x1="12" y1="198" x2="300" y2="198"/>
+                <line x1="12" y1="300" x2="300" y2="300"/>
+                <line x1="12" y1="352" x2="300" y2="352"/>
+              </g>
+              <!-- surface line -->
+              <line x1="12" y1="152" x2="300" y2="152" stroke="#C1B9D0" stroke-width="2"/>
+
+              <!-- derrick -->
+              <g stroke="#001D69" stroke-width="2.3" fill="none" stroke-linejoin="round" stroke-linecap="round">
+                <path d="M96 150 L118 62 L140 150"/>
+                <line x1="104" y1="104" x2="132" y2="104"/>
+                <line x1="100" y1="126" x2="136" y2="126"/>
+                <path d="M96 150 L136 104"/>
+                <path d="M140 150 L100 104"/>
+                <line x1="118" y1="66" x2="118" y2="150"/>
+              </g>
+              <rect x="112" y="55" width="12" height="10" rx="2" fill="#001D69"/>
+
+              <!-- seismic survey truck -->
+              <rect x="203" y="136" width="26" height="13" rx="3" fill="#DCE1FF" stroke="#001D69" stroke-width="1.5"/>
+              <circle cx="208" cy="151" r="2.5" fill="#001D69"/>
+              <circle cx="224" cy="151" r="2.5" fill="#001D69"/>
+
+              <!-- bore / casing + lateral -->
+              <path d="M124 150 L124 388 Q124 410 146 410 L252 410" fill="none" stroke="#001D69" stroke-width="7" stroke-linecap="round"/>
+              <path d="M124 150 L124 388 Q124 410 146 410 L252 410" fill="none" stroke="#DCE1FF" stroke-width="3" stroke-linecap="round"/>
+              <rect x="116" y="144" width="16" height="9" rx="2" fill="#001D69"/>
+
+              <!-- perforations along the lateral -->
+              <g stroke="#001D69" stroke-width="2" stroke-linecap="round" opacity="0.8">
+                <line x1="168" y1="411" x2="168" y2="424"/>
+                <line x1="190" y1="411" x2="190" y2="424"/>
+                <line x1="212" y1="411" x2="212" y2="424"/>
+                <line x1="234" y1="411" x2="234" y2="424"/>
+              </g>
+
+              <!-- downhole pump (ESP) + lift arrows -->
+              <rect x="115" y="330" width="18" height="26" rx="3" fill="#001D69"/>
+              <g stroke="#DCE1FF" stroke-width="1.5" stroke-linecap="round">
+                <line x1="119" y1="338" x2="129" y2="338"/>
+                <line x1="119" y1="343" x2="129" y2="343"/>
+                <line x1="119" y1="348" x2="129" y2="348"/>
+              </g>
+              <g stroke="#001D69" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M118 322 L124 315 L130 322"/>
+              </g>
+
+              <!-- oil in the reservoir -->
+              <g fill="#001D69" opacity="0.42">
+                <circle cx="70" cy="438" r="2.6"/>
+                <circle cx="92" cy="452" r="2.2"/>
+                <circle cx="150" cy="444" r="2.6"/>
+                <circle cx="176" cy="436" r="2.2"/>
+                <circle cx="200" cy="450" r="2.6"/>
+                <circle cx="224" cy="438" r="2.2"/>
+                <circle cx="250" cy="448" r="2.6"/>
+                <circle cx="112" cy="458" r="2.2"/>
+                <circle cx="270" cy="434" r="2.2"/>
+              </g>
+            </g>
+
+            <!-- seismic waves into the ground (drawn over the ground) -->
+            <g stroke="#001D69" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.5">
+              <path d="M198 157 Q216 172 234 157"/>
+              <path d="M192 163 Q216 184 240 163"/>
+              <path d="M186 169 Q216 196 246 169"/>
+            </g>
+
+            <!-- ===== THE BRAIN rail (always visible) ===== -->
+            <g>
+              <rect x="310" y="20" width="40" height="442" rx="14" fill="#FFFFFF" stroke="#C9C2D6" stroke-width="1.5"/>
+              <!-- cpu icon -->
+              <g transform="translate(330,44)" stroke="#001D69" stroke-width="1.7" fill="none">
+                <rect x="-7" y="-7" width="14" height="14" rx="2"/>
+                <rect x="-3" y="-3" width="6" height="6" rx="1" fill="#DCE1FF" stroke="none"/>
+                <line x1="-2" y1="-7" x2="-2" y2="-11"/><line x1="3" y1="-7" x2="3" y2="-11"/>
+                <line x1="-2" y1="7" x2="-2" y2="11"/><line x1="3" y1="7" x2="3" y2="11"/>
+                <line x1="-7" y1="-2" x2="-11" y2="-2"/><line x1="-7" y1="3" x2="-11" y2="3"/>
+                <line x1="7" y1="-2" x2="11" y2="-2"/><line x1="7" y1="3" x2="11" y2="3"/>
+              </g>
+              <!-- data bus -->
+              <line x1="336" y1="72" x2="336" y2="412" stroke="#001D69" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round" opacity="0.6"/>
+              <!-- nodes aligned to the three physical zones -->
+              <g fill="#001D69"><circle cx="336" cy="82" r="7"/><circle cx="336" cy="229" r="7"/><circle cx="336" cy="388" r="7"/></g>
+              <g fill="#DCE1FF"><circle cx="336" cy="82" r="2.6"/><circle cx="336" cy="229" r="2.6"/><circle cx="336" cy="388" r="2.6"/></g>
+              <!-- wires reaching into each zone -->
+              <g stroke="#001D69" stroke-width="1.6" stroke-dasharray="2 3" opacity="0.5">
+                <line x1="329" y1="82" x2="300" y2="82"/>
+                <line x1="329" y1="229" x2="300" y2="229"/>
+                <line x1="329" y1="388" x2="300" y2="388"/>
+              </g>
+              <!-- rotated label -->
+              <text transform="translate(321,150) rotate(-90)" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#001D69" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">THE BRAIN</text>
+            </g>
+          </g>
+
+          <!-- ===== INTERACTIVE ZONES ===== -->
+          <!-- FIND IT -->
+          <g class="zone" data-zone="find" role="button" tabindex="0" aria-label="Zone 1 Find It">
+            <rect class="tint" x="12" y="12" width="288" height="140" rx="4"/>
+            <rect class="hit" x="12" y="12" width="288" height="140" fill="transparent"/>
+            <rect class="frame" x="15" y="15" width="282" height="134" rx="11"/>
+            <rect class="bar" x="12" y="16" width="4" height="132"/>
+            <g class="chip-g" transform="translate(24,24)">
+              <rect width="84" height="24" rx="7" fill="#fff" stroke="#D9D3E1"/>
+              <g transform="translate(10,6)" stroke="#001D69" stroke-width="1.8" fill="none" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.5"/><line x1="8.9" y1="8.9" x2="12" y2="12"/></g>
+              <text x="30" y="16.5" font-size="11" font-weight="800" fill="#001D69" letter-spacing="0.7">FIND IT</text>
+            </g>
+          </g>
+          <!-- DRILL IT -->
+          <g class="zone" data-zone="drill" role="button" tabindex="0" aria-label="Zone 2 Drill It">
+            <rect class="tint" x="12" y="152" width="288" height="154" rx="4"/>
+            <rect class="hit" x="12" y="152" width="288" height="154" fill="transparent"/>
+            <rect class="frame" x="15" y="155" width="282" height="148" rx="11"/>
+            <rect class="bar" x="12" y="156" width="4" height="146"/>
+            <g class="chip-g" transform="translate(24,162)">
+              <rect width="86" height="24" rx="7" fill="#fff" stroke="#D9D3E1"/>
+              <g transform="translate(10,5)" stroke="#001D69" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="1" x2="6" y2="8"/><path d="M3 6l3 3 3-3"/><line x1="1.5" y1="13" x2="10.5" y2="13"/></g>
+              <text x="30" y="16.5" font-size="11" font-weight="800" fill="#001D69" letter-spacing="0.7">DRILL IT</text>
+            </g>
+          </g>
+          <!-- MILK IT -->
+          <g class="zone" data-zone="milk" role="button" tabindex="0" aria-label="Zone 3 Milk It">
+            <rect class="tint" x="12" y="306" width="288" height="164" rx="4"/>
+            <rect class="hit" x="12" y="306" width="288" height="164" fill="transparent"/>
+            <rect class="frame" x="15" y="309" width="282" height="158" rx="11"/>
+            <rect class="bar" x="12" y="310" width="4" height="156"/>
+            <g class="chip-g" transform="translate(24,436)">
+              <rect width="82" height="24" rx="7" fill="#fff" stroke="#D9D3E1"/>
+              <g transform="translate(11,5)" stroke="#001D69" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1c2 2.7 4 4.7 4 7A4 4 0 0 1 2 8c0-2.3 2-4.3 4-7z"/></g>
+              <text x="29" y="16.5" font-size="11" font-weight="800" fill="#001D69" letter-spacing="0.7">MILK IT</text>
+            </g>
+          </g>
+          <!-- THE BRAIN -->
+          <g class="zone" data-zone="brain" role="button" tabindex="0" aria-label="Zone 4 The Brain">
+            <rect class="tint" x="310" y="20" width="40" height="442" rx="14"/>
+            <rect class="hit" x="308" y="18" width="44" height="446" fill="transparent" rx="15"/>
+            <rect class="frame" x="311" y="21" width="38" height="440" rx="14"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RIGHT: content -->
+      <div class="right"><div id="panel"></div></div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   ICONS — inline line-icons (Phosphor-style). Edit-safe.
+   ===================================================================== */
+const ICONS = {
+  search:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><line x1="15.5" y1="15.5" x2="21" y2="21"/></svg>`,
+  drill:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="13"/><path d="M8 9l4 4 4-4"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`,
+  drop:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 7 6 10.5A6 6 0 0 1 6 13.5C6 10 9 7 12 3z"/></svg>`,
+  chip:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><line x1="10" y1="7" x2="10" y2="4"/><line x1="14" y1="7" x2="14" y2="4"/><line x1="10" y1="20" x2="10" y2="17"/><line x1="14" y1="20" x2="14" y2="17"/><line x1="7" y1="10" x2="4" y2="10"/><line x1="7" y1="14" x2="4" y2="14"/><line x1="20" y1="10" x2="17" y2="10"/><line x1="20" y1="14" x2="17" y2="14"/></svg>`,
+  chevR:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+  chevL:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`,
+  building:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="16"/><rect x="13" y="9" width="7" height="11"/><line x1="7" y1="8" x2="8" y2="8"/><line x1="7" y1="12" x2="8" y2="12"/><line x1="16" y1="13" x2="17" y2="13"/></svg>`,
+  cursor:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l15 8-7 2-2 7L5 3z"/></svg>`
+};
+
+/* =====================================================================
+   DATA — every zone + mission. Edit here; UI re-renders from this.
+   ===================================================================== */
+const ZONES = [
+  {
+    id:"find", num:1, tag:"FIND IT", icon:"search",
+    lane:"Resource Characterization & Capture",
+    about:"First, work out if there's oil down there, how much of it, and who's allowed to take it, all before you spend millions to drill and find out the hard way.",
+    laneIf:"you like being a detective, using clues and clever tools to find what's hidden before anyone digs.",
+    missions:[
+      {
+        name:"Geology, geophysics & advanced imaging", detail:"",
+        hook:"See the oil hidden deep in the rock, without drilling everywhere.",
+        giant:"SLB (Schlumberger)", pill:"Heritage backer", extra:"",
+        story:[
+          "The oil is hidden deep inside solid rock, and you can't dig everywhere to look for it. So how do you find it without drilling a million holes hoping to get lucky?",
+          "Here's one clever trick: you send sound waves down into the ground and listen to the echoes that bounce back. Different rocks echo differently, so those echoes get turned into a map of what's hidden far below your feet. It's the exact same idea as a doctor's ultrasound seeing a baby before it's born, just pointed at the Earth instead.",
+          "Pretty cool, right? Giant companies like SLB (Schlumberger) do this all over the world, and EIC Heritage backs the startups building the next, sharper version of it. (SLB is even one of Heritage's own backers.)"
+        ]
+      },
+      {
+        name:"Reservoir characterization, geochemistry & improved predictions", detail:"",
+        hook:"Work out how much oil is really down there, and if it will flow.",
+        giant:"Halliburton", pill:"", extra:"",
+        story:[
+          "Okay, so the echoes say there's oil down there. But how much, and will it actually come out, or just sit stuck in the rock? Guess too high and you sink millions into a dud. Guess too low and you walk away from a fortune. So how do you make the right call?",
+          "People study tiny rock and fluid samples, mix in some chemistry, and crunch the numbers to predict how much oil is really trapped and how easily it will flow. Nail that prediction and you save a fortune, which is why giants like Halliburton built entire businesses around getting it right."
+        ]
+      },
+      {
+        name:"Subsurface digital twin & economic evaluation", detail:"",
+        hook:"Test your drilling plan on a computer before spending a cent.",
+        giant:"Baker Hughes", pill:"", extra:"",
+        story:[
+          "You think there's oil down there and you have a plan to reach it. But drilling is wildly expensive, and if your plan is wrong you lose it all. So how do you test your idea before betting real money on it?",
+          "Here's the clever bit: you build a full copy of the underground world inside a computer, then try your drilling plan on that copy first. It's like a video-game level or a flight simulator. Pilots crash a thousand times in the simulator so they never crash the real plane. You test drilling ideas on a laptop so you never waste a real, expensive well.",
+          "Cool, right? Giants like Baker Hughes build these virtual copies so companies can pick the smartest plan before a single drill touches the ground."
+        ]
+      },
+      {
+        name:"Land, mineral & royalty rights", detail:"(AI-enabled)",
+        hook:"Find out who legally owns the oil, in seconds not weeks.",
+        giant:"Enverus", pill:"", extra:"",
+        story:[
+          "Say you found oil. There's a catch: you can't just take it. Someone owns the rights to what's under that land, and if you drill without permission you're in serious trouble. So how do you find out who owns what, fast?",
+          "Think of it like your backyard. Nobody can build there without your say-so, and land rights work the same way. Normally, checking who owns the rights means digging through weeks of dusty paperwork. Now AI reads all those records and answers in seconds instead.",
+          "Pretty cool, right? Companies like Enverus use AI to untangle who owns what, so deals that used to crawl now move at the speed of a search."
+        ]
+      }
+    ]
+  },
+  {
+    id:"drill", num:2, tag:"DRILL IT", icon:"drill",
+    lane:"Resource Development",
+    about:"You know there's oil and you've got the rights. Now punch a hole miles down to reach it and get that hole ready to flow, without it collapsing, veering off course, or costing a fortune.",
+    laneIf:"you like building things and solving hands-on engineering puzzles under real pressure.",
+    missions:[
+      {
+        name:"Drilling", detail:"(bottom-hole assembly, fluid management, downhole data transmission, autonomous drilling, longer laterals)",
+        hook:"Drill miles down, then steer the hole sideways through rock.",
+        giant:"Nabors Industries", pill:"", extra:"",
+        story:[
+          "You need to reach oil sitting a couple of miles straight down. And here's the strange part: once you get down there, you often need the hole to bend and travel sideways too. So how do you dig a hole that deep that can also turn a corner?",
+          "Picture pushing a bendy straw through a cake without snapping it. Modern drills do exactly that, steering themselves through the rock and even reading the ground as they go. When people say 'longer laterals,' they mean reaching lots of rooms from a single hallway, so one well drains far more oil.",
+          "Cool, right? Companies like Nabors Industries build drills that steer themselves, so wells go deeper, farther, and straighter with less guesswork."
+        ]
+      },
+      {
+        name:"Completion", detail:"(downhole equipment, fluids/sand/smart proppant, diagnostics)",
+        hook:"Crack the rock and prop it open so the oil can flow in.",
+        giant:"Liberty Energy", pill:"Heritage backer", extra:"",
+        story:[
+          "You've drilled the hole. Surprise: the oil doesn't just come gushing out. The rock around your hole is tight, and the oil is locked inside it. So how do you get it to actually flow?",
+          "You line the hole to keep it strong, then crack the rock around it and prop those cracks open with sand so the oil has a path to seep in. It's like installing the plumbing and finally opening the taps. The newest sand is even 'smart,' quietly reporting back on what's happening deep inside the crack.",
+          "Pretty cool, right? Liberty Energy is a giant at this, and it's also one of Heritage's own backers, so you'd be learning from a company right in the family."
+        ]
+      }
+    ]
+  },
+  {
+    id:"milk", num:3, tag:"MILK IT", icon:"drop",
+    lane:"Resource Management",
+    about:"The well is flowing. Now pull out as many profitable barrels as you can over years, keep a tired well alive, and handle everything that comes up alongside the oil.",
+    laneIf:"you like squeezing the most out of what you already have, and you hate seeing anything wasted.",
+    missions:[
+      {
+        name:"Production", detail:"(artificial lift, facilities, enhanced oil recovery, autonomous ESP)",
+        hook:"Keep a tired well pumping, and reach the oil left behind.",
+        giant:"ChampionX", pill:"", extra:"Plus Moleaer, a Heritage company using tiny bubbles to recover even more oil.",
+        story:[
+          "At first, oil comes up on its own. But every well gets tired, the flow slows, and a lot of oil just sits there stuck in the rock. So how do you keep the barrels coming after the easy gush is gone?",
+          "Think of a bottle of soda. The first pour is easy, but to get the last of it you have to squeeze it or use a straw. A well is the same. You add a pump to lift the oil (that's 'artificial lift'), or use clever tricks to loosen what's stuck (that's 'enhanced oil recovery').",
+          "Cool, right? Giants like ChampionX build the pumps that keep tired wells alive, and Heritage-backed Moleaer uses tiny bubbles to shake even more oil loose."
+        ]
+      },
+      {
+        name:"Produced-water treatment, re-use & handling", detail:"",
+        hook:"Clean and re-use the flood of salty water that comes up too.",
+        giant:"Aris Water Solutions", pill:"", extra:"",
+        story:[
+          "Here's something nobody tells you: wells don't just produce oil. For every barrel of oil, you often pull up several barrels of salty, dirty water too. That's a flood of water you have to deal with. So what do you do with all of it?",
+          "You can't just dump it. So you clean it up and re-use it for the next well, or safely put it back deep underground. Think of it like recycling the water instead of wasting fresh water every time.",
+          "Pretty cool, right? Companies like Aris Water Solutions handle this river of water, turning a messy problem into something clean and re-usable."
+        ]
+      },
+      {
+        name:"Field gas to value", detail:"(power generation, gas-to-liquids)",
+        hook:"Catch the gas that used to be burned off, and turn it into power or fuel.",
+        giant:"Sasol", pill:"", extra:"",
+        story:[
+          "When you pump oil, gas often comes up with it. For years, sites just burned that gas off into the sky, which is called flaring. It's pure waste. So what if you could catch it and actually use it?",
+          "Now that gas gets turned into electricity to run the site, or even converted into liquid fuel you can sell. It's basically turning trash into cash. The gas that used to go up in flames now does real work instead.",
+          "Cool, right? Sasol pioneered turning gas into liquid fuel, proving that the stuff everyone once wasted can be worth a fortune."
+        ]
+      }
+    ]
+  },
+  {
+    id:"brain", num:4, tag:"THE BRAIN", icon:"chip",
+    lane:"Cross-cutting digital layer",
+    about:"This one isn't a spot in the well. It's the smarts wired through all of it: the AI, robots, cameras, and software that make every other zone faster, cheaper, and safer.",
+    laneIf:"you're into AI, robots, and software, and you want to see them let loose on a giant real-world machine.",
+    missions:[
+      {
+        name:"AI/ML analytics & predictive modeling", detail:"",
+        hook:"Predict which machine is about to fail before it does.",
+        giant:"C3.ai", pill:"", extra:"Plus Origen, a Heritage dealflow company using AI to optimize whole fields.",
+        story:[
+          "An oilfield is full of pumps and machines, and when one breaks it can shut everything down and cost a fortune. So here's the dream: what if you could see a breakdown coming before it happens?",
+          "Your phone already predicts your next word before you type it. This is the same idea, aimed at machines. Software watches the tiny signals a pump gives off and warns you which one is about to fail, so you fix it on a calm Tuesday instead of during a 3am emergency.",
+          "Cool, right? Giants like C3.ai build this kind of industrial AI, and Heritage-tracked Origen uses it to squeeze more out of entire fields."
+        ]
+      },
+      {
+        name:"Autonomous systems & robotics", detail:"",
+        hook:"Send robot dogs to patrol the dangerous spots, so people don't have to.",
+        giant:"Boston Dynamics", pill:"", extra:"",
+        story:[
+          "Oilfields have dangerous corners: leaking gas, high pressure, remote spots miles from anyone. Sending a person to check them is slow and risky. So what if a robot could go instead?",
+          "Picture a robot dog that patrols the site on its own, sniffing for leaks and checking gauges in the exact places you'd never want a human standing. Boston Dynamics makes a robot like this, nicknamed 'Spot,' and it walks the rounds so people stay safe.",
+          "Pretty cool, right? Robots take the dangerous, boring patrols, which means fewer people in harm's way and problems caught sooner."
+        ]
+      },
+      {
+        name:"Computer vision, advanced sensing & imaging", detail:"",
+        hook:"Catch a hairline crack or leak a human eye would miss.",
+        giant:"Percepto", pill:"", extra:"",
+        story:[
+          "A tiny crack in a pipe or a slow leak can turn into a huge, dangerous mess. But a person walking by usually can't spot something that small. So how do you catch the tiny problems before they blow up?",
+          "You use the same computer vision that lets a self-driving car see the road, or that unlocks your phone with your face. Point that at pipes and equipment and it spots hairline cracks, heat, and leaks a human eye would slide right past.",
+          "Cool, right? Companies like Percepto fly autonomous drones that inspect a whole site with these smart cameras, catching the little problems while they're still little."
+        ]
+      },
+      {
+        name:"Operations software & digital twins", detail:"",
+        hook:"Watch and run hundreds of wells from a single screen.",
+        giant:"Palantir", pill:"", extra:"",
+        story:[
+          "A single oilfield can have hundreds of wells spread across miles. Driving out to check each one would take forever. So how do you keep an eye on all of them at once?",
+          "You put every well onto one live dashboard, so the whole field shows up on a single screen. It's like mission control for a space launch, except it's for oil, and you run the operation almost like a video game.",
+          "Pretty cool, right? Palantir builds this kind of software, turning a sprawling, messy field into one clear screen you can actually control."
+        ]
+      }
+    ]
+  }
+];
+
+/* =====================================================================
+   ENGINE
+   ===================================================================== */
+const panel = document.getElementById("panel");
+let curZone = null;   // index into ZONES
+let curMission = null; // index into ZONES[curZone].missions
+
+const LEVEL0 = `
+  <div class="l0">
+    <div class="l0-ico">${ICONS.cursor}</div>
+    <p class="l0-lead">Click a zone to explore.</p>
+    <p class="l0-sub">You're looking for the lane that pulls you in, not memorizing every term.</p>
+  </div>`;
+
+function level1(z){
+  const cards = z.missions.map((m,i)=>`
+    <button class="mcard" data-mi="${i}">
+      <span class="mc-txt">
+        <span class="mc-name">${m.name}</span>
+        <span class="mc-hook">${m.hook}</span>
+      </span>
+      <span class="mc-arrow">${ICONS.chevR}</span>
+    </button>`).join("");
+  return `
+    <div class="l1">
+      <div class="kicker"><span class="zpill">ZONE ${z.num} &middot; ${z.tag}</span></div>
+      <div class="lane-row"><span class="lane-ico">${ICONS[z.icon]}</span><h2 class="lane">${z.lane}</h2></div>
+      <p class="about">${z.about}</p>
+      <div class="mcards">${cards}</div>
+      <div class="laneif"><span class="li-ico">${ICONS.cursor}</span><p><b>This is your lane if</b> ${z.laneIf}</p></div>
+    </div>`;
+}
+
+function level2(z, mi){
+  const m = z.missions[mi];
+  const paras = m.story.map(p=>`<p>${p}</p>`).join("");
+  const pill = m.pill ? `<span class="hpill">${m.pill}</span>` : "";
+  const extra = m.extra ? `<div class="giant-extra">${m.extra}</div>` : "";
+  const detail = m.detail ? `<div class="m-detail">${m.detail}</div>` : "";
+  return `
+    <div class="l2">
+      <button class="backbtn" data-back="1">${ICONS.chevL} Back to ${z.tag} missions</button>
+      <div class="kicker">
+        <span class="zpill">ZONE ${z.num} &middot; ${z.tag}</span>
+        <span class="mnum">Mission ${mi+1} of ${z.missions.length}</span>
+      </div>
+      <h2 class="m-name">${m.name}</h2>
+      ${detail}
+      <div class="story">${paras}</div>
+      <div class="giant">
+        <span class="giant-ico">${ICONS.building}</span>
+        <div>
+          <div class="giant-k">WHO DOES THIS TODAY</div>
+          <div class="giant-n">${m.giant}${pill}</div>
+          ${extra}
+        </div>
+      </div>
+    </div>`;
+}
+
+function render(){
+  // well highlight
+  document.querySelectorAll(".zone").forEach(g=>{
+    const on = curZone!=null && g.getAttribute("data-zone")===ZONES[curZone].id;
+    g.classList.toggle("is-selected", on);
+  });
+  // right panel
+  if(curZone==null){ panel.innerHTML = LEVEL0; }
+  else if(curMission==null){ panel.innerHTML = level1(ZONES[curZone]); }
+  else { panel.innerHTML = level2(ZONES[curZone], curMission); }
+}
+
+// zone clicks (and keyboard for accessibility)
+document.querySelectorAll(".zone").forEach(g=>{
+  function pick(){
+    const id = g.getAttribute("data-zone");
+    curZone = ZONES.findIndex(z=>z.id===id);
+    curMission = null;
+    render();
+  }
+  g.addEventListener("click", pick);
+  g.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); pick(); } });
+});
+
+// panel clicks (mission open + back)
+panel.addEventListener("click", e=>{
+  const card = e.target.closest(".mcard");
+  if(card){ curMission = +card.getAttribute("data-mi"); render(); return; }
+  const back = e.target.closest(".backbtn");
+  if(back){ curMission = null; render(); return; }
+});
+
+/* ---- scale-to-fit (Notion embeds are ~700-900px wide) ---- */
+function scaleDeck(){
+  const w = document.getElementById("wrapper");
+  const s = Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+  w.style.transform = `scale(${s})`;
+  w.style.transformOrigin = "top center";
+}
+window.addEventListener("resize", scaleDeck);
+scaleDeck();
+render();
+</script>
+</body>
+</html>
