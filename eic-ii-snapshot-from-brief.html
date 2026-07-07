@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus-Area Snapshot — AI Data-Center Energy Demand</title>
+<style>
+  :root{
+    --bg:#FDF8F8; --navy:#001D69; --lav:#DCE1FF; --ink:#1C1B1B;
+    --body:#484646; --line:#ECE6EE; --muted:#8A8693; --white:#FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    overflow:hidden;
+    height:100vh;
+  }
+  #wrapper{
+    position:absolute; top:0; left:50%;
+    transform-origin:top center;
+    transform:translateX(-50%) scale(1);
+  }
+  #card{
+    width:1000px;
+    background:var(--white);
+    padding:48px 56px 40px;
+  }
+
+  /* Header */
+  .kicker{
+    display:inline-block;
+    background:var(--lav);
+    color:var(--navy);
+    font-size:13px; font-weight:700;
+    letter-spacing:.10em; text-transform:uppercase;
+    padding:7px 15px; border-radius:999px;
+  }
+  h1.headline{
+    color:var(--ink);
+    font-size:34px; line-height:1.22; font-weight:800;
+    margin:20px 0 0; letter-spacing:-.01em;
+  }
+
+  /* Section shells */
+  .section{margin-top:34px;}
+  .eyebrow{
+    color:var(--navy);
+    font-size:13px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase;
+    margin:0 0 12px;
+  }
+  .whatis p{
+    font-size:18px; line-height:1.6; margin:0; color:var(--body);
+  }
+  .whatis .term{color:var(--ink); font-weight:600;}
+
+  /* Trajectory */
+  .traj-head{display:flex; justify-content:space-between; align-items:flex-end; gap:24px;}
+  .readout{min-width:260px;}
+  .readout .big{
+    color:var(--navy); font-weight:800; letter-spacing:-.02em;
+    font-size:58px; line-height:1;
+  }
+  .readout .big .unit{font-size:26px; font-weight:700; margin-left:6px;}
+  .readout .sub{margin-top:8px; font-size:15px; color:var(--body);}
+  .readout .tag{
+    display:inline-block; margin-top:10px;
+    font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    padding:4px 11px; border-radius:999px;
+  }
+  .tag.actual{background:#E7ECFF; color:var(--navy);}
+  .tag.projected{background:#F2EEF6; color:#5B5570; border:1px dashed #B9B0CC;}
+
+  .scenario{text-align:right;}
+  .scenario .lbl{font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.05em; text-transform:uppercase; margin-bottom:8px;}
+  .scenario .btns{display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .scenario button{
+    appearance:none; border:0; background:var(--white);
+    font-family:inherit; font-size:14px; font-weight:600; color:var(--body);
+    padding:9px 16px; cursor:pointer; border-left:1px solid var(--line);
+  }
+  .scenario button:first-child{border-left:0;}
+  .scenario button.on{background:var(--navy); color:var(--white);}
+
+  .chartwrap{position:relative; margin-top:18px;}
+  svg{display:block; width:100%; height:auto;}
+  .tooltip{
+    position:absolute; z-index:5;
+    display:none;
+    background:var(--ink); color:var(--white);
+    font-size:13px; line-height:1.4;
+    padding:10px 12px; border-radius:8px;
+    width:240px; pointer-events:none;
+    transform:translate(-50%,-100%);
+    box-shadow:0 6px 20px rgba(28,27,27,.22);
+  }
+  .tooltip .fig{font-weight:700; display:block; margin-bottom:3px;}
+  .tooltip .src{color:#C9CEEB; font-size:12px;}
+  .tooltip::after{
+    content:""; position:absolute; left:50%; top:100%;
+    transform:translateX(-50%);
+    border:7px solid transparent; border-top-color:var(--ink);
+  }
+
+  .slider-row{margin-top:14px;}
+  .slider-row input[type=range]{width:100%; accent-color:var(--navy);}
+  .slider-scale{display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-top:4px;}
+  .legend{display:flex; gap:22px; margin-top:14px; font-size:13px; color:var(--body); flex-wrap:wrap;}
+  .legend span{display:inline-flex; align-items:center; gap:8px;}
+  .lg-solid,.lg-dash{width:26px; height:0; border-top:3px solid var(--navy);}
+  .lg-dash{border-top:3px dashed #7d84b8;}
+
+  /* Why it matters */
+  .why-card{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 20px;
+    margin-top:12px;
+  }
+  .why-card + .why-card{margin-top:12px;}
+  .why-card .pt{font-size:17px; line-height:1.5; color:var(--ink); font-weight:600; margin:0;}
+  .why-card .cite{display:block; margin-top:7px; font-size:13px; color:var(--muted);}
+
+  /* Footer */
+  .footer{margin-top:30px; border-top:1px solid var(--line); padding-top:16px;}
+  .sources{font-size:13px; color:var(--muted); line-height:1.5;}
+  .credit{margin-top:10px; font-size:14px; color:var(--ink); font-weight:600;}
+  .note{margin-top:6px; font-size:13px; color:var(--muted); font-style:italic;}
+</style>
+</head>
+<body>
+  <div id="wrapper">
+    <div id="card">
+
+      <!-- 1. Header -->
+      <span class="kicker">Focus-Area Snapshot</span>
+      <h1 class="headline">Here is what I learned about AI data-center energy demand, and why it matters to oil and gas.</h1>
+
+      <!-- 2. What it is -->
+      <div class="section whatis">
+        <p class="eyebrow">What it is</p>
+        <p id="whatis-text"></p>
+      </div>
+
+      <!-- 3. The Trajectory (interactive centerpiece) -->
+      <div class="section">
+        <p class="eyebrow">The Trajectory</p>
+        <div class="traj-head">
+          <div class="readout">
+            <div class="big"><span id="ro-value">0</span><span class="unit" id="ro-unit">TWh</span></div>
+            <div class="sub" id="ro-sub"></div>
+            <span class="tag actual" id="ro-tag">Actual</span>
+          </div>
+          <div class="scenario">
+            <div class="lbl">2028 projection</div>
+            <div class="btns" id="scenario-btns">
+              <button data-s="0">Conservative</button>
+              <button data-s="1">Base</button>
+              <button data-s="2">Aggressive</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chartwrap">
+          <svg id="chart" viewBox="0 0 888 330" role="img" aria-label="U.S. data-center electricity use over time, in terawatt-hours"></svg>
+          <div class="tooltip" id="tooltip"><span class="fig" id="tt-fig"></span><span class="src" id="tt-src"></span></div>
+        </div>
+
+        <div class="slider-row">
+          <input type="range" id="year" min="2014" max="2028" step="1" value="2028" aria-label="Year">
+          <div class="slider-scale"><span>2014</span><span>2023</span><span>2028</span></div>
+        </div>
+
+        <div class="legend">
+          <span><span class="lg-solid"></span> Reported (2014 to 2023)</span>
+          <span><span class="lg-dash"></span> Illustrative projection (to 2028)</span>
+        </div>
+      </div>
+
+      <!-- 4. Why it matters -->
+      <div class="section">
+        <p class="eyebrow">Why it matters to oil and gas</p>
+        <div id="why-wrap"></div>
+      </div>
+
+      <!-- 5. Footer -->
+      <div class="footer">
+        <div class="sources" id="sources"></div>
+        <div class="credit" id="credit"></div>
+        <div class="note" id="note"></div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+/* =========================================================================
+   DATA  — every number and source below is taken from the sample brief
+   "The AI Data Center Energy Surge". Edit copy and numbers here only.
+   ========================================================================= */
+var DATA = {
+  focusArea: "AI data-center energy demand",
+
+  whatIs:
+    "AI data centers are buildings full of computers that train and run artificial intelligence. " +
+    "They need far more electricity than older data centers, and many more of them are being built. " +
+    "The reason is density. A rack is a frame that holds a stack of servers. One modern AI rack draws " +
+    "about 120 kilowatts of power, roughly 6 to 10 times a traditional rack (The Register, 2024). " +
+    "That higher draw per rack, multiplied across thousands of new buildings, is what pushes total demand up.",
+
+  // Chart series: U.S. data-center electricity use, in TWh
+  unit: "TWh",
+  valueLabel: "U.S. data-center electricity",
+  unitPlain: "A terawatt-hour (TWh) is a way to measure a year of electricity use.",
+
+  driver: { min: 2014, max: 2028, step: 1, default: 2028 },
+  yMax: 600,
+
+  // Cited anchor points. mode: "actual" = reported figure; "projected" = forward-looking.
+  anchors: [
+    { year: 2014, value: 58,  mode: "actual",
+      tooltip: { fig: "2014: 58 TWh (reported)",
+                 src: "LBNL 2024, via U.S. DOE" } },
+    { year: 2023, value: 176, mode: "actual",
+      tooltip: { fig: "2023: 176 TWh, about 4.4% of all U.S. electricity (reported)",
+                 src: "LBNL 2024, via U.S. DOE" } },
+    { year: 2028, value: 450, mode: "projected",
+      tooltip: { fig: "2028: 325 to 580 TWh projected, about 6.7% to 12% of U.S. electricity",
+                 src: "LBNL 2024, via U.S. DOE" } }
+  ],
+
+  // Growth scenarios move only the dashed 2028 endpoint, inside the cited 325 to 580 range.
+  scenarios: [
+    { name: "Conservative", value: 325, note: "low end of the cited range" },
+    { name: "Base",         value: 450, note: "midpoint of the cited range" },
+    { name: "Aggressive",   value: 580, note: "high end of the cited range" }
+  ],
+  defaultScenario: 1,
+
+  takeaway: {
+    actual:    "In {year}, U.S. data centers used about {value} TWh of electricity.",
+    projected: "By {year}, U.S. data centers are projected to use about {value} TWh of electricity."
+  },
+
+  whyItMatters: [
+    { point: "About 60% of the new AI power demand is expected to be met by natural gas. The rest is expected to come from other sources, including nuclear and renewables.",
+      cite: "Goldman Sachs, 2025" },
+    { point: "Data centers could add 3 to 6 Bcf/d of new U.S. natural gas demand by 2030, against total U.S. use near 90 Bcf/d. Bcf/d means billion cubic feet of gas per day.",
+      cite: "S&P Global, RBC, and East Daley, 2024 to 2026" }
+  ],
+
+  sources: [
+    "LBNL 2024 (via U.S. DOE)",
+    "The Register, 2024",
+    "Goldman Sachs, 2025",
+    "S&P Global, RBC, and East Daley, 2024 to 2026"
+  ],
+  credit: "Priya Rao  ·  EIC Energy Transition Venture Capital Market Research Externship",
+  projectionNote: "Illustrative projection, based on cited sources."
+};
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+var state = { year: DATA.driver.default, scenario: DATA.defaultScenario };
+
+// Chart geometry
+var W = 888, H = 330;
+var padL = 66, padR = 26, padT = 22, padB = 46;
+var plotW = W - padL - padR;
+var plotH = H - padT - padB;
+
+function xOf(year){
+  return padL + (year - DATA.driver.min) / (DATA.driver.max - DATA.driver.min) * plotW;
+}
+function yOf(v){
+  return padT + (1 - v / DATA.yMax) * plotH;
+}
+function endpoint(){ return DATA.scenarios[state.scenario].value; }
+
+// Value at a given year, interpolating between cited anchors
+function valueAt(year){
+  if (year <= 2023){
+    return 58 + (176 - 58) * (year - 2014) / (2023 - 2014);
+  }
+  return 176 + (endpoint() - 176) * (year - 2023) / (2028 - 2023);
+}
+function modeAt(year){ return year <= 2023 ? "actual" : "projected"; }
+
+function svgEl(tag, attrs){
+  var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (var k in attrs){ e.setAttribute(k, attrs[k]); }
+  return e;
+}
+
+function drawStatic(svg){
+  // horizontal gridlines + y labels
+  var ticks = [0,150,300,450,600];
+  ticks.forEach(function(t){
+    var y = yOf(t);
+    svg.appendChild(svgEl("line",{x1:padL,y1:y,x2:W-padR,y2:y,stroke:"#ECE6EE","stroke-width":1}));
+    var lb = svgEl("text",{x:padL-12,y:y+4,"text-anchor":"end","font-size":12,fill:"#8A8693"});
+    lb.textContent = t;
+    svg.appendChild(lb);
+  });
+  // y axis title
+  var yt = svgEl("text",{x:padL-46,y:padT-8,"font-size":12,fill:"#8A8693"});
+  yt.textContent = "TWh per year";
+  svg.appendChild(yt);
+  // x labels
+  [2014,2020,2023,2028].forEach(function(yr){
+    var x = xOf(yr);
+    var lb = svgEl("text",{x:x,y:H-padB+22,"text-anchor":"middle","font-size":12,fill:"#8A8693"});
+    lb.textContent = yr;
+    svg.appendChild(lb);
+  });
+}
+
+var svg = document.getElementById("chart");
+var dyn = null; // dynamic group
+
+function draw(){
+  if (dyn){ svg.removeChild(dyn); }
+  dyn = svgEl("g",{});
+
+  var yBase = yOf(0);
+
+  // ---- Solid (reported) area + line: 2014 -> 2023 ----
+  var x14 = xOf(2014), y14 = yOf(58);
+  var x23 = xOf(2023), y23 = yOf(176);
+  dyn.appendChild(svgEl("path",{
+    d:"M"+x14+","+yBase+" L"+x14+","+y14+" L"+x23+","+y23+" L"+x23+","+yBase+" Z",
+    fill:"#DCE1FF","fill-opacity":0.55, stroke:"none"
+  }));
+  dyn.appendChild(svgEl("path",{
+    d:"M"+x14+","+y14+" L"+x23+","+y23,
+    fill:"none", stroke:"#001D69","stroke-width":3.5,"stroke-linecap":"round"
+  }));
+
+  // ---- Dashed (projected) line: 2023 -> 2028 endpoint ----
+  var x28 = xOf(2028), y28 = yOf(endpoint());
+  dyn.appendChild(svgEl("path",{
+    d:"M"+x23+","+y23+" L"+x28+","+y28,
+    fill:"none", stroke:"#7d84b8","stroke-width":3,"stroke-dasharray":"7 6","stroke-linecap":"round"
+  }));
+  // "Illustrative projection" label near the dashed region
+  var midx = (x23 + x28)/2, midy = (y23 + y28)/2;
+  var pl = svgEl("text",{x:midx+6,y:midy-14,"font-size":12.5,fill:"#5B5570","font-style":"italic"});
+  pl.textContent = "Illustrative projection";
+  dyn.appendChild(pl);
+
+  // ---- Cited dots ----
+  DATA.anchors.forEach(function(a, i){
+    var vy = a.year === 2028 ? endpoint() : a.value;
+    var cx = xOf(a.year), cy = yOf(vy);
+    var ring = svgEl("circle",{cx:cx,cy:cy,r:9,fill:"#FFFFFF",stroke:(a.mode==="actual"?"#001D69":"#7d84b8"),"stroke-width":3});
+    var dot  = svgEl("circle",{cx:cx,cy:cy,r:4.5,fill:(a.mode==="actual"?"#001D69":"#7d84b8"),"data-i":i,style:"cursor:pointer"});
+    ring.style.cursor = "pointer";
+    // hit target
+    var hit = svgEl("circle",{cx:cx,cy:cy,r:16,fill:"transparent",style:"cursor:pointer","tabindex":"0","data-i":i,role:"button","aria-label":a.tooltip.fig});
+    dyn.appendChild(ring); dyn.appendChild(dot); dyn.appendChild(hit);
+    bindTip(hit, a.tooltip, cx, cy);
+  });
+
+  // ---- Slider marker (current year) ----
+  var v = valueAt(state.year);
+  var mx = xOf(state.year), my = yOf(v);
+  dyn.appendChild(svgEl("line",{x1:mx,y1:padT,x2:mx,y2:yBase,stroke:"#1C1B1B","stroke-width":1,"stroke-dasharray":"3 4","stroke-opacity":0.35}));
+  dyn.appendChild(svgEl("circle",{cx:mx,cy:my,r:6,fill:"#1C1B1B"}));
+
+  svg.appendChild(dyn);
+}
+
+// Tooltip handling (hidden by default; shown on hover / focus / tap)
+var tip = document.getElementById("tooltip");
+function showTip(t, cx, cy){
+  document.getElementById("tt-fig").textContent = t.fig;
+  document.getElementById("tt-src").textContent = "Source: " + t.src;
+  // convert SVG coords to pixel position within chartwrap
+  var rect = svg.getBoundingClientRect();
+  var sx = rect.width / W, sy = rect.height / H;
+  tip.style.left = (cx * sx) + "px";
+  tip.style.top  = (cy * sy - 14) + "px";
+  tip.style.display = "block";
+}
+function hideTip(){ tip.style.display = "none"; }
+function bindTip(node, t, cx, cy){
+  node.addEventListener("mouseenter", function(){ showTip(t, cx, cy); });
+  node.addEventListener("mouseleave", hideTip);
+  node.addEventListener("focus", function(){ showTip(t, cx, cy); });
+  node.addEventListener("blur", hideTip);
+  node.addEventListener("click", function(e){
+    e.stopPropagation();
+    if (tip.style.display === "block"){ hideTip(); } else { showTip(t, cx, cy); }
+  });
+}
+document.addEventListener("click", hideTip);
+
+// Readout + takeaway
+function updateReadout(){
+  var v = valueAt(state.year);
+  var mode = modeAt(state.year);
+  var rounded = Math.round(v);
+  document.getElementById("ro-value").textContent = rounded;
+  document.getElementById("ro-unit").textContent = DATA.unit;
+  var tmpl = DATA.takeaway[mode];
+  document.getElementById("ro-sub").textContent =
+    tmpl.replace("{year}", state.year).replace("{value}", rounded);
+  var tag = document.getElementById("ro-tag");
+  if (mode === "actual"){ tag.textContent = "Reported"; tag.className = "tag actual"; }
+  else { tag.textContent = "Projected"; tag.className = "tag projected"; }
+}
+
+function render(){ draw(); updateReadout(); fit(); }
+
+// Static content
+function fillStatic(){
+  document.getElementById("whatis-text").textContent = DATA.whatIs;
+
+  var wc = document.getElementById("why-wrap");
+  DATA.whyItMatters.forEach(function(w){
+    var d = document.createElement("div");
+    d.className = "why-card";
+    var p = document.createElement("p"); p.className = "pt"; p.textContent = w.point;
+    var c = document.createElement("span"); c.className = "cite"; c.textContent = "Source: " + w.cite;
+    d.appendChild(p); d.appendChild(c); wc.appendChild(d);
+  });
+
+  // de-duplicate sources, join with middot
+  var seen = {}, uniq = [];
+  DATA.sources.forEach(function(s){ if(!seen[s]){ seen[s]=1; uniq.push(s); } });
+  document.getElementById("sources").textContent = "Sources: " + uniq.join("  ·  ");
+  document.getElementById("credit").textContent = DATA.credit;
+  document.getElementById("note").textContent = DATA.projectionNote;
+}
+
+// Controls
+document.getElementById("year").addEventListener("input", function(e){
+  state.year = parseInt(e.target.value, 10);
+  hideTip();
+  draw(); updateReadout();
+});
+var sBtns = document.getElementById("scenario-btns").querySelectorAll("button");
+sBtns.forEach(function(b){
+  b.addEventListener("click", function(){
+    state.scenario = parseInt(b.getAttribute("data-s"), 10);
+    sBtns.forEach(function(x){ x.classList.remove("on"); });
+    b.classList.add("on");
+    hideTip();
+    draw(); updateReadout();
+  });
+});
+
+// Scale-to-fit
+function fit(){
+  var card = document.getElementById("card");
+  var w = 1000;
+  var h = card.offsetHeight;
+  var s = Math.min(window.innerWidth / w, window.innerHeight / h, 1);
+  document.getElementById("wrapper").style.transform =
+    "translateX(-50%) scale(" + s + ")";
+}
+window.addEventListener("resize", fit);
+
+/* init (fully settled, no timers) */
+fillStatic();
+drawStatic(svg);
+sBtns[state.scenario].classList.add("on");
+render();
+</script>
+</body>
+</html>
