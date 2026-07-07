@@ -324,7 +324,7 @@ const DATA = {
   focusArea: "AI Data-Center Energy Demand",
 
   // WHAT IT IS: one plain-English sentence defining the focus area.
-  whatIs: "Power-hungry buildings running AI models around the clock. Their electricity use is climbing fast.",
+  whatIs: "Data centers are large facilities that house the servers running AI models. Their electricity demand is growing quickly as AI use expands.",
 
   // ---- THE TRAJECTORY ----
   unit:       "TWh",
@@ -337,8 +337,12 @@ const DATA = {
 
   // >>> Your two CITED value anchors (the standout numbers) <<<
   anchors: [
-    { year: 2023, value: 176 },   // cited: 2023 = 176 TWh
-    { year: 2028, value: 580 }    // cited: 2028 = 580 TWh
+    { year: 2023, value: 176,     // cited: 2023 = 176 TWh
+      tip1: "2023: 176 TWh, about 4.4% of US electricity",
+      tip2: "Source: LBNL / U.S. DOE, 2024" },
+    { year: 2028, value: 580,     // cited: 2028 = 580 TWh
+      tip1: "2028: up to 580 TWh, up to 12% of US electricity",
+      tip2: "Source: LBNL / U.S. DOE, 2024" }
   ],
 
   // >>> Your two CITED context percentages (share of the denominator) <<<
@@ -446,6 +450,84 @@ function drawAxes(){
 var dyn = el("g", {});
 chart.appendChild(dyn);
 
+/* ----- static anchor layer (dots + hover tooltips), always on top ----- */
+var anchorLayer = el("g", {});
+chart.appendChild(anchorLayer);
+
+/* Draw the two CITED anchor dots once, each with a hover/tap tooltip that
+   carries the exact sourced figure. Tooltips are SVG groups (so they scale
+   with the transformed wrapper) and are HIDDEN by default. */
+function drawAnchors(){
+  DATA.anchors.forEach(function(a){
+    var ax = xPos(a.year), ay = yPos(a.value);
+    var line1 = a.tip1 || "", line2 = a.tip2 || "";
+
+    // --- tooltip box geometry (kept inside the 0..520 viewBox) ---
+    var maxLen = Math.max(line1.length, line2.length);
+    var boxW = Math.min(384, maxLen * 6.4 + 24);
+    var boxH = 42;
+    var bx = ax - boxW / 2;
+    bx = Math.max(4, Math.min(bx, 520 - 4 - boxW)); // never clip left/right edge
+    var by = ay - boxH - 14;                          // sit above the dot
+    if (by < 4) by = ay + 14;                         // flip below if near top
+
+    var tip = el("g", { opacity:"0", visibility:"hidden", "pointer-events":"none" });
+    tip.appendChild(el("rect", { x:bx, y:by, width:boxW, height:boxH, rx:8, ry:8,
+      fill:"#001D69", stroke:"#FFFFFF", "stroke-width":1 }));
+    var t1 = el("text", { x:bx + boxW/2, y:by + 18, "text-anchor":"middle",
+      "font-size":11, "font-weight":"700", fill:"#FFFFFF" });
+    t1.textContent = line1;
+    tip.appendChild(t1);
+    var t2 = el("text", { x:bx + boxW/2, y:by + 33, "text-anchor":"middle",
+      "font-size":10, "font-weight":"600", fill:"#DCE1FF" });
+    t2.textContent = line2;
+    tip.appendChild(t2);
+
+    // hover highlight ring (hidden by default)
+    var ring = el("circle", { cx:ax, cy:ay, r:11, fill:"none",
+      stroke:"#001D69", "stroke-width":1.5, opacity:"0" });
+    anchorLayer.appendChild(ring);
+
+    // static "YEAR cited" label above the dot
+    var lbl = el("text", { x:ax, y:ay - 14, "text-anchor":"middle",
+      "font-size":11, "font-weight":"700", fill:"#001D69" });
+    lbl.textContent = a.year + " cited";
+    anchorLayer.appendChild(lbl);
+
+    // the interactive dot
+    var dot = el("circle", { cx:ax, cy:ay, r:6, fill:"#001D69",
+      stroke:"#FFFFFF", "stroke-width":2 });
+    dot.style.cursor = "pointer";
+    anchorLayer.appendChild(dot);
+
+    // tooltip drawn last so it sits on top of everything
+    anchorLayer.appendChild(tip);
+
+    var open = false;
+    function show(){
+      tip.setAttribute("opacity","1"); tip.setAttribute("visibility","visible");
+      ring.setAttribute("opacity","1"); dot.setAttribute("r","8");
+    }
+    function hide(){
+      tip.setAttribute("opacity","0"); tip.setAttribute("visibility","hidden");
+      ring.setAttribute("opacity","0"); dot.setAttribute("r","6");
+    }
+    dot.addEventListener("mouseenter", show);
+    dot.addEventListener("mouseleave", function(){ if (!open) hide(); });
+    dot.addEventListener("click", function(e){   // tap / click toggles (touch)
+      e.stopPropagation();
+      open = !open;
+      if (open) show(); else hide();
+    });
+  });
+
+  // subtle prompt so users know the dots are interactive
+  var capTip = el("text", { x:PLOT.left, y:410, "text-anchor":"start",
+    "font-size":10.5, fill:"#8A8693" });
+  capTip.textContent = "Hover the dots for the cited figures.";
+  anchorLayer.appendChild(capTip);
+}
+
 function redraw(){
   var year = parseInt(document.getElementById("slider").value, 10);
   var g = currentGrowth;
@@ -483,15 +565,10 @@ function redraw(){
   dyn.appendChild(el("circle", { cx:mx, cy:my, r:9, fill:"#DCE1FF" }));
   dyn.appendChild(el("circle", { cx:mx, cy:my, r:5, fill:"#001D69", stroke:"#FFFFFF", "stroke-width":2 }));
 
-  // CITED anchor points as solid dots, on top
-  DATA.anchors.forEach(function(a){
-    var ax = xPos(a.year), ay = yPos(a.value);
-    dyn.appendChild(el("circle", { cx:ax, cy:ay, r:6, fill:"#001D69", stroke:"#FFFFFF", "stroke-width":2 }));
-    var lbl = el("text", { x:ax, y:ay - 14, "text-anchor":"middle",
-      "font-size":11, "font-weight":"700", fill:"#001D69" });
-    lbl.textContent = a.year + " cited";
-    dyn.appendChild(lbl);
-  });
+  // NOTE: the CITED anchor dots + their hover tooltips live in a separate
+  // static layer (drawAnchors) that is NOT rebuilt on redraw, so hover /
+  // tap state survives slider and growth changes. Anchor positions are
+  // fixed, so they never need to be redrawn.
 
   // update left-column readouts
   var val = valueAt(year, g), pct = percentAt(year, g);
@@ -568,6 +645,7 @@ window.addEventListener("resize", fit);
 /* ---------- init (fully settled on load, screenshot-safe) ---------- */
 drawAxes();
 redraw();
+drawAnchors();
 fit();
 </script>
 </body>
