@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <!--
   EIC Heritage — The Research Timeline (Perplexity -> Claude two-tool flow)
-  A horizontal timeline the learner SCRUBS across. Hover (or click / keyboard-focus) each stop and the
-  detail below reveals WHAT TO DO at that stage plus a reusable PROMPT TEMPLATE with [placeholders] the
-  learner swaps in for their own focus area. Reusable how-to, not a single worked example.
+  A horizontal timeline the learner SCRUBS across. Three stops: Perplexity -> Claude -> Capture.
+  Hover (or click / keyboard-focus) each stop and the detail below reveals WHAT TO DO at that stage
+  plus a reusable PROMPT TEMPLATE with [placeholders] the learner swaps in for their own focus area.
 
   SELF-CONTAINED: inline CSS + vanilla JS + inline SVG. ZERO external requests.
   Fixed 960x540, never scrolls in any state. System font stack. Brand palette only.
@@ -42,8 +42,8 @@
   .tl{position:relative;height:144px;margin:0 8px;}
   .tl-hint{position:absolute;top:13px;left:0;right:0;text-align:center;font-size:11px;font-weight:600;color:var(--muted);}
   .tl-hint b{color:var(--accent);font-weight:800;}
-  .spine{position:absolute;top:76px;left:12.5%;width:75%;height:3px;border-radius:3px;background:var(--line);}
-  .fill{position:absolute;top:76px;left:12.5%;height:3px;border-radius:3px;background:var(--accent);transition:width .22s ease;}
+  .spine{position:absolute;top:76px;left:16.666%;width:66.666%;height:3px;border-radius:3px;background:var(--line);}
+  .fill{position:absolute;top:76px;left:16.666%;height:3px;border-radius:3px;background:var(--accent);transition:width .22s ease;}
   .node{position:absolute;top:56px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:9px;width:150px;background:transparent;border:none;cursor:pointer;font-family:inherit;padding:0;}
   .dot{width:42px;height:42px;border-radius:50%;background:var(--white);border:2.5px solid var(--line);color:var(--muted);display:flex;align-items:center;justify-content:center;position:relative;z-index:2;transition:all .18s ease;}
   .dot svg{width:20px;height:20px;}
@@ -64,15 +64,9 @@
   .kicker{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
   .zpill{font-size:10.5px;font-weight:800;letter-spacing:1px;color:var(--accent);background:var(--hl);padding:4px 11px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
   .zpill svg{width:13px;height:13px;}
-  .d-title{font-size:19px;font-weight:800;color:var(--ink);line-height:1.15;margin-bottom:9px;}
+  .d-title{font-size:19px;font-weight:800;color:var(--ink);line-height:1.15;margin-bottom:8px;}
   .d-lead{font-size:12.5px;color:var(--body);line-height:1.5;margin-bottom:11px;}
   .d-lead b{color:var(--ink);font-weight:700;}
-
-  /* question chips (pick) */
-  .qgrid{display:flex;flex-direction:column;gap:6px;}
-  .qrow{display:flex;align-items:center;gap:11px;background:var(--white);border:1px solid #EAE4EE;border-radius:9px;padding:8px 12px;}
-  .qtag{font-size:9.5px;font-weight:800;letter-spacing:.5px;color:var(--accent);width:104px;flex-shrink:0;}
-  .qtxt{font-size:12px;color:var(--body);line-height:1.3;}
 
   /* WHAT TO DO block */
   .blocklbl{display:flex;align-items:center;gap:7px;font-size:9.5px;font-weight:800;letter-spacing:.9px;color:var(--muted);margin:0 0 8px;}
@@ -128,22 +122,19 @@
 <script>
 /* ===================== ICONS ===================== */
 const IC = {
-  target:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><line x1="12" y1="1.5" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.5" y2="12"/></svg>`,
   search:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><line x1="15.5" y1="15.5" x2="21" y2="21"/></svg>`,
   spark:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8L21.5 17.5 19.7 18.2 19 20l-.7-1.8L16.5 17.5l1.8-.7z"/></svg>`,
   star:`<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.9 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg>`,
   starline:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.9 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg>`,
   recycle:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6l2.5-3.5L14 4"/><path d="M4.5 12L3 8l4-1"/><path d="M17 8l3 1-1 4"/><path d="M20 15l-2.5 3.5L13 17"/><path d="M4 15l1 4 4-1"/></svg>`,
-  paste:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="4" width="12" height="16" rx="2"/><path d="M8 8H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2"/></svg>`,
   check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 6.5"/></svg>`
 };
 
 /* ===================== DATA ===================== */
 const NODES = [
-  {id:"pick",    num:1, label:"Pick it",     sub:"your focus area", icon:"target"},
-  {id:"pplx",    num:2, label:"Perplexity",  sub:"cast the net",    icon:"search"},
-  {id:"claude",  num:3, label:"Claude",      sub:"verify + build",  icon:"spark"},
-  {id:"capture", num:4, label:"Capture",     sub:"flag the number", icon:"starline"}
+  {id:"pplx",    num:1, label:"Perplexity",  sub:"cast the net",    icon:"search"},
+  {id:"claude",  num:2, label:"Claude",      sub:"verify + build",  icon:"spark"},
+  {id:"capture", num:3, label:"Capture",     sub:"flag the number", icon:"starline"}
 ];
 
 /* helpers */
@@ -157,23 +148,10 @@ function promptTemplate(txt){
 }
 
 /* ---- detail per stop ---- */
-function detailPick(){
-  const rows = [
-    ["WHAT IT IS","What is your focus area, in plain terms?"],
-    ["WHAT IT IS","What are the key terms someone needs to follow it?"],
-    ["WHY IT MATTERS","Why does it matter to oil and gas?"],
-    ["WHY IT MATTERS","What are the key numbers that show its impact?"],
-    ["WHY IT MATTERS","How does it show up in operations, and what does it cost?"]
-  ].map(r=>`<div class="qrow"><span class="qtag">${r[0]}</span><span class="qtxt">${r[1]}</span></div>`).join("");
-  return kick("target","STEP 1 &middot; PICK IT")
-    + `<h2 class="d-title">Start with your focus area and its five questions</h2>`
-    + `<p class="d-lead">Once you have picked your focus area, the whole session fills in five questions: two on <b>what it is</b>, three on <b>why it matters to oil and gas</b>.</p>`
-    + `<div class="qgrid">${rows}</div>`;
-}
-
 function detailPplx(){
-  return kick("search","STEP 2 &middot; PERPLEXITY")
+  return kick("search","STEP 1 &middot; PERPLEXITY")
     + `<h2 class="d-title">Cast the wide net in Perplexity</h2>`
+    + `<p class="d-lead">Your brief has two parts: <b>what your focus area is</b>, and <b>why it matters to oil and gas</b>. Ask a strong question for each.</p>`
     + whatToDo([
         `Open Perplexity and turn on <b>Research mode</b>.`,
         `Ask one strong question for each part of your brief. Name the figures and timeframes you want, and always ask for sources.`,
@@ -184,7 +162,7 @@ function detailPplx(){
 }
 
 function detailClaude(){
-  return kick("spark","STEP 3 &middot; CLAUDE")
+  return kick("spark","STEP 2 &middot; CLAUDE")
     + `<h2 class="d-title">Verify with Claude, then build the doc</h2>`
     + whatToDo([
         `Copy everything Perplexity gave you, findings and sources, and paste it into Claude.`,
@@ -197,7 +175,7 @@ function detailClaude(){
 }
 
 function detailCapture(){
-  return kick("starline","STEP 4 &middot; CAPTURE")
+  return kick("starline","STEP 3 &middot; CAPTURE")
     + `<h2 class="d-title">Flag the one number a partner would remember</h2>`
     + whatToDo([
         `Read your finished brief through once more.`,
@@ -207,7 +185,7 @@ function detailCapture(){
     + `<div class="tmplline"><span class="ic">${IC.star}</span><span class="tt"><b>This is your headline.</b> If someone reads one line of your brief, make it the line that shows why your focus area matters to oil and gas.</span></div>`;
 }
 
-const RENDER = {pick:detailPick, pplx:detailPplx, claude:detailClaude, capture:detailCapture};
+const RENDER = {pplx:detailPplx, claude:detailClaude, capture:detailCapture};
 
 /* ===================== ENGINE ===================== */
 const nodesEl = document.getElementById("nodes");
@@ -215,8 +193,8 @@ const fillEl  = document.getElementById("fill");
 const detailEl= document.getElementById("detail");
 let active = 0;
 
-// place nodes at even centers: 12.5, 37.5, 62.5, 87.5 (%)
-function nodeLeft(i){ return 12.5 + i*25; }
+// place nodes at even centers for 3 stops: 16.666, 50, 83.333 (%)
+function nodeLeft(i){ return 16.666 + i*33.333; }
 nodesEl.innerHTML = NODES.map((n,i)=>`
   <button class="node" data-i="${i}" style="left:${nodeLeft(i)}%" aria-label="${n.label}, ${n.sub}">
     <span class="dot">${IC[n.icon]}<span class="n">${n.num}</span></span>
@@ -226,7 +204,7 @@ nodesEl.innerHTML = NODES.map((n,i)=>`
 function setActive(i){
   active = i;
   document.querySelectorAll(".node").forEach((el,k)=>el.classList.toggle("on", k===i));
-  fillEl.style.width = (i*25) + "%";
+  fillEl.style.width = (i*33.333) + "%";
   detailEl.innerHTML = RENDER[NODES[i].id]();
 }
 
@@ -238,7 +216,7 @@ document.querySelectorAll(".node").forEach(el=>{
   el.addEventListener("focus", ()=>setActive(i));
 });
 
-/* optional deep-link for QA: #pick #pplx #claude #capture */
+/* optional deep-link for QA: #pplx #claude #capture */
 (function(){
   const h=(location.hash||"").replace("#","");
   const k=NODES.findIndex(n=>n.id===h);
