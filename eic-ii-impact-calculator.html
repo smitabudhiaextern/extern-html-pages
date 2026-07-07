@@ -1,176 +1,401 @@
-<!DOCTYPE html>
-<!--
-  EIC II — Impact Calculator (finished EXAMPLE for Project 1, Step 3: "What an Impact Calculator Is and Why It Lands").
-  ON-THESIS (upstream O&G / EIC Heritage): a RECOVERY-UPLIFT calculator. Inputs (existing wells, recovery uplift %,
-  oil price) drive live outputs (extra barrels per year, extra revenue, and "new wells you didn't have to drill").
-  Embodies the Heritage thesis: get more oil from EXISTING wells at a lower cost per barrel, no new drilling.
-  This is the model artifact students SEE before building their own in a Claude Artifact. Numbers illustrative.
-  Notion-embeddable 960x540 canvas (Mode A) + mandatory scale-to-fit. Brand palette, Inter, Phosphor.
--->
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Impact Calculator (Example) — EIC</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<meta charset="utf-8">
+<title>EIC Heritage Focus Area — Interactive Scale Calculator</title>
 <style>
-  :root {
-    --color-bg: #FDF8F8;
-    --color-surface-highlight: #DCE1FF;
-    --color-accent: #001D69;
-    --color-title: #1C1B1B;
-    --color-body: #484646;
-    --color-white: #FFFFFF;
-    --color-border: #E7E3EC;
-    --color-muted: #8a8693;
+  :root{
+    --bg:#FDF8F8; --navy:#001D69; --lav:#DCE1FF; --ink:#1C1B1B;
+    --body:#484646; --line:#ECE6EE; --muted:#8A8693; --white:#FFFFFF;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #EFEAF0; font-family: 'Inter', sans-serif; }
-  #stage { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: flex-start; justify-content: center; }
-  #deck-wrapper { width: 960px; height: 540px; position: relative; overflow: hidden; background: var(--color-bg); padding: 26px 34px; display: flex; flex-direction: column; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex; justify-content:center; align-items:flex-start;
+    overflow:hidden;
+  }
+  #wrapper{
+    width:1000px; height:600px;
+    transform-origin:top center;
+  }
+  .card{
+    width:1000px; height:600px;
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:22px;
+    padding:38px 44px 22px;
+    display:grid;
+    grid-template-rows:1fr auto;
+    box-shadow:0 18px 44px rgba(0,29,105,0.06);
+  }
+  .body-grid{
+    display:grid;
+    grid-template-columns:410px 1fr;
+    gap:44px;
+    min-height:0;
+  }
 
-  .brandbar { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--color-accent); margin-bottom: 5px; }
-  .brandbar i { font-size: 15px; }
-  h1.deck-title { font-size: 22px; font-weight: 800; color: var(--color-title); line-height: 1.1; margin-bottom: 3px; }
-  .deck-sub { font-size: 12.5px; color: var(--color-muted); margin-bottom: 14px; }
+  /* ---------- LEFT COLUMN ---------- */
+  .left{display:flex; flex-direction:column; min-width:0;}
+  .eyebrow{
+    font-size:12px; font-weight:700; letter-spacing:2px;
+    color:var(--muted); text-transform:uppercase;
+  }
+  .focus{
+    margin-top:8px; font-size:22px; font-weight:700; color:var(--ink);
+    line-height:1.2;
+  }
+  .headline{margin-top:20px; display:flex; align-items:flex-end; gap:12px;}
+  .uptowrap{display:flex; flex-direction:column; align-items:flex-start;}
+  .upto{
+    font-size:13px; font-weight:600; color:var(--muted);
+    text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;
+  }
+  #bigNumber{
+    font-size:74px; font-weight:800; color:var(--navy);
+    line-height:0.9; letter-spacing:-2px;
+  }
+  .unit{font-size:26px; font-weight:700; color:var(--navy); padding-bottom:8px;}
+  .valuelabel{font-size:13px; color:var(--muted); margin-top:6px;}
 
-  .cols { display: flex; gap: 22px; flex: 1; min-height: 0; }
+  .badge{
+    margin-top:16px; align-self:flex-start;
+    background:var(--lav); color:var(--navy);
+    font-size:14px; padding:8px 16px; border-radius:999px;
+  }
+  #badge b{font-weight:800;}
+  .badge-sub{font-weight:600; color:#3a4a8f;}
 
-  /* LEFT — inputs */
-  .inputs { width: 330px; flex-shrink: 0; background: var(--color-white); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 4px 18px rgba(0,29,105,.07); padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; }
-  .panel-label { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
-  .field label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--color-body); font-weight: 500; margin-bottom: 7px; }
-  .field .val { color: var(--color-accent); font-weight: 700; font-size: 13px; background: var(--color-surface-highlight); padding: 2px 8px; border-radius: 6px; }
-  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #E7E1EA; outline: none; }
-  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--color-accent); cursor: pointer; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,29,105,.3); }
-  .ticks { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--color-muted); margin-top: 4px; }
+  #takeaway{
+    margin-top:18px; font-size:16px; line-height:1.55; color:var(--ink);
+    max-width:392px;
+  }
+  #takeaway b{color:var(--navy);}
 
-  /* RIGHT — results */
-  .results { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .hero { background: var(--color-accent); color: #fff; border-radius: 12px; padding: 16px 20px; }
-  .hero .label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
-  .hero .num { font-size: 38px; font-weight: 800; line-height: 1.05; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
-  .hero .comp { font-size: 12.5px; opacity: .9; }
-  .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.22); margin-top: 10px; overflow: hidden; }
-  .bar-fill { height: 100%; background: #fff; border-radius: 99px; transition: width .15s ease; }
+  .controls{margin-top:auto; padding-top:20px;}
+  .ctrl-row{margin-bottom:16px;}
+  .ctrl-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:9px;
+  }
+  .ctrl-label{font-size:12px; font-weight:700; letter-spacing:1px; color:var(--muted); text-transform:uppercase;}
+  #yearReadout{font-size:20px; font-weight:800; color:var(--navy);}
 
-  .pair { display: flex; gap: 12px; }
-  .card { flex: 1; background: var(--color-white); border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 15px; box-shadow: 0 2px 10px rgba(0,29,105,.05); }
-  .card .ico { width: 30px; height: 30px; border-radius: 8px; background: var(--color-surface-highlight); color: var(--color-accent); display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 7px; }
-  .card .label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
-  .card .num { font-size: 22px; font-weight: 800; color: var(--color-title); font-variant-numeric: tabular-nums; line-height: 1.1; margin: 1px 0 2px; }
-  .card .comp { font-size: 11.5px; color: var(--color-body); line-height: 1.3; }
+  /* slider: lavender filled track, navy thumb */
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:8px; border-radius:999px;
+    background:linear-gradient(90deg, var(--lav) 0%, var(--lav) var(--fill,0%), var(--line) var(--fill,0%), var(--line) 100%);
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:22px; height:22px; border-radius:50%;
+    background:var(--navy); border:3px solid var(--white);
+    box-shadow:0 2px 6px rgba(0,29,105,0.35); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:20px; height:20px; border-radius:50%;
+    background:var(--navy); border:3px solid var(--white);
+    box-shadow:0 2px 6px rgba(0,29,105,0.35); cursor:pointer;
+  }
+  .scale-ticks{display:flex; justify-content:space-between; margin-top:7px; font-size:11px; color:var(--muted);}
 
-  .foot { font-size: 10.5px; color: var(--color-muted); margin-top: 12px; line-height: 1.4; }
+  /* segmented growth control */
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .seg button{
+    font:inherit; font-size:13px; font-weight:600;
+    padding:8px 16px; border:none; background:var(--white); color:var(--body);
+    cursor:pointer; border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--navy); color:var(--white);}
+
+  /* ---------- RIGHT COLUMN ---------- */
+  .right{position:relative; min-width:0; display:flex; align-items:center;}
+  .chip{
+    position:absolute; top:4px; right:6px;
+    background:var(--bg); border:1px solid var(--line);
+    color:var(--muted); font-size:11px; font-weight:700; letter-spacing:0.5px;
+    padding:5px 12px; border-radius:999px; text-transform:uppercase;
+  }
+  svg{width:100%; height:auto; display:block;}
+
+  /* ---------- FOOTER ---------- */
+  .footer{
+    border-top:1px solid var(--line); margin-top:14px; padding-top:12px;
+    font-size:12px; color:var(--muted); line-height:1.4;
+  }
 </style>
-</head>
-<body>
-<div id="stage">
-  <div id="deck-wrapper" role="img"
-       aria-label="Example impact calculator: three sliders (number of existing wells, recovery uplift percent from the technology, and oil price) drive live outputs for extra barrels per year, extra revenue per year, and the number of new wells you did not have to drill.">
 
-    <div class="brandbar"><i class="ph-bold ph-calculator"></i> Impact Calculator — finished example</div>
-    <h1 class="deck-title">How much more can you get from wells you already have?</h1>
-    <div class="deck-sub">Drag a slider and watch the extra barrels move. This is the kind of tool you can build in Step 3.</div>
+<div id="wrapper">
+  <div class="card">
+    <div class="body-grid">
 
-    <div class="cols">
-      <!-- INPUTS -->
-      <div class="inputs">
-        <div class="panel-label">Set the inputs</div>
-        <div class="field">
-          <label>Existing wells <span class="val" id="wells-val">100</span></label>
-          <input type="range" id="wells" min="10" max="500" step="10" value="100">
-          <div class="ticks"><span>10</span><span>500</span></div>
+      <!-- LEFT -->
+      <div class="left">
+        <div class="eyebrow" id="eyebrow">FOCUS AREA · EIC HERITAGE</div>
+        <div class="focus" id="focusArea">AI Data-Center Power Demand</div>
+
+        <div class="headline">
+          <div class="uptowrap">
+            <span class="upto">up to</span>
+            <span id="bigNumber">176</span>
+          </div>
+          <span class="unit" id="unit">TWh</span>
         </div>
-        <div class="field">
-          <label>Recovery uplift from the tech <span class="val" id="uplift-val">20%</span></label>
-          <input type="range" id="uplift" min="5" max="40" step="1" value="20">
-          <div class="ticks"><span>5%</span><span>40%</span></div>
-        </div>
-        <div class="field">
-          <label>Oil price <span class="val" id="price-val">$70 / bbl</span></label>
-          <input type="range" id="price" min="40" max="100" step="5" value="70">
-          <div class="ticks"><span>$40</span><span>$100</span></div>
+        <div class="valuelabel" id="valueLabel">Electricity demand in the selected year</div>
+
+        <div class="badge" id="badge"><b>up to 4.4%</b> <span class="badge-sub">of US electricity</span></div>
+
+        <div id="takeaway"></div>
+
+        <div class="controls">
+          <div class="ctrl-row">
+            <div class="ctrl-head">
+              <span class="ctrl-label" id="driverLabel">Year</span>
+              <span id="yearReadout">2023</span>
+            </div>
+            <input type="range" id="slider" min="2023" max="2030" step="1" value="2023">
+            <div class="scale-ticks">
+              <span>2023</span><span>2025</span><span>2028</span><span>2030</span>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span class="ctrl-label">Growth past 2028</span></div>
+            <div class="seg" id="growth">
+              <button data-g="conservative">Conservative</button>
+              <button data-g="base" class="active">Base</button>
+              <button data-g="aggressive">Aggressive</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- RESULTS -->
-      <div class="results">
-        <div class="hero">
-          <div class="label">Extra barrels per year</div>
-          <div class="num" id="out-bbl">730K bbl</div>
-          <div class="comp" id="out-wells-comp">the same as about 20 new wells, with no new drilling</div>
-          <div class="bar-track"><div class="bar-fill" id="bar" style="width:10%"></div></div>
-        </div>
-        <div class="pair">
-          <div class="card">
-            <div class="ico"><i class="ph-bold ph-currency-dollar"></i></div>
-            <div class="label">Extra revenue per year</div>
-            <div class="num" id="out-rev">$51M</div>
-            <div class="comp">at this oil price</div>
-          </div>
-          <div class="card">
-            <div class="ico"><i class="ph-bold ph-check-circle"></i></div>
-            <div class="label">New wells you didn't drill</div>
-            <div class="num" id="out-wells">20</div>
-            <div class="comp">extra output, from wells you already have</div>
-          </div>
-        </div>
-        <div class="foot">Illustrative example. Assumes each well produces about 100 barrels a day before the uplift. Your own calculator will use the numbers from your brief.</div>
+      <!-- RIGHT -->
+      <div class="right">
+        <div class="chip">Illustrative projection</div>
+        <svg id="chart" viewBox="0 0 520 430" preserveAspectRatio="xMidYMid meet" aria-label="Projection chart"></svg>
       </div>
+
     </div>
 
+    <div class="footer" id="footer"></div>
   </div>
 </div>
 
-<noscript><p style="font-family:sans-serif;padding:16px">Interactive impact calculator: sliders for number of existing wells, recovery uplift percent, and oil price drive extra barrels per year, extra revenue, and the number of new wells you did not have to drill.</p></noscript>
-
 <script>
-const BBL_PER_WELL_DAY = 100, DAYS = 365, MAX_BBL_DAY = 20000;
-const $ = id => document.getElementById(id);
-const wells = $('wells'), uplift = $('uplift'), price = $('price');
+/* =====================================================================
+   STUDENT DATA  -  EDIT THIS BLOCK ONLY
+   ---------------------------------------------------------------------
+   Swap in your own focus area and your own two CITED anchor points.
+   Everything on the page (headline number, % badge, sentence, chart)
+   is drawn from the two anchors below, so you only edit numbers here.
 
-function fmtBbl(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M bbl';
-  if (n >= 1e3) return Math.round(n / 1e3) + 'K bbl';
-  return Math.round(n) + ' bbl';
-}
-function fmtRev(d) {
-  if (d >= 1e9) return '$' + (d / 1e9).toFixed(1) + 'B';
-  if (d >= 1e6) return '$' + Math.round(d / 1e6) + 'M';
-  return '$' + Math.round(d / 1e3) + 'K';
-}
-function calc() {
-  const n = +wells.value, up = +uplift.value / 100, p = +price.value;
-  $('wells-val').textContent = n;
-  $('uplift-val').textContent = uplift.value + '%';
-  $('price-val').textContent = '$' + p + ' / bbl';
+   HOW THE MATH WORKS (deliberately simple and honest):
+     - "anchors" are your two cited data points (year + value). The tool
+       draws a straight line between them (linear interpolation) and,
+       past the second anchor, extends that line gently.
+     - "percentAnchors" are two cited context percentages (share of the
+       denominator, here US electricity). Same straight-line treatment.
+     - Everything shows "up to" language and is rounded, so the chart
+       never implies more precision than your two sources support.
+   ===================================================================== */
+const DATA = {
+  eyebrow:    "FOCUS AREA · EIC HERITAGE",
+  focusArea:  "AI Data-Center Power Demand",
+  unit:       "TWh",
+  valueLabel: "Electricity demand in the selected year",
 
-  const extraBblDay = n * BBL_PER_WELL_DAY * up;
-  const extraBblYr = extraBblDay * DAYS;
-  const extraRev = extraBblYr * p;
-  const wellsAvoided = Math.round(n * up);
+  // Slider (the "driver"): usually a year range.
+  driverLabel: "Year",
+  driverMin: 2023,
+  driverMax: 2030,
+  driverStep: 1,
 
-  $('out-bbl').textContent = fmtBbl(extraBblYr);
-  $('out-wells-comp').textContent = 'the same as about ' + wellsAvoided + ' new well' + (wellsAvoided === 1 ? '' : 's') + ', with no new drilling';
-  $('out-rev').textContent = fmtRev(extraRev);
-  $('out-wells').textContent = wellsAvoided;
-  $('bar').style.width = Math.min(100, extraBblDay / MAX_BBL_DAY * 100) + '%';
-}
-[wells, uplift, price].forEach(s => s.addEventListener('input', calc));
-calc();
+  // >>> Your two CITED value anchors (the standout numbers) <<<
+  anchors: [
+    { year: 2023, value: 176 },   // cited: 2023 = 176 TWh
+    { year: 2028, value: 580 }    // cited: 2028 = 580 TWh
+  ],
 
-/* ---- MANDATORY viewport scale-to-fit (Notion embeds are 700-900px wide) ---- */
-function scaleDeck() {
-  const wrapper = document.getElementById('deck-wrapper');
-  const scale = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
-  wrapper.style.transform = `scale(${scale})`;
-  wrapper.style.transformOrigin = 'top center';
+  // >>> Your two CITED context percentages (share of US electricity) <<<
+  percentAnchors: [
+    { year: 2023, percent: 4.4 }, // cited: about 4.4% of US electricity
+    { year: 2028, percent: 12  }  // cited: up to about 12% of US electricity
+  ],
+
+  // Chart y-axis top. Set a round number a bit above your largest value.
+  yMax: 900,
+
+  // Takeaway sentence. Tokens {value}, {percent}, {year} are filled live.
+  takeaway: "By <b>{year}</b>, AI data centers could draw up to <b>{value} TWh</b>, about <b>{percent}</b> of all US electricity, most of it likely met by natural gas.",
+
+  // One-line source + method note shown in the footer.
+  source: "Source: LBNL / U.S. DOE; EIA, 2024. Straight-line interpolation between the cited 2023 and 2028 figures. Values past 2028 are illustrative, not forecasts."
+};
+/* ===================  END OF STUDENT DATA  =========================== */
+
+
+/* ---------- derived constants (from the two anchors) ---------- */
+var A0 = DATA.anchors[0], A1 = DATA.anchors[1];
+var valSlope = (A1.value - A0.value) / (A1.year - A0.year);   // per year
+var P0 = DATA.percentAnchors[0], P1 = DATA.percentAnchors[1];
+var pctSlope = (P1.percent - P0.percent) / (P1.year - P0.year);
+var SECOND_YEAR = A1.year;   // past this year we extrapolate + apply growth
+
+var growthFactor = { conservative:0.5, base:1.0, aggressive:1.6 };
+var currentGrowth = "base";
+
+/* ---------- value + percent models ---------- */
+function valueAt(year, growth){
+  if (year <= SECOND_YEAR) return A0.value + valSlope * (year - A0.year);
+  return A1.value + valSlope * growthFactor[growth] * (year - SECOND_YEAR);
 }
-window.addEventListener('resize', scaleDeck);
-scaleDeck();
+function percentAt(year, growth){
+  if (year <= SECOND_YEAR) return P0.percent + pctSlope * (year - P0.year);
+  return P1.percent + pctSlope * growthFactor[growth] * (year - SECOND_YEAR);
+}
+
+/* ---------- honest formatting (no false precision) ---------- */
+function fmtValue(v){ return Math.round(v).toLocaleString(); }
+function fmtPercent(p){
+  var r = Math.round(p * 10) / 10;                 // one decimal max
+  var s = (r % 1 === 0) ? r.toFixed(0) : r.toFixed(1);
+  return "up to " + s + "%";
+}
+
+/* ---------- chart geometry ---------- */
+var SVG_NS = "http://www.w3.org/2000/svg";
+var chart = document.getElementById("chart");
+var PLOT = { left:52, right:504, top:24, bottom:372 };  // inside 520x430 viewBox
+var xMin = DATA.driverMin, xMax = DATA.driverMax, yMax = DATA.yMax;
+
+function xPos(year){ return PLOT.left + (year - xMin)/(xMax - xMin) * (PLOT.right - PLOT.left); }
+function yPos(val){  return PLOT.bottom - (val / yMax) * (PLOT.bottom - PLOT.top); }
+
+function el(name, attrs){
+  var e = document.createElementNS(SVG_NS, name);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+/* ----- static axes + gridlines, drawn once ----- */
+function drawAxes(){
+  var g = el("g", {});
+  var steps = 3;
+  for (var i = 0; i <= steps; i++){
+    var val = yMax * i / steps;
+    var y = yPos(val);
+    g.appendChild(el("line", { x1:PLOT.left, y1:y, x2:PLOT.right, y2:y,
+      stroke:"#ECE6EE", "stroke-width":1 }));
+    var t = el("text", { x:PLOT.left - 10, y:y + 4, "text-anchor":"end",
+      "font-size":11, fill:"#8A8693" });
+    t.textContent = Math.round(val).toLocaleString();
+    g.appendChild(t);
+  }
+  var cap = el("text", { x:PLOT.left - 10, y:PLOT.top - 8, "text-anchor":"start",
+    "font-size":10, fill:"#8A8693", "letter-spacing":"1" });
+  cap.textContent = DATA.unit;
+  g.appendChild(cap);
+  for (var yr = xMin; yr <= xMax; yr++){
+    var x = xPos(yr);
+    var lt = el("text", { x:x, y:PLOT.bottom + 20, "text-anchor":"middle",
+      "font-size":11, fill:"#8A8693" });
+    lt.textContent = yr;
+    g.appendChild(lt);
+  }
+  chart.appendChild(g);
+}
+
+/* ----- dynamic layer ----- */
+var dyn = el("g", {});
+chart.appendChild(dyn);
+
+function redraw(){
+  var year = parseInt(document.getElementById("slider").value, 10);
+  var g = currentGrowth;
+
+  // projected line across whole integer year range
+  var pts = [];
+  for (var yr = xMin; yr <= xMax; yr++){
+    pts.push({ x: xPos(yr), y: yPos(valueAt(yr, g)) });
+  }
+  var linePath = pts.map(function(p, i){ return (i===0?"M":"L") + p.x.toFixed(1) + " " + p.y.toFixed(1); }).join(" ");
+  var areaPath = linePath + " L" + pts[pts.length-1].x.toFixed(1) + " " + PLOT.bottom +
+                 " L" + pts[0].x.toFixed(1) + " " + PLOT.bottom + " Z";
+
+  while (dyn.firstChild) dyn.removeChild(dyn.firstChild);
+
+  dyn.appendChild(el("path", { d:areaPath, fill:"#DCE1FF", opacity:"0.55", stroke:"none" }));
+  dyn.appendChild(el("path", { d:linePath, fill:"none", stroke:"#001D69",
+    "stroke-width":3, "stroke-dasharray":"7 5", "stroke-linecap":"round", "stroke-linejoin":"round" }));
+
+  // moving guide + dot at current slider year
+  var mx = xPos(year), my = yPos(valueAt(year, g));
+  dyn.appendChild(el("line", { x1:mx, y1:PLOT.top, x2:mx, y2:PLOT.bottom,
+    stroke:"#8A8693", "stroke-width":1, "stroke-dasharray":"3 4", opacity:"0.5" }));
+  dyn.appendChild(el("circle", { cx:mx, cy:my, r:9, fill:"#DCE1FF" }));
+  dyn.appendChild(el("circle", { cx:mx, cy:my, r:5, fill:"#001D69", stroke:"#FFFFFF", "stroke-width":2 }));
+
+  // CITED anchor points as solid dots, on top
+  DATA.anchors.forEach(function(a){
+    var ax = xPos(a.year), ay = yPos(a.value);
+    dyn.appendChild(el("circle", { cx:ax, cy:ay, r:6, fill:"#001D69", stroke:"#FFFFFF", "stroke-width":2 }));
+    var lbl = el("text", { x:ax, y:ay - 14, "text-anchor":"middle",
+      "font-size":11, "font-weight":"700", fill:"#001D69" });
+    lbl.textContent = a.year + " cited";
+    dyn.appendChild(lbl);
+  });
+
+  // update left-column readouts
+  var val = valueAt(year, g), pct = percentAt(year, g);
+  document.getElementById("bigNumber").textContent = fmtValue(val);
+  document.getElementById("badge").innerHTML =
+    "<b>" + fmtPercent(pct) + "</b> <span class='badge-sub'>of US electricity</span>";
+  document.getElementById("takeaway").innerHTML = DATA.takeaway
+    .replace("{year}", year)
+    .replace("{value}", fmtValue(val))
+    .replace("{percent}", fmtPercent(pct));
+  document.getElementById("yearReadout").textContent = year;
+
+  // slider fill
+  var pctFill = (year - xMin) / (xMax - xMin) * 100;
+  document.getElementById("slider").style.setProperty("--fill", pctFill + "%");
+}
+
+/* ---------- wire up static text from DATA ---------- */
+document.getElementById("eyebrow").textContent = DATA.eyebrow;
+document.getElementById("focusArea").textContent = DATA.focusArea;
+document.getElementById("unit").textContent = DATA.unit;
+document.getElementById("valueLabel").textContent = DATA.valueLabel;
+document.getElementById("driverLabel").textContent = DATA.driverLabel;
+document.getElementById("footer").textContent = DATA.source;
+(function(){
+  var s = document.getElementById("slider");
+  s.min = DATA.driverMin; s.max = DATA.driverMax; s.step = DATA.driverStep; s.value = DATA.driverMin;
+})();
+
+/* ---------- events ---------- */
+document.getElementById("slider").addEventListener("input", redraw);
+document.getElementById("growth").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if (!b) return;
+  currentGrowth = b.getAttribute("data-g");
+  Array.prototype.forEach.call(this.querySelectorAll("button"), function(x){ x.classList.remove("active"); });
+  b.classList.add("active");
+  redraw();
+});
+
+/* ---------- scale-to-fit (never scroll) ---------- */
+var W = 1000, H = 600, wrap = document.getElementById("wrapper");
+function fit(){
+  var s = Math.min(window.innerWidth / W, window.innerHeight / H, 1);
+  wrap.style.transform = "scale(" + s + ")";
+}
+window.addEventListener("resize", fit);
+
+/* ---------- init ---------- */
+drawAxes();
+redraw();
+fit();
 </script>
-</body>
-</html>
