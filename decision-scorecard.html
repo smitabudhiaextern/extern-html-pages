@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VC Decision Scorecard — HP Tech Ventures Externship</title>
+<style>
+  :root{--ink:#1a2233;--sub:#5b6575;--line:#e3e7ee;--bg:#f7f9fc;--blue:#0a5cff;--blue-soft:#e8f0ff;--green:#0d8a5f;--green-soft:#e3f6ee;--gold:#b45309}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.5;padding:20px 16px 48px;max-width:820px;margin:0 auto}
+  h1{font-size:1.45rem;margin-bottom:4px}
+  .lede{color:var(--sub);font-size:.95rem;margin-bottom:18px}
+  .pill{display:inline-block;background:var(--blue-soft);color:var(--blue);font-weight:600;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;margin-bottom:10px}
+  .names{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+  .names input{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.9rem;width:100%;font-weight:600}
+  .names input:focus{outline:none;border-color:var(--blue)}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 6px;text-align:center;border-bottom:1px solid var(--line)}
+  th{font-size:.8rem;color:var(--sub)}
+  td.crit{text-align:left;font-size:.88rem;max-width:230px}
+  td.crit b{display:block;font-size:.9rem}
+  td.crit span{color:var(--sub);font-size:.78rem}
+  .dots{display:inline-flex;gap:4px}
+  .dot{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-size:.72rem;font-weight:700;color:var(--sub);display:flex;align-items:center;justify-content:center}
+  .dot:hover{border-color:var(--blue)}
+  .dot.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  tr.total td{font-weight:800;font-size:1.05rem;border-bottom:none;padding-top:14px}
+  tr.total td.leader{color:var(--green)}
+  #verdict{display:none;margin-top:18px;border-radius:14px;padding:18px;background:var(--green-soft)}
+  #verdict h3{font-size:1.05rem;margin-bottom:6px}
+  #verdict p{font-size:.92rem}
+  #verdict .warn{color:var(--gold);font-size:.85rem;margin-top:8px}
+  .gutcheck{margin-top:14px;background:var(--bg);border-radius:12px;padding:14px 16px;font-size:.9rem}
+  .copybtn{margin-top:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;font-size:.87rem;cursor:pointer}
+  @media(max-width:560px){td.crit{max-width:130px}.dot{width:22px;height:22px}}
+</style>
+</head>
+<body>
+  <span class="pill">Interactive · ~10 min</span>
+  <h1>The Decision Scorecard</h1>
+  <p class="lede">This is how investors turn "they all seem good" into a decision: score every company on the <b>same</b> dimensions, then argue with the result. Type your three startups, tap to score 1–5.</p>
+
+  <div class="names">
+    <input id="n0" placeholder="Startup A" maxlength="24">
+    <input id="n1" placeholder="Startup B" maxlength="24">
+    <input id="n2" placeholder="Startup C" maxlength="24">
+  </div>
+
+  <table id="grid">
+    <thead><tr><th style="text-align:left">Score 1 (weak) → 5 (strong)</th><th id="h0">Startup A</th><th id="h1">Startup B</th><th id="h2">Startup C</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="verdict">
+    <h3 id="vTitle"></h3>
+    <p id="vBody"></p>
+    <p class="warn" id="vWarn"></p>
+    <div class="gutcheck"><b>The gut check (VCs do this too):</b> If the scorecard's winner makes you feel disappointed — that's information. You'll live with this company for three more projects. Conviction counts. You get the final vote, not the spreadsheet.</div>
+    <button class="copybtn" onclick="copySummary()">Copy my scorecard summary</button>
+  </div>
+
+<script>
+  var CRIT=[
+    {n:"Thesis fit",d:"Passes all 4 must-haves cleanly? Nice-to-haves too?"},
+    {n:"Team",d:"Founders' background: domain depth, prior startups, strong schools/accelerators/companies"},
+    {n:"Market",d:"TAM over $1B, or clear evidence of a growing customer base"},
+    {n:"Moat",d:"Proprietary tech: novel IP or a genuinely hard-to-copy application"},
+    {n:"Traction & signals",d:"Funding momentum, brand investors, patents, media, visible customers"},
+    {n:"Your conviction",d:"Would YOU spend 3 weeks digging into this company?"}
+  ];
+  var scores=[[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]];
+  var tb=document.querySelector('#grid tbody');
+  CRIT.forEach(function(c,ci){
+    var tr=document.createElement('tr');
+    var td=document.createElement('td');td.className='crit';td.innerHTML='<b>'+c.n+'</b><span>'+c.d+'</span>';tr.appendChild(td);
+    for(var s=0;s<3;s++){
+      var cell=document.createElement('td');var dots=document.createElement('div');dots.className='dots';
+      for(var v=1;v<=5;v++){
+        var d=document.createElement('div');d.className='dot';d.textContent=v;
+        d.dataset.s=s;d.dataset.c=ci;d.dataset.v=v;
+        d.addEventListener('click',pick);
+        dots.appendChild(d);
+      }
+      cell.appendChild(dots);tr.appendChild(cell);
+    }
+    tb.appendChild(tr);
+  });
+  var trT=document.createElement('tr');trT.className='total';
+  trT.innerHTML='<td class="crit"><b>Total</b></td><td id="t0">—</td><td id="t1">—</td><td id="t2">—</td>';
+  tb.appendChild(trT);
+
+  ['n0','n1','n2'].forEach(function(id,i){
+    document.getElementById(id).addEventListener('input',function(e){
+      document.getElementById('h'+i).textContent=e.target.value||('Startup '+'ABC'[i]);
+      refresh();
+    });
+  });
+  function pick(e){
+    var d=e.target,s=+d.dataset.s,c=+d.dataset.c,v=+d.dataset.v;
+    scores[s][c]=v;
+    var row=d.parentElement.querySelectorAll('.dot');
+    row.forEach(function(x){x.classList.toggle('on',+x.dataset.v<=v);});
+    refresh();
+  }
+  function name(i){return document.getElementById('n'+i).value||('Startup '+'ABC'[i]);}
+  function refresh(){
+    var totals=scores.map(function(r){return r.reduce(function(a,b){return a+b;},0);});
+    var complete=scores.every(function(r){return r.every(function(v){return v>0;});});
+    var max=Math.max.apply(null,totals);
+    for(var i=0;i<3;i++){
+      var td=document.getElementById('t'+i);
+      td.textContent=totals[i]||'—';
+      td.classList.toggle('leader',complete&&totals[i]===max);
+    }
+    if(complete){
+      var winners=[0,1,2].filter(function(i){return totals[i]===max;});
+      var v=document.getElementById('verdict');v.style.display='block';
+      if(winners.length===1){
+        var w=winners[0];
+        document.getElementById('vTitle').textContent='📊 The scorecard says: '+name(w)+' ('+max+'/30)';
+        var conv=scores[w][5];
+        document.getElementById('vBody').textContent=
+          name(w)+' leads on your numbers. Strongest dimensions: '+topDims(w)+'.';
+        document.getElementById('vWarn').textContent=
+          conv<=2?'⚠️ But you scored your own conviction '+conv+'/5 on it. Re-read the gut check below before you commit.':'';
+      }else{
+        document.getElementById('vTitle').textContent='📊 Dead heat: '+winners.map(name).join(' & ')+' ('+max+'/30)';
+        document.getElementById('vBody').textContent='The numbers won\'t decide this one — which is normal. Break the tie with conviction: which company would you rather explain to Angelo?';
+        document.getElementById('vWarn').textContent='';
+      }
+    }
+  }
+  function topDims(w){
+    return scores[w].map(function(v,i){return{v:v,n:CRIT[i].n};})
+      .sort(function(a,b){return b.v-a.v;}).slice(0,2).map(function(x){return x.n+' ('+x.v+'/5)';}).join(', ');
+  }
+  function copySummary(){
+    var out='My VC scorecard (1–5 per dimension):\n';
+    for(var i=0;i<3;i++){
+      out+=name(i)+': total '+scores[i].reduce(function(a,b){return a+b;},0)+'/30 — '+
+        CRIT.map(function(c,ci){return c.n+' '+scores[i][ci];}).join(', ')+'\n';
+    }
+    if(navigator.clipboard){navigator.clipboard.writeText(out);}
+    else{var ta=document.createElement('textarea');ta.value=out;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+    document.querySelector('.copybtn').textContent='Copied ✓';
+    setTimeout(function(){document.querySelector('.copybtn').textContent='Copy my scorecard summary';},1500);
+  }
+</script>
+</body>
+</html>
