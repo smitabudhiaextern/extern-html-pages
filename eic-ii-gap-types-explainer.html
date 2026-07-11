@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<!--
+  EIC II — P3 Step 2 teaching interactive: "What a Gap Actually Is".
+  Uses a compact version of the P3 Step 1 AI data center market map and points at
+  the real gap cells for each gap type (white space / one-sided / thin), each with
+  a plain fast-food analogy. Self-contained, no external requests. 960x540 scale-to-fit.
+  Companies/cells mirror eic-ii-data-center-market-map.html. Illustrative only.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What a Gap Actually Is</title>
+<style>
+  :root {
+    --bg: #FDF8F8;
+    --accent: #001D69;
+    --lav: #DCE1FF;
+    --title: #1C1B1B;
+    --body: #484646;
+    --white: #FFFFFF;
+    --border: #E7E3EC;
+    --gap-ink: #B45309;
+    --gap-bg: #FEF6E7;
+    --gap-line: #E9A23B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#EFEAF0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  #stage { position:absolute; top:0; left:0; width:100%; height:100%;
+    display:flex; align-items:flex-start; justify-content:center; }
+  #deck-wrapper { width:960px; height:540px; position:relative; overflow:hidden; background:var(--bg); }
+  .root { width:960px; height:540px; padding:16px 22px 12px; display:flex; flex-direction:column; }
+
+  .titlebar h1 { font-size:20px; font-weight:800; color:var(--title); line-height:1.1; }
+  .titlebar p { font-size:11px; font-weight:600; color:var(--body); margin-top:3px; }
+
+  /* controls */
+  .controls { display:flex; gap:8px; margin-top:10px; }
+  .gbtn { flex:1; cursor:pointer; border:1.5px solid var(--border); background:var(--white);
+    border-radius:9px; padding:8px 10px; text-align:left; transition:all .15s ease; }
+  .gbtn .g-name { font-size:12.5px; font-weight:800; color:var(--title); }
+  .gbtn .g-hint { font-size:9.5px; font-weight:600; color:var(--body); margin-top:1px; }
+  .gbtn.active { border-color:var(--gap-line); background:var(--gap-bg); box-shadow:0 2px 8px rgba(233,162,59,.22); }
+  .gbtn.active .g-name { color:var(--gap-ink); }
+
+  /* body: map + detail */
+  .stagearea { flex:1; display:flex; gap:12px; margin-top:11px; min-height:0; }
+
+  /* compact map */
+  .map { flex:1.55; display:flex; gap:6px; min-height:0; }
+  .col { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .col-head { border-radius:6px 6px 0 0; padding:4px 4px; color:#fff; text-align:center;
+    font-size:9.5px; font-weight:800; line-height:1.05; }
+  .col-body { flex:1; display:flex; flex-direction:column; gap:4px; padding:5px;
+    background:rgba(255,255,255,.55); border:1px solid var(--border); border-top:none;
+    border-radius:0 0 6px 6px; min-height:0; }
+  .cell { flex:1; border:1px solid var(--border); background:var(--white); border-radius:5px;
+    padding:4px 5px; display:flex; flex-direction:column; justify-content:center; min-height:0;
+    transition:all .18s ease; position:relative; }
+  .cell .c-label { font-size:8.7px; font-weight:800; color:var(--title); line-height:1.08; }
+  .dots { display:flex; gap:3px; margin-top:3px; }
+  .dot { width:7px; height:7px; border-radius:50%; }
+  .dot.inc { background:var(--accent); }
+  .dot.new { background:transparent; border:1.4px solid var(--accent); }
+  .cell.empty { border:1.4px dashed var(--gap-line); background:var(--gap-bg); align-items:center; }
+  .cell.empty .c-label { color:var(--gap-ink); text-align:center; }
+  .cell .c-empty-tag { font-size:8px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--gap-ink); margin-top:2px; }
+
+  /* highlight state */
+  .cell.hit { border-color:var(--gap-line); border-width:2px; background:var(--gap-bg);
+    box-shadow:0 0 0 2px rgba(233,162,59,.28); animation:pulse 1.1s ease-in-out infinite; z-index:2; }
+  .cell.hit .c-label { color:var(--gap-ink); }
+  @keyframes pulse {
+    0%,100% { box-shadow:0 0 0 2px rgba(233,162,59,.20); }
+    50% { box-shadow:0 0 0 5px rgba(233,162,59,.42); }
+  }
+  .cell.dim { opacity:.42; }
+
+  /* detail panel */
+  .detail { flex:1; background:var(--white); border:1px solid var(--border); border-radius:11px;
+    padding:12px 14px; display:flex; flex-direction:column; min-height:0; }
+  .detail .d-badge { align-self:flex-start; font-size:9.5px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--gap-ink); background:var(--gap-bg);
+    border:1px solid var(--gap-line); border-radius:999px; padding:3px 9px; }
+  .detail .d-what { font-size:11.5px; font-weight:600; color:var(--body); line-height:1.4; margin-top:9px; }
+  .drow { margin-top:9px; }
+  .drow .d-h { font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--accent); }
+  .drow .d-t { font-size:11px; font-weight:600; color:var(--body); line-height:1.38; margin-top:2px; }
+  .drow.burger .d-h { color:var(--gap-ink); }
+
+  .foot { margin-top:9px; display:flex; align-items:center; gap:16px; font-size:9.5px; color:var(--body); }
+  .foot .lg { display:flex; align-items:center; gap:5px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="deck-wrapper">
+    <div class="root">
+
+      <div class="titlebar">
+        <h1>What a Gap Actually Is</h1>
+        <p>A gap is a spot where a new company could be backed. It shows up three ways. Click each one to see it on the AI data center map.</p>
+      </div>
+
+      <div class="controls" id="controls"></div>
+
+      <div class="stagearea">
+        <div class="map" id="map"></div>
+        <div class="detail" id="detail"></div>
+      </div>
+
+      <div class="foot">
+        <span class="lg"><span class="dot inc"></span> Established player</span>
+        <span class="lg"><span class="dot new"></span> New entrant</span>
+        <span class="lg"><span style="width:14px;height:10px;border:1.3px dashed var(--gap-line);background:var(--gap-bg);border-radius:3px;display:inline-block;"></span> Empty</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- the map (compact mirror of the Step 1 sample) ---- */
+const MAP = [
+  { name:"Energy Supply", color:"#7C3AED", subs:[
+    { id:"onsite", label:"On-site Generation", dots:["inc","inc","new"] },
+    { id:"grid",   label:"Grid & Interconnect", dots:["inc","new","new"] },
+    { id:"storage",label:"Storage & Backup", dots:["inc","inc","new"] },
+    { id:"pss",    label:"Power-Swing Smoothing", empty:true }
+  ]},
+  { name:"Facility & Cooling", color:"#2563EB", subs:[
+    { id:"modular",label:"Modular / Prefab", dots:["inc","inc","new"] },
+    { id:"liquid", label:"Liquid & Immersion", dots:["inc","new","new"] },
+    { id:"heatreuse",label:"Heat Reuse", dots:["inc","inc"] },
+    { id:"h2p",    label:"Heat-to-Power", empty:true }
+  ]},
+  { name:"Compute", color:"#EA580C", subs:[
+    { id:"accel",  label:"AI Accelerators", dots:["inc","inc","new"] },
+    { id:"optical",label:"Optical Interconnect", dots:["inc","new","new"] },
+    { id:"servers",label:"Servers & Networking", dots:["inc","inc","inc"] }
+  ]},
+  { name:"Operations & Software", color:"#0E9C94", subs:[
+    { id:"dcim",   label:"DCIM & Monitoring", dots:["inc","inc","inc"] },
+    { id:"workload",label:"Workload Optimization", dots:["new","new","new"] },
+    { id:"sustain",label:"Sustainability Reporting", empty:true }
+  ]}
+];
+
+/* ---- the three gap types ---- */
+const TYPES = [
+  {
+    key:"whitespace",
+    name:"White space",
+    hint:"Nobody there yet",
+    cells:["pss","h2p","sustain"],
+    what:"A category with no company in it at all. Barely anyone is solving this problem yet.",
+    map:"Power-Swing Smoothing, Heat-to-Power, and Sustainability Reporting all sit empty.",
+    burger:"Picture the fast food world with no salad chain anywhere. That empty salad column is white space."
+  },
+  {
+    key:"onesided",
+    name:"One-sided cell",
+    hint:"Only one type of player",
+    cells:["dcim","workload"],
+    what:"A category filled by only one kind of player: all big established names, or all tiny early startups. The missing side is the opening.",
+    map:"DCIM & Monitoring has only big players (room for a startup). Workload Optimization has only early startups (still unproven).",
+    burger:"A burger scene with only giant chains and no small gourmet startup. One side is missing, so there is room to enter."
+  },
+  {
+    key:"thin",
+    name:"Thin category",
+    hint:"Only one or two names",
+    cells:["heatreuse"],
+    what:"Just one or two companies, while the categories around it are fuller. The problem clearly matters, but the field is not crowded.",
+    map:"Heat Reuse has only a couple of names, while the categories next to it each carry three.",
+    burger:"Everyone sells burgers and fried chicken, but only one place sells tacos. Tacos is the thin category."
+  }
+];
+
+/* ---- render map ---- */
+const mapEl = document.getElementById('map');
+MAP.forEach(stage => {
+  const col = document.createElement('div');
+  col.className = 'col';
+  const cellsHtml = stage.subs.map(s => {
+    if (s.empty) {
+      return `<div class="cell empty" data-id="${s.id}">
+        <div class="c-label">${s.label}</div>
+        <div class="c-empty-tag">Empty</div>
+      </div>`;
+    }
+    const dots = s.dots.map(d => `<span class="dot ${d}"></span>`).join('');
+    return `<div class="cell" data-id="${s.id}">
+      <div class="c-label">${s.label}</div>
+      <div class="dots">${dots}</div>
+    </div>`;
+  }).join('');
+  col.innerHTML = `<div class="col-head" style="background:${stage.color};">${stage.name}</div>
+    <div class="col-body">${cellsHtml}</div>`;
+  mapEl.appendChild(col);
+});
+
+/* ---- render controls ---- */
+const controlsEl = document.getElementById('controls');
+TYPES.forEach((t, i) => {
+  const b = document.createElement('button');
+  b.className = 'gbtn' + (i === 0 ? ' active' : '');
+  b.dataset.key = t.key;
+  b.innerHTML = `<div class="g-name">${t.name}</div><div class="g-hint">${t.hint}</div>`;
+  b.addEventListener('click', () => select(t.key));
+  controlsEl.appendChild(b);
+});
+
+/* ---- selection logic ---- */
+const detailEl = document.getElementById('detail');
+function select(key) {
+  const t = TYPES.find(x => x.key === key);
+  document.querySelectorAll('.gbtn').forEach(b =>
+    b.classList.toggle('active', b.dataset.key === key));
+
+  const hit = new Set(t.cells);
+  document.querySelectorAll('.cell').forEach(c => {
+    const isHit = hit.has(c.dataset.id);
+    c.classList.toggle('hit', isHit);
+    c.classList.toggle('dim', !isHit);
+  });
+
+  detailEl.innerHTML = `
+    <span class="d-badge">${t.name}</span>
+    <div class="d-what">${t.what}</div>
+    <div class="drow"><div class="d-h">On the AI data center map</div><div class="d-t">${t.map}</div></div>
+    <div class="drow burger"><div class="d-h">Like fast food</div><div class="d-t">${t.burger}</div></div>
+  `;
+}
+select('whitespace');
+
+/* ---- scale-to-fit ---- */
+function scaleDeck() {
+  const w = document.getElementById('deck-wrapper');
+  const s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+  w.style.transform = `scale(${s})`;
+  w.style.transformOrigin = 'top center';
+}
+window.addEventListener('resize', scaleDeck);
+scaleDeck();
+</script>
+</body>
+</html>
