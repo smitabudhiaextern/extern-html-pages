@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<!--
+  EIC II — Company Fit Checker (P4 Step 1)
+  House deck shell: 960x540, scale-to-fit (flex-shrink:0 + top-left origin +
+  translateX centering), Extern palette + Inter. Self-contained; inline SVG.
+
+  LEFT  = type a company name -> generate a personalized fit-check PROMPT the
+          student copies into their own Claude/Perplexity (the widget never
+          calls an API; the student's AI does the research).
+  RIGHT = a scorecard: three toggles (Application / Stage / US-based) that light
+          up a live Fit / Flag / Not-a-fit verdict.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Company fit checker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg: #FDF8F8;
+    --color-surface-highlight: #DCE1FF;
+    --color-accent: #001D69;
+    --color-title: #1C1B1B;
+    --color-body: #484646;
+    --color-white: #FFFFFF;
+    --color-border: #E7E3EC;
+    --fit: #1E7A46;
+    --flag: #B26A00;
+    --no: #B3261E;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #EFEAF0;
+    font-family: 'Inter', sans-serif;
+  }
+  #stage {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: flex-start; justify-content: flex-start;
+  }
+  #deck-wrapper {
+    width: 960px; height: 540px; flex-shrink: 0;
+    position: relative; overflow: hidden;
+    background: var(--color-bg);
+  }
+  .screen {
+    position: absolute; top: 0; left: 0;
+    width: 960px; height: 540px;
+    padding: 22px 40px 16px;
+    display: flex; flex-direction: column;
+  }
+
+  .brandbar {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--color-accent);
+    margin-bottom: 11px; flex-shrink: 0;
+  }
+  .brandbar svg { width: 18px; height: 18px; }
+
+  .body { display: flex; gap: 22px; flex: 1 1 auto; min-height: 0; }
+  .col-left  { width: 430px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; }
+  .col-right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+
+  .rail-head {
+    font-size: 11px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--color-accent);
+    margin-bottom: 9px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .rail-head .n {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--color-accent);
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; flex-shrink: 0;
+  }
+
+  /* inputs */
+  .field { margin-bottom: 9px; flex-shrink: 0; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--color-body); margin-bottom: 4px; }
+  .field label span { color: #9A95A8; font-weight: 500; }
+  .field input {
+    width: 100%; font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--color-title);
+    background: var(--color-white); border: 1.5px solid var(--color-border);
+    border-radius: 9px; padding: 9px 12px; outline: none;
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  .field input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-surface-highlight); }
+  .field input::placeholder { color: #B4AFC0; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--color-accent); color: #fff; border: none; border-radius: 9px; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 700;
+    padding: 10px 16px; transition: transform .08s ease, box-shadow .15s ease;
+    box-shadow: 0 2px 10px rgba(0,29,105,.18); flex-shrink: 0;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(0,29,105,.26); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.ghost { background: #fff; color: var(--color-accent); border: 1.5px solid var(--color-accent); box-shadow: none; padding: 8px 13px; font-size: 12.5px; }
+
+  /* generated prompt */
+  .prompt-wrap { margin-top: 11px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .prompt-box {
+    border: 1.5px solid var(--color-surface-highlight); background: #FBFAFF;
+    border-radius: 10px; padding: 11px 13px;
+    font-size: 12px; color: var(--color-body); line-height: 1.5;
+    overflow-y: auto; flex: 1 1 auto; min-height: 0;
+    white-space: pre-wrap; user-select: text; -webkit-user-select: text;
+  }
+  .prompt-box.placeholder { display: flex; align-items: center; justify-content: center; text-align: center; color: #B4AFC0; font-style: italic; }
+  .prompt-actions { display: flex; align-items: center; gap: 11px; margin-top: 9px; flex-shrink: 0; }
+  .prompt-note { font-size: 11px; color: var(--color-body); line-height: 1.35; }
+  .prompt-note b { color: var(--color-title); font-weight: 700; }
+
+  /* scorecard */
+  .crit { margin-bottom: 11px; flex-shrink: 0; }
+  .crit-top { display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px; }
+  .crit-name { font-size: 13px; font-weight: 700; color: var(--color-title); }
+  .crit-gate { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--color-accent); background: var(--color-surface-highlight); padding: 1px 7px; border-radius: 20px; }
+  .crit-q { font-size: 11.5px; color: var(--color-body); line-height: 1.3; margin-bottom: 6px; }
+  .seg { display: flex; gap: 7px; }
+  .seg button {
+    flex: 1 1 0; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer;
+    background: #fff; color: var(--color-body); border: 1.5px solid var(--color-border);
+    border-radius: 8px; padding: 7px 6px; transition: all .1s ease;
+  }
+  .seg button:hover { border-color: var(--color-accent); }
+  .seg button.on { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+  .verdict {
+    margin-top: auto; border-radius: 12px; padding: 13px 15px;
+    background: var(--color-white); border: 1.5px solid var(--color-border);
+    display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+  }
+  .verdict .badge {
+    align-self: flex-start; font-size: 13px; font-weight: 800; letter-spacing: .02em;
+    padding: 4px 13px; border-radius: 20px; color: #fff; background: #B4AFC0;
+  }
+  .verdict.fit  { border-color: var(--fit);  background: #F0FAF4; }
+  .verdict.fit  .badge  { background: var(--fit); }
+  .verdict.flag { border-color: var(--flag); background: #FCF6EC; }
+  .verdict.flag .badge  { background: var(--flag); }
+  .verdict.no   { border-color: var(--no);   background: #FCF0EF; }
+  .verdict.no   .badge  { background: var(--no); }
+  .verdict .reason { font-size: 12.5px; color: var(--color-title); line-height: 1.45; }
+
+  /* footer */
+  .footstrip {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    background: var(--color-surface-highlight); border-radius: 10px;
+    padding: 9px 16px; margin-top: 11px;
+  }
+  .footstrip .f-ico { color: var(--color-accent); display: flex; flex-shrink: 0; }
+  .footstrip .f-ico svg { width: 17px; height: 17px; }
+  .footstrip p { font-size: 12px; color: var(--color-title); line-height: 1.35; }
+  .footstrip b { font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="deck-wrapper">
+    <section class="screen">
+
+      <div class="brandbar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><polyline points="9 12 11.5 14.5 16 9.5"/></svg>
+        Company fit checker
+      </div>
+
+      <div class="body">
+        <!-- LEFT: prompt builder -->
+        <div class="col-left">
+          <div class="rail-head"><span class="n">1</span> Build your fit-check prompt</div>
+
+          <div class="field">
+            <label for="coName">Company name</label>
+            <input id="coName" type="text" placeholder="e.g. BiSN" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="coDesc">What it does <span>(optional, one line)</span></label>
+            <input id="coDesc" type="text" placeholder="e.g. makes dissolvable well-plugging tools" autocomplete="off">
+          </div>
+
+          <button class="btn" id="buildBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7"/><path d="M4 9h10"/><path d="M4 14h5"/><path d="M15 12l5 5-2 2-5-5z"/><path d="M18 15l2-2"/></svg>
+            Build my fit-check
+          </button>
+
+          <div class="prompt-wrap">
+            <div class="prompt-box placeholder" id="promptBox">Type a company name, then press "Build my fit-check" to get a prompt you can paste into Claude or Perplexity.</div>
+            <div class="prompt-actions" id="promptActions" style="display:none;">
+              <button class="btn ghost" id="copyBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+                <span id="copyLabel">Copy prompt</span>
+              </button>
+              <span class="prompt-note">Paste into <b>Claude</b> or <b>Perplexity</b> — they do the research, then bring the answer back here.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: scorecard -->
+        <div class="col-right">
+          <div class="rail-head"><span class="n">2</span> Record the verdict</div>
+
+          <div class="crit">
+            <div class="crit-top"><span class="crit-name">Application</span><span class="crit-gate">The gate</span></div>
+            <div class="crit-q">Could an upstream or midstream oil &amp; gas operator use it to run better?</div>
+            <div class="seg" data-key="app">
+              <button data-val="yes">Yes</button>
+              <button data-val="unsure">Unsure</button>
+              <button data-val="no">No</button>
+            </div>
+          </div>
+
+          <div class="crit">
+            <div class="crit-top"><span class="crit-name">Stage</span></div>
+            <div class="crit-q">Is it pre-seed to Series B? (A guide, not a wall.)</div>
+            <div class="seg" data-key="stage">
+              <button data-val="yes">In range</button>
+              <button data-val="no">Outside</button>
+            </div>
+          </div>
+
+          <div class="crit">
+            <div class="crit-top"><span class="crit-name">Location</span></div>
+            <div class="crit-q">Is the company US-based?</div>
+            <div class="seg" data-key="us">
+              <button data-val="yes">US-based</button>
+              <button data-val="no">Not US</button>
+            </div>
+          </div>
+
+          <div class="verdict" id="verdict">
+            <span class="badge" id="vBadge">Your call</span>
+            <span class="reason" id="vReason">Set the three answers from what Claude found to see where this company lands.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="footstrip">
+        <span class="f-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </span>
+        <p><b>Application beats stage.</b> If an operator wouldn't use it, it isn't a fit, however impressive the technology.</p>
+      </div>
+
+    </section>
+  </div>
+</div>
+
+<script>
+/* ---------- prompt builder ---------- */
+const coName = document.getElementById('coName');
+const coDesc = document.getElementById('coDesc');
+const promptBox = document.getElementById('promptBox');
+const promptActions = document.getElementById('promptActions');
+const copyBtn = document.getElementById('copyBtn');
+const copyLabel = document.getElementById('copyLabel');
+let copyTimer = null;
+
+function buildPrompt() {
+  const name = coName.value.trim() || '[company name]';
+  const desc = coDesc.value.trim();
+  const descClause = desc ? (', which ' + desc) : '';
+  return "I'm evaluating a company for an energy investor, EIC Heritage. Their screen has three parts. First and most important: can the technology be used to improve the operation of an upstream or midstream oil and gas company? Second: the company is ideally pre-seed to Series B, though stage matters less than the application. Third: it should be US-based.\n\n" +
+    "The company I'm checking is " + name + descClause + ".\n\n" +
+    "Research it with up-to-date sources and tell me:\n" +
+    "1. Application: could an upstream or midstream oil and gas operator actually use this technology to run better, to produce, move, or manage hydrocarbons more efficiently, more safely, or at lower cost? Explain how, or say clearly if it can't.\n" +
+    "2. Stage: what funding stage is it at, and is that within pre-seed to Series B?\n" +
+    "3. Location: is it US-based?\n\n" +
+    "Then give an overall call, Fit, Watch, or Not a fit, with a one-line reason. Put a source link next to each fact, and if you can't confirm something, say so instead of guessing.";
+}
+
+document.getElementById('buildBtn').addEventListener('click', () => {
+  promptBox.textContent = buildPrompt();
+  promptBox.classList.remove('placeholder');
+  promptActions.style.display = 'flex';
+  promptBox.scrollTop = 0;
+  copyLabel.textContent = 'Copy prompt';
+});
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+}
+copyBtn.addEventListener('click', () => {
+  const text = promptBox.textContent;
+  const done = () => { copyLabel.textContent = 'Copied!'; if (copyTimer) clearTimeout(copyTimer); copyTimer = setTimeout(() => { copyLabel.textContent = 'Copy prompt'; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => { fallbackCopy(text); done(); });
+  } else { fallbackCopy(text); done(); }
+});
+
+/* ---------- scorecard ---------- */
+const state = { app: null, stage: null, us: null };
+const vEl = document.getElementById('verdict');
+const vBadge = document.getElementById('vBadge');
+const vReason = document.getElementById('vReason');
+
+document.querySelectorAll('.seg').forEach(seg => {
+  const key = seg.dataset.key;
+  seg.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      state[key] = b.dataset.val;
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      render();
+    });
+  });
+});
+
+function computeVerdict() {
+  const { app, stage, us } = state;
+  if (!app) return { badge: 'Your call', cls: '', reason: 'Set the three answers from what Claude found to see where this company lands.' };
+  if (app === 'no') return { badge: 'Not a fit', cls: 'no', reason: 'No upstream or midstream operator application. That is the gate, so this one is out, whatever the stage or location.' };
+  if (app === 'unsure') return { badge: 'Dig deeper', cls: 'flag', reason: 'The operator application is unclear. Go back and pin down exactly how an operator would use it before you decide.' };
+  if (stage === null || us === null) return { badge: 'Almost there', cls: '', reason: 'Strong application. Now set the stage and location to get the full call.' };
+  if (stage === 'yes' && us === 'yes') return { badge: 'Fit', cls: 'fit', reason: 'Operator application works, in the stage range, and US-based. This one clears the screen. Take it forward.' };
+  const issues = [];
+  if (stage === 'no') issues.push('the stage is outside pre-seed to Series B');
+  if (us === 'no') issues.push('it is not US-based');
+  return { badge: 'Flag / Watch', cls: 'flag', reason: 'The application fits, but ' + issues.join(' and ') + '. EIC cares less about stage than application, so keep it on the watch list rather than dropping it.' };
+}
+
+function render() {
+  const v = computeVerdict();
+  vEl.className = 'verdict' + (v.cls ? ' ' + v.cls : '');
+  vBadge.textContent = v.badge;
+  vReason.textContent = v.reason;
+}
+
+/* MANDATORY viewport scale-to-fit */
+function scaleDeck() {
+  const wrapper = document.getElementById('deck-wrapper');
+  const scale = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+  const tx = Math.max(0, (window.innerWidth - 960 * scale) / 2);
+  wrapper.style.transformOrigin = 'top left';
+  wrapper.style.transform = `translateX(${tx}px) scale(${scale})`;
+}
+window.addEventListener('resize', scaleDeck);
+scaleDeck();
+</script>
+</body>
+</html>
