@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Your Workflow Actually Gets Its Product Data</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FDF8F8;
+      --title: #1C1B1B;
+      --body: #484646;
+      --muted: rgba(72,70,70,0.6);
+      --highlight: #DCE1FF;
+      --accent: #001D69;
+      --nav-bg: #001D69;
+      --white: #ffffff;
+
+      --green: #10B981;  --green-tint: #D1FAE5;
+      --blue: #2563EB;   --blue-tint: #DBEAFE;
+      --purple: #7C3AED; --purple-tint: #EDE9FE;
+      --orange: #EA580C; --orange-tint: #FED7AA;
+      --red: #DC2626;    --red-tint: #FECACA;
+      --amber: #D97706;  --amber-tint: #FEF3C7;
+
+      --backdrop: #F0F0FF;
+    }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      margin: 0; padding: 0;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--title);
+    }
+
+    #deck-wrapper {
+      width: 960px; height: 540px;
+      overflow: hidden; background: var(--bg);
+    }
+
+    .slide {
+      width: 960px; height: 540px;
+      position: absolute; top: 0; left: 0;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 30px 60px 54px;
+      box-sizing: border-box;
+      background: var(--backdrop);
+    }
+    .slide[aria-hidden="true"] { display: none; }
+
+    .slide-inner { width: 100%; max-width: 840px; margin: 0 auto; }
+
+    /* Title slide */
+    .slide-title { justify-content: center; align-items: center; }
+    .slide-title .slide-inner { text-align: center; }
+    .kicker {
+      display: inline-block;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--highlight);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    .slide-title h1 {
+      font-size: 33px; font-weight: 700; line-height: 1.15;
+      color: var(--title); margin-bottom: 12px;
+    }
+    .slide-title .lede {
+      font-size: 14px; font-weight: 500; color: var(--body);
+      line-height: 1.6; max-width: 640px; margin: 0 auto 22px;
+    }
+    .slide-title .lede strong { color: var(--accent); }
+
+    .chip-row { display: flex; gap: 12px; justify-content: center; }
+    .chip {
+      background: var(--white); border-radius: 12px;
+      padding: 12px 18px; min-width: 150px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 16px rgba(0,0,0,0.05);
+    }
+    .chip .chip-emoji { font-size: 22px; }
+    .chip .chip-name { font-size: 14px; font-weight: 700; color: var(--title); margin-top: 4px; }
+    .chip .chip-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* Content slides */
+    .q-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+    }
+    .q-hero {
+      font-size: 23px; font-weight: 700; color: var(--title);
+      line-height: 1.2; margin-bottom: 12px;
+    }
+    .q-hero.c-red { color: var(--red); }
+    .q-hero.c-green { color: var(--green); }
+    .q-hero.c-purple { color: var(--purple); }
+    .intro-text {
+      font-size: 13px; color: var(--body); line-height: 1.55; margin-bottom: 12px;
+    }
+    .intro-text strong { color: var(--title); }
+
+    .card {
+      display: flex; align-items: flex-start; gap: 14px;
+      background: var(--white); border-radius: 13px;
+      padding: 13px 18px; margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    }
+    .card-icon {
+      flex-shrink: 0; width: 44px; height: 44px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; line-height: 1;
+    }
+    .card-body { flex: 1; min-width: 0; }
+    .card-heading { font-size: 14px; font-weight: 700; line-height: 1.25; margin-bottom: 3px; }
+    .card-text { font-size: 12.5px; color: var(--body); line-height: 1.5; }
+    .card-text strong { color: var(--title); }
+    .card-text code {
+      font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+      background: rgba(0,29,105,0.06); color: var(--accent);
+      padding: 1px 5px; border-radius: 4px;
+    }
+
+    .card-green .card-icon { background: var(--green-tint); }
+    .card-green .card-heading { color: var(--green); }
+    .card-blue .card-icon { background: var(--blue-tint); }
+    .card-blue .card-heading { color: var(--blue); }
+    .card-purple .card-icon { background: var(--purple-tint); }
+    .card-purple .card-heading { color: var(--purple); }
+    .card-orange .card-icon { background: var(--orange-tint); }
+    .card-orange .card-heading { color: var(--orange); }
+    .card-red .card-icon { background: var(--red-tint); }
+    .card-red .card-heading { color: var(--red); }
+    .card-amber .card-icon { background: var(--amber-tint); }
+    .card-amber .card-heading { color: var(--amber); }
+
+    .card-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .card-grid-2 .card { margin-bottom: 0; }
+
+    /* Endpoint code block */
+    .endpoint {
+      background: var(--accent); color: var(--white);
+      font-family: 'JetBrains Mono', monospace; font-size: 14px;
+      padding: 16px 20px; border-radius: 12px; margin-bottom: 14px;
+      line-height: 1.4; word-break: break-all;
+      box-shadow: 0 6px 18px rgba(0,29,105,0.25);
+    }
+    .endpoint .ep-method { color: #7CFFB2; font-weight: 700; }
+    .endpoint .ep-var { color: var(--highlight); }
+
+    .callout {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: #FFFBEB; border-left: 4px solid var(--amber);
+      border-radius: 8px; padding: 12px 16px; margin-top: 4px;
+    }
+    .callout .callout-emoji { font-size: 20px; line-height: 1.2; }
+    .callout .callout-title { font-size: 12.5px; font-weight: 700; color: var(--amber); margin-bottom: 2px; }
+    .callout .callout-text { font-size: 12.5px; color: var(--body); line-height: 1.5; }
+
+    .closing-line {
+      font-size: 13px; color: var(--body); line-height: 1.55;
+      margin-top: 12px; font-style: italic;
+    }
+    .closing-line strong { color: var(--accent); font-style: normal; }
+
+    /* Completion banner */
+    #completion-banner {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: var(--accent); color: var(--white);
+      padding: 16px 28px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      box-shadow: 0 8px 32px rgba(0,29,105,0.35);
+      z-index: 200; display: none; align-items: center; gap: 12px;
+      transition: opacity 0.25s, transform 0.25s; opacity: 0;
+    }
+    #completion-banner.show { display: flex; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    #completion-banner i { font-size: 22px; color: var(--highlight); }
+
+    /* Nav */
+    #nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 48px;
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      background: var(--nav-bg); z-index: 100;
+    }
+    .nav-btn {
+      background: none; border: none; color: var(--white);
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+      cursor: pointer; padding: 0 16px; height: 48px; transition: color 0.2s; flex-shrink: 0;
+    }
+    .nav-btn:hover { color: var(--highlight); }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .nav-btn:disabled:hover { color: var(--white); }
+    #dots { display: flex; align-items: center; gap: 6px; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.3); cursor: pointer;
+      transition: background 0.2s, transform 0.2s; border: none; padding: 0;
+    }
+    .dot.active { background: var(--highlight); transform: scale(1.25); }
+  </style>
+</head>
+<body>
+
+<div id="deck-wrapper">
+
+  <!-- SLIDE 1: Title -->
+  <div class="slide slide-title" role="region" aria-label="Intro">
+    <div class="slide-inner">
+      <span class="kicker">Behind the Scenes</span>
+      <h1>How Your Workflow Actually Gets Its Product Data</h1>
+      <p class="lede">Your workflow never visits Wayfair, Amazon, or Walmart. It calls <strong>three API endpoints</strong> and gets clean JSON back. Here's what's happening behind them.</p>
+      <div class="chip-row">
+        <div class="chip">
+          <div class="chip-emoji">🛋️</div>
+          <div class="chip-name">Wayfair</div>
+          <div class="chip-sub">clean product JSON</div>
+        </div>
+        <div class="chip">
+          <div class="chip-emoji">📦</div>
+          <div class="chip-name">Amazon</div>
+          <div class="chip-sub">clean product JSON</div>
+        </div>
+        <div class="chip">
+          <div class="chip-emoji">🛒</div>
+          <div class="chip-name">Walmart</div>
+          <div class="chip-sub">clean product JSON</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2: The three walls -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Why not scrape directly">
+    <div class="slide-inner">
+      <div class="q-tag">Why the API layer exists</div>
+      <div class="q-hero">Why not just scrape the sites directly?</div>
+      <p class="intro-text">Scraping a retailer straight from an n8n Code node runs into three walls.</p>
+
+      <div class="card card-red">
+        <div class="card-icon">🚫</div>
+        <div class="card-body">
+          <div class="card-heading">The sites block you</div>
+          <div class="card-text">Wayfair sits behind PerimeterX, Amazon throws CAPTCHAs, and Walmart throttles, so plain HTTP requests get blocked.</div>
+        </div>
+      </div>
+
+      <div class="card card-amber">
+        <div class="card-icon">🎯</div>
+        <div class="card-body">
+          <div class="card-heading">The target keeps moving</div>
+          <div class="card-text">Retailer HTML changes constantly, so any selector you write today probably breaks next week, and your workflow starts silently returning empty results.</div>
+        </div>
+      </div>
+
+      <div class="card card-purple">
+        <div class="card-icon">🏗️</div>
+        <div class="card-body">
+          <div class="card-heading">It's a whole engineering project</div>
+          <div class="card-text">Get past those two and you still need proxies, headless browsers, retries, and storage. That's not something to hide inside a workflow.</div>
+        </div>
+      </div>
+
+      <p class="closing-line">You only need fresh data every so often, so it's cleaner to scrape once and serve the results to many runs. <strong>That's the job of the API layer.</strong></p>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: How the data gets scraped -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="How the data gets scraped">
+    <div class="slide-inner">
+      <div class="q-tag">How we actually scrape</div>
+      <div class="q-hero">So how does the data get collected?</div>
+      <p class="intro-text">We use <strong>browser-console extractors</strong>: small JavaScript blocks pasted into each retailer's category page while it's open in Chrome.</p>
+
+      <div class="card card-blue">
+        <div class="card-icon">🧩</div>
+        <div class="card-body">
+          <div class="card-heading">What the extractor does</div>
+          <div class="card-text">It figures out which category page you're on, reads the product cards out of the DOM, and downloads a merged JSON once all four rug categories are done.</div>
+        </div>
+      </div>
+
+      <div class="card card-green">
+        <div class="card-icon">🕵️</div>
+        <div class="card-body">
+          <div class="card-heading">Why paste into Chrome instead of a headless bot</div>
+          <div class="card-text">It uses a real browser session with valid cookies and a natural fingerprint, so bot detection mostly leaves it alone.</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-emoji">📏</div>
+        <div>
+          <div class="callout-title">Right-sized for the job</div>
+          <div class="callout-text">At ~120 products per retailer, refreshed every 1–2 weeks, a full automated pipeline would be overkill.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4: Meet the three retailers -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="Meet the three retailers">
+    <div class="slide-inner">
+      <div class="q-tag">How we actually scrape</div>
+      <div class="q-hero">Each retailer plays by its own rules</div>
+      <p class="intro-text">Every retailer behaves differently, so each one gets handled a little differently.</p>
+
+      <div class="card card-red">
+        <div class="card-icon">🛡️</div>
+        <div class="card-body">
+          <div class="card-heading">Wayfair — the strictest</div>
+          <div class="card-text">Scraped first, one category at a time, with a scripted scroll to trigger lazy loading and a 5-minute wait between pages.</div>
+        </div>
+      </div>
+
+      <div class="card card-amber">
+        <div class="card-icon">📦</div>
+        <div class="card-body">
+          <div class="card-heading">Amazon — the middle child</div>
+          <div class="card-text">Uses a standard search-results DOM. It rate-limits, but it doesn't hard-block.</div>
+        </div>
+      </div>
+
+      <div class="card card-green">
+        <div class="card-icon">🛒</div>
+        <div class="card-body">
+          <div class="card-heading">Walmart — the easy one</div>
+          <div class="card-text">Stable <code>data-item-id</code> attributes make it the simplest to read.</div>
+        </div>
+      </div>
+
+      <p class="closing-line">The resulting JSON files land in the backend and get pushed to production.</p>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: From files to your endpoint -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="From files to your endpoint">
+    <div class="slide-inner">
+      <div class="q-tag">From files to your endpoint</div>
+      <div class="q-hero">One call, clean data back</div>
+      <p class="intro-text">Once the data is in production, your workflow reaches it with a single call:</p>
+
+      <div class="endpoint"><span class="ep-method">GET</span> /api/products/<span class="ep-var">{amazon|walmart|wayfair}</span>?category=area_rug&amp;limit=10</div>
+
+      <div class="card-grid-2">
+        <div class="card card-blue">
+          <div class="card-icon">🔀</div>
+          <div class="card-body">
+            <div class="card-heading">Shuffled on every call</div>
+            <div class="card-text">Each call returns a shuffled subset, so repeated requests give you varied products while you iterate.</div>
+          </div>
+        </div>
+
+        <div class="card card-purple">
+          <div class="card-icon">🗂️</div>
+          <div class="card-body">
+            <div class="card-heading">Six fields per product</div>
+            <div class="card-text">URL, name, price, image, rating, and review count.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: What you'd use in production -->
+  <div class="slide" aria-hidden="true" role="region" aria-label="What you would use in production">
+    <div class="slide-inner">
+      <div class="q-tag">What you'd use in production</div>
+      <div class="q-hero c-green">If this were a real product</div>
+      <p class="intro-text">Our manual approach fits an educational program with no live-data SLA. For a real product, you'd want something automated. A few options, depending on what you need:</p>
+
+      <div class="card-grid-2">
+        <div class="card card-green">
+          <div class="card-icon">🚀</div>
+          <div class="card-body">
+            <div class="card-heading">Apify — where most teams start</div>
+            <div class="card-text">Pre-built "actors" for major retailers handle proxies, CAPTCHAs, and retries. Usage-based pricing, typically a few dollars per 1,000 products.</div>
+          </div>
+        </div>
+
+        <div class="card card-blue">
+          <div class="card-icon">🏢</div>
+          <div class="card-body">
+            <div class="card-heading">Bright Data / Oxylabs — enterprise scale</div>
+            <div class="card-text">The enterprise end, with residential proxy networks for very high volume.</div>
+          </div>
+        </div>
+
+        <div class="card card-purple">
+          <div class="card-icon">🔍</div>
+          <div class="card-body">
+            <div class="card-heading">SerpAPI — search results only</div>
+            <div class="card-text">Covers search-result data if that's all you need.</div>
+          </div>
+        </div>
+
+        <div class="card card-amber">
+          <div class="card-icon">🐝</div>
+          <div class="card-body">
+            <div class="card-heading">ScraperAPI / ScrapingBee — middle ground</div>
+            <div class="card-text">You write the selectors, they run the proxy layer.</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="closing-line">Pick based on <strong>volume, freshness, and depth.</strong></p>
+    </div>
+  </div>
+
+</div><!-- /#deck-wrapper -->
+
+<div id="completion-banner" role="status" aria-live="polite">
+  <i class="ph ph-check-circle"></i>
+  <span>That's what's behind the endpoints.</span>
+</div>
+
+<nav id="nav" aria-label="Slide navigation">
+  <button class="nav-btn" id="btn-prev" onclick="navigate(-1)" aria-label="Previous slide">&larr; Prev</button>
+  <div id="dots" role="tablist" aria-label="Slide indicators"></div>
+  <button class="nav-btn" id="btn-next" onclick="navigate(1)" aria-label="Next slide">Next &rarr;</button>
+</nav>
+
+<script>
+  var NAV_H = 48;
+  function scaleSlides() {
+    var wrapper = document.getElementById('deck-wrapper');
+    var availH = window.innerHeight - NAV_H;
+    var scaleX = window.innerWidth / 960;
+    var scaleY = availH / 540;
+    var scale = Math.min(scaleX, scaleY);
+    wrapper.style.transform = 'scale(' + scale + ')';
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = ((window.innerWidth - 960 * scale) / 2) + 'px';
+    wrapper.style.top = ((availH - 540 * scale) / 2) + 'px';
+  }
+  window.addEventListener('resize', scaleSlides);
+  window.addEventListener('load', scaleSlides);
+
+  (function () {
+    var slides = document.querySelectorAll('#deck-wrapper .slide');
+    var total = slides.length;
+    var current = 0;
+
+    var dotsContainer = document.getElementById('dots');
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.setAttribute('role', 'tab');
+      dot.dataset.index = i;
+      dot.addEventListener('click', function () { goTo(parseInt(this.dataset.index, 10)); });
+      dotsContainer.appendChild(dot);
+    }
+
+    function updateNextBtn() {
+      var nextBtn = document.getElementById('btn-next');
+      nextBtn.innerHTML = (current === total - 1) ? 'Finish' : 'Next &rarr;';
+      nextBtn.disabled = false;
+    }
+
+    function goTo(index) {
+      slides[current].setAttribute('aria-hidden', 'true');
+      slides[current].style.display = 'none';
+      dotsContainer.children[current].classList.remove('active');
+      current = index;
+      slides[current].removeAttribute('aria-hidden');
+      slides[current].style.display = 'flex';
+      dotsContainer.children[current].classList.add('active');
+      document.getElementById('btn-prev').disabled = (current === 0);
+      updateNextBtn();
+    }
+
+    function showCompletionBanner() {
+      var banner = document.getElementById('completion-banner');
+      banner.classList.add('show');
+      setTimeout(function () { banner.classList.remove('show'); }, 2800);
+    }
+
+    function navigate(dir) {
+      if (dir > 0 && current === total - 1) { showCompletionBanner(); return; }
+      var next = current + dir;
+      if (next < 0 || next >= total) return;
+      goTo(next);
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+    });
+
+    for (var j = 0; j < total; j++) {
+      if (j === 0) { slides[j].removeAttribute('aria-hidden'); slides[j].style.display = 'flex'; }
+      else { slides[j].setAttribute('aria-hidden', 'true'); slides[j].style.display = 'none'; }
+    }
+    document.getElementById('btn-prev').disabled = true;
+    updateNextBtn();
+    window.navigate = navigate;
+  })();
+</script>
+
+</body>
+</html>
