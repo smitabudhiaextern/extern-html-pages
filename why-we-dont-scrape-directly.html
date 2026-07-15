@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why We Don't Scrape the Websites Directly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FDF8F8;
+      --title: #1C1B1B;
+      --body: #484646;
+      --muted: rgba(72,70,70,0.55);
+      --highlight: #DCE1FF;
+      --accent: #001D69;
+      --white: #ffffff;
+
+      --red: #DC2626;    --red-tint: #FECACA;    --red-soft: #FEF2F2;
+      --amber: #D97706;  --amber-tint: #FEF3C7;  --amber-soft: #FFFBEB;
+      --blue: #2563EB;   --blue-tint: #DBEAFE;   --blue-soft: #EFF6FF;
+      --green: #10B981;  --green-soft: #ECFDF5;
+
+      --backdrop: #F0F0FF;
+    }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--title);
+    }
+
+    #stage {
+      width: 960px; height: 540px;
+      position: absolute; top: 0; left: 0;
+      transform-origin: top left;
+      background: var(--backdrop);
+      padding: 30px 44px;
+      display: flex; flex-direction: column;
+    }
+
+    .head h1 { font-size: 25px; font-weight: 700; line-height: 1.2; }
+    .head p { font-size: 13px; color: var(--body); margin-top: 5px; }
+    .head p .hint { color: var(--accent); font-weight: 600; }
+
+    /* Tab cards */
+    .tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; }
+    .tab {
+      background: var(--white); border: 2px solid transparent;
+      border-radius: 13px; padding: 13px 15px; cursor: pointer;
+      text-align: left; font-family: inherit;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.05);
+      transition: border-color .15s, transform .15s, box-shadow .15s;
+      display: flex; gap: 11px; align-items: flex-start;
+    }
+    .tab:hover { transform: translateY(-2px); }
+    .tab .t-icon {
+      flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 19px;
+    }
+    .tab .t-head { font-size: 13.5px; font-weight: 700; line-height: 1.25; }
+    .tab .t-num { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+
+    .tab--red   .t-icon { background: var(--red-tint);   color: var(--red); }
+    .tab--amber .t-icon { background: var(--amber-tint); color: var(--amber); }
+    .tab--blue  .t-icon { background: var(--blue-tint);  color: var(--blue); }
+
+    .tab.active { border-color: var(--accent); }
+    .tab--red.active   { border-color: var(--red); }
+    .tab--amber.active { border-color: var(--amber); }
+    .tab--blue.active  { border-color: var(--blue); }
+
+    /* Example panel */
+    .panel-wrap { margin-top: 16px; flex: 1; min-height: 0; position: relative; }
+    .panel {
+      position: absolute; inset: 0;
+      background: var(--white); border-radius: 14px;
+      padding: 18px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,0,0,0.06);
+      display: none; flex-direction: column;
+    }
+    .panel.show { display: flex; }
+    .panel .why { font-size: 13px; color: var(--body); line-height: 1.5; margin-bottom: 12px; }
+    .panel .why strong { color: var(--title); }
+    .panel .ex-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 10px;
+    }
+
+    /* Flow (reason 1) */
+    .flow { display: flex; align-items: center; gap: 14px; justify-content: center; margin-top: 4px; }
+    .flow-box {
+      background: var(--bg); border: 1.5px solid var(--highlight); border-radius: 11px;
+      padding: 12px 16px; font-size: 12.5px; font-weight: 600; color: var(--title);
+      text-align: center; min-width: 128px;
+    }
+    .flow-box .fb-sub { font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 3px; }
+    .flow-arrow { color: var(--accent); font-size: 22px; }
+    .flow-box.blocked {
+      background: var(--red-soft); border-color: var(--red-tint); color: var(--red);
+    }
+    .flow-box.blocked .fb-sub { color: var(--red); opacity: .85; }
+
+    /* Code compare (reason 2) */
+    .code-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .code-card { border-radius: 10px; padding: 12px 14px; }
+    .code-card.last { background: var(--green-soft); }
+    .code-card.now  { background: var(--amber-soft); }
+    .code-card .cc-title { font-size: 11px; font-weight: 700; margin-bottom: 7px; }
+    .code-card.last .cc-title { color: var(--green); }
+    .code-card.now  .cc-title { color: var(--amber); }
+    .code-card code {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--title);
+      display: block; line-height: 1.5;
+    }
+    .code-card code .tag { color: var(--blue); }
+    .code-card code .diff { background: #FDE68A; border-radius: 3px; padding: 0 3px; }
+    .result-strip {
+      margin-top: 12px; background: var(--red-soft); border-left: 4px solid var(--red);
+      border-radius: 8px; padding: 10px 14px; font-size: 12.5px; color: var(--body); line-height: 1.5;
+    }
+    .result-strip strong { color: var(--red); }
+
+    /* Build stack (reason 3) */
+    .stack-compare { display: flex; gap: 16px; align-items: stretch; }
+    .stack-col { flex: 1; }
+    .stack-col .sc-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--muted); }
+    .simple-pill {
+      background: var(--bg); border: 1.5px solid var(--highlight); border-radius: 10px;
+      padding: 14px; font-size: 12.5px; color: var(--title); text-align: center; font-weight: 600;
+    }
+    .parts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .part {
+      background: var(--blue-soft); border-radius: 9px; padding: 9px 11px;
+      font-size: 12px; font-weight: 600; color: var(--blue);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .stack-note {
+      margin-top: 12px; font-size: 12.5px; color: var(--body); line-height: 1.5; text-align: center;
+    }
+    .stack-note strong { color: var(--accent); }
+    .vs {
+      align-self: center; font-size: 11px; font-weight: 700; color: var(--muted);
+      letter-spacing: .06em;
+    }
+  </style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="head">
+    <h1>Why we don't scrape the websites directly</h1>
+    <p>You might expect the workflow to open Wayfair, Amazon, and Walmart and read the products off the page. It doesn't. <span class="hint">Click each reason to see what would go wrong.</span></p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab tab--red active" data-panel="p1">
+      <span class="t-icon"><i class="ph-bold ph-shield-slash"></i></span>
+      <span>
+        <span class="t-num">Reason 1</span>
+        <span class="t-head">The websites block automated visits</span>
+      </span>
+    </button>
+    <button class="tab tab--amber" data-panel="p2">
+      <span class="t-icon"><i class="ph-bold ph-arrows-clockwise"></i></span>
+      <span>
+        <span class="t-num">Reason 2</span>
+        <span class="t-head">Websites change often</span>
+      </span>
+    </button>
+    <button class="tab tab--blue" data-panel="p3">
+      <span class="t-icon"><i class="ph-bold ph-stack"></i></span>
+      <span>
+        <span class="t-num">Reason 3</span>
+        <span class="t-head">Doing it properly is a big project</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="panel-wrap">
+
+    <!-- Panel 1 -->
+    <div class="panel show" id="p1">
+      <div class="why">These retailers have systems that detect and stop bots. <strong>Wayfair uses a security service called PerimeterX, Amazon shows CAPTCHAs, and Walmart slows requests down.</strong> A simple request from your workflow usually gets blocked.</div>
+      <div class="ex-label"><i class="ph-bold ph-eye"></i> What it looks like</div>
+      <div class="flow">
+        <div class="flow-box">Your workflow<div class="fb-sub">"Give me the rug listings"</div></div>
+        <div class="flow-arrow"><i class="ph-bold ph-arrow-right"></i></div>
+        <div class="flow-box">Retailer website<div class="fb-sub">spots the bot</div></div>
+        <div class="flow-arrow"><i class="ph-bold ph-arrow-right"></i></div>
+        <div class="flow-box blocked">Access denied<div class="fb-sub">CAPTCHA instead of products</div></div>
+      </div>
+    </div>
+
+    <!-- Panel 2 -->
+    <div class="panel" id="p2">
+      <div class="why">The way a page is built changes constantly. Code that reads it correctly today can quietly stop working next week, and your workflow would start returning <strong>empty results without telling you</strong>.</div>
+      <div class="ex-label"><i class="ph-bold ph-code"></i> A simple example</div>
+      <div class="code-row">
+        <div class="code-card last">
+          <div class="cc-title">Last week, the price sat here:</div>
+          <code>&lt;span class="<span class="tag">price</span>"&gt;$129&lt;/span&gt;</code>
+        </div>
+        <div class="code-card now">
+          <div class="cc-title">This week, the site changed it to:</div>
+          <code>&lt;span class="<span class="diff">sale-price</span>"&gt;$129&lt;/span&gt;</code>
+        </div>
+      </div>
+      <div class="result-strip">Your code was still looking for <code style="font-family:'JetBrains Mono',monospace;">price</code>, so it finds nothing and returns <strong>0 products</strong> — with no error to warn you.</div>
+    </div>
+
+    <!-- Panel 3 -->
+    <div class="panel" id="p3">
+      <div class="why">To collect this data reliably, the "just visit the page" idea quietly turns into a lot of moving parts you'd have to build and keep running.</div>
+      <div class="ex-label"><i class="ph-bold ph-wrench"></i> What it really takes</div>
+      <div class="stack-compare">
+        <div class="stack-col">
+          <div class="sc-title">The simple idea</div>
+          <div class="simple-pill">Visit the page,<br>read the products</div>
+        </div>
+        <div class="vs">turns into</div>
+        <div class="stack-col">
+          <div class="sc-title">What you actually need to build</div>
+          <div class="parts">
+            <div class="part"><i class="ph-bold ph-shuffle"></i> Proxies</div>
+            <div class="part"><i class="ph-bold ph-browser"></i> Automated browsers</div>
+            <div class="part"><i class="ph-bold ph-arrow-counter-clockwise"></i> Retry logic</div>
+            <div class="part"><i class="ph-bold ph-database"></i> Storage</div>
+          </div>
+        </div>
+      </div>
+      <div class="stack-note">That's a <strong>full engineering project on its own</strong>, not something to hide inside a workflow.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function scaleStage() {
+    var stage = document.getElementById('stage');
+    var scale = Math.min(window.innerWidth / 960, window.innerHeight / 540);
+    stage.style.transform = 'scale(' + scale + ')';
+    stage.style.left = ((window.innerWidth - 960 * scale) / 2) + 'px';
+    stage.style.top = ((window.innerHeight - 540 * scale) / 2) + 'px';
+  }
+  window.addEventListener('resize', scaleStage);
+  window.addEventListener('load', scaleStage);
+  scaleStage();
+
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.panel');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      panels.forEach(function (p) { p.classList.remove('show'); });
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('show');
+    });
+  });
+</script>
+
+</body>
+</html>
