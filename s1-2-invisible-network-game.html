@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Invisible Network: a riddle game</title>
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#EAF4F4; --muted:#8FB0BC; --violet:#9B8CFF; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+
+  #deck-wrapper{width:960px;height:540px;overflow:hidden;position:relative;flex-shrink:0;background:var(--bg)}
+  .slide{width:960px;height:540px;padding:34px 60px 58px;position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+
+  h1{font-size:34px;font-weight:800;line-height:1.15}
+  h2{font-size:23px;font-weight:800}
+  .muted{color:var(--muted)}
+  .btn{appearance:none;border:0;border-radius:10px;padding:11px 19px;font-size:15px;font-weight:800;cursor:pointer;
+    background:var(--teal);color:#062421;transition:transform .12s,filter .12s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+
+  .roundtag{display:inline-block;width:fit-content;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--teal);background:rgba(46,196,182,.12);border:1px solid rgba(46,196,182,.35);padding:4px 11px;border-radius:20px}
+
+  /* nav chrome */
+  #nav{position:absolute;left:24px;right:24px;bottom:10px;display:flex;align-items:center;gap:14px;z-index:5}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .navbtn:disabled{opacity:.3;cursor:not-allowed}
+  .navbtn.pulse{background:var(--teal);color:#062421;border-color:var(--teal);animation:pu 1.2s infinite}
+  @keyframes pu{50%{box-shadow:0 0 14px rgba(46,196,182,.6)}}
+  #dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dt.on{background:var(--teal)}
+
+  /* title */
+  .s-title{justify-content:center;gap:16px}
+  .s-title .emoji{font-size:44px}
+  .stakes{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+  .stake{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    padding:5px 12px;border-radius:20px;border:1px solid var(--line);color:var(--muted);background:var(--panel2)}
+  .stake.on1{border-color:var(--teal);color:var(--teal)}
+  .stake.on2{border-color:var(--amber);color:var(--amber)}
+  .stake.on3{border-color:var(--red);color:var(--red)}
+  .arrow{color:var(--line);font-size:12px}
+
+  /* guess slide */
+  .qtitle{font-size:18px;font-weight:700;margin:8px 0 12px}
+  .clues{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0}
+  .clue{position:relative;border:1px solid var(--line);border-radius:10px;padding:11px 15px 11px 62px;
+    background:var(--panel2);font-size:15px;line-height:1.4;display:none;animation:in .3s ease}
+  .clue.shown{display:block}
+  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  .clue .cnum{position:absolute;top:10px;left:12px;font-size:12px;font-weight:800;color:var(--muted);
+    border:1px solid var(--line);padding:1px 7px;border-radius:9px}
+  .guessrow{display:flex;gap:8px;margin-top:12px}
+  .guessrow input{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:9px;
+    padding:10px 13px;font-size:15px;color:var(--ink);outline:none}
+  .guessrow input:focus{border-color:var(--teal)}
+  .hint{font-size:13px;margin-top:8px;min-height:16px;color:var(--muted)}
+  .hint.nope{color:var(--red)} .hint.yes{color:var(--good);font-weight:800}
+
+  /* meet-the-parts slide */
+  .parts-head{margin-bottom:12px}
+  .parts-head .sub{font-size:14px;color:var(--muted);margin-top:4px;line-height:1.45}
+  .parts-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;flex:1}
+  .part{border:1px solid var(--line);border-radius:13px;padding:14px 13px;display:flex;flex-direction:column;gap:7px;background:var(--panel2)}
+  .part .pic{height:66px;display:flex;align-items:center;justify-content:center}
+  .part .pic svg{width:60px;height:60px}
+  .part .pname{font-size:15px;font-weight:800;letter-spacing:.02em}
+  .part.sensor .pname{color:var(--good)} .part.network .pname{color:var(--teal)}
+  .part.subscriber .pname{color:var(--violet)} .part.actuator .pname{color:var(--act)}
+  .part .pdef{font-size:12.5px;color:var(--muted);line-height:1.4}
+  .part .pmap{font-size:12.5px;line-height:1.4;margin-top:auto;padding-top:7px;border-top:1px solid var(--line)}
+  .part .pmap b{color:var(--ink)}
+
+  /* attacker slide */
+  .a-esc{display:flex;gap:7px;align-items:center;margin-bottom:10px}
+  .a-esc .stake{font-size:12px;padding:4px 10px}
+  .a-prompt{font-size:17px;font-weight:700;line-height:1.35;margin-bottom:6px}
+  .a-prompt b{color:var(--red)}
+  .a-hint{font-size:13px;color:var(--muted);margin:0 0 12px}
+  .a-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .a-opt{border:1.5px solid var(--line);background:var(--panel2);border-radius:11px;padding:12px 14px;
+    font-size:14.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:9px;transition:all .15s;text-align:left}
+  .a-opt:hover{border-color:var(--muted)}
+  .a-opt .ic{width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .a-opt.sensor.pick{border-color:var(--good);background:rgba(62,207,142,.1)}
+  .a-opt.network.pick{border-color:var(--teal);background:rgba(46,196,182,.1)}
+  .a-opt.subscriber.pick{border-color:var(--violet);background:rgba(155,140,255,.12)}
+  .a-opt.actuator.pick{border-color:var(--act);background:rgba(255,120,73,.12)}
+  .a-fb{margin-top:12px;border-radius:11px;padding:13px 16px;font-size:14.5px;line-height:1.5;display:none;animation:in .3s ease;
+    background:linear-gradient(135deg,#2A1520,#1C1023);border:1px solid rgba(228,87,61,.4)}
+  .a-fb.show{display:block}
+  .a-fb .stakeline{margin-top:9px;font-size:13.5px;font-weight:800;color:var(--amber)}
+
+  /* finale */
+  .s-fin{justify-content:center;gap:13px}
+  .s-fin h2{color:var(--teal)}
+  .s-fin p{font-size:15px;line-height:1.6;max-width:820px}
+  .bridge{font-size:17px;font-weight:800;padding:14px 18px;border-left:4px solid var(--amber);
+    background:rgba(245,166,35,.07);border-radius:0 10px 10px 0;line-height:1.5}
+
+  /* ---------- mobile fallback: below 640px, abandon the fixed 960x540 canvas ----------
+     and render a fluid, vertically-scrolling, stacked layout at readable font sizes ---- */
+  @media (max-width:640px){
+    html,body{overflow:auto;height:auto}
+    #deck-wrapper{width:100%;height:auto;overflow:visible;transform:none!important}
+    .slide{position:relative;inset:auto;width:100%;height:auto;min-height:calc(100vh - 62px);padding:20px 16px 74px}
+    .parts-grid{grid-template-columns:1fr 1fr;gap:10px;flex:none}
+    .part .pic{height:48px}.part .pic svg{width:44px;height:44px}
+    .a-opts{grid-template-columns:1fr}
+    .clues{flex:none}
+    h1{font-size:26px} h2{font-size:20px}
+    #nav{position:fixed;background:var(--bg);padding-top:8px}
+  }
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- S0 TITLE -->
+  <section class="slide s-title active" id="sl0">
+    <div class="emoji">🕵️</div>
+    <h1>The Invisible Network</h1>
+    <p class="muted" style="font-size:16px;max-width:660px;line-height:1.55">
+      Three everyday devices are hiding in plain sight. I'll describe each one in clues, you guess it,
+      then we'll take it apart to see the four pieces inside. Finally, you'll look at it the way an
+      <b style="color:var(--red)">attacker</b> would.
+    </p>
+    <div class="stakes">
+      <span class="stake" id="st1">Round 1 · your habits</span><span class="arrow">▸</span>
+      <span class="stake" id="st2">Round 2 · your voice</span><span class="arrow">▸</span>
+      <span class="stake" id="st3">Round 3 · your front door</span>
+    </div>
+    <div><button class="btn" onclick="go(1)">Start round 1 →</button></div>
+  </section>
+
+  <!-- round shells: 3 slides each (guess / parts / attack) -->
+  <section class="slide" id="sl1"></section>
+  <section class="slide" id="sl2"></section>
+  <section class="slide" id="sl3"></section>
+  <section class="slide" id="sl4"></section>
+  <section class="slide" id="sl5"></section>
+  <section class="slide" id="sl6"></section>
+  <section class="slide" id="sl7"></section>
+  <section class="slide" id="sl8"></section>
+  <section class="slide" id="sl9"></section>
+
+  <!-- S10 FINALE -->
+  <section class="slide s-fin" id="sl10">
+    <h2>You can now see the invisible network.</h2>
+    <p>Every device you took apart runs on the same four parts: something that <b>senses</b>, a <b>broker</b> (the network) that
+      carries the data out, a <b>subscriber</b> that reads it, and, in the dangerous ones, an <b>actuator</b> that acts
+      on the real world. Broker is the word the pros use, and the one you'll use from here on. And you felt
+    the stakes climb: your habits, then your voice, then your front door. The lesson
+      the attacker already knows: <b>a device's danger isn't what it knows, it's what it can do.</b></p>
+    <div class="bridge">Now imagine the device doesn't count steps or open doors.<br>It controls the water for 2,000 hotel guests.</div>
+  </section>
+
+  <div id="nav">
+    <button class="navbtn" id="prevb" onclick="go(cur-1)">← Back</button>
+    <div id="dots"></div>
+    <button class="navbtn" id="nextb" onclick="go(cur+1)">Next →</button>
+  </div>
+</div>
+
+<script>
+/* ---------- SVG illustrations for the four parts ---------- */
+function partSVG(key){
+  const c={sensor:'#3ECF8E',network:'#2EC4B6',subscriber:'#9B8CFF',actuator:'#FF7849'}[key];
+  const s={
+    sensor:`<svg viewBox="0 0 64 64" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 32 C 18 16, 46 16, 58 32 C 46 48, 18 48, 6 32 Z"/>
+      <circle cx="32" cy="32" r="8" fill="${c}" stroke="none"/>
+      <path d="M50 12 q 5 4 0 8" opacity=".8"/><path d="M56 8 q 8 6 0 12" opacity=".5"/></svg>`,
+    network:`<svg viewBox="0 0 64 64" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round">
+      <circle cx="32" cy="48" r="4" fill="${c}" stroke="none"/>
+      <path d="M20 42 a 17 17 0 0 1 24 0"/>
+      <path d="M13 35 a 27 27 0 0 1 38 0"/>
+      <path d="M6 28 a 37 37 0 0 1 52 0"/></svg>`,
+    subscriber:`<svg viewBox="0 0 64 64" fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round">
+      <rect x="19" y="7" width="26" height="50" rx="5"/>
+      <polyline points="24,42 30,33 36,38 42,26" stroke-linecap="round"/>
+      <line x1="28" y1="51" x2="36" y2="51"/></svg>`,
+    actuator:`<svg viewBox="0 0 64 64"><path d="M37 5 L17 37 H30 L27 59 L48 27 H34 Z" fill="${c}"/></svg>`
+  };
+  return s[key];
+}
+function optSVG(key){ return partSVG(key).replace('width="3"','width="4"'); }
+
+/* ---------- part definitions ---------- */
+const PART_META={
+  sensor:{name:'Sensor',def:'What the device notices about the world.'},
+  network:{name:'Broker',alt:'(the network)',def:'The hub the data travels through on its way out.'},
+  subscriber:{name:'Subscriber',def:'Who or what reads the data.'},
+  actuator:{name:'Actuator',def:'What the device can DO back in the real world.'}
+};
+const ORDER=['sensor','network','subscriber','actuator'];
+
+/* ---------- round data ---------- */
+const ROUNDS=[
+ {
+  device:'A fitness tracker',
+  answers:['fitbit','fitness tracker','tracker','smartwatch','smart watch','apple watch','garmin','fitness band','step counter','pedometer','activity tracker','whoop','fitness watch'],
+  clues:[
+   "I live on your wrist and count every step, every heartbeat, every restless hour of your sleep.",
+   "Every few minutes I quietly send everything I've learned to your phone.",
+   "An app turns my numbers into charts, and shares them with your running group.",
+   "When you've sat too long, I buzz your wrist to make you move."
+  ],
+  guessTitle:'it knows more about you than your best friend does.',
+  headline:'Meet the four parts',
+  sub:'Every smart device is built from these four. You just met them in the clues without knowing it.',
+  map:{
+   sensor:'It measures your steps, heartbeat, and sleep.',
+   network:'It sends that data to your phone over Bluetooth.',
+   subscriber:'A phone app reads it and turns it into charts.',
+   actuator:'It buzzes your wrist to make you move.'
+  },
+  attackPrompt:"Now flip sides. You're the attacker. Which part would you go after to learn the most about this person?",
+  attack:{
+   sensor:{fb:"The sensor only measures. To actually get what it sees, you'd tap the data as it leaves, through the broker.",key:false},
+   network:{fb:"Grab that feed and, without ever meeting them, you'd know when they sleep, when their home is empty, and the route they run alone at 6 AM.",key:true},
+   subscriber:{fb:"Break into the app and you'd get months of history in one place: every run, every night's sleep.",key:true},
+   actuator:{fb:"A buzz on the wrist can't hurt anyone. This device's danger is all in its data, not its actions. Hold that thought.",key:false}
+  },
+  stake:'STAKES: their habits. The attacker is only watching, but they already know your life.',
+  escId:'st1', escCls:'on1'
+ },
+ {
+  device:'A smart speaker',
+  answers:['alexa','echo','amazon echo','smart speaker','google home','google nest','voice assistant','speaker','homepod','home pod','siri speaker','nest mini','assistant'],
+  clues:[
+   "I sit in your kitchen with seven microphones, always listening for one special word.",
+   "The moment I hear it, your voice travels over Wi-Fi to a computer in another state.",
+   "That faraway computer decides what you meant, and remembers every question you've ever asked.",
+   "Then I answer out loud. I can also dim your lights, or order more coffee with your card."
+  ],
+  guessTitle:"it's been listening this whole time.",
+  headline:'Same four parts, new disguise',
+  sub:'You know these now. Here they are on a smart speaker.',
+  map:{
+   sensor:'Seven microphones, always listening.',
+   network:'Your voice travels over Wi-Fi to the cloud.',
+   subscriber:'A cloud server decides what you meant, and stores it.',
+   actuator:'It speaks, dims lights, and can spend your money.'
+  },
+  attackPrompt:"You're the attacker again. Which part gives you the most power over this home?",
+  attack:{
+   sensor:{fb:"Own the microphones and you can listen to the room whenever you like.",key:false},
+   network:{fb:"Tap the Wi-Fi feed and you hear everything on its way to the cloud.",key:false},
+   subscriber:{fb:"Break into the cloud account and you get every command they've ever spoken, plus their shopping.",key:true},
+   actuator:{fb:"Now it gets real. You could speak with its voice, dim the lights, or spend their money. The device does things, not just listens.",key:true}
+  },
+  stake:'STAKES: their voice and their wallet. The attacker can now DO things, not just watch.',
+  escId:'st2', escCls:'on2'
+ },
+ {
+  device:'A smart lock',
+  answers:['smart lock','lock','door lock','doorlock','keyless lock','august','august lock','deadbolt','smart deadbolt','door','front door lock','yale','keyless entry'],
+  clues:[
+   "I feel whether the deadbolt is turned, and I notice every time the door opens.",
+   "Before deciding anything, I check in over your home Wi-Fi.",
+   "An app on your phone tells me who's allowed in: you, your family, the dog-walker on Tuesdays.",
+   "And when a trusted phone comes close, I open your front door."
+  ],
+  guessTitle:'guess carefully. This one matters.',
+  headline:'Same four parts. Watch the actuator.',
+  sub:'The same anatomy as a fitness tracker. This time, notice what the actuator can do.',
+  map:{
+   sensor:'It senses the bolt, and every time the door opens.',
+   network:'It checks in over your home Wi-Fi.',
+   subscriber:'An app decides who is allowed in.',
+   actuator:'It physically unlocks your front door.'
+  },
+  attackPrompt:"Last one. You're the attacker. Which part do you want?",
+  attack:{
+   sensor:{fb:"Knowing when the door opens tells you their schedule. Useful, but not the prize here.",key:false},
+   network:{fb:"Intercept the Wi-Fi and you could watch the lock, or worse, talk to it.",key:false},
+   subscriber:{fb:"Add yourself to the app's allowed list and the lock will happily let you in.",key:false},
+   actuator:{fb:"This is the one. Trigger the actuator and the front door opens. No key, no break-in, no trace.",key:true}
+  },
+  stake:'STAKES: physical access to their home. The danger was never the data. It was what the device can DO.',
+  escId:'st3', escCls:'on3'
+ }
+];
+
+/* ---------- state ---------- */
+const revealed=[false,false,false];
+const picked=[null,null,null];
+
+/* ---------- build the 3 slides per round ---------- */
+function buildGuess(r){
+  const R=ROUNDS[r], sl=document.getElementById('sl'+(1+r*3));
+  sl.innerHTML=`
+    <div class="roundtag">Round ${r+1} of 3 · guess the device</div>
+    <div class="qtitle">${R.guessTitle}</div>
+    <div class="clues" id="cl${r}">
+      ${R.clues.map((c,i)=>`<div class="clue ${i===0?'shown':''}"><span class="cnum">CLUE ${i+1}</span>${c}</div>`).join('')}
+    </div>
+    <div class="guessrow" id="gr${r}">
+      <input id="g${r}" type="text" placeholder="What device am I? Type your guess…" autocomplete="off">
+      <button class="btn" onclick="tryGuess(${r})">Guess</button>
+      <button class="btn" style="background:transparent;border:1px solid var(--line);color:var(--muted)" id="mc${r}" onclick="moreClue(${r})">Another clue</button>
+    </div>
+    <div class="hint" id="h${r}"></div>`;
+  document.getElementById('g'+r).addEventListener('keydown',e=>{if(e.key==='Enter')tryGuess(r)});
+}
+function buildParts(r){
+  const R=ROUNDS[r], sl=document.getElementById('sl'+(2+r*3));
+  const cards=ORDER.map(k=>`
+    <div class="part ${k}">
+      <div class="pic">${partSVG(k)}</div>
+      <div class="pname">${PART_META[k].name}${PART_META[k].alt?' <span style="color:var(--muted);font-weight:400;font-size:12px">'+PART_META[k].alt+'</span>':''}</div>
+      <div class="pdef">${PART_META[k].def}</div>
+      <div class="pmap">In this device: <b>${R.map[k]}</b></div>
+    </div>`).join('');
+  sl.innerHTML=`
+    <div class="parts-head">
+      <div class="roundtag">Round ${r+1} of 3 · ${R.device}</div>
+      <h2 style="margin-top:9px">${R.headline}</h2>
+      <div class="sub">${R.sub}</div>
+    </div>
+    <div class="parts-grid">${cards}</div>`;
+}
+function buildAttack(r){
+  const R=ROUNDS[r], sl=document.getElementById('sl'+(3+r*3));
+  const opts=ORDER.map(k=>`
+    <button class="a-opt ${k}" id="ao${r}_${k}" onclick="pickAttack(${r},'${k}')">
+      <span class="ic">${optSVG(k)}</span>${PART_META[k].name}</button>`).join('');
+  sl.innerHTML=`
+    <div class="a-esc">
+      <span class="stake" id="es${r}_1">habits</span><span class="arrow">▸</span>
+      <span class="stake" id="es${r}_2">voice</span><span class="arrow">▸</span>
+      <span class="stake" id="es${r}_3">front door</span>
+    </div>
+    <div class="roundtag">Round ${r+1} of 3 · attacker's turn</div>
+    <div class="a-prompt" style="margin-top:9px">${R.attackPrompt}</div>
+    <div class="a-hint">Pick the part you would go after, then click the others too. Each one shows what it would hand an attacker.</div>
+    <div class="a-opts">${opts}</div>
+    <div class="a-fb" id="afb${r}"></div>`;
+  for(let i=1;i<=r+1;i++){const e=sl.querySelector('#es'+r+'_'+i); if(e) e.classList.add(['on1','on2','on3'][i-1]);}
+}
+for(let r=0;r<3;r++){ buildGuess(r); buildParts(r); buildAttack(r); }
+
+/* ---------- guess mechanics ---------- */
+function shownCount(r){return document.querySelectorAll('#cl'+r+' .clue.shown').length;}
+function moreClue(r){
+  const clues=document.querySelectorAll('#cl'+r+' .clue');
+  const n=shownCount(r);
+  if(n<clues.length) clues[n].classList.add('shown');
+  if(shownCount(r)>=clues.length){
+    const b=document.getElementById('mc'+r); b.textContent='Reveal the answer'; b.onclick=()=>reveal(r,false);
+    document.getElementById('h'+r).textContent="That's all four clues. Guess, or reveal.";
+  }
+}
+function tryGuess(r){
+  if(revealed[r])return;
+  const v=document.getElementById('g'+r).value.trim().toLowerCase();
+  if(!v)return;
+  if(ROUNDS[r].answers.some(a=>v.includes(a))){ reveal(r,true); }
+  else{
+    const h=document.getElementById('h'+r); h.className='hint nope';
+    h.textContent=shownCount(r)<4?"Not quite. Here's another clue.":'Not quite. Guess again, or reveal.';
+    if(shownCount(r)<4) moreClue(r);
+  }
+}
+function reveal(r,guessed){
+  if(revealed[r])return; revealed[r]=true;
+  document.querySelectorAll('#cl'+r+' .clue').forEach(el=>el.classList.add('shown'));
+  const h=document.getElementById('h'+r); h.className='hint yes';
+  h.textContent=`✓ ${ROUNDS[r].device}. Hit Next to take it apart.`;
+  document.getElementById('gr'+r).style.display='none';
+  nav();
+}
+
+/* ---------- attacker mechanics ---------- */
+function pickAttack(r,k){
+  picked[r]=k;
+  ORDER.forEach(o=>document.getElementById('ao'+r+'_'+o).classList.toggle('pick',o===k));
+  const R=ROUNDS[r], a=R.attack[k];
+  const fb=document.getElementById('afb'+r);
+  fb.className='a-fb show';
+  fb.innerHTML=(a.key?'<b style="color:var(--red)">Sharp target.</b> ':'<b style="color:var(--amber)">Fair pick.</b> ')+a.fb+
+    '<div class="stakeline">'+R.stake+'</div>';
+  document.getElementById(R.escId)?.classList.add(R.escCls);
+  nav();
+}
+
+/* ---------- deck nav ---------- */
+let cur=0; const N=11;
+const dots=document.getElementById('dots');
+for(let i=0;i<N;i++){const d=document.createElement('div');d.className='dt';dots.appendChild(d)}
+function canLeave(i){
+  if(i===1) return revealed[0];
+  if(i===4) return revealed[1];
+  if(i===7) return revealed[2];
+  if(i===3) return picked[0]!==null;
+  if(i===6) return picked[1]!==null;
+  if(i===9) return picked[2]!==null;
+  return true;
+}
+function go(n){
+  if(n<0||n>=N)return;
+  if(n>cur&&!canLeave(cur))return;
+  document.getElementById('sl'+cur).classList.remove('active');
+  cur=n;
+  document.getElementById('sl'+cur).classList.add('active');
+  nav();
+}
+function nav(){
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('prevb').disabled=(cur===0);
+  const nb=document.getElementById('nextb');
+  const locked=!canLeave(cur);
+  nb.disabled=(cur===N-1)||locked;
+  const gate=(cur===1||cur===4||cur===7||cur===3||cur===6||cur===9);
+  nb.classList.toggle('pulse', !nb.disabled && gate);
+  if(cur===1||cur===4||cur===7) nb.title=locked?'Guess or reveal the device first':'';
+  else if(cur===3||cur===6||cur===9) nb.title=locked?'Make your pick first':'';
+  else nb.title='';
+}
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key==='ArrowRight')go(cur+1);
+  if(e.key==='ArrowLeft')go(cur-1);
+});
+nav();
+
+/* ---------- mandatory scale-to-fit ---------- */
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){
+  if(window.innerWidth<=640){ wrapper.style.transform='none'; return; } // mobile: stacked layout via CSS, no scaling
+  const s=Math.min(window.innerWidth/960,window.innerHeight/540,1);
+  const ox=Math.max(0,(window.innerWidth-960*s)/2), oy=Math.max(0,(window.innerHeight-540*s)/2);
+  wrapper.style.transformOrigin='top left';
+  wrapper.style.transform='translate('+ox+'px,'+oy+'px) scale('+s+')';
+}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>

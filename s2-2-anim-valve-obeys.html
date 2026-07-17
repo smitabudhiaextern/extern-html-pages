@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valve command: one message, the water obeys</title>
+<!--
+  Vault micro-animation: "valve-obeys".
+  A compact auto-looping SVG (no raster GIF). Water flows through a pipe, a CLOSE
+  command drops onto the gate, the gate slides shut, flow stops, Gate reads 100% -> 0%.
+  Night Ops palette; matches the map/dashboard visual language. ~4.5s loop.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E; --ink:#EAF4F4; --muted:#8FB0BC; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+  #deck-wrapper{width:700px;height:270px;overflow:hidden;position:relative;flex-shrink:0;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px}
+  .wrap{width:700px;height:270px;padding:14px 18px;display:flex;flex-direction:column}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .top .t{font-size:14px;font-weight:800}
+  .readout{font-size:13px;font-weight:800;font-family:'Consolas',monospace}
+  .readout .k{color:var(--muted);font-weight:600}
+  .readout .v{color:var(--teal)}
+  .readout.closed .v{color:var(--red)}
+  svg{width:100%;flex:1}
+  .status{font-size:13px;font-weight:800;text-align:center;height:18px}
+  .status.flow{color:var(--good)} .status.stop{color:var(--red)}
+
+  /* pipe + water */
+  .pipe{fill:#0E2334;stroke:#2A4D66;stroke-width:1.5}
+  .drop{fill:var(--teal);transition:opacity .3s}
+  .closed .drop{opacity:0}
+  .down{transition:fill .4s}                 /* downstream water tint */
+  .closed .down{fill:#241318}
+  /* gate slides down into the pipe when closed */
+  .gate{transform:translateY(-34px);transition:transform .55s cubic-bezier(.5,0,.3,1)}
+  .closed .gate{transform:translateY(0)}
+  .gatecap{transition:fill .4s}
+  .closed .gatecap{fill:var(--red)}
+  /* command packet drops from the top onto the gate */
+  .cmd{opacity:0}
+  .cmd.travel{animation:drop .7s ease forwards}
+  @keyframes drop{0%{opacity:0;transform:translateY(-46px)}30%{opacity:1}100%{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+  <div class="wrap" id="stage">
+    <div class="top">
+      <div class="t">One command. The water obeys.</div>
+      <div class="readout" id="readout"><span class="k">GATE&nbsp;</span><span class="v" id="gateval">100%</span></div>
+    </div>
+
+    <svg viewBox="0 0 664 170" preserveAspectRatio="xMidYMid meet">
+      <!-- station (left) -->
+      <rect x="8" y="58" width="86" height="60" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+      <text x="51" y="84" text-anchor="middle" font-size="12" font-weight="700" fill="#CFE6E6">STATION</text>
+      <text x="51" y="102" text-anchor="middle" font-size="12" fill="#8FB0BC">valve</text>
+
+      <!-- pipe -->
+      <rect class="pipe" x="94" y="74" width="470" height="28" rx="6"/>
+      <!-- downstream tint (right of gate) -->
+      <rect class="pipe down" x="320" y="76" width="244" height="24" rx="4" stroke="none"/>
+
+      <!-- water drops (animated via SMIL along the pipe) -->
+      <g id="drops">
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" repeatCount="indefinite"/></circle>
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" begin="0.5s" repeatCount="indefinite"/></circle>
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" begin="1s" repeatCount="indefinite"/></circle>
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" begin="0.25s" repeatCount="indefinite"/></circle>
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" begin="0.75s" repeatCount="indefinite"/></circle>
+        <circle class="drop" r="4" cy="88"><animate attributeName="cx" from="104" to="556" dur="1.5s" begin="1.25s" repeatCount="indefinite"/></circle>
+      </g>
+
+      <!-- outlet -->
+      <text x="588" y="82" font-size="12" font-weight="700" fill="#8FB0BC">to</text>
+      <text x="588" y="98" font-size="12" font-weight="700" fill="#8FB0BC">rooms</text>
+
+      <!-- the gate (slides down into the pipe) -->
+      <g class="gate">
+        <rect class="gatecap" x="306" y="46" width="26" height="14" rx="3" fill="var(--muted)"/>
+        <rect x="314" y="58" width="10" height="46" rx="2" fill="#9AA6A1"/>
+      </g>
+
+      <!-- command packet, drops onto the gate -->
+      <g class="cmd" id="cmd">
+        <rect x="286" y="8" width="66" height="26" rx="8" fill="#2A1520" stroke="var(--red)" stroke-width="1.5"/>
+        <text x="319" y="25" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">⚡ CLOSE</text>
+      </g>
+    </svg>
+
+    <div class="status flow" id="status">● water flowing</div>
+  </div>
+</div>
+
+<script>
+const stage=document.getElementById('stage');
+const gateval=document.getElementById('gateval');
+const readout=document.getElementById('readout');
+const status=document.getElementById('status');
+const cmd=document.getElementById('cmd');
+
+function open(){
+  stage.classList.remove('closed');
+  readout.classList.remove('closed');
+  gateval.textContent='100%';
+  status.className='status flow'; status.textContent='● water flowing';
+}
+function fireCommand(){ cmd.classList.remove('travel'); void cmd.offsetWidth; cmd.classList.add('travel'); }
+function close(){
+  stage.classList.add('closed');
+  readout.classList.add('closed');
+  gateval.textContent='0%';
+  status.className='status stop'; status.textContent='⚠ water stopped';
+}
+function cycle(){
+  open();
+  setTimeout(fireCommand, 1400);
+  setTimeout(close, 2100);
+}
+cycle();
+setInterval(cycle, 4600);
+
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){const s=Math.min(window.innerWidth/700,window.innerHeight/270,1);wrapper.style.transform='scale('+s+')';wrapper.style.transformOrigin='top left';}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>

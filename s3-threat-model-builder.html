@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Grand Marina: Threat Model Builder</title>
+<!--
+  Step 3 Capstone: The Threat Model Builder (s3-threat-model-builder.html).
+  A guided deck that turns the six attacks the student already ran into a
+  client-ready STRIDE threat model. Flow: (0) Plan Your Heist warmup,
+  (1) STRIDE intro, (2-7) six STRIDE cards (card 1 pre-filled), (8) Assemble
+  the document preview, (9) Export via window.print to a light client PDF.
+  Progress best-effort saved to localStorage (try/catch, never throws).
+  Same Night Ops palette + centered scale-to-fit as the Step 2 interactives.
+  Self-contained: inline CSS / JS, no external requests, no libraries.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#EAF4F4; --muted:#8FB0BC; --violet:#9B8CFF; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+
+  #deck-wrapper{width:960px;height:540px;overflow:hidden;position:relative;flex-shrink:0;background:var(--bg)}
+  .slide{width:960px;height:540px;padding:22px 46px 52px;position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+
+  h2{font-size:22px;font-weight:800;line-height:1.15}
+  .muted{color:var(--muted)}
+  .roundtag{display:inline-block;width:fit-content;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--violet);background:rgba(155,140,255,.12);border:1px solid rgba(155,140,255,.35);padding:4px 11px;border-radius:20px}
+
+  /* nav chrome (copied from s2-4) */
+  #nav{position:absolute;left:24px;right:24px;bottom:10px;display:flex;align-items:center;gap:14px;z-index:5}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .navbtn:disabled{opacity:.3;cursor:not-allowed}
+  .navbtn.pulse{background:var(--teal);color:#062421;border-color:var(--teal);animation:pu 1.2s infinite}
+  @keyframes pu{50%{box-shadow:0 0 14px rgba(46,196,182,.6)}}
+  #dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dt.on{background:var(--teal)}
+
+  #globalnudge{position:absolute;left:24px;right:24px;bottom:44px;text-align:center;font-size:12px;font-weight:700;
+    color:var(--red);min-height:16px;z-index:6;pointer-events:none}
+  #globalnudge.show{animation:nudgep .3s}
+  @keyframes nudgep{from{opacity:.2}to{opacity:1}}
+
+  .savenote{font-size:12px;color:var(--muted);line-height:1.4;margin-top:auto;padding-top:8px}
+  .savenote b{color:var(--ink)}
+
+  /* warmup */
+  .lead{font-size:15px;line-height:1.5;color:var(--ink);margin:10px 0 6px}
+  .prompt{font-size:14px;font-weight:700;color:var(--amber);margin:14px 0 8px;line-height:1.4}
+  .bigarea{width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;
+    padding:11px 13px;font-size:13px;font-family:inherit;line-height:1.5;resize:none}
+  .bigarea::placeholder{color:var(--muted);font-style:italic}
+  .bigarea:focus{outline:none;border-color:var(--teal)}
+
+  /* STRIDE intro table */
+  .introcopy{font-size:13.5px;line-height:1.5;color:var(--muted);margin:8px 0 10px}
+  .introcopy b{color:var(--ink)}
+  .stride-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px;flex:1;min-height:0}
+  .srow{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-left:3px solid var(--teal);
+    border-radius:8px;background:var(--panel2);padding:7px 10px}
+  .srow.newone{border-left-color:var(--amber)}
+  .sL{font-size:20px;font-weight:800;color:var(--teal);line-height:1;flex-shrink:0;width:20px;text-align:center}
+  .srow.newone .sL{color:var(--amber)}
+  .sbody{min-width:0}
+  .smean{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.25}
+  .satk{font-size:12px;color:var(--muted);line-height:1.3;margin-top:2px}
+  .newpill{font-size:12px;font-weight:800;color:var(--amber)}
+
+  /* STRIDE card */
+  .chead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .bigL{display:inline-block;font-size:26px;font-weight:800;color:var(--teal);margin-right:6px}
+  .newtag{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--amber);
+    border:1px solid rgba(245,166,35,.4);border-radius:14px;padding:3px 10px;white-space:nowrap;align-self:center}
+  .meaning{font-size:14px;font-weight:700;color:var(--ink);margin:6px 0 4px;line-height:1.35}
+  .recall{font-size:12.5px;color:var(--muted);line-height:1.4;padding:7px 11px;border-left:3px solid var(--violet);
+    background:rgba(155,140,255,.08);border-radius:0 8px 8px 0;margin-bottom:9px}
+  .recall b{color:var(--ink)}
+  .flabel{font-size:12px;font-weight:800;letter-spacing:.03em;color:var(--teal);display:block;margin:6px 0 4px}
+  .flabel span{color:var(--muted);font-weight:600;letter-spacing:0}
+  .finput{width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:9px;
+    padding:8px 11px;font-size:12.5px;font-family:inherit;line-height:1.45;resize:none;height:50px}
+  .finput::placeholder{color:var(--muted);font-style:italic}
+  .finput:focus{outline:none;border-color:var(--teal)}
+  .suggrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px}
+  .suggl{font-size:12px;font-weight:700;color:var(--muted);margin-right:2px}
+  .suggchip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:14px;
+    padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
+  .suggchip:hover{border-color:var(--teal);color:var(--teal)}
+
+  /* assemble preview */
+  .asm-hint{font-size:12.5px;line-height:1.45;color:var(--muted);margin:6px 0 8px}
+  .asm-hint b{color:var(--amber)}
+  .preview-scroll{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#5c6b73;padding:14px}
+
+  /* the client document (light) shared by on-screen preview and print */
+  .pd{background:#ffffff;color:#16232b;border-radius:6px;padding:26px 30px;max-width:720px;margin:0 auto;
+    box-shadow:0 3px 14px rgba(0,0,0,.25)}
+  .pd-title{font-size:19px;font-weight:800;color:#0B1D2A;line-height:1.2;margin-bottom:4px}
+  .pd-by{font-size:12.5px;color:#3a4c56;margin-bottom:2px}
+  .pd-by input{border:1px solid #c6d2d8;border-radius:5px;padding:4px 8px;font-size:12.5px;font-family:inherit;
+    color:#16232b;min-width:220px}
+  .pd-h{font-size:13.5px;font-weight:800;color:#0B1D2A;text-transform:uppercase;letter-spacing:.04em;
+    border-bottom:2px solid #2EC4B6;padding-bottom:3px;margin:16px 0 8px}
+  .pd-p{font-size:12.5px;line-height:1.55;color:#22333d}
+  .pd textarea{width:100%;border:1px solid #c6d2d8;border-radius:6px;padding:8px 10px;font-size:12.5px;
+    font-family:inherit;line-height:1.5;color:#16232b;resize:none}
+  .pd textarea:focus{outline:none;border-color:#2EC4B6}
+  .pd-table{width:100%;border-collapse:collapse;margin-top:2px}
+  .pd-td{border:1px solid #d5dee2;padding:6px 8px;font-size:12px;line-height:1.4;vertical-align:top;color:#22333d}
+  .pd-l{font-weight:800;color:#0B1D2A;text-align:center;width:26px}
+  .pd-th{background:#eef3f5;font-weight:800;color:#0B1D2A;font-size:12px}
+  .pd-empty{color:#b04a3a;font-style:italic}
+  .pd-list{list-style:none;margin-top:4px}
+  .pd-li{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #e3eaed}
+  .pd-rec{font-size:12.5px;line-height:1.45;color:#22333d;flex:1}
+  .pd-rec b{color:#0B1D2A}
+  .pd-li.pd-fund{background:#fff6e2;border-radius:6px;padding:7px 8px}
+  .fundbtn{appearance:none;border:1px solid #c6d2d8;background:#f3f6f7;color:#3a4c56;border-radius:14px;
+    padding:3px 10px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
+  .fundbtn.on{background:#F5A623;border-color:#F5A623;color:#3a2a02}
+  .pd-fundbadge{display:inline-block;background:#F5A623;color:#3a2a02;font-size:12px;font-weight:800;
+    border-radius:12px;padding:2px 8px;margin-right:8px;white-space:nowrap}
+
+  /* export slide */
+  .exlead{font-size:15px;line-height:1.55;margin:12px 0 6px}
+  .printbtn{appearance:none;border:0;border-radius:11px;padding:14px 26px;font-size:16px;font-weight:800;cursor:pointer;
+    background:var(--teal);color:#062421;margin:16px 0 8px;width:fit-content}
+  .printbtn:hover{box-shadow:0 0 16px rgba(46,196,182,.5)}
+  .exnote{font-size:13px;line-height:1.5;color:var(--muted);max-width:640px}
+  .exnote b{color:var(--ink)}
+  .exchecklist{font-size:12.5px;color:var(--muted);line-height:1.7;margin:8px 0}
+  .exchecklist b{color:var(--good)}
+
+  /* the printable document is hidden on screen, revealed only when printing */
+  #printdoc{display:none}
+
+  @media print{
+    html,body{width:auto;height:auto;overflow:visible;background:#ffffff}
+    #deck-wrapper{display:none !important}
+    #globalnudge,#nav{display:none !important}
+    #printdoc{display:block !important;background:#ffffff;color:#111}
+    #printdoc .pd{box-shadow:none;max-width:none;margin:0;padding:0;border-radius:0}
+    #printdoc .pd-title{font-size:22pt;color:#000}
+    #printdoc .pd-by{font-size:11pt;color:#333;margin-bottom:2pt}
+    #printdoc .pd-h{font-size:13pt;color:#000;border-bottom:2px solid #111;margin:18pt 0 8pt}
+    #printdoc .pd-p{font-size:11pt;color:#111}
+    #printdoc .pd-td{font-size:10.5pt;color:#111;border:1px solid #888}
+    #printdoc .pd-l,#printdoc .pd-th{color:#000}
+    #printdoc .pd-th{background:#eee}
+    #printdoc .pd-rec{font-size:11pt;color:#111}
+    #printdoc .pd-li{border-bottom:1px solid #ccc}
+    #printdoc .pd-li.pd-fund{background:#fdf2d6}
+    #printdoc .pd-fundbadge{background:#f0c24a;color:#3a2a02}
+    @page{margin:16mm}
+  }
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- STEP 0: PLAN YOUR HEIST (warmup, required) -->
+  <section class="slide active" id="sl0">
+    <span class="roundtag">Step 0 &middot; Plan Your Heist</span>
+    <h2 style="margin-top:6px">Plan Your Heist</h2>
+    <div class="lead">Before you defend a system, think like the person attacking it. For a week you mapped the Grand Marina and broke in six ways. Put that hat back on for one question.</div>
+    <div class="prompt">If you were attacking the Grand Marina, what is the ONE move you would make first, and why?</div>
+    <textarea class="bigarea" id="warmup" rows="4" placeholder="Write your first move and the reason it works. This is your attacker mindset, and it primes everything that follows."></textarea>
+    <div class="savenote">Progress saves on this browser. For a two-sitting task, open this in its own tab. <b>Your saved progress will be waiting when you come back.</b></div>
+  </section>
+
+  <!-- STEP 1: STRIDE INTRO -->
+  <section class="slide" id="sl1">
+    <span class="roundtag">Step 1 &middot; The Framework</span>
+    <h2 style="margin-top:6px">STRIDE: Six Attacks, One Filing System</h2>
+    <div class="introcopy">STRIDE is not new theory. It is a filing system for attacks you <b>already ran</b>. Five of the six letters map straight onto your Attack Lab. Only <b>Repudiation</b> is new here, and it shows up by consequence: when the attacker acted as the operator, could anyone prove it was not the real one?</div>
+    <div class="stride-grid" id="strideGrid"></div>
+  </section>
+
+  <!-- STEPS 2-7 (the six STRIDE cards) are generated by script and appended below -->
+
+  <!-- STEP 8: ASSEMBLE -->
+  <section class="slide" id="sl8">
+    <div class="chead">
+      <div><span class="roundtag">Step 8 &middot; Assemble</span>
+        <h2 style="margin-top:6px">Assemble Your Threat Model</h2></div>
+    </div>
+    <div class="asm-hint">Your cards become the client document below. Edit any section. Mark <b>THREE recommendations to fund first</b> (your Priority Call shields). They get highlighted for the client.</div>
+    <div class="preview-scroll"><div id="preview" class="pd"></div></div>
+  </section>
+
+  <!-- STEP 9: EXPORT -->
+  <section class="slide" id="sl9">
+    <span class="roundtag">Step 9 &middot; Export</span>
+    <h2 style="margin-top:6px">Export Your Threat Model</h2>
+    <div class="exlead">Your document is assembled. Save it as a clean, professional PDF and upload that PDF to the platform. That file is your submission and your first portfolio piece.</div>
+    <button class="printbtn" id="printbtn" type="button">Print / Save as PDF</button>
+    <div class="exnote">In the print dialog, choose <b>"Save as PDF"</b> as the destination. The printed page is a light, multi-section client document, not this dark builder.</div>
+    <div class="exchecklist" id="exchecklist"></div>
+    <div class="savenote">Progress saves on this browser. If you exported the PDF, your work is safely captured there too.</div>
+  </section>
+
+  <div id="globalnudge"></div>
+  <div id="nav">
+    <button class="navbtn" id="prevb" onclick="go(cur-1)">&larr; Back</button>
+    <div id="dots"></div>
+    <button class="navbtn" id="nextb" onclick="go(cur+1)">Next &rarr;</button>
+  </div>
+</div>
+
+<!-- The printable client document: hidden on screen, revealed only by the print stylesheet -->
+<div id="printdoc"></div>
+
+<script>
+/* ================= data ================= */
+const STRIDE=[
+  {L:'S', name:'Spoofing', mean:'Pretending to be something you are not.',
+   atk:'Spoofing: a fake normal reading sent to the dashboard over a real flood.', isNew:false},
+  {L:'T', name:'Tampering', mean:'Changing data or commands while they travel.',
+   atk:'Man in the Middle / Replay: altering or resending traffic in transit.', isNew:false},
+  {L:'R', name:'Repudiation', mean:'Doing something and leaving no trace of who did it.',
+   atk:'New here: with no audit log, you cannot prove who sent a command.', isNew:true},
+  {L:'I', name:'Information Disclosure', mean:'Reading data you should not see.',
+   atk:'Eavesdropping: the captured traffic and the captured login.', isNew:false},
+  {L:'D', name:'Denial of Service', mean:'Taking a system down so it cannot do its job.',
+   atk:'Denial of Service: the silenced leak-detection alert.', isNew:false},
+  {L:'E', name:'Elevation of Privilege', mean:'Getting more access than you are allowed.',
+   atk:'Unauthorized Access: the stolen operator login.', isNew:false}
+];
+const LETTERS=STRIDE.map(s=>s.L);
+
+const SUGG=[
+  'TLS encryption (Week 4).',
+  'Device certificates + mutual TLS (Week 6).',
+  'Timestamps + nonces (Week 7).',
+  'Rate limiting + redundancy.',
+  'Strong authentication + audit logs.'
+];
+
+const DEFAULT_SYS='The Grand Marina runs three water monitoring stations. Each station reports its pressure and flow readings through a central broker to a cloud service and an operator dashboard, all over a shared network. Operators send control commands back to the stations through the same path.';
+
+/* ================= state ================= */
+const state={
+  warmup:'',
+  cards:{},
+  preparedBy:'',
+  execSummary:'',
+  systemDesc:DEFAULT_SYS,
+  fundFirst:[]
+};
+LETTERS.forEach(L=>{ state.cards[L]={threat:'',rec:''}; });
+/* Card 1 (Spoofing) pre-filled as the worked example */
+state.cards.S.threat='An attacker on the network sends the dashboard a fake normal reading while a pipe is actually flooding, so no alarm fires.';
+state.cards.S.rec='Require device certificates so the broker only accepts readings from real, verified stations (mutual TLS, Week 6).';
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* ================= persistence (best-effort, never throws) ================= */
+const LS_KEY='s3-threat-model-v1';
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){/* storage blocked: ignore */}
+}
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    if(typeof d.warmup==='string') state.warmup=d.warmup;
+    if(typeof d.preparedBy==='string') state.preparedBy=d.preparedBy;
+    if(typeof d.execSummary==='string') state.execSummary=d.execSummary;
+    if(typeof d.systemDesc==='string' && d.systemDesc.trim()) state.systemDesc=d.systemDesc;
+    if(Array.isArray(d.fundFirst)) state.fundFirst=d.fundFirst.filter(L=>LETTERS.includes(L)).slice(0,3);
+    if(d.cards) LETTERS.forEach(L=>{
+      if(d.cards[L]){
+        if(typeof d.cards[L].threat==='string') state.cards[L].threat=d.cards[L].threat;
+        if(typeof d.cards[L].rec==='string') state.cards[L].rec=d.cards[L].rec;
+      }
+    });
+  }catch(e){/* parse or storage error: ignore, use defaults */}
+}
+load();
+
+/* ================= build STRIDE intro grid ================= */
+(function buildIntro(){
+  const grid=document.getElementById('strideGrid');
+  STRIDE.forEach(s=>{
+    const row=document.createElement('div');
+    row.className='srow'+(s.isNew?' newone':'');
+    row.innerHTML='<div class="sL">'+s.L+'</div>'+
+      '<div class="sbody">'+
+        '<div class="smean">'+esc(s.name)+': '+esc(s.mean)+'</div>'+
+        '<div class="satk">'+(s.isNew?'<span class="newpill">NEW &middot; </span>':'Recall: ')+esc(s.atk)+'</div>'+
+      '</div>';
+    grid.appendChild(row);
+  });
+})();
+
+/* ================= build the six STRIDE card slides ================= */
+(function buildCards(){
+  const deck=document.getElementById('deck-wrapper');
+  const navEl=document.getElementById('nav');
+  STRIDE.forEach((s,i)=>{
+    const idx=i+2;                    // slides sl2..sl7
+    const sec=document.createElement('section');
+    sec.className='slide';
+    sec.id='sl'+idx;
+    let chips='<span class="suggl">Insert a suggestion:</span>';
+    SUGG.forEach((t,j)=>{ chips+='<button class="suggchip" type="button" data-l="'+s.L+'" data-s="'+j+'">'+esc(t)+'</button>'; });
+    sec.innerHTML=
+      '<div class="chead">'+
+        '<div><span class="roundtag">STRIDE Card '+(i+1)+' / 6</span>'+
+          '<h2 style="margin-top:6px"><span class="bigL">'+s.L+'</span>'+esc(s.name)+'</h2></div>'+
+        (s.isNew?'<div class="newtag">New This Step</div>':(i===0?'<div class="newtag" style="color:var(--good);border-color:rgba(62,207,142,.4)">Worked Example</div>':''))+
+      '</div>'+
+      '<div class="meaning">'+esc(s.mean)+'</div>'+
+      '<div class="recall"><b>The attack you already ran:</b> '+esc(s.atk)+'</div>'+
+      '<label class="flabel" for="threat-'+s.L+'">The Threat <span>&middot; what an attacker does to this system under this category</span></label>'+
+      '<textarea class="finput" id="threat-'+s.L+'" placeholder="Describe the attack against the Grand Marina in one or two lines."></textarea>'+
+      '<label class="flabel" for="rec-'+s.L+'">Your Recommendation <span>&middot; what to do about it</span></label>'+
+      '<textarea class="finput" id="rec-'+s.L+'" placeholder="What defense would you recommend to Marcus?"></textarea>'+
+      '<div class="suggrow">'+chips+'</div>';
+    deck.insertBefore(sec, navEl);   // ATTACH before querying children (avoids detached getElementById)
+    /* wire now that the slide is in the document */
+    const tA=sec.querySelector('#threat-'+s.L);
+    const rA=sec.querySelector('#rec-'+s.L);
+    tA.addEventListener('input',()=>{ state.cards[s.L].threat=tA.value; save(); nav(); });
+    rA.addEventListener('input',()=>{ state.cards[s.L].rec=rA.value; save(); nav(); });
+    sec.querySelectorAll('.suggchip').forEach(chip=>{
+      chip.addEventListener('click',()=>{
+        const L=chip.dataset.l, txt=SUGG[+chip.dataset.s];
+        const cur=state.cards[L].rec.trim();
+        state.cards[L].rec = cur ? (cur.replace(/\s*$/,'')+' '+txt) : txt;
+        rA.value=state.cards[L].rec; save(); nav();
+      });
+    });
+  });
+})();
+
+/* ================= hydrate inputs from saved state ================= */
+function hydrate(){
+  document.getElementById('warmup').value=state.warmup;
+  LETTERS.forEach(L=>{
+    const t=document.getElementById('threat-'+L);
+    const r=document.getElementById('rec-'+L);
+    if(t) t.value=state.cards[L].threat;
+    if(r) r.value=state.cards[L].rec;
+  });
+}
+hydrate();
+document.getElementById('warmup').addEventListener('input',function(){ state.warmup=this.value; save(); nav(); });
+
+/* ================= assemble preview (interactive, light document) ================= */
+function threatsRows(){
+  let rows='<tr><th class="pd-td pd-th pd-l">.</th><th class="pd-td pd-th">Category</th><th class="pd-td pd-th">Threat</th></tr>';
+  STRIDE.forEach((s,i)=>{
+    const t=state.cards[s.L].threat.trim();
+    rows+='<tr><td class="pd-td pd-l">'+s.L+'</td><td class="pd-td"><b>'+esc(s.name)+'</b></td>'+
+      '<td class="pd-td">'+(t?esc(t):'<span class="pd-empty">(fill this on card '+(i+1)+')</span>')+'</td></tr>';
+  });
+  return rows;
+}
+function renderPreview(){
+  const p=document.getElementById('preview');
+  let recs='';
+  STRIDE.forEach((s,i)=>{
+    const r=state.cards[s.L].rec.trim();
+    const funded=state.fundFirst.includes(s.L);
+    recs+='<li class="pd-li'+(funded?' pd-fund':'')+'">'+
+      '<button class="fundbtn'+(funded?' on':'')+'" type="button" data-l="'+s.L+'">'+(funded?'★ Funded first':'Fund first')+'</button>'+
+      '<span class="pd-rec"><b>'+esc(s.name)+':</b> '+(r?esc(r):'<span class="pd-empty">(fill this on card '+(i+1)+')</span>')+'</span></li>';
+  });
+  p.innerHTML=
+    '<div class="pd-title">Grand Marina Water Monitoring: Threat Model</div>'+
+    '<div class="pd-by">Prepared by: <input id="pb-input" type="text" maxlength="80" placeholder="Your name"></div>'+
+    '<div class="pd-h">Executive Summary</div>'+
+    '<textarea id="exec-input" rows="4" placeholder="Paste or write your summary: what you protect, what is exposed, the risk you accepted. Seed this from your Priority Call answer to Marcus."></textarea>'+
+    '<div class="pd-h">System Description</div>'+
+    '<textarea id="sys-input" rows="3"></textarea>'+
+    '<div class="pd-h">Threats Identified</div>'+
+    '<table class="pd-table">'+threatsRows()+'</table>'+
+    '<div class="pd-h">Recommendations</div>'+
+    '<ol class="pd-list">'+recs+'</ol>';
+  /* wire (elements now attached) */
+  const pb=p.querySelector('#pb-input'); pb.value=state.preparedBy;
+  pb.addEventListener('input',()=>{ state.preparedBy=pb.value; save(); renderPrintDoc(); });
+  const ex=p.querySelector('#exec-input'); ex.value=state.execSummary;
+  ex.addEventListener('input',()=>{ state.execSummary=ex.value; save(); renderPrintDoc(); });
+  const sy=p.querySelector('#sys-input'); sy.value=state.systemDesc;
+  sy.addEventListener('input',()=>{ state.systemDesc=sy.value; save(); renderPrintDoc(); });
+  p.querySelectorAll('.fundbtn').forEach(b=>b.addEventListener('click',()=>toggleFund(b.dataset.l)));
+}
+function toggleFund(L){
+  const i=state.fundFirst.indexOf(L);
+  if(i>=0){ state.fundFirst.splice(i,1); }
+  else{
+    if(state.fundFirst.length>=3){ showNudge('You can fund three. Unmark one first.'); return; }
+    state.fundFirst.push(L);
+  }
+  save(); renderPreview(); renderPrintDoc();
+}
+
+/* ================= the printable static document ================= */
+function renderPrintDoc(){
+  const pd=document.getElementById('printdoc');
+  let trows='<tr><th class="pd-td pd-th pd-l">.</th><th class="pd-td pd-th">Category</th><th class="pd-td pd-th">Threat</th></tr>';
+  STRIDE.forEach((s,i)=>{
+    const t=state.cards[s.L].threat.trim();
+    trows+='<tr><td class="pd-td pd-l">'+s.L+'</td><td class="pd-td"><b>'+esc(s.name)+'</b></td>'+
+      '<td class="pd-td">'+(t?esc(t):'(not yet described)')+'</td></tr>';
+  });
+  let recs='';
+  STRIDE.forEach(s=>{
+    const r=state.cards[s.L].rec.trim();
+    const funded=state.fundFirst.includes(s.L);
+    recs+='<li class="pd-li'+(funded?' pd-fund':'')+'">'+
+      (funded?'<span class="pd-fundbadge">FUND FIRST</span>':'')+
+      '<span class="pd-rec"><b>'+esc(s.name)+':</b> '+(r?esc(r):'(not yet recommended)')+'</span></li>';
+  });
+  const by=state.preparedBy.trim()||'____________________';
+  const exec=state.execSummary.trim()||'(Executive summary to be completed: what you protect, what is exposed, and the risk you accepted.)';
+  const sys=state.systemDesc.trim()||DEFAULT_SYS;
+  pd.innerHTML=
+    '<div class="pd">'+
+      '<div class="pd-title">Grand Marina Water Monitoring: Threat Model</div>'+
+      '<div class="pd-by">Prepared by: '+esc(by)+'</div>'+
+      '<div class="pd-by">Framework: STRIDE &middot; Client: Grand Marina Hotel</div>'+
+      '<div class="pd-h">Executive Summary</div>'+
+      '<div class="pd-p">'+esc(exec)+'</div>'+
+      '<div class="pd-h">System Description</div>'+
+      '<div class="pd-p">'+esc(sys)+'</div>'+
+      '<div class="pd-h">Threats Identified</div>'+
+      '<table class="pd-table">'+trows+'</table>'+
+      '<div class="pd-h">Recommendations</div>'+
+      '<ol class="pd-list">'+recs+'</ol>'+
+    '</div>';
+}
+window.addEventListener('beforeprint',renderPrintDoc);
+document.getElementById('printbtn').addEventListener('click',()=>{ renderPrintDoc(); window.print(); });
+
+/* ================= gating helpers ================= */
+function warmupOK(){ return state.warmup.trim().length>0; }
+function cardOK(L){ const c=state.cards[L]; return c.threat.trim().length>0 && c.rec.trim().length>0; }
+function missingCards(){ return LETTERS.filter(L=>!cardOK(L)); }
+function allComplete(){ return warmupOK() && missingCards().length===0; }
+
+/* ================= export checklist ================= */
+function renderExportChecklist(){
+  const el=document.getElementById('exchecklist');
+  const parts=[];
+  parts.push((warmupOK()?'<b>done</b>':'to do')+' &middot; Plan Your Heist warmup');
+  const miss=missingCards();
+  parts.push((miss.length===0?'<b>done</b>':'to do')+' &middot; Six STRIDE cards ('+(6-miss.length)+' / 6 complete)');
+  parts.push((state.fundFirst.length===3?'<b>done</b>':'optional')+' &middot; Three recommendations funded first ('+state.fundFirst.length+' / 3)');
+  el.innerHTML=parts.map(p=>'&bull; '+p).join('<br>');
+}
+
+/* ================= deck nav ================= */
+let cur=0; const N=10;
+const dots=document.getElementById('dots');
+for(let i=0;i<N;i++){const d=document.createElement('div');d.className='dt';dots.appendChild(d);}
+
+function showNudge(msg){
+  const n=document.getElementById('globalnudge');
+  n.textContent=msg;
+  n.classList.remove('show'); void n.offsetWidth; n.classList.add('show');
+  clearTimeout(n._t); n._t=setTimeout(()=>{n.textContent='';},3200);
+}
+function canLeave(i){
+  if(i===0) return warmupOK();
+  if(i===8) return allComplete();     // gate entry into Export
+  return true;
+}
+function go(n){
+  if(n<0||n>=N) return;
+  if(n>cur&&!canLeave(cur)){
+    if(cur===0){ showNudge('Write your first attacker move to continue.'); }
+    else if(cur===8){
+      const bits=[];
+      if(!warmupOK()) bits.push('your Plan Your Heist move');
+      const miss=missingCards();
+      if(miss.length) bits.push('the threat and recommendation on card'+(miss.length>1?'s':'')+' '+miss.join(', '));
+      showNudge('Before export, fill in '+bits.join(' and ')+'.');
+    }
+    return;
+  }
+  document.getElementById('sl'+cur).classList.remove('active');
+  cur=n;
+  document.getElementById('sl'+cur).classList.add('active');
+  if(cur===8){ renderPreview(); renderPrintDoc(); }
+  if(cur===9){ renderPrintDoc(); renderExportChecklist(); }
+  nav();
+}
+function nav(){
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('prevb').style.display=(cur===0)?'none':'';
+  const nb=document.getElementById('nextb');
+  if(cur===N-1){ nb.style.display='none'; return; }
+  nb.style.display='';
+  nb.disabled=false;                  // always clickable; go() names what is missing
+  nb.classList.toggle('pulse', canLeave(cur));
+  nb.textContent='Next →';
+}
+window.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='textarea'||tag==='input') return;   // do not hijack typing
+  if(e.key==='ArrowRight') go(cur+1);
+  if(e.key==='ArrowLeft') go(cur-1);
+});
+nav();
+
+/* ================= centered scale-to-fit (copied from s2-4) ================= */
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){
+  const s=Math.min(window.innerWidth/960,window.innerHeight/540,1);
+  const ox=Math.max(0,(window.innerWidth-960*s)/2), oy=Math.max(0,(window.innerHeight-540*s)/2);
+  wrapper.style.transformOrigin='top left';
+  wrapper.style.transform='translate('+ox+'px,'+oy+'px) scale('+s+')';
+}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>

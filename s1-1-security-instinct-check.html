@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Grand Marina: Security Instinct Check</title>
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#EAF4F4; --muted:#8FB0BC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+
+  #deck-wrapper{width:960px;height:540px;overflow:hidden;position:relative;flex-shrink:0;background:var(--bg)}
+  .slide{width:960px;height:540px;padding:40px 64px 60px;position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+
+  .btn{appearance:none;border:0;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:800;cursor:pointer;
+    background:var(--teal);color:#062421;transition:transform .12s,filter .12s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  h1{font-size:32px;font-weight:800;line-height:1.15}
+  .muted{color:var(--muted)}
+
+  #nav{position:absolute;left:24px;right:24px;bottom:10px;display:flex;align-items:center;gap:14px;z-index:5}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .navbtn:disabled{opacity:.3;cursor:not-allowed}
+  .navbtn.pulse{background:var(--teal);color:#062421;border-color:var(--teal);animation:pu 1.2s infinite}
+  @keyframes pu{50%{box-shadow:0 0 14px rgba(46,196,182,.6)}}
+  #dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dt.on{background:var(--teal)}
+
+  /* S0 scenario */
+  .topbar{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:9px 15px;font-size:13px;color:var(--muted);width:fit-content}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
+  .dot.alert{background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 1.1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .topbar b{color:var(--ink)}
+  .scenario{background:linear-gradient(135deg,#132C40,#0F2536);border:1px solid var(--line);
+    border-left:4px solid var(--red);border-radius:12px;padding:16px 20px;font-size:16px;line-height:1.6;max-width:720px}
+  .scenario .call{color:var(--amber);font-weight:700}
+  .s0{justify-content:center;gap:18px}
+
+  /* S1 map + feedback */
+  .prompt{font-size:13px;color:var(--teal);font-weight:800;letter-spacing:.02em;margin-bottom:8px}
+  .reassure{font-size:13px;color:var(--muted);margin:2px 0 8px;line-height:1.45;max-width:640px}
+  .reassure .who{color:var(--teal);font-weight:700}
+  .stage{display:flex;gap:14px;flex:1;min-height:0}
+  .mapcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;flex:1.45;display:flex}
+  .mapcard svg{width:100%;height:100%;display:block}
+  .node{cursor:pointer}
+  .node rect,.node circle{transition:all .18s ease}
+  .node:hover rect,.node:hover circle{filter:brightness(1.35)}
+  .node.visited .ring{stroke:var(--teal)}
+  .nlabel{font-size:12.5px;fill:#CFE6E6;font-weight:600;pointer-events:none}
+  .nsub{font-size:11px;fill:#8FB0BC;pointer-events:none}
+  .flow{stroke:#2A4D66;stroke-width:2;fill:none}
+  .pkt{fill:var(--teal);opacity:.9}
+  .side{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .feedback{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;flex:1;
+    font-size:15px;line-height:1.5;overflow:hidden}
+  .feedback .tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--teal);background:rgba(46,196,182,.12);border:1px solid rgba(46,196,182,.35);
+    padding:2px 9px;border-radius:20px;margin-bottom:7px}
+  .feedback h3{font-size:15.5px;margin-bottom:4px}
+  .feedback.empty{display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center}
+  .progress{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+  .pips{display:flex;gap:4px}
+  .pip{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .pip.on{background:var(--teal)}
+
+  /* S2 reveal */
+  .s2{justify-content:center;gap:12px}
+  .s2 h2{font-size:22px;color:var(--teal)}
+  .s2 p{font-size:14.5px;line-height:1.6;max-width:800px}
+  .attack{color:var(--amber);font-weight:800}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:20px;padding:6px 12px}
+  .chip b{color:var(--ink)}
+  .next{background:rgba(62,207,142,.1);border:1px solid rgba(62,207,142,.35);border-radius:10px;padding:12px 15px;font-size:14px;max-width:800px}
+  .next b{color:var(--good)}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- S0 · SCENARIO -->
+  <section class="slide s0 active" id="sl0">
+    <div class="topbar"><span class="dot"></span><span><b>GRAND MARINA</b> Live View · Water Monitoring</span><span style="margin-left:14px">06:47 AM</span></div>
+    <h1>The dashboard said everything was fine.</h1>
+    <div class="scenario">
+      All night, the operator watched this screen: steady flow, normal pressure, zero alerts.
+      At <b>6:47 AM</b>, the front desk gets a call from housekeeping.
+      <span class="call">the Main Building basement is flooding.</span><br>
+      Somewhere in this system, the data was wrong, and no alarm caught it.
+    </div>
+    <div><button class="btn" onclick="go(1)">Investigate →</button></div>
+  </section>
+
+  <!-- S1 · MAP -->
+  <section class="slide" id="sl1">
+    <div class="prompt">▸ YOU'RE THE SECURITY ENGINEER. TAP THE PARTS YOU'D INVESTIGATE FIRST. EXPLORE AT LEAST TWO.</div>
+    <div class="reassure">Don't worry about understanding all of this yet. Just point at where you'd start looking, and I'll explain each piece as you go.   <span class="who">Maya</span></div>
+    <div class="stage">
+      <div class="mapcard">
+        <svg viewBox="0 0 520 430" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-label="Grand Marina IoT system map">
+          <path class="flow" d="M120,80  H210 V170 H228"/>
+          <path class="flow" d="M120,190 H228"/>
+          <path class="flow" d="M120,300 H210 V210 H228"/>
+          <path class="flow" d="M342,190 H390"/>
+          <path class="flow" d="M440,215 V260"/>
+          <circle class="pkt" r="3.5"><animateMotion dur="2.6s" repeatCount="indefinite" path="M120,80 H210 V170 H240"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="2.2s" repeatCount="indefinite" path="M120,190 H240"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="3s" repeatCount="indefinite" path="M120,300 H210 V210 H240"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="2s" repeatCount="indefinite" path="M330,190 H390"/></circle>
+          <g class="node" id="n-main" onclick="pick('main')">
+            <rect class="ring" x="18" y="52" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="69" y="76" text-anchor="middle">MAIN BUILDING</text>
+            <text class="nsub" x="69" y="90" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="63" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-pool" onclick="pick('pool')">
+            <rect class="ring" x="18" y="162" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="69" y="186" text-anchor="middle">POOL &amp; SPA</text>
+            <text class="nsub" x="69" y="200" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="173" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-kitchen" onclick="pick('kitchen')">
+            <rect class="ring" x="18" y="272" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="69" y="296" text-anchor="middle">KITCHEN</text>
+            <text class="nsub" x="69" y="310" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="283" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-broker" onclick="pick('broker')">
+            <rect class="ring" x="228" y="160" width="114" height="60" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="285" y="186" text-anchor="middle">MESSAGE HUB</text>
+            <text class="nsub" x="285" y="200" text-anchor="middle">all readings pass here</text>
+          </g>
+          <g class="node" id="n-cloud" onclick="pick('cloud')">
+            <rect class="ring" x="390" y="160" width="100" height="60" rx="30" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="440" y="186" text-anchor="middle">RECORD KEEPER</text>
+            <text class="nsub" x="440" y="200" text-anchor="middle">stores the history</text>
+          </g>
+          <g class="node" id="n-dash" onclick="pick('dash')">
+            <rect class="ring" x="388" y="260" width="104" height="62" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" x="440" y="286" text-anchor="middle">OPERATOR SCREEN</text>
+            <text class="nsub" x="440" y="300" text-anchor="middle">what the staff watch</text>
+            <text x="440" y="314" text-anchor="middle" font-size="11" fill="#3ECF8E">"ALL NORMAL ✓"</text>
+          </g>
+          <g class="node" id="n-wifi" onclick="pick('wifi')">
+            <circle class="ring" cx="285" cy="70" r="34" fill="#152E42" stroke="#2A4D66" stroke-width="1.6" stroke-dasharray="4 3"/>
+            <text class="nlabel" x="285" y="66" text-anchor="middle">GUEST</text>
+            <text class="nlabel" x="285" y="79" text-anchor="middle">WI-FI</text>
+          </g>
+          <g>
+            <rect x="18" y="368" width="200" height="44" rx="9" fill="rgba(228,87,61,.12)" stroke="rgba(228,87,61,.5)" stroke-width="1.4"/>
+            <text x="34" y="388" font-size="12" fill="#E4573D" font-weight="700">⚠ MAIN BUILDING BASEMENT</text>
+            <text x="34" y="403" font-size="11" fill="#C98276">flooding, reported by a human, not the system</text>
+          </g>
+        </svg>
+      </div>
+      <div class="side">
+        <div class="feedback empty" id="feedback">Tap a component on the map.<br>Every instinct here teaches you something.</div>
+        <div class="progress"><span>Explored</span><div class="pips" id="pips"></div><span id="pcount">0 / 7</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S2 · REVEAL -->
+  <section class="slide s2" id="sl2">
+    <h2>So what actually happened?</h2>
+    <p>Here's what makes this hard: <b>it could have been any of them.</b> A tampered sensor, a fake device slipped onto the network,
+      or someone quietly changing the numbers as they travel to the screen. Learning to tell which, and to catch it before the basement floods, is the job you're starting today.</p>
+    <p>In this case, someone fed the system fake "normal" readings while a real pipe leaked underneath. That attack has a name:
+      <span class="attack">spoofing</span>, faking trusted data. It's one of a handful of attacks you'll get to know this week, so you can spot each one on purpose before it costs anyone $4.2 million.</p>
+    <div class="chips">
+      <span class="chip">📋 Week-1 deliverable: <b>a professional threat model</b></span>
+      <span class="chip">⏱ Project 1 ≈ <b>4 hours</b> total (complete beginner)</span>
+      <span class="chip">✅ First submitted answer in about <b>15 minutes</b></span>
+    </div>
+    <div class="next"><b>You just did your first security analysis.</b> Keep scrolling, your mission brief is next.</div>
+  </section>
+
+  <div id="nav">
+    <button class="navbtn" id="prevb" onclick="go(cur-1)">← Back</button>
+    <div id="dots"></div>
+    <button class="navbtn" id="nextb" onclick="go(cur+1)">Next →</button>
+  </div>
+</div>
+
+<script>
+const FEEDBACK = {
+  main:{tag:'The sensor',h:'Good instinct. Start at the source.',
+    p:'This is the device measuring the water in the Main Building. If someone tampered with it, or slipped a fake one onto the network in its place, it could report "all normal" while water pours out. The screen would never know.'},
+  pool:{tag:'A healthy neighbor',h:'Smart. Compare the sensors to each other.',
+    p:'Pool &amp; Spa looks fine, and that\'s the catch: a working sensor can\'t warn you about a broken one next door. Later in the program you\'ll build a system that watches all of them together.'},
+  kitchen:{tag:'A healthy neighbor',h:'Smart. Compare the sensors to each other.',
+    p:'Kitchen is reporting normally, which tells you nothing about the Main Building. On their own, the sensors don\'t watch each other.'},
+  broker:{tag:'The middle',h:'Sharp. This is where the pros look.',
+    p:'Every reading from every sensor passes through this one hub on its way to the screen. Whoever controls the hub controls what the operator sees, which makes it a favorite target.'},
+  cloud:{tag:'The records',h:'Reasonable. Check what was actually stored.',
+    p:'This keeps the history of every reading. If the records here look normal too, then the lie happened earlier, closer to the sensors or the hub.'},
+  dash:{tag:'The screen',h:'The operator\'s only window, and it said "normal".',
+    p:'The screen isn\'t lying on purpose. It just shows whatever it was told. A screen displays numbers; it can\'t tell real ones from fake ones. That has to be checked before it ever reaches here.'},
+  wifi:{tag:'The way in',h:'The attacker\'s easiest door.',
+    p:'2,000 guests share this same network with the hotel\'s sensors. If the readings travel without protection, someone in the lobby with a laptop could listen in, or quietly change the numbers on their way to the screen.'}
+};
+const visited=new Set(), total=Object.keys(FEEDBACK).length;
+const pips=document.getElementById('pips');
+Object.keys(FEEDBACK).forEach(()=>{const d=document.createElement('div');d.className='pip';pips.appendChild(d)});
+
+function pick(k){
+  const f=FEEDBACK[k]; visited.add(k);
+  document.getElementById('n-'+k).classList.add('visited');
+  const fb=document.getElementById('feedback');
+  fb.classList.remove('empty');
+  fb.innerHTML='<span class="tag">'+f.tag+'</span><h3>'+f.h+'</h3><p>'+f.p+'</p>';
+  [...pips.children].forEach((p,i)=>p.classList.toggle('on',i<visited.size));
+  document.getElementById('pcount').textContent=visited.size+' / '+total;
+  nav();
+}
+
+/* deck nav */
+let cur=0; const N=3;
+const dots=document.getElementById('dots');
+for(let i=0;i<N;i++){const d=document.createElement('div');d.className='dt';dots.appendChild(d)}
+function canLeave(i){ return i!==1 || visited.size>=2; }
+function go(n){
+  if(n<0||n>=N) return;
+  if(n>cur&&!canLeave(cur)) return;
+  document.getElementById('sl'+cur).classList.remove('active');
+  cur=n;
+  document.getElementById('sl'+cur).classList.add('active');
+  if(cur===2) document.querySelector('.dot')?.classList.add('alert');
+  nav();
+}
+function nav(){
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('prevb').disabled=(cur===0);
+  const nb=document.getElementById('nextb');
+  nb.disabled=(cur===N-1)||!canLeave(cur);
+  nb.classList.toggle('pulse',cur===1&&visited.size>=2);
+  nb.textContent=(cur===1&&visited.size<2)?'Explore 2 parts to continue':'Next →';
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')go(cur+1);
+  if(e.key==='ArrowLeft')go(cur-1);
+});
+nav();
+
+/* mandatory scale-to-fit */
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){
+  const scale=Math.min(window.innerWidth/960,window.innerHeight/540,1);
+  wrapper.style.transform=`scale(${scale})`;
+  wrapper.style.transformOrigin='top left';
+}
+window.addEventListener('resize',scaleDeck);
+scaleDeck();
+</script>
+</body>
+</html>

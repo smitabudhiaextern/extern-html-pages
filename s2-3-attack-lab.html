@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Grand Marina: The Attack Lab</title>
+<!--
+  Step 2, Act 2: The Attack Lab (s2-3-attack-lab.html).
+  Same Grand Marina artboard, palette and node coordinates as s2-1. The student
+  switches sides and runs six attacks. Each attack plays out on the shared map,
+  then gates on a C/I/A call (the captured artifact) before revealing weakness,
+  asset hit, damage and the fix to build. Spoofing / Denial of Service / Replay
+  reuse the motion of the three vault animations (fake-reading, silenced-alert,
+  valve-obeys). Ends on the Attacker's Board that routes to the Priority Call.
+  Self-contained: inline CSS / JS / SVG, no external requests.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#EAF4F4; --muted:#8FB0BC; --violet:#9B8CFF; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+
+  #deck-wrapper{width:960px;height:540px;overflow:hidden;position:relative;flex-shrink:0;background:var(--bg)}
+  .slide{width:960px;height:540px;padding:26px 50px 52px;position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+
+  h1{font-size:34px;font-weight:800;line-height:1.12}
+  h2{font-size:23px;font-weight:800}
+  .muted{color:var(--muted)}
+  .btn{appearance:none;border:0;border-radius:10px;padding:11px 19px;font-size:15px;font-weight:800;cursor:pointer;
+    background:var(--teal);color:#062421;transition:transform .12s,filter .12s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  .roundtag{display:inline-block;width:fit-content;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--teal);background:rgba(46,196,182,.12);border:1px solid rgba(46,196,182,.35);padding:4px 11px;border-radius:20px}
+
+  /* nav chrome */
+  #nav{position:absolute;left:24px;right:24px;bottom:10px;display:flex;align-items:center;gap:14px;z-index:5}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .navbtn:disabled{opacity:.3;cursor:not-allowed}
+  .navbtn.pulse{background:var(--teal);color:#062421;border-color:var(--teal);animation:pu 1.2s infinite}
+  @keyframes pu{50%{box-shadow:0 0 14px rgba(46,196,182,.6)}}
+  #dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dt.on{background:var(--teal)}
+
+  /* intro */
+  .s-intro{justify-content:center;gap:14px}
+  .s-intro .kick{font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--act)}
+  .s-intro p{font-size:15px;line-height:1.55;max-width:720px;color:var(--muted)}
+  .s-intro .maya{border-left:3px solid var(--act);padding:9px 15px;font-size:15px;line-height:1.55;color:var(--ink);max-width:720px;background:rgba(255,120,73,.07);border-radius:0 8px 8px 0}
+  .s-intro .maya .who{color:var(--act);font-weight:800}
+
+  /* attack slide */
+  .prompt{font-size:12px;color:var(--red);font-weight:800;letter-spacing:.05em;margin-bottom:7px}
+  .stage{flex:1;display:flex;gap:14px;min-height:0}
+  .mapcard{flex:1.45;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;display:flex}
+  .mapcard svg{width:100%;height:100%}
+  .side{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .apanel{gap:9px}
+  .atk-head .atk-num{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
+  .atk-head h2{font-size:21px;color:var(--ink);margin-top:2px}
+  .move{font-size:12.5px;line-height:1.45;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .move .mlbl{color:var(--teal);font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:12px}
+  .q{font-size:13.5px;font-weight:800;margin-bottom:7px}
+  .cia{display:flex;gap:7px;margin-bottom:9px}
+  .ciabtn{flex:1;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;
+    padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:800;font-size:16px}
+  .ciabtn span{font-size:12px;font-weight:700;color:var(--muted)}
+  .ciabtn.on{border-color:var(--teal);background:rgba(46,196,182,.14);color:var(--teal)}
+  .ciabtn.on span{color:var(--teal)}
+  .ciabtn:disabled{cursor:default}
+  .lockbtn{appearance:none;border:0;border-radius:10px;padding:10px;width:100%;font-size:14px;font-weight:800;cursor:pointer;background:var(--amber);color:#2A1A00}
+  .lockbtn:disabled{opacity:.4;cursor:not-allowed}
+  .reveal{display:none;flex-direction:column;gap:6px}
+  .reveal.show{display:flex}
+  .cia-ans{font-size:13.5px;font-weight:800;color:var(--amber);padding:7px 10px;border-radius:9px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3)}
+  .cia-ans.ok{color:var(--good);background:rgba(62,207,142,.1);border-color:rgba(62,207,142,.35)}
+  .youcalled{font-size:12px;color:var(--muted)}
+  .rrow{font-size:12.5px;line-height:1.4}
+  .rlbl{display:block;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .reveal .asset{color:var(--amber);font-weight:700}
+  .rrow.fix .rlbl{color:var(--teal)}
+
+  /* svg map (coords match s2-1) */
+  .nlabel{font-size:12.5px;fill:#CFE6E6;font-weight:700;pointer-events:none}
+  .nsub{font-size:12px;fill:#8FB0BC;pointer-events:none}
+  .flow{stroke:#2A4D66;stroke-width:2;fill:none}
+  .pkt{fill:var(--teal);opacity:.9}
+
+  /* overlay animations (no element carries both a transform attribute and a CSS transform) */
+  .eaves-ring{animation:eavesp 1.1s ease-in-out infinite alternate}
+  @keyframes eavesp{from{opacity:.35;stroke-width:2}to{opacity:1;stroke-width:4.5}}
+  .spoofcmd{opacity:0;transform:translateY(-46px);transition:transform .55s cubic-bezier(.5,0,.3,1),opacity .35s}
+  .spoofcmd.in{opacity:1;transform:translateY(0)}
+  .dosleak{transition:transform 1.1s linear,opacity .4s ease}
+  .dosleak.travel{transform:translate(58px,44px)}
+  .dosleak.killed{opacity:0}
+  .dosx{opacity:0;transition:opacity .25s}
+  .dosx.on{opacity:1}
+  .mitm-atk{animation:mitmp 1s ease-in-out infinite alternate}
+  @keyframes mitmp{from{opacity:.55}to{opacity:1}}
+  .mitm-pkt{transition:transform 1s linear}
+  .mitm-pkt.leg1{transform:translate(64px,0)}
+  .mitm-pkt.leg2{transform:translate(96px,-96px)}
+  .mitm-read{opacity:0;transition:opacity .3s}
+  .mitm-read.on{opacity:1}
+  .uakey{transition:transform 1.15s ease,opacity .3s}
+  .uakey.travel{transform:translate(155px,221px)}
+  .replaycmd{transition:transform 1.1s ease,opacity .3s}
+  .replaycmd.travel{transform:translate(-215px,-105px)}
+  .rgate{transition:transform .5s cubic-bezier(.5,0,.3,1)}
+  .rgate.shut{transform:translateY(14px)}
+  .tline{opacity:0;transition:opacity .25s}
+  .tline.on{opacity:1}
+
+  /* board */
+  .s-board{justify-content:center;gap:13px}
+  .s-board h2{color:var(--red)}
+  table.board{width:100%;max-width:840px;border-collapse:collapse;font-size:12px}
+  table.board th{text-align:left;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:6px 9px;border-bottom:1px solid var(--line)}
+  table.board td{padding:7px 9px;border-bottom:1px solid var(--line);line-height:1.32;vertical-align:top}
+  table.board td.bname{font-weight:800;color:var(--ink);white-space:nowrap}
+  table.board td.bcia{font-weight:800;color:var(--violet);white-space:nowrap}
+  table.board td.basset{color:var(--amber);font-weight:600}
+  .bridge{font-size:14px;font-weight:700;padding:12px 16px;border-left:4px solid var(--red);
+    background:rgba(228,87,61,.08);border-radius:0 10px 10px 0;line-height:1.5;max-width:840px}
+  .bridge b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- No intro slide: the on-page copy above the embed carries the opening framing.
+       Attack slides sl0..sl5 are built and inserted here by JS. -->
+
+  <!-- BOARD (final slide) -->
+  <section class="slide s-board" id="sl6">
+    <div class="roundtag" style="color:var(--red);background:rgba(228,87,61,.12);border-color:rgba(228,87,61,.4)">Six attacks run</div>
+    <h2>Your Attacker's Board</h2>
+    <table class="board">
+      <thead><tr><th>Attack</th><th>Broke</th><th>Weakness that let it</th><th>Asset it cost</th></tr></thead>
+      <tbody id="board-body"></tbody>
+    </table>
+    <div class="bridge">Read down the last column: the attacks that scared you most, spoofing a reading, replaying a shutoff, are the ones that <b>do</b> something in the real world, not the ones that only read.</div>
+  </section>
+
+  <div id="nav">
+    <button class="navbtn" id="prevb" onclick="go(cur-1)">← Back</button>
+    <div id="dots"></div>
+    <button class="navbtn" id="nextb" onclick="go(cur+1)">Next →</button>
+  </div>
+</div>
+
+<script>
+/* ---------- shared Grand Marina map (real names, coords match s2-1) ---------- */
+const BASE = `
+  <path class="flow" d="M120,80 H210 V170 H228"/>
+  <path class="flow" d="M120,190 H228"/>
+  <path class="flow" d="M120,300 H210 V210 H228"/>
+  <path class="flow" d="M342,190 H390"/>
+  <path class="flow" d="M440,215 V260"/>
+  <circle class="pkt" r="3.5"><animateMotion dur="2.6s" repeatCount="indefinite" path="M120,80 H210 V170 H228"/></circle>
+  <circle class="pkt" r="3.5"><animateMotion dur="2.2s" repeatCount="indefinite" path="M120,190 H228"/></circle>
+  <circle class="pkt" r="3.5"><animateMotion dur="3s" repeatCount="indefinite" path="M120,300 H210 V210 H228"/></circle>
+  <circle class="pkt" r="3.5"><animateMotion dur="2s" repeatCount="indefinite" path="M342,190 H390"/></circle>
+
+  <g><rect x="18" y="52" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="69" y="77" text-anchor="middle">MAIN BUILDING</text>
+    <text class="nsub" x="69" y="93" text-anchor="middle">station</text>
+    <circle cx="30" cy="63" r="4" fill="#3ECF8E"/></g>
+  <g><rect x="18" y="162" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="69" y="187" text-anchor="middle">POOL &amp; SPA</text>
+    <text class="nsub" x="69" y="203" text-anchor="middle">station</text>
+    <circle cx="30" cy="173" r="4" fill="#3ECF8E"/></g>
+  <g><rect x="18" y="272" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="69" y="297" text-anchor="middle">KITCHEN</text>
+    <text class="nsub" x="69" y="313" text-anchor="middle">station</text>
+    <circle cx="30" cy="283" r="4" fill="#3ECF8E"/></g>
+  <g><rect x="228" y="160" width="114" height="60" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="285" y="186" text-anchor="middle">BROKER</text>
+    <text class="nsub" x="285" y="202" text-anchor="middle">message hub</text></g>
+  <g><rect x="390" y="160" width="100" height="60" rx="30" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="440" y="186" text-anchor="middle">CLOUD</text>
+    <text class="nsub" x="440" y="202" text-anchor="middle">the records</text></g>
+  <g><rect x="388" y="260" width="104" height="62" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+    <text class="nlabel" x="440" y="282" text-anchor="middle">DASHBOARD</text>
+    <text class="nsub" x="440" y="297" text-anchor="middle">operator screen</text>
+    <text x="440" y="313" text-anchor="middle" font-size="12" fill="#3ECF8E">"ALL NORMAL &#10003;"</text></g>
+  <g><circle cx="285" cy="70" r="34" fill="#152E42" stroke="#2A4D66" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <text class="nlabel" x="285" y="66" text-anchor="middle">GUEST</text>
+    <text class="nlabel" x="285" y="79" text-anchor="middle">WI-FI</text></g>
+`;
+
+/* ---------- per-attack map overlays ---------- */
+const OVERLAYS=[
+  /* 0 Eavesdropping */ `
+    <circle class="eaves-ring" cx="285" cy="70" r="40" fill="none" stroke="#E4573D" stroke-width="2.5"/>
+    <circle r="4" fill="#E4573D"><animateMotion dur="2.4s" repeatCount="indefinite" path="M120,80 H210 V170 H228"/></circle>
+    <circle r="4" fill="#E4573D"><animateMotion dur="2.0s" repeatCount="indefinite" path="M120,190 H228"/></circle>
+    <circle r="4" fill="#E4573D"><animateMotion dur="2.8s" repeatCount="indefinite" path="M120,300 H210 V210 H228"/></circle>
+    <circle r="4" fill="#E4573D"><animateMotion dur="1.8s" repeatCount="indefinite" path="M342,190 H390"/></circle>
+    <rect x="12" y="332" width="496" height="94" rx="9" fill="#08151E" stroke="#E4573D" stroke-width="1.3"/>
+    <text x="24" y="347" font-size="12" font-weight="800" fill="#FF9A88" font-family="Consolas,monospace">CAPTURED TRAFFIC &#183; unencrypted &#183; topic root grandmarina/</text>
+    <g class="tline" id="e-t0"><text x="24" y="364" font-size="12" fill="#CFE6E6" font-family="Consolas,monospace">main/flow   {"lpm":95,"psi":82}</text><text x="300" y="364" font-size="12" fill="#8FB0BC">main building, 95 LPM</text></g>
+    <g class="tline" id="e-t1"><text x="24" y="379" font-size="12" fill="#CFE6E6" font-family="Consolas,monospace">pool/flow   {"lpm":43,"psi":79}</text><text x="300" y="379" font-size="12" fill="#8FB0BC">pool &amp; spa, 43 LPM</text></g>
+    <g class="tline" id="e-t2"><text x="24" y="394" font-size="12" fill="#CFE6E6" font-family="Consolas,monospace">kitchen/valve  {"cmd":"open"}</text><text x="300" y="394" font-size="12" fill="#8FB0BC">kitchen valve command</text></g>
+    <g class="tline" id="e-t3"><text x="24" y="409" font-size="12" fill="#FF6B57" font-weight="700" font-family="Consolas,monospace">sys/auth  operator / Marina2019!</text><text x="300" y="409" font-size="12" fill="#FF6B57" font-weight="700">the operator's password</text></g>
+    <g class="tline" id="e-t4"><text x="24" y="423" font-size="12" fill="#CFE6E6" font-family="Consolas,monospace">main/alert  {"leak":true}</text><text x="300" y="423" font-size="12" fill="#8FB0BC">a leak alarm</text></g>
+  `,
+  /* 1 Spoofing */ `
+    <g id="a2-cmd" class="spoofcmd">
+      <rect x="250" y="150" width="72" height="24" rx="7" fill="#2A1520" stroke="#E4573D" stroke-width="1.4"/>
+      <text x="286" y="166" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">SPOOF &#9889;</text></g>
+    <g><rect x="286" y="342" width="180" height="66" rx="8" fill="#0E2334" stroke="#1E3A4F" stroke-width="1.4"/>
+      <text x="298" y="362" font-size="12" font-weight="700" fill="#8FB0BC">DASHBOARD READS</text>
+      <text id="a2-val" x="298" y="394" font-size="26" font-weight="800" font-family="Consolas,monospace" fill="#E4573D">95</text>
+      <text x="350" y="394" font-size="13" fill="#8FB0BC">LPM</text>
+      <text id="a2-tag" x="396" y="394" font-size="12" font-weight="800" fill="#FF9A88">real</text></g>
+  `,
+  /* 2 Denial of Service */ `
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="0.9s" repeatCount="indefinite" path="M120,80 H210 V170 H228"/></circle>
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="0.7s" begin="0.2s" repeatCount="indefinite" path="M120,190 H228"/></circle>
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="1.0s" begin="0.1s" repeatCount="indefinite" path="M120,300 H210 V210 H228"/></circle>
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="0.6s" repeatCount="indefinite" path="M120,190 H228"/></circle>
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="0.8s" begin="0.35s" repeatCount="indefinite" path="M120,80 H210 V170 H228"/></circle>
+    <circle r="3.6" fill="#E4573D"><animateMotion dur="0.85s" begin="0.15s" repeatCount="indefinite" path="M120,300 H210 V210 H228"/></circle>
+    <g id="a3-leak" class="dosleak">
+      <rect x="300" y="204" width="66" height="26" rx="8" fill="#2A1520" stroke="#E4573D" stroke-width="1.5"/>
+      <text x="333" y="222" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">&#9888; LEAK</text></g>
+    <g id="a3-x" class="dosx">
+      <line x1="378" y1="240" x2="398" y2="262" stroke="#E4573D" stroke-width="3.2" stroke-linecap="round"/>
+      <line x1="398" y1="240" x2="378" y2="262" stroke="#E4573D" stroke-width="3.2" stroke-linecap="round"/></g>
+    <text x="204" y="150" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">broker flooded</text>
+  `,
+  /* 3 Man-in-the-Middle */ `
+    <g class="mitm-atk"><rect x="184" y="286" width="52" height="26" rx="7" fill="#2A1520" stroke="#E4573D" stroke-width="1.6"/>
+      <text x="210" y="303" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">MITM</text></g>
+    <g id="mitm-read" class="mitm-read"><rect x="150" y="248" width="120" height="22" rx="6" fill="#08151E" stroke="#2EC4B6" stroke-width="1.2"/>
+      <text x="210" y="263" text-anchor="middle" font-size="12" font-weight="800" fill="#8FE6DC" font-family="Consolas,monospace">read: 95 LPM</text></g>
+    <g id="mitm-pkt" class="mitm-pkt">
+      <rect id="mitm-box" x="112" y="290" width="36" height="20" rx="6" fill="#0E2334" stroke="#2EC4B6" stroke-width="1.5"/>
+      <text id="mitm-val" x="130" y="304" text-anchor="middle" font-size="12" font-weight="800" font-family="Consolas,monospace" fill="#2EC4B6">95</text></g>
+    <text x="58" y="342" font-size="12" font-weight="800" fill="#2EC4B6">honest</text>
+    <text x="248" y="150" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">altered</text>
+  `,
+  /* 4 Unauthorized Access */ `
+    <g id="a5-key" class="uakey">
+      <rect x="264" y="58" width="42" height="24" rx="6" fill="#2A1520" stroke="#E4573D" stroke-width="1.5"/>
+      <text x="285" y="74" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">LOGIN</text></g>
+    <rect id="a5-border" x="386" y="258" width="108" height="66" rx="11" fill="none" stroke="#E4573D" stroke-width="2.6" opacity="0"/>
+    <text id="a5-signed" x="440" y="250" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88" opacity="0">SIGNED IN</text>
+  `,
+  /* 5 Replay */ `
+    <g id="a6-cmd" class="replaycmd">
+      <rect x="252" y="178" width="92" height="24" rx="7" fill="#2A1520" stroke="#E4573D" stroke-width="1.5"/>
+      <text x="298" y="194" text-anchor="middle" font-size="12" font-weight="800" fill="#FF9A88">REPLAY &#9889;</text></g>
+    <rect x="120" y="98" width="46" height="12" rx="3" fill="#0E2334" stroke="#2A4D66" stroke-width="1.3"/>
+    <rect id="a6-gate" class="rgate" x="150" y="84" width="8" height="14" rx="2" fill="#9AA6A1"/>
+    <text id="a6-flow" x="122" y="128" font-size="12" font-weight="800" fill="#3ECF8E">FLOW 100%</text>
+  `
+];
+
+/* ---------- attack copy (source: substep-3 script + locked mappings) ---------- */
+const ATTACKS=[
+ {name:"Eavesdropping", tagline:"the quiet one",
+  move:"You join the Grand Marina's Guest Wi-Fi, the same open network the residents use, and you watch the traffic between the stations and the broker. Every reading, every command, scrolling past in plain text. You just read.",
+  correct:["C"], ciaText:"Confidentiality.",
+  weakness:"The traffic isn't encrypted. It travels in plain text, so anyone on the network can read it.",
+  asset:"Consumption &amp; savings history, and Operator login credentials.",
+  impact:"You saw what you shouldn't. Nobody's water stopped, nothing was faked, but now you know when the building is full, when it's empty, and you caught an operator login as it went by.",
+  fix:"TLS encryption (Week 4).",
+  bCia:"C", bWeak:"Plain text, not encrypted", bAsset:"Consumption history, operator login"},
+
+ {name:"Spoofing", tagline:"the lie",
+  move:"You send the dashboard a reading that never happened. A calm, normal flow number, while the real pipe is gushing. The basement sensor is screaming 95, you overwrite it with a fake 48, and the tile turns green.",
+  correct:["I"], ciaText:"Integrity.",
+  weakness:"The broker checks no credentials. It can't tell a real station from you, so it accepts whatever arrives.",
+  asset:"Pressure &amp; flow readings.",
+  impact:"The data is a lie. The dashboard says normal over a flood, and everyone downstream trusts it.",
+  fix:"Device certificates and mutual TLS (Week 6).",
+  bCia:"I", bWeak:"Broker checks no credentials", bAsset:"Pressure &amp; flow readings"},
+
+ {name:"Denial of Service", tagline:"the blackout",
+  move:"You bury the system. You flood the broker with junk until the real messages, including the leak alert, can't get through. A red LEAK alert tries to reach the operator and never lands.",
+  correct:["A"], ciaText:"Availability.",
+  weakness:"Nothing limits how much a single sender can push. No rate limiting, no backup path.",
+  asset:"Leak-detection alerts.",
+  impact:"The system is up, but it can't do its job. No monitoring, no alert, and if a real emergency needs the shutoff, that won't get through either.",
+  fix:"Rate limiting and redundancy.",
+  bCia:"A", bWeak:"No rate limiting, no backup path", bAsset:"Leak-detection alerts"},
+
+ {name:"Man-in-the-Middle", tagline:"sitting in the wire",
+  move:"You don't just read the traffic, you stand in the middle of it. Everything from the station to the broker passes through you first, and you change it on the way. A reading leaves the kitchen honest and arrives altered.",
+  correct:["C","I"], ciaText:"Confidentiality and Integrity, both.",
+  weakness:"The traffic is in plain text and nobody checks who's really on the line. There's no proof the message came from the real station and arrived unaltered.",
+  asset:"Pressure &amp; flow readings, and any command in transit.",
+  impact:"You see everything, and you can change anything. This is eavesdropping and spoofing at once.",
+  fix:"TLS with certificate validation (Week 4).",
+  bCia:"C + I", bWeak:"Plain text, plus no identity check", bAsset:"Readings and commands in transit"},
+
+ {name:"Unauthorized Access", tagline:"the front door",
+  move:"You log in as the operator. Not by breaking anything, you use the login you picked up eavesdropping, and the ones that were never changed from the factory default. The dashboard opens for you: every reading, every command, every station.",
+  correct:["C","I","A"], ciaText:"All three.",
+  weakness:"Credentials that were default or weak, and never rotated. The system trusts the key, not the person holding it.",
+  asset:"Operator login credentials, and through them, everything else on this page.",
+  impact:"With the operator's keys you can read everything (C), send fake commands (I), and lock the real operator out (A). One login, total control.",
+  fix:"Strong authentication, network segmentation, and audit logs.",
+  bCia:"C + I + A", bWeak:"Default / weak credentials, never rotated", bAsset:"Operator login, then everything"},
+
+ {name:"Replay", tagline:"the one that touches water",
+  move:"You don't invent a command. You capture a real one the system already sent, an emergency shutoff, and you send it again later, when nobody asked for it. The valve swings shut and the flow drops to zero.",
+  correct:["I"], ciaText:"Integrity.",
+  weakness:"Commands carry no freshness. No timestamp, no one-time token, so an old one works exactly like a new one.",
+  asset:"Gate / valve control commands, and Emergency shutoff. 500 rooms lose water in one replayed message.",
+  impact:"The command is genuine but the timing is a lie. The system can't tell now from an hour ago, so it obeys.",
+  fix:"Timestamps and nonces (Week 7).",
+  bCia:"I", bWeak:"Commands carry no freshness", bAsset:"Valve commands, emergency shutoff"}
+];
+
+/* ---------- build attack slides ---------- */
+const deck=document.getElementById('deck-wrapper');
+const boardSlide=document.getElementById('sl6');
+const answered=[false,false,false,false,false,false];
+
+function buildAttackSlide(i){
+  const a=ATTACKS[i];
+  const sec=document.createElement('section');
+  sec.className='slide s-atk';
+  sec.id='sl'+i;
+  sec.innerHTML=
+   '<div class="prompt">&#9656; ATTACK '+(i+1)+' OF 6 &nbsp;&middot;&nbsp; WATCH IT PLAY OUT, THEN MAKE THE CALL</div>'+
+   '<div class="stage">'+
+     '<div class="mapcard"><svg viewBox="0 0 520 430" preserveAspectRatio="xMidYMid meet" aria-label="Grand Marina attack map">'+BASE+OVERLAYS[i]+'</svg></div>'+
+     '<div class="side apanel">'+
+       '<div class="atk-head"><span class="atk-num">Attack '+(i+1)+' &middot; '+a.tagline+'</span><h2>'+a.name+'</h2></div>'+
+       '<div class="move"><span class="mlbl">Your move</span> &nbsp;'+a.move+'</div>'+
+       '<div class="qwrap">'+
+         '<div class="q">Which promise just broke?</div>'+
+         '<div class="cia">'+
+           '<button class="ciabtn" data-l="C">C<span>Confidentiality</span></button>'+
+           '<button class="ciabtn" data-l="I">I<span>Integrity</span></button>'+
+           '<button class="ciabtn" data-l="A">A<span>Availability</span></button>'+
+         '</div>'+
+         '<button class="lockbtn" disabled>Lock in my call.</button>'+
+       '</div>'+
+       '<div class="reveal" id="r'+i+'"></div>'+
+     '</div>'+
+   '</div>';
+  return sec;
+}
+
+function wireSlide(i){
+  const sec=document.getElementById('sl'+i);
+  const set=new Set();
+  const btns=sec.querySelectorAll('.ciabtn');
+  const lock=sec.querySelector('.lockbtn');
+  btns.forEach(b=>b.addEventListener('click',()=>{
+    if(answered[i])return;
+    const l=b.dataset.l;
+    if(set.has(l)){set.delete(l);b.classList.remove('on');}
+    else{set.add(l);b.classList.add('on');}
+    lock.disabled=(set.size===0);
+  }));
+  lock.addEventListener('click',()=>{
+    if(set.size===0||answered[i])return;
+    answered[i]=true;
+    btns.forEach(b=>b.disabled=true);
+    lock.disabled=true;
+    sec.querySelector('.qwrap').style.display='none';
+    sec.querySelector('.move').style.display='none';  // free panel height for the reveal (attack still plays on the map)
+    doReveal(i,set);
+    nav();
+  });
+}
+
+function doReveal(i,set){
+  const a=ATTACKS[i];
+  const matched=(a.correct.length===set.size)&&a.correct.every(l=>set.has(l));
+  const called=[...set].join(' + ');
+  const r=document.getElementById('r'+i);
+  r.innerHTML=
+    '<div class="cia-ans '+(matched?'ok':'')+'">'+(matched?'&#10003; You nailed it. ':'')+'Correct answer: '+a.ciaText+'</div>'+
+    (matched?'':'<div class="youcalled">You called: '+called+'. Here is what actually broke.</div>')+
+    '<div class="rrow"><span class="rlbl">What made it work</span>'+a.weakness+'</div>'+
+    '<div class="rrow"><span class="rlbl">What it cost</span><span class="asset">'+a.asset+'</span></div>'+
+    '<div class="rrow"><span class="rlbl">The damage</span>'+a.impact+'</div>'+
+    '<div class="rrow fix"><span class="rlbl">The fix you\'ll build</span>'+a.fix+'</div>';
+  r.classList.add('show');
+}
+
+ATTACKS.forEach((a,i)=>{ deck.insertBefore(buildAttackSlide(i),boardSlide); wireSlide(i); });
+document.getElementById('sl0').classList.add('active');  // open on Attack 1 (no intro slide)
+
+/* ---------- fill the board ---------- */
+(function fillBoard(){
+  const tb=document.getElementById('board-body');
+  ATTACKS.forEach((a,i)=>{
+    tb.insertAdjacentHTML('beforeend',
+      '<tr><td class="bname">'+(i+1)+'. '+a.name+'</td><td class="bcia">'+a.bCia+'</td><td>'+a.bWeak+'</td><td class="basset">'+a.bAsset+'</td></tr>');
+  });
+})();
+
+/* ---------- overlay animation cycles (spoof / dos / unauth / replay) ---------- */
+(function initAnims(){
+  // Eavesdropping: captured-traffic lines appear one by one, then loop.
+  const eRows=['e-t0','e-t1','e-t2','e-t3','e-t4'];
+  function cyE(){
+    eRows.forEach(id=>{const el=document.getElementById(id); if(el) el.classList.remove('on');});
+    eRows.forEach((id,k)=>setTimeout(()=>{const el=document.getElementById(id); if(el) el.classList.add('on');}, 300+k*500));
+  }
+  cyE(); setInterval(cyE, 300+eRows.length*500+1600);
+
+  // Man-in-the-Middle: honest packet (teal 95) is intercepted and altered (red 48) before the broker.
+  const mPkt=document.getElementById('mitm-pkt'),mVal=document.getElementById('mitm-val'),mBox=document.getElementById('mitm-box');
+  const mRead=document.getElementById('mitm-read');
+  function cyM(){
+    mPkt.style.transition='none';                          // reset instantly: no backward slide on loop
+    mPkt.classList.remove('leg1','leg2');mRead.classList.remove('on');
+    mVal.textContent='95';mVal.setAttribute('fill','#2EC4B6');mBox.setAttribute('stroke','#2EC4B6');
+    void mPkt.getBBox();                                    // flush the instant jump back to the kitchen
+    requestAnimationFrame(()=>{mPkt.style.transition='';}); // restore the transition for the travel legs
+    setTimeout(()=>mPkt.classList.add('leg1'),200);                                                       // 95 leaves the kitchen, travels to the attacker
+    setTimeout(()=>mRead.classList.add('on'),1250);                                                       // the "see" beat: attacker reads it (95)
+    setTimeout(()=>{mVal.textContent='48';mVal.setAttribute('fill','#FF6B57');mBox.setAttribute('stroke','#E4573D');},1500); // then alters it to 48
+    setTimeout(()=>{mPkt.classList.add('leg2');mRead.classList.remove('on');},1750);                      // continue to the broker, now tampered
+  }
+  cyM();setInterval(cyM,4600);
+
+  // Spoofing: SPOOF drops on the broker, the dashboard readout swaps 95 -> fake 48 green.
+  const sVal=document.getElementById('a2-val'),sTag=document.getElementById('a2-tag'),sCmd=document.getElementById('a2-cmd');
+  function cyS(){
+    sVal.textContent='95';sVal.setAttribute('fill','#E4573D');sTag.textContent='real';sTag.setAttribute('fill','#FF9A88');
+    sCmd.style.transition='none';sCmd.classList.remove('in');void sCmd.getBBox();requestAnimationFrame(()=>{sCmd.style.transition='';}); // reset the SPOOF packet instantly, no fly-back
+    setTimeout(()=>sCmd.classList.add('in'),1100);
+    setTimeout(()=>{sVal.textContent='48';sVal.setAttribute('fill','#3ECF8E');sTag.innerHTML='fake &#10003;';sTag.setAttribute('fill','#7EE6B8');},1750);
+  }
+  cyS();setInterval(cyS,4200);
+
+  // Denial of Service: LEAK alert travels toward the dashboard, killed midway, X flashes.
+  const dLeak=document.getElementById('a3-leak'),dX=document.getElementById('a3-x');
+  function cyD(){
+    dLeak.style.transition='none';dLeak.classList.remove('travel','killed');dX.classList.remove('on');void dLeak.getBBox();requestAnimationFrame(()=>{dLeak.style.transition='';}); // reset the LEAK alert instantly
+    setTimeout(()=>dLeak.classList.add('travel'),150);
+    setTimeout(()=>{dLeak.classList.add('killed');dX.classList.add('on');},1350);
+  }
+  cyD();setInterval(cyD,4200);
+
+  // Unauthorized Access: LOGIN travels Wi-Fi -> dashboard, border turns red, SIGNED IN.
+  const uKey=document.getElementById('a5-key'),uB=document.getElementById('a5-border'),uS=document.getElementById('a5-signed');
+  function cyU(){
+    uKey.style.transition='none';uKey.classList.remove('travel');uKey.style.opacity='1';uB.setAttribute('opacity','0');uS.setAttribute('opacity','0');void uKey.getBBox();requestAnimationFrame(()=>{uKey.style.transition='';}); // reset the LOGIN key instantly, no slide-back
+    setTimeout(()=>uKey.classList.add('travel'),250);
+    setTimeout(()=>{uKey.style.opacity='0';uB.setAttribute('opacity','1');uS.setAttribute('opacity','1');},1600);
+  }
+  cyU();setInterval(cyU,4200);
+
+  // Replay: captured command travels broker -> Main Building, gate shuts, flow to 0.
+  const rCmd=document.getElementById('a6-cmd'),rGate=document.getElementById('a6-gate'),rFlow=document.getElementById('a6-flow');
+  function cyR(){
+    rCmd.style.transition='none';rGate.style.transition='none';rCmd.classList.remove('travel');rCmd.style.opacity='1';rGate.classList.remove('shut');rFlow.textContent='FLOW 100%';rFlow.setAttribute('fill','#3ECF8E');void rCmd.getBBox();requestAnimationFrame(()=>{rCmd.style.transition='';rGate.style.transition='';}); // reset the REPLAY command AND gate instantly, no slide-back
+    setTimeout(()=>rCmd.classList.add('travel'),250);
+    setTimeout(()=>{rCmd.style.opacity='0';rGate.classList.add('shut');rFlow.textContent='FLOW 0%';rFlow.setAttribute('fill','#E4573D');},1500);
+  }
+  cyR();setInterval(cyR,4200);
+})();
+
+/* ---------- deck nav ---------- */
+let cur=0; const N=7;
+const dots=document.getElementById('dots');
+for(let i=0;i<N;i++){const d=document.createElement('div');d.className='dt';dots.appendChild(d);}
+function canLeave(i){ if(i>=0&&i<=5) return answered[i]; return true; }
+function go(n){
+  if(n<0||n>=N)return;
+  if(n>cur&&!canLeave(cur))return;
+  document.getElementById('sl'+cur).classList.remove('active');
+  cur=n;
+  document.getElementById('sl'+cur).classList.add('active');
+  nav();
+}
+function nav(){
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('prevb').disabled=(cur===0);
+  const nb=document.getElementById('nextb');
+  if(cur===N-1){ nb.style.display='none'; return; }   // last slide: no Next button
+  nb.style.display='';
+  const locked=!canLeave(cur);
+  const isAtk=(cur>=0&&cur<=5);
+  nb.disabled=locked;
+  nb.classList.toggle('pulse', !locked && isAtk);
+  nb.textContent=(isAtk&&locked)?'Make your call to continue':'Next →';
+  nb.title=(isAtk&&locked)?'Lock in a C, I or A call first':'';
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')go(cur+1);
+  if(e.key==='ArrowLeft')go(cur-1);
+});
+nav();
+
+/* ---------- centered scale-to-fit (copied from s2-1) ---------- */
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){
+  const s=Math.min(window.innerWidth/960,window.innerHeight/540,1);
+  const ox=Math.max(0,(window.innerWidth-960*s)/2), oy=Math.max(0,(window.innerHeight-540*s)/2);
+  wrapper.style.transformOrigin='top left';
+  wrapper.style.transform='translate('+ox+'px,'+oy+'px) scale('+s+')';
+}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>

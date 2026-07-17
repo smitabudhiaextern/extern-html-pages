@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand Marina: Water Monitoring System</title>
+<!--
+  Faithful re-creation of the real Project-7 dashboard.html (styles + structure copied
+  from the student build), shown in its healthy LIVE state for the Step-1 hook.
+  Fixed-canvas + scale-to-fit so it embeds cleanly in Notion. Maya intro card removed
+  (she narrates in the page copy directly above this embed).
+-->
+<style>
+  :root{
+    --bg-primary:#0a0a1a; --bg-secondary:#12122a; --bg-card:rgba(255,255,255,0.05);
+    --accent-cyan:#00d4ff; --accent-blue:#4a9eff; --accent-green:#00ff88; --accent-red:#ff4444; --accent-orange:#ff9500;
+    --text-primary:#ffffff; --text-secondary:rgba(255,255,255,0.7); --text-dim:rgba(255,255,255,0.4);
+    --border-glow:rgba(0,212,255,0.3);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg-primary)}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--text-primary)}
+  #deck-wrapper{width:1000px;height:670px;overflow:hidden;position:relative;flex-shrink:0;
+    background:linear-gradient(135deg,var(--bg-primary) 0%,var(--bg-secondary) 100%);display:flex;flex-direction:column}
+
+  /* header */
+  .header{background:linear-gradient(90deg,rgba(0,212,255,.1) 0%,rgba(74,158,255,.1) 100%);
+    border-bottom:1px solid var(--border-glow);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center}
+  .header-left{display:flex;align-items:center;gap:1rem}
+  .logo-icon{font-size:2.2rem}
+  .header-title h1{font-size:1.8rem;font-weight:600;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .header-title p{font-size:.9rem;color:var(--text-secondary)}
+  .header-right{display:flex;align-items:center;gap:1.5rem}
+  .live-indicator{display:flex;align-items:center;gap:.5rem;padding:.4rem 1rem;background:rgba(0,255,136,.1);
+    border:1px solid var(--accent-green);border-radius:20px;font-size:.85rem;font-weight:600}
+  .live-dot{width:10px;height:10px;background:var(--accent-green);border-radius:50%;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}
+  .timestamp{color:var(--text-secondary);font-family:'Consolas',monospace}
+
+  /* container fills remaining height and centers its content vertically */
+  .container{flex:1;padding:1.5rem 2rem;display:flex;flex-direction:column;justify-content:center;gap:1.5rem}
+
+  /* zones */
+  .sensors-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+  .sensor-card{background:var(--bg-card);border:1px solid var(--border-glow);border-radius:16px;padding:1.25rem;position:relative;overflow:hidden}
+  .sensor-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue))}
+  .sensor-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem}
+  .sensor-icon{font-size:1.6rem}
+  .sensor-title{font-size:1.05rem;font-weight:600}
+  .sensor-status{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--text-secondary)}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-green);animation:pulse 2s infinite}
+  .sensor-metrics{display:flex;flex-direction:column;gap:.9rem}
+  .metric{display:flex;justify-content:space-between;align-items:center}
+  .metric-label{color:var(--text-secondary);font-size:.9rem}
+  .metric-value{font-size:1.4rem;font-weight:600;font-family:'Consolas',monospace;color:var(--accent-cyan)}
+  .pressure-bar{height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden;margin-top:.4rem}
+  .pressure-fill{height:100%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));border-radius:4px;transition:width .5s ease}
+
+  /* security */
+  .security-section{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+  .security-card{background:var(--bg-card);border:1px solid var(--border-glow);border-radius:16px;padding:1.25rem}
+  .security-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.85rem;font-size:1.05rem;font-weight:600}
+  .security-normal{color:var(--accent-green)}
+  .security-status-text{color:var(--text-secondary);margin-bottom:.4rem;font-size:.9rem;line-height:1.5}
+  .event-log{display:flex;flex-direction:column}
+  .event-item{padding:.5rem .1rem;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;gap:.75rem;font-size:.85rem;animation:slideIn .3s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .event-item:last-child{border-bottom:none}
+  .event-icon{font-size:1rem}
+  .event-time{color:var(--text-dim);font-family:'Consolas',monospace;font-size:.78rem}
+  .event-message{flex:1;color:var(--accent-green)}
+
+  /* footer */
+  .stats-footer{display:flex;justify-content:center;gap:3rem;padding:1rem;background:var(--bg-card);border-radius:12px}
+  .stat-item{text-align:center}
+  .stat-value{font-size:1.9rem;font-weight:700;font-family:'Consolas',monospace}
+  .stat-value.green{color:var(--accent-green)} .stat-value.red{color:var(--accent-red)} .stat-value.cyan{color:var(--accent-cyan)}
+  .stat-label{color:var(--text-secondary);font-size:.85rem;margin-top:.15rem}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-icon">🌊</div>
+      <div class="header-title">
+        <h1>GRAND MARINA</h1>
+        <p>Water Monitoring System | Powered by Hydroficient</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-indicator"><div class="live-dot"></div><span>LIVE</span></div>
+      <div class="timestamp" id="clock">06:47:12</div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="sensors-grid">
+      <div class="sensor-card">
+        <div class="sensor-header">
+          <div><div class="sensor-icon">🏢</div><div class="sensor-title">MAIN BUILDING</div></div>
+          <div class="sensor-status"><div class="status-dot"></div><span>ONLINE</span></div>
+        </div>
+        <div class="sensor-metrics">
+          <div class="metric"><span class="metric-label">Pressure</span><span class="metric-value"><span id="p1">82</span> PSI</span></div>
+          <div class="pressure-bar"><div class="pressure-fill" id="g1" style="width:70%"></div></div>
+          <div class="metric"><span class="metric-label">Flow Rate</span><span class="metric-value"><span id="f1">48</span> LPM</span></div>
+          <div class="metric"><span class="metric-label">Gate Position</span><span class="metric-value">100%</span></div>
+        </div>
+      </div>
+      <div class="sensor-card">
+        <div class="sensor-header">
+          <div><div class="sensor-icon">🏊</div><div class="sensor-title">POOL &amp; SPA</div></div>
+          <div class="sensor-status"><div class="status-dot"></div><span>ONLINE</span></div>
+        </div>
+        <div class="sensor-metrics">
+          <div class="metric"><span class="metric-label">Pressure</span><span class="metric-value"><span id="p2">79</span> PSI</span></div>
+          <div class="pressure-bar"><div class="pressure-fill" id="g2" style="width:62%"></div></div>
+          <div class="metric"><span class="metric-label">Flow Rate</span><span class="metric-value"><span id="f2">43</span> LPM</span></div>
+          <div class="metric"><span class="metric-label">Gate Position</span><span class="metric-value">85%</span></div>
+        </div>
+      </div>
+      <div class="sensor-card">
+        <div class="sensor-header">
+          <div><div class="sensor-icon">🍽️</div><div class="sensor-title">KITCHEN &amp; LAUNDRY</div></div>
+          <div class="sensor-status"><div class="status-dot"></div><span>ONLINE</span></div>
+        </div>
+        <div class="sensor-metrics">
+          <div class="metric"><span class="metric-label">Pressure</span><span class="metric-value"><span id="p3">84</span> PSI</span></div>
+          <div class="pressure-bar"><div class="pressure-fill" id="g3" style="width:74%"></div></div>
+          <div class="metric"><span class="metric-label">Flow Rate</span><span class="metric-value"><span id="f3">51</span> LPM</span></div>
+          <div class="metric"><span class="metric-label">Gate Position</span><span class="metric-value">100%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="security-section">
+      <div class="security-card">
+        <div class="security-header security-normal"><span>🛡️</span><span>SECURITY STATUS</span></div>
+        <div class="security-status-text">All systems operating normally. HMAC + timestamp + sequence verification active.</div>
+        <div class="security-status-text">Last security check: <span id="lastcheck">06:47:10</span></div>
+      </div>
+      <div class="security-card">
+        <div class="security-header" style="color:var(--accent-cyan)"><span>📋</span><span>SECURITY EVENT LOG</span></div>
+        <div class="event-log" id="log"><div class="event-item valid"><span class="event-icon">✅</span><span class="event-time">06:47:11</span><span class="event-message">Kitchen &amp; Laundry: pressure=85 PSI, flow=50 LPM</span></div><div class="event-item valid"><span class="event-icon">✅</span><span class="event-time">06:47:09</span><span class="event-message">Main Building: pressure=80 PSI, flow=48 LPM</span></div><div class="event-item valid"><span class="event-icon">✅</span><span class="event-time">06:47:08</span><span class="event-message">Pool &amp; Spa: pressure=79 PSI, flow=43 LPM</span></div><div class="event-item valid"><span class="event-icon">✅</span><span class="event-time">06:47:07</span><span class="event-message">Pool &amp; Spa: pressure=78 PSI, flow=42 LPM</span></div></div>
+      </div>
+    </div>
+
+    <div class="stats-footer">
+      <div class="stat-item"><div class="stat-value green" id="valid">1,204</div><div class="stat-label">Valid Messages</div></div>
+      <div class="stat-item"><div class="stat-value red">0</div><div class="stat-label">Attacks Blocked</div></div>
+      <div class="stat-item"><div class="stat-value cyan" id="total">1,204</div><div class="stat-label">Total Processed</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+function rnd(c,a){return c+(Math.random()-0.5)*a;}
+function pad(n){return String(n).padStart(2,'0');}
+
+let hh=6,mm=47,ss=12;
+function fmt(){return pad(hh)+':'+pad(mm)+':'+pad(ss);}
+setInterval(()=>{ss++;if(ss>59){ss=0;mm++;}if(mm>59){mm=0;hh++;}$('clock').textContent=fmt();},1000);
+
+const zones=[['p1','f1','g1',82,48,'Main Building'],['p2','f2','g2',79,43,'Pool & Spa'],['p3','f3','g3',84,51,'Kitchen & Laundry']];
+const latest={};
+function tick(){
+  zones.forEach(([pi,fi,gi,pc,fc,nm])=>{
+    const p=Math.round(rnd(pc,4)), f=Math.round(rnd(fc,4));
+    $(pi).textContent=p; $(fi).textContent=f;
+    $(gi).style.width=((p-70)/(95-70)*100).toFixed(0)+'%';
+    latest[nm]={p,f};
+  });
+}
+tick(); setInterval(tick,1600);
+
+const log=$('log');
+let valid=1204,total=1204;
+function addEvent(){
+  const z=zones[Math.floor(Math.random()*3)][5];
+  const d=latest[z]||{p:82,f:48};
+  const item=document.createElement('div');
+  item.className='event-item valid';
+  item.innerHTML='<span class="event-icon">✅</span><span class="event-time">'+fmt()+'</span>'+
+    '<span class="event-message">'+z+': pressure='+d.p+' PSI, flow='+d.f+' LPM</span>';
+  log.insertBefore(item,log.firstChild);
+  while(log.children.length>4) log.removeChild(log.lastChild);
+  valid++; total++;
+  $('valid').textContent=valid.toLocaleString();
+  $('total').textContent=total.toLocaleString();
+  $('lastcheck').textContent=fmt();
+}
+setInterval(addEvent,1900);
+
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){const s=Math.min(window.innerWidth

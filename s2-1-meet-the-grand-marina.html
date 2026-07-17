@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Grand Marina: Case the System</title>
+<!--
+  Step 2, Act 1: Meet the Grand Marina (map explorer).
+  Map layout + node coordinates match s1-1-security-instinct-check.html so the
+  day-one plain labels visibly flip to their real names. On-map labels kept SHORT
+  to fit their boxes; the "you knew this as X" recall lives in the info panel.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#EAF4F4; --muted:#8FB0BC; --violet:#9B8CFF; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+
+  #deck-wrapper{width:960px;height:540px;overflow:hidden;position:relative;flex-shrink:0;background:var(--bg)}
+  .slide{width:960px;height:540px;padding:30px 54px 56px;position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+
+  h1{font-size:32px;font-weight:800;line-height:1.15}
+  h2{font-size:23px;font-weight:800}
+  .muted{color:var(--muted)}
+  .btn{appearance:none;border:0;border-radius:10px;padding:11px 19px;font-size:15px;font-weight:800;cursor:pointer;
+    background:var(--teal);color:#062421;transition:transform .12s,filter .12s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  .roundtag{display:inline-block;width:fit-content;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--teal);background:rgba(46,196,182,.12);border:1px solid rgba(46,196,182,.35);padding:4px 11px;border-radius:20px}
+
+  /* nav chrome */
+  #nav{position:absolute;left:24px;right:24px;bottom:10px;display:flex;align-items:center;gap:14px;z-index:5}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:9px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .navbtn:disabled{opacity:.3;cursor:not-allowed}
+  .navbtn.pulse{background:var(--teal);color:#062421;border-color:var(--teal);animation:pu 1.2s infinite}
+  @keyframes pu{50%{box-shadow:0 0 14px rgba(46,196,182,.6)}}
+  #dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dt.on{background:var(--teal)}
+
+  /* intro */
+  .s-intro{justify-content:center;gap:15px}
+  .s-intro .kick{font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--teal)}
+  .s-intro p{font-size:16px;line-height:1.55;max-width:700px;color:var(--muted)}
+  .s-intro .maya{border-left:3px solid var(--teal);padding:9px 15px;font-size:15px;line-height:1.55;color:var(--ink);max-width:700px;background:rgba(46,196,182,.06);border-radius:0 8px 8px 0}
+  .s-intro .maya .who{color:var(--teal);font-weight:800}
+
+  /* map slide */
+  .prompt{font-size:13px;color:var(--teal);font-weight:800;letter-spacing:.02em;margin-bottom:8px}
+  .stage{flex:1;display:flex;gap:14px;min-height:0}
+  .mapcard{flex:1.5;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;display:flex}
+  .mapcard svg{width:100%;height:100%}
+  .side{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .info{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;font-size:13.5px;line-height:1.5;overflow:hidden}
+  .info.empty{display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted)}
+  .info .tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+    padding:3px 10px;border-radius:20px;margin-bottom:8px;border:1px solid}
+  .info h3{font-size:16px;margin-bottom:3px}
+  .info .was{font-size:12px;font-style:italic;color:var(--muted);margin-bottom:9px}
+  .info .row{margin-bottom:8px}
+  .info .lbl{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+  .info .asset{color:var(--amber);font-weight:700}
+  .progress{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:0 3px}
+  .pips{display:flex;gap:5px}
+  .pip{width:9px;height:9px;border-radius:50%;background:var(--line)}
+  .pip.on{background:var(--teal)}
+
+  /* svg map (coords match instinct check) */
+  .node{cursor:pointer}
+  .node rect,.node circle{transition:all .2s}
+  .node:hover rect,.node:hover circle{filter:brightness(1.3)}
+  .node.visited .ring{stroke:var(--teal);stroke-width:2.4}
+  .nlabel{font-size:12.5px;fill:#CFE6E6;font-weight:700;pointer-events:none}
+  .nsub{font-size:12px;fill:#8FB0BC;pointer-events:none}
+  .flow{stroke:#2A4D66;stroke-width:2;fill:none}
+  .pkt{fill:var(--teal);opacity:.9}
+
+  /* inventory slide */
+  .s-inv{justify-content:center;gap:14px}
+  .s-inv h2{color:var(--teal)}
+  .inv-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:760px}
+  .inv-item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px;font-size:14px}
+  .inv-item .lock{color:var(--amber);font-size:16px}
+  .bridge{font-size:17px;font-weight:800;padding:13px 17px;border-left:4px solid var(--amber);
+    background:rgba(245,166,35,.07);border-radius:0 10px 10px 0;line-height:1.5;max-width:760px}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- S0 INTRO -->
+  <section class="slide s-intro active" id="sl0">
+    <div class="kick">The Grand Marina · Act 1</div>
+    <h1>Case the system.</h1>
+    <div class="maya">"You've seen this map before, on your very first task, when I asked where you'd start looking. Back then you were guessing. Now you know the words, so walk it like an analyst and click everything." <span class="who">Maya</span></div>
+    <p>Click all six components. Each one flips to its real name and tells you what it holds, and what breaks if it fails.</p>
+    <div><button class="btn" onclick="go(1)">Open the map →</button></div>
+  </section>
+
+  <!-- S1 MAP -->
+  <section class="slide" id="sl1">
+    <div class="prompt">▸ CLICK EACH COMPONENT TO BUILD YOUR INVENTORY. WATCH ITS DAY-ONE LABEL FLIP TO ITS REAL NAME.</div>
+    <div class="stage">
+      <div class="mapcard">
+        <svg viewBox="0 0 520 430" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-label="Grand Marina system map">
+          <path class="flow" d="M120,80  H210 V170 H228"/>
+          <path class="flow" d="M120,190 H228"/>
+          <path class="flow" d="M120,300 H210 V210 H228"/>
+          <path class="flow" d="M342,190 H390"/>
+          <path class="flow" d="M440,215 V260"/>
+          <circle class="pkt" r="3.5"><animateMotion dur="2.6s" repeatCount="indefinite" path="M120,80 H210 V170 H228"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="2.2s" repeatCount="indefinite" path="M120,190 H228"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="3s" repeatCount="indefinite" path="M120,300 H210 V210 H228"/></circle>
+          <circle class="pkt" r="3.5"><animateMotion dur="2s" repeatCount="indefinite" path="M342,190 H390"/></circle>
+
+          <g class="node" id="n-main" onclick="pick('main')">
+            <rect class="ring" x="18" y="52" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-main" x="69" y="76" text-anchor="middle">MAIN BUILDING</text>
+            <text class="nsub" id="s-main" x="69" y="90" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="63" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-pool" onclick="pick('pool')">
+            <rect class="ring" x="18" y="162" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-pool" x="69" y="186" text-anchor="middle">POOL &amp; SPA</text>
+            <text class="nsub" id="s-pool" x="69" y="200" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="173" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-kitchen" onclick="pick('kitchen')">
+            <rect class="ring" x="18" y="272" width="102" height="56" rx="10" fill="#14344A" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-kitchen" x="69" y="296" text-anchor="middle">KITCHEN</text>
+            <text class="nsub" id="s-kitchen" x="69" y="310" text-anchor="middle">water sensor</text>
+            <circle cx="30" cy="283" r="4" fill="#3ECF8E"/>
+          </g>
+          <g class="node" id="n-broker" onclick="pick('broker')">
+            <rect class="ring" x="228" y="160" width="114" height="60" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-broker" x="285" y="186" text-anchor="middle">MESSAGE HUB</text>
+            <text class="nsub" id="s-broker" x="285" y="200" text-anchor="middle">all readings pass here</text>
+          </g>
+          <g class="node" id="n-cloud" onclick="pick('cloud')">
+            <rect class="ring" x="390" y="160" width="100" height="60" rx="30" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-cloud" x="440" y="186" text-anchor="middle">RECORD KEEPER</text>
+            <text class="nsub" id="s-cloud" x="440" y="200" text-anchor="middle">stores the history</text>
+          </g>
+          <g class="node" id="n-dash" onclick="pick('dash')">
+            <rect class="ring" x="388" y="260" width="104" height="62" rx="10" fill="#1A3A52" stroke="#2A4D66" stroke-width="1.6"/>
+            <text class="nlabel" id="t-dash" x="440" y="284" text-anchor="middle">OPERATOR SCREEN</text>
+            <text class="nsub" id="s-dash" x="440" y="298" text-anchor="middle">what the staff watch</text>
+            <text x="440" y="313" text-anchor="middle" font-size="12" fill="#3ECF8E">"ALL NORMAL ✓"</text>
+          </g>
+          <g class="node" id="n-wifi" onclick="pick('wifi')">
+            <circle class="ring" cx="285" cy="70" r="34" fill="#152E42" stroke="#2A4D66" stroke-width="1.6" stroke-dasharray="4 3"/>
+            <text class="nlabel" x="285" y="66" text-anchor="middle">GUEST</text>
+            <text class="nlabel" x="285" y="79" text-anchor="middle">WI-FI</text>
+          </g>
+        </svg>
+      </div>
+      <div class="side">
+        <div class="info empty" id="info">Click a component on the map. Its real name and its secrets appear here.</div>
+        <div class="progress"><span>Explored</span><div class="pips" id="pips"></div><span id="pcount">0 / 6</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S2 INVENTORY -->
+  <section class="slide s-inv" id="sl2">
+    <div class="roundtag">Inventory complete</div>
+    <h2>You've walked the whole system.</h2>
+    <p class="muted" style="font-size:14px">Here's what every security analyst collects before their first recommendation: the six things worth protecting.</p>
+    <div class="inv-grid">
+      <div class="inv-item"><span class="lock">🔒</span> Pressure &amp; flow readings</div>
+      <div class="inv-item"><span class="lock">🔒</span> Gate / valve control commands</div>
+      <div class="inv-item"><span class="lock">🔒</span> Emergency shutoff capability</div>
+      <div class="inv-item"><span class="lock">🔒</span> Operator login credentials</div>
+      <div class="inv-item"><span class="lock">🔒</span> Consumption &amp; savings history</div>
+      <div class="inv-item"><span class="lock">🔒</span> Leak-detection alerts</div>
+    </div>
+    <div class="bridge">That's your inventory: what the system holds, and what breaks if it fails.<br>Next, you stop touring the system and start breaking it.</div>
+  </section>
+
+  <div id="nav">
+    <button class="navbtn" id="prevb" onclick="go(cur-1)">← Back</button>
+    <div id="dots"></div>
+    <button class="navbtn" id="nextb" onclick="go(cur+1)">Next →</button>
+  </div>
+</div>
+
+<script>
+/* ---------- component reveal data ----------
+   flipLabel / flipSub = SHORT text drawn on the map (must fit the box).
+   real = full name for the info panel; was = day-one recall line. ---- */
+const DATA={
+  main:{count:true, flipLabel:'MAIN BUILDING', flipSub:'HYDROLOGIC 01', real:'Main Building station', tagText:'Sensor + Actuator', tagCol:'var(--good)',
+    what:"The water station for the main building. It senses pressure and flow, and it can open or close the building's water valve on command.",
+    asset:"Its pressure &amp; flow readings, and the emergency shutoff, this device can cut water to the whole building.",
+    depends:"500 rooms of guests, and the leak-alert system, which trusts these readings to be honest."},
+  pool:{count:true, flipLabel:'POOL &amp; SPA', flipSub:'HYDROLOGIC 02', real:'Pool &amp; Spa station', tagText:'Sensor + Actuator', tagCol:'var(--good)',
+    what:"The water station for the pool and spa. Same design as the others: it senses flow and pressure and can shut its own valve.",
+    asset:"Pressure &amp; flow readings for this zone.",
+    depends:"The spa's operation, and again the leak-alert system."},
+  kitchen:{count:true, flipLabel:'KITCHEN', flipSub:'HYDROLOGIC 03', real:'Kitchen &amp; Laundry station', tagText:'Sensor + Actuator', tagCol:'var(--good)',
+    what:"The busiest water zone. It senses flow and pressure and holds the valve that controls water to the kitchen and laundry.",
+    asset:"Pressure &amp; flow readings, and the gate / valve control commands that open and close its water.",
+    depends:"Kitchen and laundry operations across the hotel."},
+  broker:{count:true, flipLabel:'BROKER', flipSub:'network hub', real:'The Broker', was:'the message hub', tagText:'Network / Broker', tagCol:'var(--teal)',
+    what:"The hub every device reports to. Every reading and every command passes through here on its way across the system.",
+    asset:"All readings and commands, in transit. Whoever controls the broker controls what everyone downstream sees.",
+    depends:"The cloud and the dashboard, they only ever know what the broker forwards them."},
+  cloud:{count:true, flipLabel:'CLOUD', flipSub:'the records', real:'The Cloud', was:'the record keeper', tagText:'Subscriber', tagCol:'var(--violet)',
+    what:"The record keeper. It stores the history of every reading and runs the system's reports.",
+    asset:"Months of consumption &amp; savings history for the hotel.",
+    depends:"The dashboard's charts and the hotel's billing reports."},
+  dash:{count:true, flipLabel:'DASHBOARD', flipSub:'the screen', real:'The Dashboard', was:'the operator screen', tagText:'Subscriber', tagCol:'var(--violet)',
+    what:"The operator's only window. It shows live readings and raises the alerts staff act on. It can't tell true data from fake, it just displays what it's told.",
+    asset:"The operator login credentials, and the leak-detection alerts, the thing a human sees when something is wrong.",
+    depends:"Every decision the night operator makes. They act on what this screen shows, even when it's lying."},
+  wifi:{count:false, real:'Guest Wi-Fi', tagText:'The way in', tagCol:'var(--red)',
+    what:"2,000 guests share this network with the hotel's infrastructure. It isn't something you protect, it's the door an attacker walks through.",
+    asset:"Nothing lives here, but everything the devices send can be reached from here if it travels unprotected.",
+    depends:"You'll come back to this one the moment you start running attacks. (Not one of the six.)"}
+};
+const SIX=['main','pool','kitchen','broker','cloud','dash'];
+const visited=new Set();
+
+const pips=document.getElementById('pips');
+SIX.forEach(()=>{const d=document.createElement('div');d.className='pip';pips.appendChild(d)});
+
+function pick(k){
+  const d=DATA[k];
+  const t=document.getElementById('t-'+k), s=document.getElementById('s-'+k);
+  if(t && d.flipLabel) t.innerHTML=d.flipLabel;
+  if(s && d.flipSub){ s.innerHTML=d.flipSub; s.setAttribute('fill','#8FB0BC'); }
+  document.getElementById('n-'+k).classList.add('visited');
+  const info=document.getElementById('info');
+  info.classList.remove('empty');
+  info.innerHTML=
+    '<span class="tag" style="color:'+d.tagCol+';border-color:'+d.tagCol+'">'+d.tagText+'</span>'+
+    '<h3>'+d.real+'</h3>'+
+    (d.was?'<div class="was">You met this on day one as the '+d.was+'.</div>':'')+
+    '<div class="row"><div class="lbl">What it is</div>'+d.what+'</div>'+
+    '<div class="row"><div class="lbl">What lives here</div><span class="asset">'+d.asset+'</span></div>'+
+    '<div class="row"><div class="lbl">Who depends on it</div>'+d.depends+'</div>';
+  if(d.count){
+    visited.add(k);
+    [...pips.children].forEach((p,i)=>p.classList.toggle('on',i<visited.size));
+    document.getElementById('pcount').textContent=visited.size+' / 6';
+  }
+  nav();
+}
+
+/* ---------- deck nav ---------- */
+let cur=0; const N=3;
+const dots=document.getElementById('dots');
+for(let i=0;i<N;i++){const d=document.createElement('div');d.className='dt';dots.appendChild(d)}
+function canLeave(i){ return i!==1 || visited.size>=6; }
+function go(n){
+  if(n<0||n>=N)return;
+  if(n>cur&&!canLeave(cur))return;
+  document.getElementById('sl'+cur).classList.remove('active');
+  cur=n;
+  document.getElementById('sl'+cur).classList.add('active');
+  nav();
+}
+function nav(){
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('prevb').disabled=(cur===0);
+  const nb=document.getElementById('nextb');
+  // last slide: no Next button at all (the platform's Next takes over)
+  if(cur===N-1){ nb.style.display='none'; return; }
+  nb.style.display='';
+  const locked=!canLeave(cur);
+  nb.disabled=locked;
+  nb.classList.toggle('pulse', cur===1 && visited.size>=6);
+  if(cur===1) nb.textContent = locked ? ('Explore all six to continue ('+visited.size+' of 6)') : 'Next →';
+  else nb.textContent='Next →';
+  nb.title = (cur===1 && locked) ? 'Click all six components first' : '';
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')go(cur+1);
+  if(e.key==='ArrowLeft')go(cur-1);
+});
+nav();
+
+/* ---------- centered scale-to-fit ---------- */
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){
+  const s=Math.min(window.innerWidth/960,window.innerHeight/540,1);
+  const ox=Math.max(0,(window.innerWidth-960*s)/2), oy=Math.max(0,(window.innerHeight-540*s)/2);
+  wrapper.style.transformOrigin='top left';
+  wrapper.style.transform='translate('+ox+'px,'+oy+'px) scale('+s+')';
+}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>

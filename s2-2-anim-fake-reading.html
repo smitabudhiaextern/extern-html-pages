@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fake the reading: the screen lies over a flood</title>
+<!--
+  Vault micro-animation: "fake-reading".
+  A compact auto-looping SVG/HTML (no raster GIF). A dashboard sensor tile shows a
+  water flow reading. The TRUE value is a leak (~95 LPM). A SPOOF command drops onto
+  the tile, swapping the DISPLAYED number to a fake normal ~48 LPM. The tile flips
+  GREEN and reads NORMAL, while the basement below quietly floods with water.
+  The green NORMAL tile at the exact moment the basement floods is the whole point.
+  Night Ops palette; matches the map/dashboard visual language. ~4.5s loop.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E; --ink:#EAF4F4; --muted:#8FB0BC; --act:#FF7849;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
+  #deck-wrapper{width:700px;height:270px;overflow:hidden;position:relative;flex-shrink:0;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px}
+  .wrap{width:700px;height:270px;padding:14px 18px;display:flex;flex-direction:column}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .top .t{font-size:14px;font-weight:800}
+  .top .sub{font-size:12px;font-weight:600;color:var(--muted)}
+  svg{width:100%;flex:1}
+  .status{font-size:13px;font-weight:800;text-align:center;height:18px}
+  .status.leak{color:var(--red)} .status.norm{color:var(--good)}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+  <div class="wrap" id="stage">
+    <div class="top">
+      <div class="t">The screen lies.</div>
+      <div class="sub">flow sensor, basement line</div>
+    </div>
+
+    <svg viewBox="0 0 664 176" preserveAspectRatio="xMidYMid meet">
+      <!-- ============ DASHBOARD SENSOR TILE (left) ============ -->
+      <!-- tile border colour switches via JS by setting stroke -->
+      <rect id="tile" x="8" y="6" width="300" height="130" rx="12"
+            fill="#0E2334" stroke="var(--red)" stroke-width="2.4"/>
+      <text x="26" y="32" font-size="12" font-weight="700" fill="#8FB0BC">FLOW SENSOR</text>
+      <text x="290" y="32" text-anchor="end" font-size="12" font-weight="700" fill="#8FB0BC">B-01</text>
+
+      <!-- big flow number + unit (row 1) -->
+      <text id="flowval" x="26" y="86" font-size="40" font-weight="800"
+            font-family="Consolas,monospace" fill="var(--red)">95</text>
+      <text id="flowunit" x="104" y="86" font-size="16" font-weight="700" fill="var(--muted)">LPM</text>
+
+      <!-- status pill on its own row below the number (row 2) -->
+      <rect id="pill" x="26" y="98" width="176" height="28" rx="14"
+            fill="#2A1520" stroke="var(--red)" stroke-width="1.5"/>
+      <text id="pilltext" x="114" y="117" text-anchor="middle" font-size="13"
+            font-weight="800" fill="#FF9A88">LEAK DETECTED</text>
+
+      <!-- truth caption under the tile, hidden until spoof -->
+      <text id="truth" x="12" y="156" font-size="12" font-weight="700"
+            fill="var(--red)" opacity="0">(real flow: 95 LPM leak)</text>
+
+      <!-- ============ SPOOF COMMAND PACKET ============ -->
+      <g id="cmd" opacity="0">
+        <rect x="120" y="6" width="88" height="28" rx="8" fill="#2A1520" stroke="var(--red)" stroke-width="1.5"/>
+        <text x="164" y="25" text-anchor="middle" font-size="13" font-weight="800" fill="#FF9A88">⚡ SPOOF</text>
+      </g>
+
+      <!-- ============ BASEMENT (right) ============ -->
+      <text x="356" y="24" font-size="12" font-weight="700" fill="#8FB0BC">BASEMENT</text>
+      <!-- basement enclosure -->
+      <rect x="356" y="30" width="300" height="132" rx="8" fill="#0C1E2C" stroke="#2A4D66" stroke-width="1.6"/>
+      <!-- clip so water stays inside the basement box -->
+      <clipPath id="baseClip"><rect x="358" y="32" width="296" height="128" rx="7"/></clipPath>
+      <g clip-path="url(#baseClip)">
+        <!-- rising water: y animates upward by shrinking from bottom -->
+        <rect id="water" x="358" y="160" width="296" height="0" fill="#1C6E8C" opacity="0.92"/>
+        <rect id="waterTop" x="358" y="160" width="296" height="3" fill="#2EC4B6" opacity="0.9"/>
+      </g>
+      <!-- basement floor line -->
+      <line x1="356" y1="160" x2="656" y2="160" stroke="#2A4D66" stroke-width="1.6"/>
+      <text x="506" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#5C7C8A">floor</text>
+    </svg>
+
+    <div class="status leak" id="status">⚠ real leak: basement flooding</div>
+  </div>
+</div>
+
+<script>
+const stage=document.getElementById('stage');
+const tile=document.getElementById('tile');
+const flowval=document.getElementById('flowval');
+const flowunit=document.getElementById('flowunit');
+const pill=document.getElementById('pill');
+const pilltext=document.getElementById('pilltext');
+const truth=document.getElementById('truth');
+const cmd=document.getElementById('cmd');
+const water=document.getElementById('water');
+const waterTop=document.getElementById('waterTop');
+const status=document.getElementById('status');
+
+let tickTimer=null;
+let floodTimer=null;
+
+// basement geometry
+const FLOOR=160;      // water base y
+const MAXH=126;       // max water height (fills almost to top)
+
+function stopTimers(){
+  if(tickTimer){clearInterval(tickTimer);tickTimer=null;}
+  if(floodTimer){clearInterval(floodTimer);floodTimer=null;}
+}
+
+// Phase 1: show the true LEAK reading, tile RED, basement dry.
+function phase1(){
+  stopTimers();
+  // reset water to empty
+  setWater(0);
+  // tile red
+  tile.setAttribute('stroke','var(--red)');
+  flowval.setAttribute('fill','var(--red)');
+  pill.setAttribute('fill','#2A1520');
+  pill.setAttribute('stroke','var(--red)');
+  pilltext.setAttribute('fill','#FF9A88');
+  pilltext.textContent='LEAK DETECTED';
+  truth.setAttribute('opacity','0');
+  cmd.setAttribute('opacity','0');
+  status.className='status leak';
+  status.textContent='⚠ real leak: basement flooding';
+  // ticking real leak value around 95
+  tickTimer=setInterval(()=>{
+    const v=93+Math.floor(Math.random()*5); // 93..97
+    flowval.textContent=String(v);
+  },180);
+}
+
+// Phase 2: SPOOF command drops onto the tile.
+function fireSpoof(){
+  cmd.setAttribute('opacity','1');
+  cmd.style.transition='none';
+  cmd.style.transform='translateY(-40px)';
+  cmd.style.opacity='0';
+  // force reflow then animate the drop
+  void cmd.getBBox();
+  requestAnimationFrame(()=>{
+    cmd.style.transition='transform .55s cubic-bezier(.5,0,.3,1), opacity .35s ease';
+    cmd.style.transform='translateY(0)';
+    cmd.style.opacity='1';
+  });
+}
+
+// Phase 3: displayed number SWAPS to fake normal, tile GREEN, basement floods.
+function phase3(){
+  stopTimers();
+  // fake normal reading
+  flowval.textContent='48';
+  flowval.setAttribute('fill','var(--good)');
+  // tile flips green
+  tile.setAttribute('stroke','var(--good)');
+  pill.setAttribute('fill','#0E3325');
+  pill.setAttribute('stroke','var(--good)');
+  pilltext.setAttribute('fill','#7EE6B8');
+  pilltext.textContent='● NORMAL ✓';
+  // truth caption appears in red
+  truth.setAttribute('opacity','1');
+  // status flips to green NORMAL wording (the contradiction)
+  status.className='status norm';
+  status.textContent='● dashboard reads normal, water still rising';
+  // fake number gently ticks around 48 to look live
+  tickTimer=setInterval(()=>{
+    const v=47+Math.floor(Math.random()*3); // 47..49
+    flowval.textContent=String(v);
+  },220);
+  // basement starts filling
+  let h=0;
+  floodTimer=setInterval(()=>{
+    h+=2.6;
+    if(h>=MAXH){h=MAXH;clearInterval(floodTimer);floodTimer=null;}
+    setWater(h);
+  },40);
+}
+
+function setWater(h){
+  const y=FLOOR-h;
+  water.setAttribute('y',y);
+  water.setAttribute('height',h);
+  waterTop.setAttribute('y',y);
+}
+
+function cycle(){
+  phase1();
+  setTimeout(fireSpoof, 1400);
+  setTimeout(phase3, 2100);
+}
+cycle();
+setInterval(cycle, 4600);
+
+const wrapper=document.getElementById('deck-wrapper');
+function scaleDeck(){const s=Math.min(window.innerWidth/700,window.innerHeight/270,1);wrapper.style.transform='scale('+s+')';wrapper.style.transformOrigin='top left';}
+window.addEventListener('resize',scaleDeck);scaleDeck();
+</script>
+</body>
+</html>
