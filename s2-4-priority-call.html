@@ -10,7 +10,7 @@
   (each with a one-line reminder and its security property shown, not asked),
   picks three to defend, and writes one line of why per pick (with a hint).
   Slide 1 mirrors the family pattern back neutrally and produces a copyable /
-  downloadable (PNG) shield summary. Slide 2 is the Marcus assessment, captured
+  copyable text shield summary. Slide 2 is the Marcus assessment, captured
   on the platform. No map on this slide: the decision is which three, not where.
   Self-contained: inline CSS / JS, no external requests.
 -->
@@ -152,8 +152,8 @@
       <pre class="sumblock" id="sumblock"></pre>
     </div>
     <div class="sumfoot">
-      <button class="copybtn" id="pngbtn" style="background:var(--violet);color:#0B1226">Download Summary Image</button>
-      <div class="paste">Download this summary and <b>upload the image to the platform</b>.</div>
+      <button class="copybtn" id="copybtn" style="background:var(--violet);color:#0B1226">Copy Summary</button>
+      <div class="paste">Copy this summary and <b>paste it into the platform field below</b>.</div>
     </div>
   </section>
 
@@ -302,43 +302,36 @@ function renderSummary(){
   document.getElementById('mirror').innerHTML='You shielded '+esc(joinAnd(parts))+'. '+cap(word(exposed.length))+
     ' asset'+(exposed.length===1?'':'s')+' '+(exposed.length===1?'is':'are')+' now exposed: '+
     '<span class="exp">'+esc(exposed.map(a=>a.name).join(', '))+'</span>.';
-  const lines=shielded.map(a=>a.name+' ('+a.prop+') - '+state[a.id].why.trim());
-  document.getElementById('sumblock').textContent=lines.join('\n');
-  const pb=document.getElementById('pngbtn'); pb.classList.remove('done'); pb.textContent='Download Summary Image';
+  const shieldLines=shielded.map((a,i)=>(i+1)+'. '+a.name+' ('+a.prop+') - '+state[a.id].why.trim());
+  const exposedLines=exposed.map(a=>'- '+a.name);
+  const summary='PRIORITY CALL - SHIELD SUMMARY\n\n'+
+    'Shielded (where I spent the budget):\n'+shieldLines.join('\n')+
+    '\n\nLeft exposed:\n'+exposedLines.join('\n');
+  document.getElementById('sumblock').textContent=summary;
+  const pb=document.getElementById('copybtn'); pb.classList.remove('done'); pb.textContent='Copy Summary';
 }
 
-/* ---------- PNG summary for upload (self-contained canvas, no libraries) ---------- */
-function roundRectPath(ctx,rx,ry,w,h,r){ctx.beginPath();ctx.moveTo(rx+r,ry);ctx.arcTo(rx+w,ry,rx+w,ry+h,r);ctx.arcTo(rx+w,ry+h,rx,ry+h,r);ctx.arcTo(rx,ry+h,rx,ry,r);ctx.arcTo(rx,ry,rx+w,ry,r);ctx.closePath();}
-function wrapText(ctx,text,x0,y0,maxW,lh){
-  const words=text.split(' ');let line='',yy=y0;
-  for(const w of words){const t=line?line+' '+w:w;
-    if(ctx.measureText(t).width>maxW && line){ctx.fillText(line,x0,yy);line=w;yy+=lh;}else line=t;}
-  if(line){ctx.fillText(line,x0,yy);yy+=lh;} return yy;
+/* ---------- copy the text summary to the clipboard (works inside Notion embeds) ---------- */
+function copySummary(){
+  const btn=document.getElementById('copybtn');
+  const text=document.getElementById('sumblock').textContent;
+  function ok(){btn.textContent='Copied ✓';btn.classList.add('done');
+    setTimeout(()=>{btn.classList.remove('done');btn.textContent='Copy Summary';},2500);}
+  function selectFallback(){
+    // download and clipboard-API can both be blocked in a sandboxed iframe; select the
+    // text so the student can copy it manually, and try execCommand as a best effort.
+    const pre=document.getElementById('sumblock');
+    const r=document.createRange();r.selectNodeContents(pre);
+    const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
+    let done=false;try{done=document.execCommand('copy');}catch(e){done=false;}
+    if(done){sel.removeAllRanges();ok();}
+    else{btn.textContent='Press Ctrl+C to copy';}   // leaves the text selected
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(ok).catch(selectFallback);
+  }else{selectFallback();}
 }
-function downloadPNG(){
-  const shielded=selOrder.map(id=>ASSETS.find(a=>a.id===id));
-  const exposed=ASSETS.filter(a=>!state[a.id].sel);
-  const c=document.createElement('canvas');c.width=1000;c.height=640;const x=c.getContext('2d');
-  x.fillStyle='#0B1D2A';x.fillRect(0,0,1000,640);
-  x.fillStyle='#10283A';roundRectPath(x,20,20,960,600,18);x.fill();x.strokeStyle='#1E3A4F';x.lineWidth=1.5;x.stroke();
-  x.fillStyle='#EAF4F4';x.font='800 30px system-ui,Arial';x.fillText('Priority Call: Shield Summary',52,80);
-  x.fillStyle='#2EC4B6';x.font='800 15px system-ui,Arial';x.fillText('SHIELDED  (WHERE THE BUDGET GOES)',52,120);
-  let yy=156;
-  shielded.forEach(a=>{
-    x.fillStyle='#3ECF8E';x.font='800 21px system-ui,Arial';x.fillText(a.name+'   ('+a.prop+')',56,yy);yy+=27;
-    x.fillStyle='#9FC0CC';x.font='16px system-ui,Arial';yy=wrapText(x,'"'+state[a.id].why.trim()+'"',56,yy,884,22);yy+=16;
-  });
-  yy+=10;x.fillStyle='#F5A623';x.font='800 15px system-ui,Arial';x.fillText('LEFT EXPOSED',52,yy);yy+=30;
-  x.fillStyle='#EAD9A8';x.font='18px system-ui,Arial';
-  exposed.forEach(a=>{x.fillText('•   '+a.name,56,yy);yy+=27;});
-  c.toBlob(function(b){
-    const u=URL.createObjectURL(b);const link=document.createElement('a');
-    link.href=u;link.download='priority-call-shields.png';document.body.appendChild(link);link.click();link.remove();
-    setTimeout(()=>URL.revokeObjectURL(u),1500);
-    const pb=document.getElementById('pngbtn');pb.textContent='Downloaded';pb.classList.add('done');
-  },'image/png');
-}
-document.getElementById('pngbtn').addEventListener('click',downloadPNG);
+document.getElementById('copybtn').addEventListener('click',copySummary);
 
 function renderMarcus(){
   const exposed=ASSETS.filter(a=>!state[a.id].sel);
