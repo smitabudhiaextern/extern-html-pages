@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build Your Threat Model</title>
+<!--
+  Hydroficient P1, Step 3, Task 1: "Build Your Threat Model".
+  Guided workspace that assembles the six-section Grand Marina threat model
+  (section names and table shapes mirror the MedVault sample).
+  Replaces the old s3-threat-model-builder.html (4 sections, one threat per
+  letter, print-to-PDF export). No PDF, no downloads, no print: capture is
+  copy-per-section plus a final "Copy full report".
+  Fixed 960x600 canvas, scaled to fit entirely inside the embed.
+  State persists in localStorage under "hydro-tmb-v1".
+  QA: append ?beat=N (1 to 8) to jump straight to a beat. Deep links beyond
+  beat 1 auto-fill an in-memory demo state for any prerequisite that is
+  missing, so every beat renders and gates open for QA.
+  Beat map:
+    1 Intro (flow, what is pre-filled vs written, saving, start over)
+    2 Section 2: System Overview (pre-filled, confirm)
+    3 Section 3: Asset Inventory (pre-filled, confirm)
+    4 Section 4: STRIDE Analysis (student writes; full on Web Dashboard,
+      minimum 2 letters on each other component)
+    5 Section 5: Risk Summary (auto-generated from ratings)
+    6 Section 6: Recommended Mitigations (student writes per Critical/High)
+    7 Section 1: Executive Summary (written last, on purpose)
+    8 Assemble and copy out (per-section copy + Copy full report)
+  Self-contained: inline CSS/JS, no external requests, no em dashes.
+-->
+<style>
+  :root{
+    /* Dark storybook house style (matches step-1 explainer palette) */
+    --bg:#0B1D2A; --card:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --ink:#EAF4F4; --body:#CDDDE4; --muted:#9DBAC6;
+    --hl:rgba(46,196,182,.15); --accent:#2EC4B6;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D;
+    --goodbg:rgba(62,207,142,.16); --good:#3ECF8E;
+    --badbg:rgba(228,87,61,.22); --bad:#E4573D;
+    --medbg:rgba(245,166,35,.18); --med:#F5A623;
+    --highbg:rgba(240,136,60,.20); --high:#F0883C;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--body)}
+
+  #deck-wrapper{width:960px;height:600px;position:absolute;top:0;left:0;transform-origin:top left;
+    background:var(--bg);display:flex;flex-direction:column}
+  .stage{flex:1;min-height:0;padding:22px 48px 4px;position:relative}
+
+  .beat{display:none;height:100%;flex-direction:column;animation:fade .35s ease}
+  .beat.on{display:flex}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .kicker{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:28px;font-weight:800;color:var(--ink);line-height:1.15}
+  h2{font-size:22px;font-weight:800;color:var(--ink);line-height:1.2}
+  .lead{font-size:15px;line-height:1.55;color:var(--body)}
+  .lead b{color:var(--ink)}
+  .smallnote{font-size:12.5px;color:var(--muted);line-height:1.45}
+
+  .scrollbody{flex:1;min-height:0;overflow-y:auto;padding-right:8px;margin-top:8px}
+  .scrollbody::-webkit-scrollbar{width:8px}
+  .scrollbody::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+
+  .cardbox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  .seclabel{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+
+  /* intro flow list */
+  .flowlist{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .flowitem{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
+  .flown{flex-shrink:0;width:26px;height:26px;border-radius:8px;background:var(--hl);color:var(--accent);
+    font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .flowitem .fi-t{font-size:14px;font-weight:800;color:var(--ink);line-height:1.25}
+  .flowitem .fi-d{font-size:12.5px;color:var(--body);line-height:1.35;margin-top:1px}
+  .tagpre{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--goodbg);color:var(--good)}
+  .tagyou{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--hl);color:var(--accent)}
+  .tagauto{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--medbg);color:var(--med)}
+
+  /* buttons */
+  .btn{appearance:none;border:none;background:var(--accent);color:#062421;border-radius:10px;padding:9px 18px;
+    font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:transform .12s,filter .12s}
+  .btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.15)}
+  .btn:disabled{opacity:.28;cursor:not-allowed}
+  .btn.ghost{background:var(--card);color:var(--accent);border:2px solid var(--accent);padding:7px 16px}
+  .btn.small{font-size:12.5px;padding:7px 14px;border-radius:8px}
+  .linkish{appearance:none;border:none;background:none;color:var(--muted);font-size:12.5px;font-weight:700;
+    cursor:pointer;font-family:inherit;text-decoration:underline;padding:2px}
+  .linkish:hover{color:var(--bad)}
+
+  .confirmrow{display:flex;align-items:center;gap:12px;margin-top:10px}
+  .confirmed{display:none;align-items:center;gap:8px;font-size:13.5px;font-weight:800;color:var(--good)}
+  .confirmed.on{display:flex}
+
+  /* pre-filled section content */
+  ul.plain{margin:6px 0 4px;padding-left:20px}
+  ul.plain li{font-size:13.5px;margin-bottom:3px;line-height:1.45}
+  ul.plain li b{color:var(--ink)}
+  .flowline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0}
+  .fnode{background:var(--card);border:1.5px solid var(--accent);border-radius:8px;padding:5px 10px;
+    font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap}
+  .fnode.plain2{border-color:var(--line);color:var(--ink)}
+  .farrow{font-size:14px;font-weight:800;color:var(--muted)}
+
+  table.assets{width:100%;border-collapse:collapse;margin-top:4px}
+  table.assets th{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    text-align:left;padding:5px 8px;border-bottom:2px solid var(--line)}
+  table.assets th.ctr{text-align:center}
+  table.assets td{font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.35}
+  table.assets td b{color:var(--ink)}
+  table.assets td.ctr{text-align:center;font-weight:800;white-space:nowrap;font-size:11.5px}
+  .famhead td{background:var(--hl);color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    padding:4px 8px;border-bottom:none;border-radius:6px}
+
+  /* component tabs */
+  .comptabs{display:flex;gap:6px;margin-top:8px}
+  .ctab{appearance:none;border:2px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;
+    font-family:inherit;cursor:pointer;flex:1;text-align:left;transition:border-color .12s}
+  .ctab:hover{border-color:var(--accent)}
+  .ctab.on{border-color:var(--accent);background:var(--hl)}
+  .ctab .cname{font-size:12.5px;font-weight:800;color:var(--ink);line-height:1.15}
+  .ctab .cprog{font-size:11px;font-weight:700;color:var(--muted);margin-top:1px}
+  .ctab.done .cprog{color:var(--good)}
+  .complead{font-size:12.5px;color:var(--body);line-height:1.4;margin-top:7px}
+  .complead b{color:var(--ink)}
+
+  /* STRIDE accordion */
+  .acc{background:var(--card);border:1.5px solid var(--line);border-radius:11px;margin-bottom:7px;overflow:hidden}
+  .acc.open{border-color:var(--accent)}
+  .acchead{display:flex;align-items:center;gap:10px;width:100%;appearance:none;border:none;background:none;
+    font-family:inherit;cursor:pointer;padding:8px 12px;text-align:left}
+  .accletter{flex-shrink:0;width:28px;height:28px;border-radius:8px;background:var(--hl);color:var(--accent);
+    font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .accname{font-size:14px;font-weight:800;color:var(--ink);flex:1}
+  .st{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .st-empty{background:rgba(157,186,198,.12);color:var(--muted)}
+  .st-part{background:var(--medbg);color:var(--med)}
+  .rb{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .r-low{background:var(--goodbg);color:var(--good)}
+  .r-med{background:var(--medbg);color:var(--med)}
+  .r-high{background:var(--highbg);color:var(--high)}
+  .r-crit{background:var(--badbg);color:var(--bad)}
+  .accbody{display:none;padding:2px 12px 11px}
+  .acc.open .accbody{display:block}
+  .hintline{font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:6px}
+  textarea{width:100%;border:1.5px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:9px;
+    padding:8px 11px;font-size:13px;font-family:inherit;line-height:1.5;resize:none}
+  textarea::placeholder{color:var(--muted);font-style:italic}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .pickline{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+  .plabel{font-size:12px;font-weight:800;color:var(--ink);white-space:nowrap}
+  .pick{appearance:none;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;
+    padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:border-color .12s,background .12s}
+  .pick:hover{border-color:var(--accent)}
+  .pick.sel{border-color:var(--accent);background:var(--hl);color:var(--accent)}
+  .riskline{font-size:12.5px;font-weight:700;color:var(--ink);margin-top:7px;min-height:18px}
+
+  /* risk summary */
+  .rsgroup{margin-bottom:12px}
+  .rsgroup h4{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--ink);margin-bottom:5px}
+  .rsgroup ol{margin:0;padding-left:22px}
+  .rsgroup li{font-size:13px;line-height:1.45;margin-bottom:4px}
+  .rsgroup li b{color:var(--ink)}
+
+  /* mitigations */
+  .mithead-sc{font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:7px;font-style:italic}
+  .chiprow{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+  .chiplabel{font-size:11.5px;font-weight:700;color:var(--muted);margin-right:2px}
+  .chip{appearance:none;border:1.5px solid var(--line);background:var(--card);color:var(--accent);border-radius:999px;
+    padding:3px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .chip:hover{border-color:var(--accent);background:var(--hl)}
+
+  /* AI helper */
+  .helper{background:var(--card);border:1.5px dashed var(--accent);border-radius:11px;margin-top:8px;overflow:hidden}
+  .helperhead{display:flex;align-items:center;gap:8px;width:100%;appearance:none;border:none;background:none;
+    font-family:inherit;cursor:pointer;padding:8px 13px;font-size:13px;font-weight:800;color:var(--accent);text-align:left}
+  .helperhead .caret{transition:transform .15s}
+  .helper.open .helperhead .caret{transform:rotate(90deg)}
+  .helperbody{display:none;padding:0 13px 11px}
+  .helper.open .helperbody{display:block}
+  .helperbody p{font-size:12.5px;line-height:1.5;margin-bottom:6px}
+  .helperbody p b{color:var(--ink)}
+  .guardrail{background:var(--hl);border-radius:8px;padding:8px 11px;font-size:12px;line-height:1.45;color:var(--ink);margin:7px 0}
+
+  /* exec summary */
+  .execgrid{display:flex;gap:16px;flex:1;min-height:0;margin-top:8px}
+  .execleft{flex:1.4;display:flex;flex-direction:column;min-height:0}
+  .execright{flex:1;min-height:0;overflow-y:auto}
+  #exectext{flex:1;min-height:120px}
+  .charcount{font-size:11.5px;color:var(--muted);margin-top:4px;text-align:right}
+  .topfind{display:flex;gap:8px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+    border-radius:9px;padding:7px 10px;margin-bottom:6px;font-size:12px;line-height:1.35}
+  .topfind b{color:var(--ink)}
+
+  /* final beat */
+  .finalgrid{display:flex;gap:18px;flex:1;min-height:0;margin-top:8px}
+  .finleft{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;padding-right:4px}
+  .finright{flex:1.15;min-height:0;overflow-y:auto;background:var(--card);border-radius:12px;padding:12px}
+  .seccopyrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:7px 12px}
+  .seccopyrow .scr-n{flex-shrink:0;width:22px;height:22px;border-radius:6px;background:var(--hl);color:var(--accent);
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .seccopyrow .scr-t{flex:1;font-size:12.5px;font-weight:800;color:var(--ink)}
+  .namerow{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+  .namerow label{font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap}
+  .namerow input{flex:1;border:1.5px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;
+    padding:6px 10px;font-size:13px;font-family:inherit}
+  .namerow input:focus{outline:none;border-color:var(--accent)}
+  .doc{background:var(--panel2);border-radius:8px;padding:16px 18px;box-shadow:inset 0 0 0 1px var(--line)}
+  .doc h5{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;
+    border-bottom:2px solid var(--hl);padding-bottom:2px;margin:12px 0 5px}
+  .doc h5:first-child{margin-top:0}
+  .doc pre{font-family:inherit;font-size:11.5px;line-height:1.5;white-space:pre-wrap;color:var(--body)}
+  .doc .doctitle{font-size:14px;font-weight:800;color:var(--ink);line-height:1.25}
+  .doc .docmeta{font-size:11px;color:var(--muted);margin-top:2px}
+
+  .copybar{display:flex;align-items:center;gap:10px;margin-top:8px;flex-shrink:0}
+
+  /* manual copy overlay */
+  #copyoverlay{display:none;position:absolute;inset:0;background:rgba(4,15,22,.6);z-index:20;
+    align-items:center;justify-content:center}
+  #copyoverlay.show{display:flex}
+  .overlaycard{background:var(--card);border-radius:14px;padding:16px 18px;width:640px;max-height:480px;
+    display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+  .overlaycard h3{font-size:15px;font-weight:800;color:var(--ink)}
+  .overlaycard p{font-size:12.5px;color:var(--body)}
+  #overlaytext{flex:1;min-height:220px;font-size:11.5px}
+
+  /* nav */
+  .nav{height:50px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 48px 10px}
+  .navbtn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:10px;padding:8px 18px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit;transition:transform .12s}
+  .navbtn:hover:not(:disabled){transform:translateY(-1px);border-color:var(--accent)}
+  .navbtn:disabled{opacity:.28;cursor:not-allowed}
+  .navbtn.go{background:var(--accent);color:#062421;border-color:var(--accent)}
+  .dots{display:flex;gap:6px;margin:0 auto}
+  .dt{width:8px;height:8px;border-radius:50%;background:var(--line);transition:background .2s}
+  .dt.on{background:var(--accent)}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+  <div class="stage">
+
+    <!-- BEAT 1: intro -->
+    <section class="beat" data-beat="1">
+      <div class="kicker">Step 3 · Task 1</div>
+      <h1>Build Your Threat Model</h1>
+      <p class="lead" style="margin-top:6px">Marcus asked one question: <b>"How exposed are we?"</b> This document is your answer.
+      You will assemble the same six sections you studied in the MedVault sample, for the Grand Marina.
+      Three sections are prepared from your Step 2 work. You write the analysis.</p>
+      <div class="flowlist">
+        <div class="flowitem"><div class="flown">1</div><div><div class="fi-t">System Overview<span class="tagpre">Pre-filled</span></div><div class="fi-d">Read it and confirm it matches your Step 2 map.</div></div></div>
+        <div class="flowitem"><div class="flown">2</div><div><div class="fi-t">Asset Inventory<span class="tagpre">Pre-filled</span></div><div class="fi-d">Your six Vault assets with C/I/A priorities. Confirm.</div></div></div>
+        <div class="flowitem"><div class="flown">3</div><div><div class="fi-t">STRIDE Analysis<span class="tagyou">You write</span></div><div class="fi-d">The core. Scenarios and ratings, component by component.</div></div></div>
+        <div class="flowitem"><div class="flown">4</div><div><div class="fi-t">Risk Summary<span class="tagauto">Auto</span></div><div class="fi-d">Builds itself from your ratings. You review it.</div></div></div>
+        <div class="flowitem"><div class="flown">5</div><div><div class="fi-t">Recommended Mitigations<span class="tagyou">You write</span></div><div class="fi-d">A defense for every Critical and High finding.</div></div></div>
+        <div class="flowitem"><div class="flown">6</div><div><div class="fi-t">Executive Summary<span class="tagyou">You write</span></div><div class="fi-d">Written last, placed first. Plain language for Marcus.</div></div></div>
+      </div>
+      <div style="margin-top:auto;display:flex;align-items:center;gap:14px;padding-top:8px">
+        <p class="smallnote" style="flex:1">Your progress saves in this browser, so you can leave and come back.
+        At the end you copy each section, or the full report, and paste it into the submission field.</p>
+        <button class="linkish" id="startover">Start over</button>
+      </div>
+    </section>
+
+    <!-- BEAT 2: System Overview (Section 2, pre-filled) -->
+    <section class="beat" data-beat="2">
+      <div class="kicker">Section 2 of 6 · Pre-filled</div>
+      <h2>System Overview</h2>
+      <div class="scrollbody">
+        <div class="cardbox">
+          <div class="seclabel">The system you are protecting</div>
+          <ul class="plain">
+            <li><b>The Grand Marina:</b> a 500-room hotel.</li>
+            <li><b>3 HYDROLOGIC flow devices</b>, one per water line: Main Building, Pool and Spa, Kitchen and Laundry.</li>
+            <li><b>Cloud monitoring service</b> that receives every reading.</li>
+            <li><b>Web dashboard</b> where operators watch readings and send commands.</li>
+            <li><b>Remote controls:</b> gate control and an emergency shutoff.</li>
+          </ul>
+        </div>
+        <div class="cardbox" style="margin-top:8px">
+          <div class="seclabel">How the data flows</div>
+          <div class="flowline"><span class="fnode">HYDROLOGIC Devices</span><span class="farrow">&rarr;</span><span class="fnode">Cloud API</span><span class="farrow">&rarr;</span><span class="fnode">Dashboard</span></div>
+          <div class="flowline"><span class="fnode">HYDROLOGIC Devices</span><span class="farrow">&rarr;</span><span class="fnode plain2">Gate Controls</span><span class="farrow">/</span><span class="fnode plain2">Emergency Shutoff</span></div>
+          <div class="flowline"><span class="fnode">Cloud API</span><span class="farrow">&rarr;</span><span class="fnode plain2">Database</span><span class="farrow">/</span><span class="fnode plain2">Reports</span></div>
+        </div>
+        <p class="smallnote" style="margin-top:8px">This is the map you built in Step 2, written up the way a client document states it. You do not write this section. Read it, check it against what you remember, and confirm.</p>
+      </div>
+      <div class="copybar">
+        <button class="btn small" id="sysconfirm">This matches my map. Confirm</button>
+        <div class="confirmed" id="sysdone">&#10003; Confirmed</div>
+        <span style="flex:1"></span>
+        <button class="btn ghost small copysec" data-sec="2">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 3: Asset Inventory (Section 3, pre-filled) -->
+    <section class="beat" data-beat="3">
+      <div class="kicker">Section 3 of 6 · Pre-filled</div>
+      <h2>Asset Inventory</h2>
+      <div class="scrollbody">
+        <p class="smallnote">Your six Vault assets from Step 2, in their three families, each with a Confidentiality / Integrity / Availability priority. Read and confirm.</p>
+        <table class="assets">
+          <thead><tr><th>Asset</th><th>What it is</th><th class="ctr">C</th><th class="ctr">I</th><th class="ctr">A</th></tr></thead>
+          <tbody>
+            <tr class="famhead"><td colspan="5">What the system DOES · actions an attacker could trigger</td></tr>
+            <tr><td><b>Valve commands</b></td><td>Open or close the water lines on each HYDROLOGIC device.</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+            <tr><td><b>Emergency shutoff</b></td><td>Cut water to the whole hotel in one action.</td><td class="ctr">Low</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+            <tr class="famhead"><td colspan="5">What the system KNOWS · data an attacker could read or fake</td></tr>
+            <tr><td><b>Pressure and flow readings</b></td><td>Live numbers from all three water lines.</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr">High</td></tr>
+            <tr><td><b>Consumption history</b></td><td>Months of usage records and reports.</td><td class="ctr">High</td><td class="ctr">High</td><td class="ctr">Med</td></tr>
+            <tr class="famhead"><td colspan="5">What the system TRUSTS · things it believes without question</td></tr>
+            <tr><td><b>Operator credentials</b></td><td>Logins that unlock the dashboard and remote controls.</td><td class="ctr">Critical</td><td class="ctr">Critical</td><td class="ctr">High</td></tr>
+            <tr><td><b>Leak alerts</b></td><td>The warnings operators rely on to act in time.</td><td class="ctr">Low</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+          </tbody>
+        </table>
+        <p class="smallnote" style="margin-top:8px"><b style="color:var(--ink)">Why these priorities:</b> Integrity is critical almost everywhere, because a faked reading or command is exactly how the $4.2M leak went unnoticed. Availability is critical for the shutoff and the alerts, because they only matter in an emergency. Confidentiality peaks at operator credentials, because one stolen login unlocks everything else.</p>
+      </div>
+      <div class="copybar">
+        <button class="btn small" id="assetconfirm">These are my six assets. Confirm</button>
+        <div class="confirmed" id="assetdone">&#10003; Confirmed</div>
+        <span style="flex:1"></span>
+        <button class="btn ghost small copysec" data-sec="3">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 4: STRIDE Analysis (Section 4, student writes) -->
+    <section class="beat" data-beat="4">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+        <div>
+          <div class="kicker">Section 4 of 6 · You write this</div>
+          <h2>STRIDE Analysis</h2>
+        </div>
+        <div class="smallnote" style="text-align:right">Web Dashboard needs all 6 letters.<br>Every other component needs at least 2.</div>
+      </div>
+      <div class="comptabs" id="comptabs"></div>
+      <div class="complead" id="complead"></div>
+      <div class="scrollbody" id="stridelist"></div>
+      <div class="copybar">
+        <div class="helper" id="helper4" style="margin-top:0;flex:1">
+          <button class="helperhead" id="helper4head"><span class="caret">&#9656;</span> Get AI review of this component</button>
+          <div class="helperbody">
+            <p>Before you lock this component in, have an AI act as a senior reviewer. The prompt below carries a <b>persona</b>, the <b>Grand Marina context</b>, and <b>your current scenarios and ratings</b> for this component, plus three review questions: did you miss threat scenarios, are your likelihood and impact ratings reasonable, and is each scenario specific enough.</p>
+            <div class="guardrail">The goal is building your judgment. In real security work you defend your analysis to the client, and "the AI told me" is not a good answer. Read the AI's pushback, then decide for yourself what changes.</div>
+            <button class="btn ghost small" id="helper4copy">Copy prompt with my work</button>
+          </div>
+        </div>
+        <button class="btn ghost small copysec" data-sec="4" style="align-self:flex-start">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 5: Risk Summary (Section 5, auto) -->
+    <section class="beat" data-beat="5">
+      <div class="kicker">Section 5 of 6 · Generated from your ratings</div>
+      <h2>Risk Summary</h2>
+      <p class="smallnote" style="margin-top:4px">This section wrote itself from your STRIDE ratings, sorted the way a busy reader needs it: worst first. Review it. If something looks over- or under-rated, go back and adjust the rating, and this list updates.</p>
+      <div class="scrollbody" id="risksummary"></div>
+      <div class="copybar">
+        <span style="flex:1"></span>
+        <button class="btn ghost small copysec" data-sec="5">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 6: Recommended Mitigations (Section 6, student writes) -->
+    <section class="beat" data-beat="6">
+      <div class="kicker">Section 6 of 6 · You write this</div>
+      <h2>Recommended Mitigations</h2>
+      <p class="smallnote" style="margin-top:4px">Every Critical and High finding gets a proposed defense and an implementation complexity. The defense chips are the ones you met in the Attack Lab; click to insert, then edit into your own words.</p>
+      <div class="scrollbody" id="mitlist"></div>
+      <div class="copybar">
+        <span style="flex:1"></span>
+        <button class="btn ghost small copysec" data-sec="6">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 7: Executive Summary (Section 1, written last) -->
+    <section class="beat" data-beat="7">
+      <div class="kicker">Section 1 of 6 · You write this, last on purpose</div>
+      <h2>Executive Summary</h2>
+      <div class="execgrid">
+        <div class="execleft">
+          <p class="smallnote" style="margin-bottom:6px">Write 2 to 3 short paragraphs for <b style="color:var(--ink)">Marcus Webb</b>, the general manager. Plain language, no STRIDE jargon. Say what system you analyzed, why it matters to the hotel, and name your top three findings with what you recommend first. This goes on page one, but professionals write it last, when the findings exist.</p>
+          <textarea id="exectext" placeholder="Example opening shape: The Grand Marina relies on three HYDROLOGIC devices to watch every water line in the hotel. After the $4.2M leak, we analyzed how an attacker could abuse that system. Three findings need attention first..."></textarea>
+          <div class="charcount" id="execcount"></div>
+          <div class="helper" id="helper7">
+            <button class="helperhead" id="helper7head"><span class="caret">&#9656;</span> Get AI review of your summary</button>
+            <div class="helperbody">
+              <p>Same reviewer, different lens: the prompt carries the persona, the Grand Marina context, your summary, and your Critical and High findings, and asks whether the summary is plain enough for a non-technical general manager, whether it leads with the right findings, and whether anything important is missing.</p>
+              <div class="guardrail">The goal is building your judgment. In real security work you defend your analysis to the client, and "the AI told me" is not a good answer.</div>
+              <button class="btn ghost small" id="helper7copy">Copy prompt with my work</button>
+            </div>
+          </div>
+        </div>
+        <div class="execright">
+          <div class="seclabel">Your top findings, for reference</div>
+          <div id="topfindings"></div>
+        </div>
+      </div>
+      <div class="copybar">
+        <span style="flex:1"></span>
+        <button class="btn ghost small copysec" data-sec="1">Copy this section</button>
+      </div>
+    </section>
+
+    <!-- BEAT 8: assemble and copy out -->
+    <section class="beat" data-beat="8">
+      <div class="kicker">Done · Copy and submit</div>
+      <h2>Your Threat Model Is Assembled</h2>
+      <div class="finalgrid">
+        <div class="finleft">
+          <div class="namerow">
+            <label for="pname">Prepared by</label>
+            <input id="pname" type="text" maxlength="60" placeholder="Your name (optional)">
+          </div>
+          <div class="seccopyrow"><span class="scr-n">1</span><span class="scr-t">Executive Summary</span><button class="btn ghost small copysec" data-sec="1">Copy</button></div>
+          <div class="seccopyrow"><span class="scr-n">2</span><span class="scr-t">System Overview</span><button class="btn ghost small copysec" data-sec="2">Copy</button></div>
+          <div class="seccopyrow"><span class="scr-n">3</span><span class="scr-t">Asset Inventory</span><button class="btn ghost small copysec" data-sec="3">Copy</button></div>
+          <div class="seccopyrow"><span class="scr-n">4</span><span class="scr-t">STRIDE Analysis</span><button class="btn ghost small copysec" data-sec="4">Copy</button></div>
+          <div class="seccopyrow"><span class="scr-n">5</span><span class="scr-t">Risk Summary</span><button class="btn ghost small copysec" data-sec="5">Copy</button></div>
+          <div class="seccopyrow"><span class="scr-n">6</span><span class="scr-t">Recommended Mitigations</span><button class="btn ghost small copysec" data-sec="6">Copy</button></div>
+          <button class="btn" id="copyfull" style="margin-top:4px">Copy full report</button>
+          <p class="smallnote">Paste into the submission field on the platform. Your work stays saved in this browser too.</p>
+        </div>
+        <div class="finright">
+          <div class="doc" id="docpreview"></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- manual copy fallback -->
+  <div id="copyoverlay">
+    <div class="overlaycard">
+      <h3>Copy by hand</h3>
+      <p>Automatic copy is blocked here. The text below is already selected: press <b>Ctrl+C</b> (or <b>Cmd+C</b> on Mac), then close.</p>
+      <textarea id="overlaytext" readonly></textarea>
+      <button class="btn small" id="overlayclose" style="align-self:flex-end">Close</button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <button class="navbtn" id="back">&larr; Back</button>
+    <div class="dots" id="dots"></div>
+    <button class="navbtn go" id="next">Next &rarr;</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var MIN = 1, MAX = 8;
+  var LS_KEY = 'hydro-tmb-v1';
+  var SC_MIN = 30, MIT_MIN = 15, EXEC_MIN = 200;
+
+  var params = new URLSearchParams(location.search);
+  var beat = parseInt(params.get('beat') || '1', 10);
+  if (isNaN(beat)) beat = 1;
+  beat = Math.max(MIN, Math.min(MAX, beat));
+
+  /* ---------- data ---------- */
+  var COMPONENTS = [
+    { id:'dash', name:'Web Dashboard', min:6,
+      lead:'Operators log in here to watch readings and send commands. You rated dashboard threats with Maya in the STRIDE module, so this component gets the full treatment: <b>all six letters</b>.' },
+    { id:'dev', name:'HYDROLOGIC Devices', min:2,
+      lead:'Three flow devices on the water lines: Main Building, Pool and Spa, Kitchen and Laundry. Cover <b>at least two letters</b>, more if you see them.' },
+    { id:'api', name:'Cloud API', min:2,
+      lead:'The cloud service every reading passes through, feeding the dashboard, database, and reports. Cover <b>at least two letters</b>, more if you see them.' },
+    { id:'ctl', name:'Remote Controls', min:2,
+      lead:'Gate controls and the emergency shutoff. This is what the system DOES, the highest-stakes surface. Cover <b>at least two letters</b>, more if you see them.' }
+  ];
+  var LETTERS = [
+    { k:'S', name:'Spoofing',
+      hint:'Name who pretends to be what, and what the system does because it believes them.',
+      ph:'Weak: "an attacker fakes a device." Strong: "an attacker on the guest WiFi registers a fake device that reports normal flow to this component while a real pipe leaks." Who, pretending to be what, with what result?' },
+    { k:'T', name:'Tampering',
+      hint:'Name what data or setting gets changed, where it gets changed, and what goes wrong.',
+      ph:'Weak: "an attacker changes data." Strong: "an attacker intercepts a reading in transit and rewrites 80 PSI to 45 PSI, so the dashboard shows a calm system during a burst." What changes, where, and what breaks?' },
+    { k:'R', name:'Repudiation',
+      hint:'Name an action nobody can prove happened, and why the missing record matters.',
+      ph:'Weak: "there are no logs." Strong: "someone triggers the emergency shutoff, denies it, and no log records which account clicked or when, so the dispute cannot be settled." What action, and who needs the proof?' },
+    { k:'I', name:'Information Disclosure',
+      hint:'Name what private data gets seen, by whom, and what they can do with it.',
+      ph:'Weak: "data leaks." Strong: "an attacker on the network captures unencrypted traffic to this component and reads live pressure data, learning when the building is empty." What data, seen by whom, used for what?' },
+    { k:'D', name:'Denial of Service',
+      hint:'Name what stops working, for whom, and at the moment it hurts most.',
+      ph:'Weak: "the attacker crashes it." Strong: "a flood of junk requests takes this component down for 30 minutes during an active leak, so operators cannot see or act." What goes down, for whom, at what moment?' },
+    { k:'E', name:'Elevation of Privilege',
+      hint:'Name the small access the attacker starts with and the bigger access they grow it into.',
+      ph:'Weak: "the attacker gets admin." Strong: "a view-only account exploits a bug in this component to send valve commands reserved for operators." Which small foothold grows into which bigger power?' }
+  ];
+  var LIKES = ['Low','Medium','High'];
+  var IMPS  = ['Low','Medium','High','Critical'];
+  /* canonical 3x4 matrix, identical to Module 1 */
+  var RISK = {
+    High:   ['Medium','High','Critical','Critical'],
+    Medium: ['Low','Medium','High','Critical'],
+    Low:    ['Low','Low','Medium','High']
+  };
+  var RISKCLS = { Low:'r-low', Medium:'r-med', High:'r-high', Critical:'r-crit' };
+  var CHIPS = [
+    'TLS encryption on every connection',
+    'Device certificates with mutual TLS',
+    'Timestamps and nonces on commands',
+    'Rate limiting and redundancy',
+    'Strong authentication for operators',
+    'Network segmentation',
+    'Audit logs for every action'
+  ];
+
+  var SYS_TEXT =
+    'The Grand Marina is a 500-room hotel. Its water monitoring system runs three HYDROLOGIC flow devices, one per major water line: Main Building, Pool and Spa, Kitchen and Laundry. The devices report pressure and flow readings to a cloud monitoring service (the Cloud API). Operators watch the system through a web dashboard and can send remote commands, including gate control and an emergency shutoff.\n\n' +
+    'Data flow:\n' +
+    '- Devices send readings to the Cloud API, which feeds the Dashboard.\n' +
+    '- Devices also receive commands for the Gate Controls and the Emergency Shutoff.\n' +
+    '- The Cloud API writes to the Database and generates Reports.';
+
+  var ASSETS = [
+    { fam:'What the system DOES (actions an attacker could trigger)', items:[
+      { n:'Valve commands', d:'Open or close the water lines on each HYDROLOGIC device.', c:'Med', i:'Critical', a:'Critical' },
+      { n:'Emergency shutoff', d:'Cut water to the whole hotel in one action.', c:'Low', i:'Critical', a:'Critical' } ] },
+    { fam:'What the system KNOWS (data an attacker could read or fake)', items:[
+      { n:'Pressure and flow readings', d:'Live numbers from all three water lines.', c:'Med', i:'Critical', a:'High' },
+      { n:'Consumption history', d:'Months of usage records and reports.', c:'High', i:'High', a:'Med' } ] },
+    { fam:'What the system TRUSTS (things it believes without question)', items:[
+      { n:'Operator credentials', d:'Logins that unlock the dashboard and remote controls.', c:'Critical', i:'Critical', a:'High' },
+      { n:'Leak alerts', d:'The warnings operators rely on to act in time.', c:'Low', i:'Critical', a:'Critical' } ] }
+  ];
+  var ASSET_WHY = 'Why these priorities: Integrity is critical almost everywhere, because a faked reading or command is exactly how the $4.2M leak went unnoticed. Availability is critical for the shutoff and the alerts, because they only matter in an emergency. Confidentiality peaks at operator credentials, because one stolen login unlocks everything else.';
+
+  /* ---------- state ---------- */
+  function blankStride(){
+    var s = {};
+    COMPONENTS.forEach(function(c){
+      s[c.id] = {};
+      LETTERS.forEach(function(L){ s[c.id][L.k] = { sc:'', lk:'', im:'' }; });
+    });
+    return s;
+  }
+  var state = {
+    name:'', sysOk:false, assetsOk:false,
+    stride: blankStride(),
+    mits: {},        /* key "compId.letter" -> { tx:'', cx:'' } */
+    exec:''
+  };
+
+  function save(){
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e){ /* storage blocked: ignore */ }
+  }
+  function load(){
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (typeof d.name === 'string') state.name = d.name;
+      if (d.sysOk) state.sysOk = true;
+      if (d.assetsOk) state.assetsOk = true;
+      if (typeof d.exec === 'string') state.exec = d.exec;
+      if (d.stride) COMPONENTS.forEach(function(c){
+        LETTERS.forEach(function(L){
+          var e = d.stride[c.id] && d.stride[c.id][L.k];
+          if (e){
+            if (typeof e.sc === 'string') state.stride[c.id][L.k].sc = e.sc;
+            if (LIKES.indexOf(e.lk) >= 0) state.stride[c.id][L.k].lk = e.lk;
+            if (IMPS.indexOf(e.im) >= 0) state.stride[c.id][L.k].im = e.im;
+          }
+        });
+      });
+      if (d.mits && typeof d.mits === 'object') Object.keys(d.mits).forEach(function(k){
+        var m = d.mits[k];
+        if (m && typeof m.tx === 'string') state.mits[k] = { tx:m.tx, cx:(['Low','Medium','High'].indexOf(m.cx) >= 0 ? m.cx : '') };
+      });
+    } catch(e){ /* parse error: ignore, use defaults */ }
+  }
+  load();
+
+  /* ---------- QA demo state for deep links ---------- */
+  var DEMO = {
+    'dash.S': { sc:'An attacker uses a phished operator password to log into the dashboard from outside the hotel and gains full control.', lk:'High', im:'Critical' },
+    'dash.T': { sc:'An attacker with dashboard access raises the leak alert threshold so real leaks never trigger an alert.', lk:'Medium', im:'Critical' },
+    'dash.R': { sc:'An operator triggers the emergency shutoff and later denies it, and no log records which account clicked or when.', lk:'Medium', im:'Medium' },
+    'dash.I': { sc:'An attacker with dashboard access exports a year of consumption history for the whole hotel in one click.', lk:'Medium', im:'High' },
+    'dash.D': { sc:'An attacker floods the dashboard login with requests so operators cannot see readings during an active leak.', lk:'Medium', im:'Critical' },
+    'dash.E': { sc:'A view-only account exploits a bug to send valve commands that should be reserved for admin operators.', lk:'Low', im:'Critical' },
+    'dev.S':  { sc:'A fake device on the hotel network registers as the Pool and Spa unit and reports normal flow during a leak.', lk:'Medium', im:'High' },
+    'dev.D':  { sc:'An attacker jams the wireless signal near the Kitchen and Laundry line so readings stop for an hour.', lk:'Medium', im:'High' },
+    'api.I':  { sc:'An unencrypted API connection lets an attacker on the network read every pressure reading in transit.', lk:'High', im:'Medium' },
+    'api.D':  { sc:'A flood of junk requests takes the Cloud API down, cutting the dashboard off from every device at once.', lk:'Medium', im:'Critical' },
+    'ctl.S':  { sc:'An attacker sends a forged shutoff command that the gate accepts as if a real operator sent it.', lk:'Medium', im:'Critical' },
+    'ctl.E':  { sc:'An attacker who reaches the gate controller pivots from it into the hotel internal network.', lk:'Low', im:'Critical' }
+  };
+  function applyDemo(target){
+    /* fills only what is missing; in-memory until the student edits something */
+    if (target >= 3 && !state.sysOk) state.sysOk = true;
+    if (target >= 4 && !state.assetsOk) state.assetsOk = true;
+    if (target >= 5){
+      Object.keys(DEMO).forEach(function(key){
+        var parts = key.split('.');
+        var e = state.stride[parts[0]][parts[1]];
+        if (!entryDone(e)){ e.sc = DEMO[key].sc; e.lk = DEMO[key].lk; e.im = DEMO[key].im; }
+      });
+    }
+    if (target >= 7){
+      findings().forEach(function(f){
+        var m = state.mits[f.key];
+        if (!m || m.tx.trim().length < MIT_MIN || !m.cx){
+          state.mits[f.key] = { tx:'Add strong authentication, rate limiting, and audit logs on this path so the attack is blocked and every action leaves a record.', cx:'Medium' };
+        }
+      });
+    }
+    if (target >= 8 && state.exec.trim().length < EXEC_MIN){
+      state.exec = 'The Grand Marina relies on three HYDROLOGIC devices to watch every water line in the hotel. After the $4.2M leak, we analyzed how an attacker could abuse that system.\n\nThree findings need attention first: a stolen operator password gives full control of the water system, alert thresholds can be silently changed so leaks go unnoticed, and the dashboard can be knocked offline during an emergency.\n\nWe recommend starting with stronger operator logins, which closes the biggest risk at low cost.';
+    }
+  }
+  if (params.has('beat') && beat > 1) applyDemo(beat);
+
+  /* ---------- helpers ---------- */
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function riskOf(lk, im){ return RISK[lk][IMPS.indexOf(im)]; }
+  function entryDone(e){ return e.sc.trim().length >= SC_MIN && !!e.lk && !!e.im; }
+  function compCount(cid){
+    var n = 0;
+    LETTERS.forEach(function(L){ if (entryDone(state.stride[cid][L.k])) n++; });
+    return n;
+  }
+  function strideGate(){
+    var dash = compCount('dash');
+    if (dash < 6) return { ok:false, label:'Complete all 6 letters on Web Dashboard (' + dash + ' of 6)' };
+    var missing = [];
+    COMPONENTS.forEach(function(c){
+      if (c.id !== 'dash' && compCount(c.id) < c.min) missing.push(c.name);
+    });
+    if (missing.length) return { ok:false, label:'Cover at least 2 letters on: ' + missing.join(', ') };
+    return { ok:true, label:'See your Risk Summary &rarr;' };
+  }
+  function findings(){
+    var out = [];
+    COMPONENTS.forEach(function(c){
+      LETTERS.forEach(function(L){
+        var e = state.stride[c.id][L.k];
+        if (entryDone(e)){
+          var r = riskOf(e.lk, e.im);
+          if (r === 'Critical' || r === 'High'){
+            out.push({ key:c.id + '.' + L.k, comp:c.name, letter:L.name, sc:e.sc.trim(), lk:e.lk, im:e.im, risk:r });
+          }
+        }
+      });
+    });
+    out.sort(function(a, b){
+      if (a.risk !== b.risk) return a.risk === 'Critical' ? -1 : 1;
+      return 0;
+    });
+    return out;
+  }
+  function groupedFindings(){
+    var g = { Critical:[], High:[], Medium:[], Low:[] };
+    COMPONENTS.forEach(function(c){
+      LETTERS.forEach(function(L){
+        var e = state.stride[c.id][L.k];
+        if (entryDone(e)) g[riskOf(e.lk, e.im)].push({ comp:c.name, letter:L.name, sc:e.sc.trim() });
+      });
+    });
+    return g;
+  }
+  function mitGate(){
+    var fs = findings();
+    if (!fs.length) return { ok:true, left:0, none:true };
+    var left = 0;
+    fs.forEach(function(f){
+      var m = state.mits[f.key];
+      if (!m || m.tx.trim().length < MIT_MIN || !m.cx) left++;
+    });
+    return { ok: left === 0, left:left, none:false };
+  }
+  function execOk(){ return state.exec.trim().length >= EXEC_MIN; }
+
+  /* ---------- section text builders (the copy output) ---------- */
+  function txt1(){
+    return 'SECTION 1: EXECUTIVE SUMMARY\n\n' + (state.exec.trim() || '[not written yet]');
+  }
+  function txt2(){
+    return 'SECTION 2: SYSTEM OVERVIEW\n\n' + SYS_TEXT;
+  }
+  function txt3(){
+    var out = 'SECTION 3: ASSET INVENTORY\n\n(C = Confidentiality, I = Integrity, A = Availability)\n';
+    ASSETS.forEach(function(f){
+      out += '\n' + f.fam.toUpperCase() + '\n';
+      f.items.forEach(function(a){
+        out += '- ' + a.n + ': ' + a.d + ' (C: ' + a.c + ' / I: ' + a.i + ' / A: ' + a.a + ')\n';
+      });
+    });
+    out += '\n' + ASSET_WHY;
+    return out;
+  }
+  function txt4(){
+    var out = 'SECTION 4: STRIDE ANALYSIS\n';
+    COMPONENTS.forEach(function(c){
+      var rows = '';
+      LETTERS.forEach(function(L){
+        var e = state.stride[c.id][L.k];
+        if (entryDone(e)){
+          rows += '- ' + L.name + ' (Likelihood ' + e.lk + ' x Impact ' + e.im + ' = ' + riskOf(e.lk, e.im) + ' risk):\n  ' + e.sc.trim() + '\n';
+        }
+      });
+      if (rows) out += '\nComponent: ' + c.name + '\n' + rows;
+    });
+    return out.trim() === 'SECTION 4: STRIDE ANALYSIS' ? out + '\n\n[no completed entries yet]' : out;
+  }
+  function txt5(){
+    var g = groupedFindings();
+    var out = 'SECTION 5: RISK SUMMARY\n';
+    ['Critical','High','Medium'].forEach(function(lvl){
+      out += '\n' + lvl.toUpperCase() + ' RISK\n';
+      if (!g[lvl].length){ out += '- (none)\n'; return; }
+      g[lvl].forEach(function(f, i){
+        out += (i + 1) + '. ' + f.comp + ', ' + f.letter + ': ' + f.sc + '\n';
+      });
+    });
+    if (g.Low.length) out += '\n(' + g.Low.length + ' Low-risk finding' + (g.Low.length > 1 ? 's remain' : ' remains') + ' in the STRIDE analysis above.)';
+    return out;
+  }
+  function txt6(){
+    var fs = findings();
+    var out = 'SECTION 6: RECOMMENDED MITIGATIONS\n';
+    if (!fs.length) return out + '\n[no Critical or High findings to mitigate]';
+    fs.forEach(function(f, i){
+      var m = state.mits[f.key] || { tx:'', cx:'' };
+      out += '\n' + (i + 1) + '. ' + f.comp + ', ' + f.letter + ' (' + f.risk + ' risk)\n';
+      out += '   Proposed defense: ' + (m.tx.trim() || '[not written yet]') + '\n';
+      out += '   Implementation complexity: ' + (m.cx || '[not set]') + '\n';
+    });
+    return out;
+  }
+  function txtHeader(){
+    return 'GRAND MARINA WATER MONITORING SYSTEM\nSECURITY THREAT MODEL\n\nClient: The Grand Marina Hotel\nPrepared by: ' + (state.name.trim() || '[your name]') + '\nClassification: Confidential';
+  }
+  function txtFull(){
+    var div = '\n\n==========\n\n';
+    return txtHeader() + div + txt1() + div + txt2() + div + txt3() + div + txt4() + div + txt5() + div + txt6();
+  }
+  function sectionText(n){
+    switch (String(n)){
+      case '1': return txt1();
+      case '2': return txt2();
+      case '3': return txt3();
+      case '4': return txt4();
+      case '5': return txt5();
+      case '6': return txt6();
+    }
+    return '';
+  }
+
+  /* ---------- clipboard ---------- */
+  function flashBtn(btn){
+    if (!btn) return;
+    var old = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(function(){ btn.textContent = old; }, 1400);
+  }
+  function manualCopy(text){
+    $('overlaytext').value = text;
+    $('copyoverlay').classList.add('show');
+    $('overlaytext').focus();
+    $('overlaytext').select();
+  }
+  function legacyCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copyText(text, btn){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ flashBtn(btn); },
+        function(){ if (legacyCopy(text)) flashBtn(btn); else manualCopy(text); });
+    } else {
+      if (legacyCopy(text)) flashBtn(btn); else manualCopy(text);
+    }
+  }
+  $('overlayclose').addEventListener('click', function(){ $('copyoverlay').classList.remove('show'); });
+
+  /* every "Copy this section" button (they exist on beats 2-8) */
+  Array.prototype.forEach.call(document.querySelectorAll('.copysec'), function(b){
+    b.addEventListener('click', function(){ copyText(sectionText(b.dataset.sec), b); });
+  });
+  $('copyfull').addEventListener('click', function(){ copyText(txtFull(), $('copyfull')); });
+
+  /* ---------- beat 1: start over ---------- */
+  $('startover').addEventListener('click', function(){
+    var sure = window.confirm('Start over? This erases everything you have written in this builder.');
+    if (!sure) return;
+    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    location.href = location.pathname;
+  });
+
+  /* ---------- beats 2 and 3: confirms ---------- */
+  function renderConfirms(){
+    $('sysconfirm').style.display = state.sysOk ? 'none' : '';
+    $('sysdone').classList.toggle('on', state.sysOk);
+    $('assetconfirm').style.display = state.assetsOk ? 'none' : '';
+    $('assetdone').classList.toggle('on', state.assetsOk);
+  }
+  $('sysconfirm').addEventListener('click', function(){ state.sysOk = true; save(); renderConfirms(); updateNav(); });
+  $('assetconfirm').addEventListener('click', function(){ state.assetsOk = true; save(); renderConfirms(); updateNav(); });
+
+  /* ---------- beat 4: STRIDE workspace ---------- */
+  var curComp = 'dash';
+  var openLetter = null;
+
+  function entryStatusHtml(e){
+    if (entryDone(e)){
+      var r = riskOf(e.lk, e.im);
+      return '<span class="rb ' + RISKCLS[r] + '">' + r + ' risk</span>';
+    }
+    if (e.sc.trim() || e.lk || e.im) return '<span class="st st-part">Needs detail + ratings</span>';
+    return '<span class="st st-empty">Not started</span>';
+  }
+  function renderTabs(){
+    var tabs = $('comptabs');
+    tabs.innerHTML = '';
+    COMPONENTS.forEach(function(c){
+      var n = compCount(c.id);
+      var done = n >= c.min;
+      var b = document.createElement('button');
+      b.className = 'ctab' + (curComp === c.id ? ' on' : '') + (done ? ' done' : '');
+      b.innerHTML = '<div class="cname">' + esc(c.name) + '</div>' +
+        '<div class="cprog">' + (c.min === 6
+          ? (n + ' of 6 · all required')
+          : (n + ' of 6 · need 2+')) + (done ? ' &#10003;' : '') + '</div>';
+      b.addEventListener('click', function(){
+        curComp = c.id; openLetter = null; renderStride();
+      });
+      tabs.appendChild(b);
+    });
+    var comp = COMPONENTS.filter(function(c){ return c.id === curComp; })[0];
+    $('complead').innerHTML = comp.lead;
+  }
+  function refreshAccChrome(){
+    /* update status chips + tabs + nav without rebuilding textareas */
+    LETTERS.forEach(function(L){
+      var stEl = document.getElementById('stst-' + curComp + '-' + L.k);
+      if (stEl) stEl.innerHTML = entryStatusHtml(state.stride[curComp][L.k]);
+      var rl = document.getElementById('riskline-' + curComp + '-' + L.k);
+      if (rl){
+        var e = state.stride[curComp][L.k];
+        rl.innerHTML = (e.lk && e.im)
+          ? 'Your rating: ' + e.lk + ' likelihood &times; ' + e.im + ' impact = <span class="rb ' + RISKCLS[riskOf(e.lk, e.im)] + '">' + riskOf(e.lk, e.im) + ' risk</span>'
+          : 'Pick a likelihood and an impact to see the risk.';
+      }
+    });
+    renderTabs();
+    updateNav();
+  }
+  function renderStride(){
+    renderTabs();
+    var list = $('stridelist');
+    list.innerHTML = '';
+    LETTERS.forEach(function(L){
+      var e = state.stride[curComp][L.k];
+      var acc = document.createElement('div');
+      acc.className = 'acc' + (openLetter === L.k ? ' open' : '');
+      var head = document.createElement('button');
+      head.className = 'acchead';
+      head.innerHTML = '<span class="accletter">' + L.k + '</span><span class="accname">' + esc(L.name) + '</span>' +
+        '<span id="stst-' + curComp + '-' + L.k + '">' + entryStatusHtml(e) + '</span>';
+      head.addEventListener('click', function(){
+        openLetter = (openLetter === L.k) ? null : L.k;
+        renderStride();
+      });
+      acc.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'accbody';
+      body.innerHTML = '<div class="hintline">' + esc(L.hint) + ' "Attacker does bad thing" is not acceptable.</div>';
+      var ta = document.createElement('textarea');
+      ta.rows = 3;
+      ta.placeholder = L.ph;
+      ta.value = e.sc;
+      ta.addEventListener('input', function(){
+        e.sc = ta.value; save(); refreshAccChrome();
+      });
+      body.appendChild(ta);
+
+      var pickline = document.createElement('div');
+      pickline.className = 'pickline';
+      function pickGroup(label, values, field){
+        var wrap = document.createElement('span');
+        wrap.style.display = 'inline-flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.gap = '6px';
+        var lb = document.createElement('span');
+        lb.className = 'plabel';
+        lb.textContent = label;
+        wrap.appendChild(lb);
+        values.forEach(function(v){
+          var pb = document.createElement('button');
+          pb.className = 'pick' + (e[field] === v ? ' sel' : '');
+          pb.textContent = v;
+          pb.addEventListener('click', function(){
+            e[field] = v; save();
+            Array.prototype.forEach.call(wrap.querySelectorAll('.pick'), function(x){
+              x.classList.toggle('sel', x.textContent === v);
+            });
+            refreshAccChrome();
+          });
+          wrap.appendChild(pb);
+        });
+        return wrap;
+      }
+      pickline.appendChild(pickGroup('Likelihood:', LIKES, 'lk'));
+      pickline.appendChild(pickGroup('Impact:', IMPS, 'im'));
+      body.appendChild(pickline);
+
+      var rl = document.createElement('div');
+      rl.className = 'riskline';
+      rl.id = 'riskline-' + curComp + '-' + L.k;
+      body.appendChild(rl);
+      acc.appendChild(body);
+      list.appendChild(acc);
+    });
+    refreshAccChrome();
+  }
+
+  /* AI helper toggles */
+  function wireHelper(boxId, headId){
+    $(headId).addEventListener('click', function(){ $(boxId).classList.toggle('open'); });
+  }
+  wireHelper('helper4', 'helper4head');
+  wireHelper('helper7', 'helper7head');
+
+  var PERSONA = 'You are a senior IoT security engineer with 10 years of experience in threat modeling, specializing in critical infrastructure such as water management, smart buildings, and industrial IoT.';
+  var CONTEXT = 'Context: I am building a threat model for the water monitoring system at the Grand Marina, a 500-room hotel, on behalf of Hydroficient. The system runs three HYDROLOGIC flow devices (Main Building, Pool and Spa, Kitchen and Laundry) reporting to a cloud API and a web dashboard, with remote gate control and an emergency shutoff. The client previously ignored a leak alert and took $4.2M in damage.';
+
+  $('helper4copy').addEventListener('click', function(){
+    var comp = COMPONENTS.filter(function(c){ return c.id === curComp; })[0];
+    var rows = '';
+    LETTERS.forEach(function(L){
+      var e = state.stride[curComp][L.k];
+      if (e.sc.trim() || e.lk || e.im){
+        rows += '- ' + L.name + ': ' + (e.sc.trim() || '[no scenario yet]') +
+          ' (Likelihood: ' + (e.lk || '?') + ', Impact: ' + (e.im || '?') +
+          (e.lk && e.im ? ', Risk: ' + riskOf(e.lk, e.im) : '') + ')\n';
+      }
+    });
+    if (!rows) rows = '[no entries written yet]\n';
+    var prompt = PERSONA + '\n\n' + CONTEXT + '\n\n' +
+      'Here is my STRIDE analysis for the ' + comp.name + ' component:\n' + rows + '\n' +
+      'Please review it and answer:\n' +
+      '1. Did I miss any threat scenarios for this component?\n' +
+      '2. Are my likelihood and impact ratings reasonable?\n' +
+      '3. Is each scenario specific enough? Point at any that read like "attacker does bad thing" and show me how to sharpen them.';
+    copyText(prompt, $('helper4copy'));
+  });
+
+  $('helper7copy').addEventListener('click', function(){
+    var fs = findings();
+    var flines = '';
+    fs.forEach(function(f){ flines += '- ' + f.risk + ': ' + f.comp + ', ' + f.letter + ': ' + f.sc + '\n'; });
+    if (!flines) flines = '[no Critical or High findings yet]\n';
+    var prompt = PERSONA + '\n\n' + CONTEXT + '\n\n' +
+      'Here is my executive summary, written for the hotel general manager, who is not technical:\n"' +
+      (state.exec.trim() || '[not written yet]') + '"\n\n' +
+      'For reference, my Critical and High findings are:\n' + flines + '\n' +
+      'Please review the summary and answer:\n' +
+      '1. Is it plain enough for a non-technical general manager, with no security jargon left in?\n' +
+      '2. Does it lead with the right findings, given my analysis?\n' +
+      '3. Is anything important missing or overstated?';
+    copyText(prompt, $('helper7copy'));
+  });
+
+  /* ---------- beat 5: risk summary ---------- */
+  function renderRiskSummary(){
+    var g = groupedFindings();
+    var el = $('risksummary');
+    var html = '';
+    ['Critical','High','Medium'].forEach(function(lvl){
+      html += '<div class="rsgroup"><h4><span class="rb ' + RISKCLS[lvl] + '">' + lvl + '</span></h4>';
+      if (!g[lvl].length){
+        html += '<p class="smallnote">No ' + lvl + ' findings.</p></div>';
+        return;
+      }
+      html += '<ol>';
+      g[lvl].forEach(function(f){
+        html += '<li><b>' + esc(f.comp) + ' · ' + esc(f.letter) + ':</b> ' + esc(f.sc) + '</li>';
+      });
+      html += '</ol></div>';
+    });
+    if (g.Low.length) html += '<p class="smallnote">' + g.Low.length + ' Low-risk finding' + (g.Low.length > 1 ? 's stay' : ' stays') + ' in the STRIDE grid and out of this summary. That is normal: the summary exists to direct attention.</p>';
+    el.innerHTML = html;
+  }
+
+  /* ---------- beat 6: mitigations ---------- */
+  var openMit = null;
+  function mitDone(key){
+    var m = state.mits[key];
+    return !!(m && m.tx.trim().length >= MIT_MIN && m.cx);
+  }
+  function renderMits(){
+    var fs = findings();
+    var list = $('mitlist');
+    list.innerHTML = '';
+    if (!fs.length){
+      list.innerHTML = '<div class="cardbox"><p class="lead" style="font-size:14px">You have no Critical or High findings, so there is nothing to mitigate here. That would be unusual for this system. Go back to your STRIDE ratings and check whether your likelihood and impact calls are honest, then return.</p></div>';
+      updateNav();
+      return;
+    }
+    if (openMit === null || !fs.some(function(f){ return f.key === openMit; })){
+      var firstOpen = fs.filter(function(f){ return !mitDone(f.key); })[0];
+      openMit = firstOpen ? firstOpen.key : fs[0].key;
+    }
+    fs.forEach(function(f){
+      if (!state.mits[f.key]) state.mits[f.key] = { tx:'', cx:'' };
+      var m = state.mits[f.key];
+      var acc = document.createElement('div');
+      acc.className = 'acc' + (openMit === f.key ? ' open' : '');
+      var head = document.createElement('button');
+      head.className = 'acchead';
+      head.innerHTML = '<span class="rb ' + RISKCLS[f.risk] + '">' + f.risk + '</span>' +
+        '<span class="accname">' + esc(f.comp) + ' · ' + esc(f.letter) + '</span>' +
+        '<span id="mitst-' + f.key.replace('.', '-') + '">' +
+        (mitDone(f.key) ? '<span class="st" style="background:var(--goodbg);color:var(--good)">Done</span>' : '<span class="st st-empty">Needs a defense</span>') + '</span>';
+      head.addEventListener('click', function(){
+        openMit = (openMit === f.key) ? null : f.key;
+        renderMits();
+      });
+      acc.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'accbody';
+      body.innerHTML = '<div class="mithead-sc">The finding: ' + esc(f.sc) + '</div>';
+      var ta = document.createElement('textarea');
+      ta.rows = 2;
+      ta.placeholder = 'What defense do you propose, and what does it block? Click a chip below to insert a defense you met in the Attack Lab, then edit it into a real recommendation.';
+      ta.value = m.tx;
+      ta.addEventListener('input', function(){ m.tx = ta.value; save(); refreshMitChrome(f.key); });
+      body.appendChild(ta);
+
+      var chips = document.createElement('div');
+      chips.className = 'chiprow';
+      chips.innerHTML = '<span class="chiplabel">Insert:</span>';
+      CHIPS.forEach(function(c){
+        var cb = document.createElement('button');
+        cb.className = 'chip';
+        cb.textContent = c;
+        cb.addEventListener('click', function(){
+          var cur = m.tx.trim();
+          m.tx = cur ? (cur + (/[.!?]$/.test(cur) ? ' ' : '. ') + c + '.') : (c + '.');
+          ta.value = m.tx;
+          save(); refreshMitChrome(f.key);
+          ta.focus();
+        });
+        chips.appendChild(cb);
+      });
+      body.appendChild(chips);
+
+      var pickline = document.createElement('div');
+      pickline.className = 'pickline';
+      var lb = document.createElement('span');
+      lb.className = 'plabel';
+      lb.textContent = 'Implementation complexity:';
+      pickline.appendChild(lb);
+      ['Low','Medium','High'].forEach(function(v){
+        var pb = document.createElement('button');
+        pb.className = 'pick' + (m.cx === v ? ' sel' : '');
+        pb.textContent = v;
+        pb.addEventListener('click', function(){
+          m.cx = v; save();
+          Array.prototype.forEach.call(pickline.querySelectorAll('.pick'), function(x){
+            x.classList.toggle('sel', x.textContent === v);
+          });
+          refreshMitChrome(f.key);
+        });
+        pickline.appendChild(pb);
+      });
+      body.appendChild(pickline);
+      acc.appendChild(body);
+      list.appendChild(acc);
+    });
+    updateNav();
+  }
+  function refreshMitChrome(key){
+    var el = document.getElementById('mitst-' + key.replace('.', '-'));
+    if (el) el.innerHTML = mitDone(key)
+      ? '<span class="st" style="background:var(--goodbg);color:var(--good)">Done</span>'
+      : '<span class="st st-empty">Needs a defense</span>';
+    updateNav();
+  }
+
+  /* ---------- beat 7: exec summary ---------- */
+  var execTa = $('exectext');
+  execTa.value = state.exec;
+  execTa.addEventListener('input', function(){
+    state.exec = execTa.value; save();
+    renderExecCount();
+    updateNav();
+  });
+  function renderExecCount(){
+    var n = state.exec.trim().length;
+    $('execcount').textContent = n < EXEC_MIN
+      ? n + ' characters. Keep going: aim for 2 to 3 short paragraphs.'
+      : n + ' characters.';
+  }
+  function renderExec(){
+    execTa.value = state.exec;
+    renderExecCount();
+    var fs = findings();
+    var el = $('topfindings');
+    if (!fs.length){
+      el.innerHTML = '<p class="smallnote">No Critical or High findings yet. Finish your STRIDE analysis first.</p>';
+      return;
+    }
+    var html = '';
+    fs.slice(0, 5).forEach(function(f){
+      html += '<div class="topfind"><span class="rb ' + RISKCLS[f.risk] + '">' + f.risk + '</span><span><b>' + esc(f.comp) + ' · ' + esc(f.letter) + '.</b> ' + esc(f.sc) + '</span></div>';
+    });
+    html += '<p class="smallnote">Lead with your top three. Translate them out of security language: Marcus needs "someone could shut off water to the whole hotel with a stolen password," not "spoofing on the control plane."</p>';
+    el.innerHTML = html;
+  }
+
+  /* ---------- beat 8: assemble ---------- */
+  var pname = $('pname');
+  pname.value = state.name;
+  pname.addEventListener('input', function(){ state.name = pname.value; save(); renderPreview(); });
+  function renderPreview(){
+    var doc = $('docpreview');
+    doc.innerHTML =
+      '<div class="doctitle">Grand Marina Water Monitoring System: Security Threat Model</div>' +
+      '<div class="docmeta">Client: The Grand Marina Hotel · Prepared by: ' + esc(state.name.trim() || '[your name]') + ' · Confidential</div>' +
+      '<h5>1 · Executive Summary</h5><pre>' + esc(state.exec.trim() || '[not written yet]') + '</pre>' +
+      '<h5>2 · System Overview</h5><pre>' + esc(SYS_TEXT) + '</pre>' +
+      '<h5>3 · Asset Inventory</h5><pre>' + esc(txt3().replace('SECTION 3: ASSET INVENTORY\n\n', '')) + '</pre>' +
+      '<h5>4 · STRIDE Analysis</h5><pre>' + esc(txt4().replace('SECTION 4: STRIDE ANALYSIS\n', '').trim()) + '</pre>' +
+      '<h5>5 · Risk Summary</h5><pre>' + esc(txt5().replace('SECTION 5: RISK SUMMARY\n', '').trim()) + '</pre>' +
+      '<h5>6 · Recommended Mitigations</h5><pre>' + esc(txt6().replace('SECTION 6: RECOMMENDED MITIGATIONS\n', '').trim()) + '</pre>';
+  }
+
+  /* ---------- nav ---------- */
+  var backBtn = $('back');
+  var nextBtn = $('next');
+  var dots = $('dots');
+  for (var i = MIN; i <= MAX; i++){
+    var d = document.createElement('div');
+    d.className = 'dt';
+    dots.appendChild(d);
+  }
+  var dotEls = dots.children;
+  var sections = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.beat'), function(s){ sections[s.dataset.beat] = s; });
+
+  function nextState(){
+    switch (beat){
+      case 1: return { on:true, label:'Start with the System Overview &rarr;' };
+      case 2: return state.sysOk
+        ? { on:true, label:'Next: Asset Inventory &rarr;' }
+        : { on:false, label:'Confirm the System Overview first' };
+      case 3: return state.assetsOk
+        ? { on:true, label:'Start your STRIDE analysis &rarr;' }
+        : { on:false, label:'Confirm the Asset Inventory first' };
+      case 4:
+        var g = strideGate();
+        return { on:g.ok, label:g.label };
+      case 5: return { on:true, label:'Write your mitigations &rarr;' };
+      case 6:
+        var mg = mitGate();
+        if (mg.ok) return { on:true, label:'Write your Executive Summary &rarr;' };
+        return { on:false, label: mg.left + ' finding' + (mg.left > 1 ? 's' : '') + ' still need' + (mg.left > 1 ? '' : 's') + ' a defense and complexity' };
+      case 7: return execOk()
+        ? { on:true, label:'Assemble your report &rarr;' }
+        : { on:false, label:'Write your summary for Marcus first' };
+      case 8: return { on:false, label:'End of task. Copy and submit above' };
+    }
+  }
+  function updateNav(){
+    var ns = nextState();
+    nextBtn.disabled = !ns.on;
+    nextBtn.innerHTML = ns.label;
+    backBtn.disabled = beat === MIN;
+    for (var i = 0; i < dotEls.length; i++) dotEls[i].classList.toggle('on', i === beat - 1);
+  }
+  function render(){
+    Object.keys(sections).forEach(function(k){ sections[k].classList.remove('on'); });
+    sections[String(beat)].classList.add('on');
+    if (beat === 2 || beat === 3) renderConfirms();
+    if (beat === 4) renderStride();
+    if (beat === 5) renderRiskSummary();
+    if (beat === 6) renderMits();
+    if (beat === 7) renderExec();
+    if (beat === 8) renderPreview();
+    updateNav();
+  }
+  function go(delta){
+    var target = beat + delta;
+    if (target < MIN || target > MAX) return;
+    if (delta > 0 && !nextState().on) return;
+    beat = target;
+    render();
+  }
+  backBtn.addEventListener('click', function(){ go(-1); });
+  nextBtn.addEventListener('click', function(){ go(1); });
+  window.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+    if (e.key === 'ArrowRight') go(1);
+    if (e.key === 'ArrowLeft') go(-1);
+  });
+
+  render();
+
+  /* ---------- fit-inside-embed scaling ---------- */
+  var wrapper = $('deck-wrapper');
+  function scaleDeck(){
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 600);
+    wrapper.style.transform = 'scale(' + s + ')';
+    wrapper.style.left = ((window.innerWidth  - 960 * s) / 2) + 'px';
+    wrapper.style.top  = ((window.innerHeight - 600 * s) / 2) + 'px';
+  }
+  window.addEventListener('resize', scaleDeck);
+  scaleDeck();
+})();
+</script>
+</body>
+</html>
