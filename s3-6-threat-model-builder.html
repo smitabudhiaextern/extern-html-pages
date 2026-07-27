@@ -314,7 +314,6 @@
     .pv-rating{display:inline;font-size:10.5pt;color:#555;font-weight:700}
     section.tmsec{margin-top:26pt;break-inside:auto}
     section.sec-you,section.sec-pre,section.sec-auto{border-left:none;background:none;border-radius:0;padding:0;margin-left:0;margin-right:0}
-    #sec4,#sec5{break-before:page}
     h2,.comp h3{break-after:avoid}
     table,.srow{break-inside:avoid}
     /* completion gate: Ctrl+P before the work is done prints a pending line, not a stale summary */
@@ -890,44 +889,110 @@
   $('dlbtn').addEventListener('click', function(){ window.print(); });
 
   /* ---------- shareable card (PNG): SVG built from state, rasterized via canvas ---------- */
-  var CARD_W = 1200, CARD_H = 675;
+  var CARD_W = 1200, cardH = 900;
   function trunc(s, n){
     s = String(s).trim();
     return s.length <= n ? s : s.slice(0, n - 1).replace(/\s+$/, '') + '…';
+  }
+  function mitHead(key){
+    var m = MITS[key] || '';
+    var mm = m.match(/<b>(.*?)<\/b>/);
+    return mm ? mm[1] : '';
+  }
+  function riskCounts(){
+    var c = { Critical:0, High:0, Medium:0, Low:0 };
+    ROWKEYS.forEach(function(k){
+      var e = state.rows[k];
+      var r = riskOf(e.lk, e.im);
+      if (r && c[r] !== undefined) c[r]++;
+    });
+    return c;
+  }
+  function execSummary(){
+    var parts = [];
+    if (state.exec.s1.trim()) parts.push('The most serious risk we found is ' + state.exec.s1.trim());
+    if (state.exec.s2.trim()) parts.push('Beyond that, the findings that most need attention are ' + state.exec.s2.trim());
+    if (state.exec.s3.trim()) parts.push('We recommend starting with ' + state.exec.s3.trim());
+    return parts.map(function(p){ return /[.!?]$/.test(p) ? p : p + '.'; }).join(' ');
+  }
+  function wrapLines(str, max, maxLines){
+    var words = String(str).trim().split(/\s+/).filter(Boolean);
+    var lines = [], cur = '', truncated = false;
+    for (var i = 0; i < words.length; i++){
+      var cand = cur ? cur + ' ' + words[i] : words[i];
+      if (cand.length <= max){ cur = cand; }
+      else {
+        if (cur) lines.push(cur);
+        cur = words[i];
+        if (lines.length >= maxLines){ truncated = true; cur = ''; break; }
+      }
+    }
+    if (cur){ if (lines.length < maxLines) lines.push(cur); else truncated = true; }
+    if (truncated && lines.length){
+      var last = lines[lines.length - 1];
+      lines[lines.length - 1] = last.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
+    }
+    return lines;
   }
   function cardSVG(){
     var P = 64;
     var FF = 'system-ui, sans-serif';
     var BADGE = { Low:'#3ECF8E', Medium:'#F5A623', High:'#F0883C', Critical:'#E4573D' };
-    var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + CARD_W + '" height="' + CARD_H +
-      '" viewBox="0 0 ' + CARD_W + ' ' + CARD_H + '">';
-    s += '<rect width="' + CARD_W + '" height="' + CARD_H + '" fill="#0B1D2A"/>';
-    s += '<rect x="0" y="0" width="' + CARD_W + '" height="6" fill="#2EC4B6"/>';
-    s += '<text x="' + P + '" y="84" font-family="' + FF + '" font-size="19" font-weight="800" letter-spacing="3" fill="#2EC4B6">SECURITY THREAT MODEL</text>';
-    s += '<text x="' + P + '" y="130" font-family="' + FF + '" font-size="40" font-weight="800" fill="#F2F9FA">Grand Marina Water Monitoring System</text>';
+    var inner = '';
+    inner += '<text x="' + P + '" y="80" font-family="' + FF + '" font-size="19" font-weight="800" letter-spacing="3" fill="#2EC4B6">SECURITY THREAT MODEL</text>';
+    inner += '<text x="' + P + '" y="126" font-family="' + FF + '" font-size="40" font-weight="800" fill="#F2F9FA">Grand Marina Water Monitoring System</text>';
     if (state.name.trim()){
-      s += '<text x="' + P + '" y="166" font-family="' + FF + '" font-size="19" fill="#9DBAC6">Prepared by ' + esc(trunc(state.name, 50)) + '</text>';
+      inner += '<text x="' + P + '" y="160" font-family="' + FF + '" font-size="19" fill="#9DBAC6">Prepared by ' + esc(trunc(state.name, 50)) + '</text>';
     }
-    s += '<text x="' + P + '" y="212" font-family="' + FF + '" font-size="17" font-weight="800" letter-spacing="2" fill="#9DBAC6">TOP 3 RISKS</text>';
-    var ry = 228;
+
+    /* risk breakdown strip: counts across all 12 findings */
+    var counts = riskCounts();
+    var order = ['Critical','High','Medium','Low'];
+    var stripY = 188, gap = 16, tileW = (CARD_W - 2 * P - 3 * gap) / 4;
+    order.forEach(function(lvl, i){
+      var tx = P + i * (tileW + gap);
+      inner += '<rect x="' + tx + '" y="' + stripY + '" width="' + tileW + '" height="68" rx="12" fill="#10283A" stroke="#1E3A4F"/>';
+      inner += '<text x="' + (tx + 20) + '" y="' + (stripY + 47) + '" font-family="' + FF + '" font-size="32" font-weight="800" fill="' + BADGE[lvl] + '">' + counts[lvl] + '</text>';
+      inner += '<text x="' + (tx + 20 + String(counts[lvl]).length * 20 + 12) + '" y="' + (stripY + 44) + '" font-family="' + FF + '" font-size="14" font-weight="800" letter-spacing="1.5" fill="#9DBAC6">' + lvl.toUpperCase() + '</text>';
+    });
+
+    inner += '<text x="' + P + '" y="' + (stripY + 108) + '" font-family="' + FF + '" font-size="17" font-weight="800" letter-spacing="2" fill="#9DBAC6">TOP 3 FOR MARCUS</text>';
+    var ry = stripY + 124;
     state.top3.forEach(function(key, i){
       var e = state.rows[key];
       var r = riskOf(e.lk, e.im) || 'Not rated';
       var bc = BADGE[r] || '#9DBAC6';
-      s += '<rect x="' + P + '" y="' + ry + '" width="' + (CARD_W - 2 * P) + '" height="86" rx="14" fill="#10283A" stroke="#1E3A4F"/>';
-      s += '<text x="' + (P + 26) + '" y="' + (ry + 55) + '" font-family="' + FF + '" font-size="30" font-weight="800" fill="#2EC4B6">' + (i + 1) + '</text>';
-      s += '<text x="' + (P + 66) + '" y="' + (ry + 37) + '" font-family="' + FF + '" font-size="21" font-weight="800" fill="#F2F9FA">' + esc(findingLabel(key)) + '</text>';
-      s += '<text x="' + (P + 66) + '" y="' + (ry + 64) + '" font-family="' + FF + '" font-size="17" fill="#9DBAC6">' + esc(trunc(e.scn, 90)) + '</text>';
+      inner += '<rect x="' + P + '" y="' + ry + '" width="' + (CARD_W - 2 * P) + '" height="112" rx="14" fill="#10283A" stroke="#1E3A4F"/>';
+      inner += '<text x="' + (P + 26) + '" y="' + (ry + 50) + '" font-family="' + FF + '" font-size="30" font-weight="800" fill="#2EC4B6">' + (i + 1) + '</text>';
+      inner += '<text x="' + (P + 66) + '" y="' + (ry + 35) + '" font-family="' + FF + '" font-size="21" font-weight="800" fill="#F2F9FA">' + esc(findingLabel(key)) + '</text>';
+      inner += '<text x="' + (P + 66) + '" y="' + (ry + 61) + '" font-family="' + FF + '" font-size="16" fill="#9DBAC6">' + esc(trunc(e.scn, 92)) + '</text>';
+      inner += '<text x="' + (P + 66) + '" y="' + (ry + 90) + '" font-family="' + FF + '" font-size="16" font-weight="700" fill="#7FD8CF">Fix: ' + esc(trunc(mitHead(key), 84)) + '</text>';
       var bw = r.length * 11 + 30;
       var bx = CARD_W - P - 20 - bw;
-      s += '<rect x="' + bx + '" y="' + (ry + 28) + '" width="' + bw + '" height="30" rx="15" fill="' + bc + '"/>';
-      s += '<text x="' + (bx + bw / 2) + '" y="' + (ry + 49) + '" text-anchor="middle" font-family="' + FF + '" font-size="15" font-weight="800" fill="#08222E">' + r.toUpperCase() + '</text>';
-      ry += 98;
+      inner += '<rect x="' + bx + '" y="' + (ry + 22) + '" width="' + bw + '" height="30" rx="15" fill="' + bc + '"/>';
+      inner += '<text x="' + (bx + bw / 2) + '" y="' + (ry + 43) + '" text-anchor="middle" font-family="' + FF + '" font-size="15" font-weight="800" fill="#08222E">' + r.toUpperCase() + '</text>';
+      ry += 124;
     });
-    ry += 8;
-    s += '<text x="' + P + '" y="' + (ry + 18) + '" font-family="' + FF + '" font-size="17" font-weight="800" letter-spacing="2" fill="#2EC4B6">FIRST FIX</text>';
-    s += '<text x="' + P + '" y="' + (ry + 48) + '" font-family="' + FF + '" font-size="20" fill="#E6F1F4">' + esc(trunc(state.exec.s3, 110)) + '</text>';
-    s += '<text x="' + P + '" y="' + (CARD_H - 34) + '" font-family="' + FF + '" font-size="16" fill="#9DBAC6">Hydroficient · Week 1 deliverable</text>';
+
+    /* executive summary: the student's own composed summary, wrapped */
+    ry += 12;
+    inner += '<text x="' + P + '" y="' + (ry + 18) + '" font-family="' + FF + '" font-size="17" font-weight="800" letter-spacing="2" fill="#2EC4B6">EXECUTIVE SUMMARY</text>';
+    var esLines = wrapLines(execSummary(), 104, 5);
+    var ly = ry + 50;
+    esLines.forEach(function(line){
+      inner += '<text x="' + P + '" y="' + ly + '" font-family="' + FF + '" font-size="19" fill="#E6F1F4">' + esc(line) + '</text>';
+      ly += 30;
+    });
+
+    /* dynamic height: content bottom + footer band */
+    var H = ly + 40;
+    cardH = H;
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + CARD_W + '" height="' + H +
+      '" viewBox="0 0 ' + CARD_W + ' ' + H + '">';
+    s += '<rect width="' + CARD_W + '" height="' + H + '" fill="#0B1D2A"/>';
+    s += '<rect x="0" y="0" width="' + CARD_W + '" height="6" fill="#2EC4B6"/>';
+    s += inner;
+    s += '<text x="' + P + '" y="' + (H - 22) + '" font-family="' + FF + '" font-size="16" fill="#9DBAC6">Hydroficient · Week 1 deliverable</text>';
     s += '</svg>';
     return s;
   }
@@ -936,14 +1001,16 @@
   }
   function downloadCard(){
     try {
-      var blob = new Blob([cardSVG()], { type:'image/svg+xml;charset=utf-8' });
+      var svg = cardSVG(); /* sets cardH */
+      var H = cardH;
+      var blob = new Blob([svg], { type:'image/svg+xml;charset=utf-8' });
       var url = URL.createObjectURL(blob);
       var img = new Image();
       img.onload = function(){
         try {
           var cv = document.createElement('canvas');
-          cv.width = CARD_W; cv.height = CARD_H;
-          cv.getContext('2d').drawImage(img, 0, 0, CARD_W, CARD_H);
+          cv.width = CARD_W; cv.height = H;
+          cv.getContext('2d').drawImage(img, 0, 0, CARD_W, H);
           URL.revokeObjectURL(url);
           cv.toBlob(function(pb){
             if (!pb){ cardFail(); return; }
