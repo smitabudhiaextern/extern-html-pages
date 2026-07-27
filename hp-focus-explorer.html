@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HP Focus Area Explorer</title>
+<style>
+  :root{
+    --bg:#FDF8F8;
+    --title:#1C1B1B;
+    --body:#484646;
+    --fill:#DCE1FF;
+    --accent:#001D69;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{background:var(--bg);}
+  body{
+    font-family:"Inter",-apple-system,"Segoe UI",sans-serif;
+    color:var(--body);
+    overflow-x:hidden;
+  }
+  #deck-container{
+    width:100%;
+    position:relative;
+    overflow:hidden;
+  }
+  #deck-wrapper{
+    width:960px;
+    height:540px;
+    flex-shrink:0;
+    transform-origin:top left;
+    position:relative;
+    background:var(--bg);
+    overflow:hidden;
+  }
+
+  button{font-family:inherit;}
+  button:focus-visible,a:focus-visible{
+    outline:3px solid var(--accent);
+    outline-offset:2px;
+    border-radius:6px;
+  }
+
+  /* ---------- VIEWS ---------- */
+  .view{
+    position:absolute;
+    inset:0;
+    display:none;
+    flex-direction:column;
+  }
+  .view.active{display:flex;}
+
+  /* ---------- INTRO ---------- */
+  #intro-view{
+    padding:30px 48px 26px;
+    align-items:center;
+  }
+  #intro-view h1{
+    color:var(--title);
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    text-align:center;
+  }
+  #intro-sub{
+    font-size:14px;
+    margin-top:4px;
+    text-align:center;
+  }
+
+  .bubble-row{
+    width:100%;
+    max-width:760px;
+    height:56px;
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+  }
+  .bubble{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 16px;
+    border-radius:16px;
+    font-size:14px;
+    font-weight:600;
+    transition:opacity .4s ease, transform .4s ease;
+  }
+  .bubble svg{flex-shrink:0;}
+  .bubble-user{
+    background:var(--accent);
+    color:#F2F5FF;
+    border-bottom-left-radius:4px;
+  }
+  .bubble-reply{
+    background:var(--fill);
+    color:var(--accent);
+    border-bottom-right-radius:4px;
+    opacity:0;
+    transform:translateY(-10px);
+    pointer-events:none;
+  }
+  .bubble-reply.shown{
+    opacity:1;
+    transform:translateY(0);
+    transition-delay:.5s;
+  }
+  #reply-caption{
+    font-size:12px;
+    color:var(--body);
+    text-align:right;
+    margin-top:4px;
+    opacity:0;
+    transition:opacity .4s ease .9s;
+  }
+  #reply-caption.shown{opacity:1;}
+  .reply-wrap{display:flex;flex-direction:column;align-items:flex-end;}
+
+  .stations{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:20px;
+  }
+  .station{
+    width:196px;
+    border-radius:18px;
+    background:var(--fill);
+    padding:16px 16px 14px;
+    text-align:center;
+    border:2px solid transparent;
+    opacity:.45;
+    transform:translateY(0);
+    transition:opacity .35s ease, transform .35s ease, border-color .35s ease, box-shadow .35s ease;
+  }
+  .station .st-icon{
+    width:44px;height:44px;
+    margin:0 auto 8px;
+    border-radius:12px;
+    background:#FDF8F8;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .station h2{
+    color:var(--title);
+    font-size:15px;
+    font-weight:700;
+  }
+  .station p{
+    font-size:12px;
+    line-height:1.4;
+    margin-top:4px;
+    color:var(--body);
+  }
+  .station.lit{
+    opacity:1;
+    border-color:var(--accent);
+    transform:translateY(-4px);
+    box-shadow:0 8px 18px rgba(0,29,105,.14);
+  }
+  .station.visited{opacity:1;}
+  .hop{
+    color:var(--accent);
+    opacity:.25;
+    transition:opacity .35s ease;
+    flex-shrink:0;
+  }
+  .hop.lit{opacity:1;}
+
+  #journey-caption{
+    height:38px;
+    margin-top:14px;
+    font-size:14px;
+    line-height:1.35;
+    text-align:center;
+    max-width:640px;
+    color:var(--body);
+  }
+  #journey-caption strong{color:var(--accent);font-weight:700;}
+
+  #intro-footer{
+    margin-top:auto;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    min-height:88px;
+    justify-content:flex-end;
+  }
+  #closing-line{
+    display:none;
+    font-size:14px;
+    text-align:center;
+    max-width:620px;
+    color:var(--title);
+    line-height:1.4;
+  }
+  .btn{
+    border:none;
+    cursor:pointer;
+    border-radius:999px;
+    font-size:14px;
+    font-weight:600;
+    padding:12px 26px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:#F2F5FF;
+  }
+  .btn-primary:hover{
+    transform:translateY(-1px);
+    box-shadow:0 6px 16px rgba(0,29,105,.25);
+  }
+  .btn-ghost{
+    background:var(--fill);
+    color:var(--accent);
+  }
+  .btn-ghost:hover{background:#CCD4FA;}
+  #explore-btn{display:none;}
+
+  /* ---------- TABS VIEW ---------- */
+  #tabs-view{padding:22px 44px 16px;}
+  .tabs-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .tablist{
+    display:flex;
+    gap:8px;
+  }
+  .tab{
+    border:none;
+    cursor:pointer;
+    background:var(--fill);
+    color:var(--accent);
+    font-size:14px;
+    font-weight:600;
+    padding:9px 22px;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    transition:background .15s ease, color .15s ease;
+  }
+  .tab:hover{background:#CCD4FA;}
+  .tab[aria-selected="true"]{
+    background:var(--accent);
+    color:#F2F5FF;
+  }
+  #replay-link{
+    background:none;
+    border:none;
+    cursor:pointer;
+    font-size:12px;
+    color:var(--accent);
+    text-decoration:underline;
+    text-underline-offset:3px;
+    padding:4px 2px;
+  }
+  #area-summary{
+    margin-top:12px;
+    font-size:14px;
+    color:var(--title);
+    font-weight:500;
+  }
+
+  .grid{
+    display:none;
+    margin-top:12px;
+    gap:12px;
+    flex:1;
+  }
+  .grid.active{display:grid;}
+  .grid-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+  .grid-2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;align-content:center;align-items:center;}
+  .grid-2 .card{height:240px;}
+
+  .card{
+    text-align:left;
+    border:2px solid transparent;
+    background:var(--fill);
+    border-radius:16px;
+    padding:14px 16px;
+    cursor:pointer;
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    transition:border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+  }
+  .card:hover{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:0 6px 14px rgba(0,29,105,.12);
+  }
+  .grid-2 .card{max-height:240px;}
+  .card .c-icon{
+    width:38px;height:38px;
+    flex-shrink:0;
+    border-radius:10px;
+    background:#FDF8F8;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .card-text{flex:1;min-width:0;}
+  .card h3{
+    color:var(--title);
+    font-size:14.5px;
+    font-weight:700;
+    line-height:1.25;
+  }
+  .card p{
+    font-size:12.5px;
+    line-height:1.4;
+    margin-top:4px;
+  }
+  .card .open-hint{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-top:7px;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--accent);
+  }
+
+  #tab-footer{
+    margin-top:10px;
+    font-size:11.5px;
+    color:var(--body);
+    text-align:center;
+    opacity:.85;
+  }
+
+  /* ---------- OVERLAY ---------- */
+  #overlay-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(28,27,27,.35);
+    display:none;
+    z-index:20;
+  }
+  #overlay-backdrop.open{display:block;}
+  #overlay{
+    position:absolute;
+    left:70px;right:70px;top:48px;bottom:44px;
+    background:var(--bg);
+    border:2px solid var(--accent);
+    border-radius:20px;
+    padding:22px 26px 20px;
+    z-index:21;
+    display:none;
+    flex-direction:column;
+    box-shadow:0 18px 40px rgba(0,29,105,.22);
+  }
+  #overlay.open{display:flex;}
+  .ov-head{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .ov-head .c-icon{
+    width:40px;height:40px;
+    border-radius:10px;
+    background:var(--fill);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  #ov-area-tag{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  #ov-title{
+    color:var(--title);
+    font-size:19px;
+    font-weight:700;
+    line-height:1.2;
+  }
+  #ov-close{
+    margin-left:auto;
+    border:none;
+    background:var(--fill);
+    color:var(--accent);
+    width:34px;height:34px;
+    border-radius:10px;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  #ov-close:hover{background:#CCD4FA;}
+  .ov-body{
+    display:grid;
+    grid-template-columns:1.35fr 1fr;
+    gap:22px;
+    margin-top:16px;
+    flex:1;
+    min-height:0;
+  }
+  #ov-detail{
+    font-size:14px;
+    line-height:1.55;
+  }
+  .ov-right{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .ov-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--accent);
+    display:flex;align-items:center;gap:6px;
+  }
+  #ov-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:8px;
+  }
+  .chip{
+    background:var(--fill);
+    color:var(--accent);
+    font-size:12.5px;
+    font-weight:600;
+    padding:6px 14px;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  #ov-chip-note{
+    font-size:12px;
+    line-height:1.45;
+    margin-top:7px;
+    color:var(--body);
+  }
+  #ov-why{
+    font-size:13px;
+    line-height:1.5;
+    margin-top:8px;
+    color:var(--title);
+    background:var(--fill);
+    border-left:4px solid var(--accent);
+    border-radius:0 12px 12px 0;
+    padding:10px 14px;
+  }
+</style>
+</head>
+<body>
+<div id="deck-container">
+  <div id="deck-wrapper">
+
+    <!-- ================= INTRO VIEW ================= -->
+    <section id="intro-view" class="view active" aria-label="Follow one question through the stack">
+      <h1>Follow one question through the stack</h1>
+      <p id="intro-sub">One tiny request. Three layers of AI. Watch where it goes.</p>
+
+      <div class="bubble-row">
+        <div class="bubble bubble-user">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-2.9-.36-4.15-1L3 21l1.5-5.35A8.5 8.5 0 1 1 21 12z"/></svg>
+          You type: "Draft my email"
+        </div>
+        <div class="reply-wrap">
+          <div class="bubble bubble-reply" id="reply-bubble">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            "Here's your draft."
+          </div>
+          <div id="reply-caption">Round trip: about one second.</div>
+        </div>
+      </div>
+
+      <div class="stations">
+        <div class="station" id="station-1">
+          <div class="st-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="6.5" cy="6.5" r=".5" fill="#001D69"/><circle cx="9.5" cy="6.5" r=".5" fill="#001D69"/></svg>
+          </div>
+          <h2>1 &middot; Application</h2>
+          <p>The app you typed into</p>
+        </div>
+        <svg class="hop" id="hop-1" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        <div class="station" id="station-2">
+          <div class="st-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+          </div>
+          <h2>2 &middot; Inference</h2>
+          <p>The engine that runs the AI fast</p>
+        </div>
+        <svg class="hop" id="hop-2" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        <div class="station" id="station-3">
+          <div class="st-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4a4 4 0 0 0-4 4 4 4 0 0 0-2 7.5V17a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-1.5A4 4 0 0 0 16 8a4 4 0 0 0-4-4z"/><path d="M12 4v16"/><path d="M8.5 11h-1M16.5 11h-1"/></svg>
+          </div>
+          <h2>3 &middot; Model</h2>
+          <p>The part that actually thinks</p>
+        </div>
+      </div>
+
+      <p id="journey-caption">Your question is about to hop through three layers. Each one is its own world of startups.</p>
+
+      <div id="intro-footer">
+        <p id="closing-line">Every layer of that one-second trip is a place a startup can win. HP invests in all three. Explore them.</p>
+        <button class="btn btn-ghost" id="journey-btn" type="button">
+          Tap to follow it
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="btn btn-primary" id="explore-btn" type="button">
+          Explore the 3 areas
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= TABS VIEW ================= -->
+    <section id="tabs-view" class="view" aria-label="Explore the three focus areas">
+      <div class="tabs-head">
+        <div class="tablist" role="tablist" aria-label="HP focus areas">
+          <button class="tab" id="tab-models" role="tab" aria-selected="true" aria-controls="panel-models" type="button">Models</button>
+          <button class="tab" id="tab-inference" role="tab" aria-selected="false" aria-controls="panel-inference" tabindex="-1" type="button">Inference</button>
+          <button class="tab" id="tab-applications" role="tab" aria-selected="false" aria-controls="panel-applications" tabindex="-1" type="button">Applications</button>
+        </div>
+        <button id="replay-link" type="button">&#8634; Replay the journey</button>
+      </div>
+
+      <p id="area-summary"></p>
+
+      <div class="grid grid-4 active" id="panel-models" role="tabpanel" aria-labelledby="tab-models"></div>
+      <div class="grid grid-2" id="panel-inference" role="tabpanel" aria-labelledby="tab-inference" hidden></div>
+      <div class="grid grid-4" id="panel-applications" role="tabpanel" aria-labelledby="tab-applications" hidden></div>
+
+      <p id="tab-footer">Looking for the one that makes you curious, not the one you already understand. You'll lock in your pick in the next task.</p>
+    </section>
+
+    <!-- ================= OVERLAY ================= -->
+    <div id="overlay-backdrop"></div>
+    <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ov-title">
+      <div class="ov-head">
+        <div class="c-icon" id="ov-icon"></div>
+        <div>
+          <div id="ov-area-tag"></div>
+          <h3 id="ov-title"></h3>
+        </div>
+        <button id="ov-close" type="button" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="ov-body">
+        <p id="ov-detail"></p>
+        <div class="ov-right">
+          <div>
+            <div class="ov-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3L4 13h5l-2 8 9-10h-5l2-8z"/></svg>
+              Real startups here
+            </div>
+            <div id="ov-chips"></div>
+            <p id="ov-chip-note"></p>
+          </div>
+          <div>
+            <div class="ov-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg>
+              Why VCs care
+            </div>
+            <p id="ov-why"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ================= SCALE TO FIT (960x540 stage) ================= */
+(function(){
+  var wrapper = document.getElementById('deck-wrapper');
+  var container = document.getElementById('deck-container');
+  function rescale(){
+    var w = container.clientWidth || document.documentElement.clientWidth;
+    var scale = w / 960;
+    wrapper.style.transform = 'translateX(' + ((w - 960 * scale) / 2) + 'px) scale(' + scale + ')';
+    container.style.height = (540 * scale) + 'px';
+  }
+  window.addEventListener('resize', rescale);
+  rescale();
+})();
+
+/* ================= CONTENT DATA ================= */
+var ICONS = {
+  chip:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>',
+  tune:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>',
+  spark:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z"/></svg>',
+  branch:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 7.5v9M6 9c0 3 9 1.5 9.5 3"/></svg>',
+  gauge:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18a9 9 0 1 1 16 0"/><path d="M12 13l4-4"/><circle cx="12" cy="14" r="1.4"/></svg>',
+  route:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-6M12 15C12 10 5 11 5 5M12 15c0-5 7-4 7-10"/><path d="M3 7l2-2 2 2M17 7l2-2 2 2"/></svg>',
+  appwin:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><path d="M17 14v6M14 17h6"/></svg>',
+  agent:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 13.5l2.5 2.5 5-5.5"/></svg>',
+  building:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/><path d="M15 9h3a2 2 0 0 1 2 2v10"/><path d="M2 21h20"/><path d="M8 7h3M8 11h3M8 15h3"/></svg>',
+  robot:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="8" width="14" height="10" rx="2"/><path d="M12 8V4M10 4h4"/><circle cx="9.5" cy="12.5" r="1"/><circle cx="14.5" cy="12.5" r="1"/><path d="M10 15.5h4M5 12H3M21 12h-2"/></svg>'
+};
+
+var AREAS = {
+  models:{
+    label:'Models',
+    summary:'Startups building new kinds of AI, or making existing AI smaller, faster, and more specialized.',
+    cards:[
+      {
+        icon:'chip',
+        name:'Edge AI Models',
+        tldr:'AI small enough to run on your phone, glasses, or car. No internet needed.',
+        detail:'Big models live in data centers. Edge startups shrink them (compressing, pruning, distilling) until they run on the device itself. That matters anywhere the cloud can\'t reach: a car making split-second decisions, or glasses translating speech live.',
+        chips:['XRAI Glass'],
+        note:'',
+        why:'Billions of devices, and most of them can\'t rely on the cloud.'
+      },
+      {
+        icon:'tune',
+        name:'Model Development and Fine-tuning',
+        tldr:'Taking a general AI and training it deeper on one field, like medicine or law.',
+        detail:'A general model is like a smart new hire who knows a bit of everything. Fine-tuning startups train it on one industry\'s data until it performs like a specialist. Hospitals, law firms, and retailers all need this, because generic AI isn\'t good enough for their real work.',
+        chips:['Hugging Face'],
+        note:'Hugging Face is the hub where much of this happens.',
+        why:'Every industry wants its own specialist AI, and someone has to build the tooling.'
+      },
+      {
+        icon:'spark',
+        name:'New Breakthroughs',
+        tldr:'New model designs: mixture-of-experts, small language models, synthetic training data.',
+        detail:'Instead of one giant brain, mixture-of-experts models route each question to the right specialist inside the model. Small language models (like Phi and Gemma) prove tiny can be mighty. And synthetic-data startups generate artificial training data when real data is private or scarce.',
+        chips:['Mistral (MoE)','Mostly AI','Gretel'],
+        note:'Mostly AI and Gretel work on synthetic data.',
+        why:'Whoever makes models cheaper to train and run changes the economics of the whole field.'
+      },
+      {
+        icon:'branch',
+        name:'Post-Transformer Architectures',
+        tldr:'Betting that today\'s AI design won\'t be the last one.',
+        detail:'Almost every AI today is a transformer, and transformers have a weakness: they re-read everything to answer anything. State-space models process information more like a stream. World models go further, learning an internal simulation of how reality works. These are early, risky, high-upside bets.',
+        chips:['Cartesia (SSMs)'],
+        note:'',
+        why:'If any of these replaces the transformer, the winners get in years early.'
+      }
+    ]
+  },
+  inference:{
+    label:'Inference',
+    summary:'Startups making AI answers faster and cheaper to serve, wherever they run.',
+    cards:[
+      {
+        icon:'gauge',
+        name:'Runtimes and Optimization',
+        tldr:'The software that makes a model actually run well on real hardware.',
+        detail:'A model is like a recipe; a runtime is the kitchen that cooks it. Runtime startups squeeze more speed out of the same chips, so the same model answers faster and costs less to serve. Tools like Core ML and TensorFlow Lite do this for phones; startups compete to do it everywhere.',
+        chips:['OctoML'],
+        note:'',
+        why:'Every AI company on earth pays an inference bill. Cutting it is money.'
+      },
+      {
+        icon:'route',
+        name:'Hybrid Routing',
+        tldr:'Deciding, per question, whether your device or the cloud should answer.',
+        detail:'Easy question? Answer on the device: instant and private. Hard question? Route to the cloud: more power. Hybrid startups build the traffic control that makes that decision millions of times a day, balancing speed, privacy, and cost.',
+        chips:['Qualcomm'],
+        note:'Qualcomm is pushing hybrid chips; startups build the routing layer.',
+        why:'As AI goes everywhere, someone has to direct the traffic.'
+      }
+    ]
+  },
+  applications:{
+    label:'Applications',
+    summary:'Startups putting AI in front of real users: apps, agents, industries, and the physical world.',
+    cards:[
+      {
+        icon:'appwin',
+        name:'AI-First Applications',
+        tldr:'Products where AI IS the product, not a bolted-on feature.',
+        detail:'Word added an AI button; ChatGPT is nothing but the AI. AI-first products are built around the model from day one, and they improve automatically every time the underlying models get better.',
+        chips:['Perplexity','Midjourney'],
+        note:'',
+        why:'They ride every model improvement for free.'
+      },
+      {
+        icon:'agent',
+        name:'AI Agents',
+        tldr:'AI that doesn\'t just answer, it does the task for you.',
+        detail:'A chatbot tells you how to book a flight. An agent books it: searches, compares, fills the forms, confirms. Agent startups sell completed work instead of advice, which is why they can charge much more.',
+        chips:['Cognition'],
+        note:'Cognition is the maker of Devin.',
+        why:'Software that replaces a workflow earns workflow-sized revenue.'
+      },
+      {
+        icon:'building',
+        name:'Vertical AI',
+        tldr:'AI built deep for one industry: healthcare, legal, retail, defense.',
+        detail:'Instead of being everything for everyone, vertical startups go all-in on one industry\'s messy reality: its data, its rules, its workflows. That depth is hard to copy, and regulated industries reward whoever earns their trust first.',
+        chips:['Viz.ai (radiology)','Harvey (legal)'],
+        note:'',
+        why:'Industry depth builds moats a general tool can\'t cross.'
+      },
+      {
+        icon:'robot',
+        name:'Physical AI',
+        tldr:'AI that moves: robots, drones, machines that act in the real world.',
+        detail:'Everything else on this list outputs words or pixels. Physical AI outputs motion: warehouse robots that grip, drones that inspect, surgical robots that assist. It\'s the hardest frontier, and the biggest labor markets on earth are waiting on it.',
+        chips:['Figure','Boston Dynamics'],
+        note:'',
+        why:'Labor shortages are a multi-trillion-dollar problem, and robots are the only scalable answer.'
+      }
+    ]
+  }
+};
+
+/* ================= INTRO JOURNEY ================= */
+var introView = document.getElementById('intro-view');
+var tabsView = document.getElementById('tabs-view');
+var journeyBtn = document.getElementById('journey-btn');
+var exploreBtn = document.getElementById('explore-btn');
+var closingLine = document.getElementById('closing-line');
+var caption = document.getElementById('journey-caption');
+var replyBubble = document.getElementById('reply-bubble');
+var replyCaption = document.getElementById('reply-caption');
+var journeyStep = 0;
+
+var STEPS = [
+  {
+    caption:'It lands in the <strong>application</strong>: the app you typed into.',
+    btn:'Follow it to the engine',
+    light:['station-1']
+  },
+  {
+    caption:'The app calls <strong>inference</strong>: the engine that runs the AI fast.',
+    btn:'Follow it to the model',
+    light:['station-2'], hop:'hop-1'
+  },
+  {
+    caption:'Inference wakes the <strong>model</strong>: the part that actually thinks. Then the answer travels back up.',
+    light:['station-3'], hop:'hop-2', finish:true
+  }
+];
+
+function advanceJourney(){
+  if(journeyStep >= STEPS.length) return;
+  var step = STEPS[journeyStep];
+  document.querySelectorAll('.station.lit').forEach(function(s){
+    s.classList.remove('lit');
+    s.classList.add('visited');
+  });
+  step.light.forEach(function(id){
+    document.getElementById(id).classList.add('lit');
+  });
+  if(step.hop){ document.getElementById(step.hop).classList.add('lit'); }
+  caption.innerHTML = step.caption;
+  journeyStep++;
+  if(step.finish){
+    journeyBtn.style.display = 'none';
+    replyBubble.classList.add('shown');
+    replyCaption.classList.add('shown');
+    setTimeout(function(){
+      closingLine.style.display = 'block';
+      exploreBtn.style.display = 'inline-flex';
+      exploreBtn.focus();
+    }, 1100);
+  } else {
+    journeyBtn.childNodes[0].textContent = step.btn + ' ';
+  }
+}
+journeyBtn.addEventListener('click', advanceJourney);
+
+function resetJourney(){
+  journeyStep = 0;
+  ['station-1','station-2','station-3'].forEach(function(id){
+    document.getElementById(id).classList.remove('lit','visited');
+  });
+  ['hop-1','hop-2'].forEach(function(id){
+    document.getElementById(id).classList.remove('lit');
+  });
+  replyBubble.classList.remove('shown');
+  replyCaption.classList.remove('shown');
+  closingLine.style.display = 'none';
+  exploreBtn.style.display = 'none';
+  journeyBtn.style.display = 'inline-flex';
+  journeyBtn.childNodes[0].textContent = 'Tap to follow it ';
+  caption.innerHTML = 'Your question is about to hop through three layers. Each one is its own world of startups.';
+}
+
+function showTabs(){
+  introView.classList.remove('active');
+  tabsView.classList.add('active');
+  document.getElementById('tab-' + activeArea).focus();
+}
+exploreBtn.addEventListener('click', showTabs);
+
+document.getElementById('replay-link').addEventListener('click', function(){
+  closeOverlay(false);
+  tabsView.classList.remove('active');
+  introView.classList.add('active');
+  resetJourney();
+  journeyBtn.focus();
+});
+
+/* ================= TABS ================= */
+var areaOrder = ['models','inference','applications'];
+var activeArea = 'models';
+var summaryEl = document.getElementById('area-summary');
+
+function buildCards(){
+  areaOrder.forEach(function(areaKey){
+    var panel = document.getElementById('panel-' + areaKey);
+    AREAS[areaKey].cards.forEach(function(card, i){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'card';
+      btn.setAttribute('data-area', areaKey);
+      btn.setAttribute('data-index', i);
+      btn.innerHTML =
+        '<span class="c-icon">' + ICONS[card.icon] + '</span>' +
+        '<span class="card-text">' +
+          '<h3>' + card.name + '</h3>' +
+          '<p>' + card.tldr + '</p>' +
+          '<span class="open-hint">Tap to open' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>' +
+          '</span>' +
+        '</span>';
+      btn.addEventListener('click', function(){ openOverlay(areaKey, i, btn); });
+      panel.appendChild(btn);
+    });
+  });
+}
+
+function selectTab(areaKey, focusTab){
+  activeArea = areaKey;
+  areaOrder.forEach(function(key){
+    var tab = document.getElementById('tab-' + key);
+    var panel = document.getElementById('panel-' + key);
+    var selected = key === areaKey;
+    tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+    tab.tabIndex = selected ? 0 : -1;
+    panel.classList.toggle('active', selected);
+    if(selected){ panel.removeAttribute('hidden'); } else { panel.setAttribute('hidden',''); }
+  });
+  summaryEl.textContent = AREAS[areaKey].summary;
+  if(focusTab){ document.getElementById('tab-' + areaKey).focus(); }
+}
+
+areaOrder.forEach(function(key, idx){
+  var tab = document.getElementById('tab-' + key);
+  tab.addEventListener('click', function(){ selectTab(key, false); });
+  tab.addEventListener('keydown', function(e){
+    var next = null;
+    if(e.key === 'ArrowRight'){ next = areaOrder[(idx + 1) % areaOrder.length]; }
+    else if(e.key === 'ArrowLeft'){ next = areaOrder[(idx + areaOrder.length - 1) % areaOrder.length]; }
+    else if(e.key === 'Home'){ next = areaOrder[0]; }
+    else if(e.key === 'End'){ next = areaOrder[areaOrder.length - 1]; }
+    if(next){ e.preventDefault(); selectTab(next, true); }
+  });
+});
+
+/* ================= OVERLAY ================= */
+var overlay = document.getElementById('overlay');
+var backdrop = document.getElementById('overlay-backdrop');
+var lastCardBtn = null;
+
+function openOverlay(areaKey, index, sourceBtn){
+  var card = AREAS[areaKey].cards[index];
+  lastCardBtn = sourceBtn || null;
+  document.getElementById('ov-icon').innerHTML = ICONS[card.icon];
+  document.getElementById('ov-area-tag').textContent = AREAS[areaKey].label;
+  document.getElementById('ov-title').textContent = card.name;
+  document.getElementById('ov-detail').textContent = card.detail;
+  var chipsEl = document.getElementById('ov-chips');
+  chipsEl.innerHTML = '';
+  card.chips.forEach(function(c){
+    var span = document.createElement('span');
+    span.className = 'chip';
+    span.textContent = c;
+    chipsEl.appendChild(span);
+  });
+  var noteEl = document.getElementById('ov-chip-note');
+  noteEl.textContent = card.note;
+  noteEl.style.display = card.note ? 'block' : 'none';
+  document.getElementById('ov-why').textContent = card.why;
+  overlay.classList.add('open');
+  backdrop.classList.add('open');
+  document.getElementById('ov-close').focus();
+}
+
+function closeOverlay(refocus){
+  if(!overlay.classList.contains('open')) return;
+  overlay.classList.remove('open');
+  backdrop.classList.remove('open');
+  if(refocus !== false && lastCardBtn){ lastCardBtn.focus(); }
+}
+
+document.getElementById('ov-close').addEventListener('click', function(){ closeOverlay(); });
+backdrop.addEventListener('click', function(){ closeOverlay(); });
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ closeOverlay(); }
+});
+
+/* keep keyboard focus inside the overlay while it is open */
+overlay.addEventListener('keydown', function(e){
+  if(e.key !== 'Tab') return;
+  var focusables = overlay.querySelectorAll('button');
+  if(!focusables.length) return;
+  var first = focusables[0];
+  var last = focusables[focusables.length - 1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+});
+
+/* ================= INIT ================= */
+buildCards();
+selectTab('models', false);
+</script>
+</body>
+</html>
