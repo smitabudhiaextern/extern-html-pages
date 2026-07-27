@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which AI Focus Area Fits You?</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root{
+    --bg:#FDF8F8;
+    --title:#1C1B1B;
+    --body:#484646;
+    --fill:#DCE1FF;
+    --accent:#001D69;
+    --font:"Inter", -apple-system, "Segoe UI", sans-serif;
+  }
+
+  html,body{ background:#EFE9E9; font-family:var(--font); }
+
+  #outer{ width:100%; overflow:hidden; }
+
+  #deck-wrapper{
+    width:960px;
+    height:540px;
+    flex-shrink:0;
+    transform-origin:top left;
+  }
+
+  #stage{
+    width:960px;
+    height:540px;
+    background:var(--bg);
+    color:var(--body);
+    position:relative;
+    overflow:hidden;
+  }
+
+  .screen{
+    position:absolute;
+    inset:0;
+    padding:38px 56px 30px;
+    display:none;
+    flex-direction:column;
+  }
+  .screen.active{ display:flex; }
+
+  /* top bar: step indicator */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+    min-height:26px;
+  }
+  .kicker{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:1.4px;
+    color:var(--accent);
+    text-transform:uppercase;
+  }
+  .dots{ display:flex; gap:8px; align-items:center; }
+  .dot{
+    width:9px; height:9px; border-radius:50%;
+    background:#CDCACA;
+  }
+  .dot.on{ background:var(--accent); }
+  .dotlabel{
+    font-size:11px; font-weight:600; color:var(--body);
+    letter-spacing:.3px; margin-right:4px;
+  }
+
+  h1{
+    font-size:34px;
+    line-height:1.15;
+    color:var(--title);
+    font-weight:800;
+    letter-spacing:-.5px;
+    margin-bottom:14px;
+  }
+
+  .lead{
+    font-size:19px;
+    line-height:1.5;
+    color:var(--body);
+    max-width:760px;
+  }
+  .lead b{ color:var(--title); font-weight:700; }
+
+  .grow{ flex:1; }
+
+  .footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-top:14px;
+  }
+  .hint{ font-size:13px; color:#7A7777; }
+
+  button{ font-family:var(--font); cursor:pointer; }
+
+  .btn{
+    background:var(--accent);
+    color:#F3F5FF;
+    border:none;
+    border-radius:11px;
+    padding:14px 30px;
+    font-size:16px;
+    font-weight:700;
+    letter-spacing:.2px;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    transition:transform .08s ease, box-shadow .15s ease;
+  }
+  .btn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,29,105,.22); }
+  .btn svg{ width:18px; height:18px; stroke:#F3F5FF; }
+
+  .btn.ghost{
+    background:transparent;
+    color:var(--accent);
+    border:2px solid var(--accent);
+  }
+  .btn.ghost svg{ stroke:var(--accent); }
+  .btn.ghost:hover{ box-shadow:none; background:rgba(0,29,105,.06); }
+
+  button.textlink{
+    background:none; border:none;
+    color:var(--accent);
+    font-size:13px; font-weight:600;
+    text-decoration:underline;
+    padding:4px 2px;
+  }
+
+  :focus-visible{
+    outline:3px solid #001D69;
+    outline-offset:3px;
+    border-radius:8px;
+  }
+
+  /* intro icon block */
+  .iconblock{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .iconblock svg{ width:30px; height:30px; stroke:var(--accent); fill:none; }
+
+  /* ===== question screens ===== */
+  .qtext{
+    font-size:27px;
+    line-height:1.2;
+    color:var(--title);
+    font-weight:800;
+    letter-spacing:-.3px;
+    margin-bottom:16px;
+    max-width:820px;
+  }
+  .optlist{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    flex:1;
+  }
+  .qopt{
+    background:#fff;
+    border:2px solid #C9CEEC;
+    border-radius:13px;
+    padding:15px 20px;
+    text-align:left;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    transition:transform .08s ease, border-color .15s, background .15s;
+  }
+  .qopt:hover{ transform:translateY(-1px); border-color:var(--accent); background:var(--fill); }
+  .qopt.chosen{ border-color:var(--accent); background:var(--fill); }
+  .qopt .marker{
+    width:24px; height:24px; flex-shrink:0;
+    border-radius:50%;
+    border:2px solid #B9C2F0;
+    background:#F3F5FF;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .qopt .marker svg{ width:14px; height:14px; stroke:var(--accent); display:none; }
+  .qopt.chosen .marker{ background:var(--accent); border-color:var(--accent); }
+  .qopt.chosen .marker svg{ stroke:#F3F5FF; display:block; }
+  .qopt .otext{
+    font-size:17px; line-height:1.3; color:var(--title); font-weight:600;
+  }
+
+  /* ===== result screen ===== */
+  .resultwrap{ display:flex; flex-direction:column; height:100%; }
+  .identity{
+    font-size:30px; font-weight:800; color:var(--accent);
+    line-height:1.12; margin-bottom:8px; letter-spacing:-.4px;
+  }
+  .idsub{ font-size:17px; color:var(--body); line-height:1.4; max-width:740px; margin-bottom:10px; }
+  .tally{
+    font-size:14px; color:var(--body); font-weight:600;
+    margin-bottom:16px;
+  }
+  .tally b{ color:var(--title); }
+
+  .locklabel{
+    font-size:13px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.8px; color:var(--accent); margin-bottom:10px;
+  }
+  .lockrow{ display:flex; gap:12px; }
+  .lockbtn{
+    flex:1;
+    background:#fff;
+    border:2px solid #C9CEEC;
+    border-radius:12px;
+    padding:14px 16px;
+    text-align:center;
+    transition:transform .08s ease, border-color .15s, background .15s;
+  }
+  .lockbtn:hover{ transform:translateY(-1px); border-color:var(--accent); background:var(--fill); }
+  .lockbtn.suggested{ border-color:var(--accent); }
+  .lockbtn.locked{ background:var(--accent); border-color:var(--accent); }
+  .lockbtn .ln{ font-size:18px; font-weight:800; color:var(--title); }
+  .lockbtn.locked .ln{ color:#F3F5FF; }
+  .lockbtn .lt{ font-size:11.5px; font-weight:600; color:var(--accent); margin-top:3px; min-height:14px; }
+  .lockbtn.locked .lt{ color:#C7CFFA; }
+  .lockbtn .lt.hide{ visibility:hidden; }
+
+  /* confirm card */
+  .confirm{
+    background:var(--fill);
+    border-radius:14px;
+    padding:18px 22px;
+    margin-top:14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+  }
+  .confirm .cleft .cll{
+    font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.8px; color:var(--accent); margin-bottom:4px;
+  }
+  .confirm .cleft .clarea{
+    font-size:30px; font-weight:800; color:var(--title); line-height:1.1;
+  }
+  .confirm .cleft .clsub{
+    font-size:13px; color:var(--body); margin-top:5px;
+  }
+  .copybtn{
+    background:var(--accent);
+    color:#F3F5FF;
+    border:none;
+    border-radius:10px;
+    padding:12px 22px;
+    font-size:15px;
+    font-weight:700;
+    display:inline-flex;
+    align-items:center;
+    gap:9px;
+    flex-shrink:0;
+    transition:transform .08s ease, box-shadow .15s ease;
+  }
+  .copybtn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,29,105,.22); }
+  .copybtn svg{ width:16px; height:16px; stroke:#F3F5FF; }
+  .copybtn.done{ background:#1f7a4d; }
+</style>
+</head>
+<body>
+<div id="outer">
+  <div id="deck-wrapper">
+    <div id="stage">
+
+      <!-- ===== INTRO ===== -->
+      <section class="screen active" id="intro">
+        <div class="topbar">
+          <span class="kicker">Interest Quiz</span>
+          <div class="dots"><span class="dotlabel">Start</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+        </div>
+        <div class="iconblock">
+          <svg viewBox="0 0 24 24" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.9.6c0 1.7-2.4 2.2-2.4 3.9"/><path d="M12 17.5h.01"/></svg>
+        </div>
+        <h1>Which focus area fits you?</h1>
+        <div class="grow">
+          <p class="lead">
+            Answer 5 quick questions about what you find interesting. There are no right or wrong answers,
+            just go with your gut. At the end, we will suggest the AI focus area that fits you best.
+            <b>You still make the final call.</b>
+          </p>
+        </div>
+        <div class="footer">
+          <span class="hint">This takes about 2 minutes.</span>
+          <button class="btn" id="startBtn">Start the quiz
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===== QUESTION ===== -->
+      <section class="screen" id="question">
+        <div class="topbar">
+          <span class="kicker" id="qcount">Question 1 of 5</span>
+          <div class="dots" id="qdots">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+        </div>
+        <div class="qtext" id="qtext">Question goes here</div>
+        <div class="optlist" id="optlist"></div>
+        <div class="footer">
+          <button class="btn ghost" id="backBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            Back
+          </button>
+          <span class="hint">Pick the one that feels most like you.</span>
+        </div>
+      </section>
+
+      <!-- ===== RESULT ===== -->
+      <section class="screen" id="result">
+        <div class="topbar">
+          <span class="kicker">Your Result</span>
+          <div class="dots"><span class="dotlabel">Done</span>
+            <span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span>
+          </div>
+        </div>
+        <div class="resultwrap">
+          <div class="identity" id="identity">Your interest points to: ...</div>
+          <p class="idsub" id="idsub"></p>
+          <p class="tally" id="tally"></p>
+
+          <div class="locklabel">Lock in your focus area</div>
+          <div class="lockrow" id="lockrow"></div>
+
+          <div class="confirm" id="confirm" style="display:none;">
+            <div class="cleft">
+              <div class="cll">Your focus area</div>
+              <div class="clarea" id="clarea">Applications</div>
+              <div class="clsub">Copy this into your submission below.</div>
+            </div>
+            <button class="copybtn" id="copyBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              <span id="copyLabel">Copy</span>
+            </button>
+          </div>
+
+          <div style="margin-top:auto; padding-top:8px;">
+            <button class="textlink" id="retakeBtn">Retake the quiz</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- data ---------- */
+var QUESTIONS = [
+  {
+    q:"When you use an app you love, what do you wonder about most?",
+    opts:[
+      { t:"How the computer brain inside got smart enough to do that", a:"M" },
+      { t:"How it stays so fast and never freezes or lags", a:"I" },
+      { t:"All the cool things it lets you do that you couldn't before", a:"A" }
+    ]
+  },
+  {
+    q:"Pick the school project that sounds most fun:",
+    opts:[
+      { t:"Find a brand new way to get a computer to learn something on its own", a:"M" },
+      { t:"Take something that already works and make it twice as fast or cheap", a:"I" },
+      { t:"Build an app your friends would actually use every day", a:"A" }
+    ]
+  },
+  {
+    q:"Which headline would you click first?",
+    opts:[
+      { t:"New AI learns to think in a totally new way", a:"M" },
+      { t:"Cool trick makes AI run right on your phone, even with no internet", a:"I" },
+      { t:"AI helper now does a real job in a hospital", a:"A" }
+    ]
+  },
+  {
+    q:"At a startup, which team would you join?",
+    opts:[
+      { t:"The team that makes the AI smarter", a:"M" },
+      { t:"The team that makes the AI faster and cheaper to run", a:"I" },
+      { t:"The team that designs the product real customers use", a:"A" }
+    ]
+  },
+  {
+    q:"Imagine you built your own AI. What would make you proudest?",
+    opts:[
+      { t:"It thinks through hard problems in a smart, new way", a:"M" },
+      { t:"It runs on a cheap little chip that almost anyone can afford", a:"I" },
+      { t:"Millions of people use it every day to make life easier", a:"A" }
+    ]
+  }
+];
+
+var AREA = {
+  M:{ name:"Models", why:"You are drawn to how AI thinks and learns. That is the heart of the Models area." },
+  I:{ name:"Inference", why:"You care about making AI fast, cheap, and practical. That is the Inference area." },
+  A:{ name:"Applications", why:"You care about what AI does for real people. That is the Applications area." }
+};
+var ORDER = ["M","I","A"];
+
+/* ---------- state ---------- */
+var answers = [null,null,null,null,null]; // one of M/I/A per question
+var current = 0;
+
+/* ---------- screen switching ---------- */
+function show(id){
+  var screens = document.querySelectorAll('.screen');
+  for(var i=0;i<screens.length;i++){ screens[i].classList.remove('active'); }
+  document.getElementById(id).classList.add('active');
+}
+
+/* ---------- render a question ---------- */
+function renderQuestion(){
+  var Q = QUESTIONS[current];
+  document.getElementById('qcount').textContent = 'Question ' + (current+1) + ' of 5';
+
+  // dots
+  var dots = document.getElementById('qdots').children;
+  for(var i=0;i<dots.length;i++){
+    if(i <= current){ dots[i].classList.add('on'); }
+    else { dots[i].classList.remove('on'); }
+  }
+
+  document.getElementById('qtext').textContent = Q.q;
+
+  var list = document.getElementById('optlist');
+  list.innerHTML = '';
+  Q.opts.forEach(function(o, idx){
+    var b = document.createElement('button');
+    b.className = 'qopt' + (answers[current] === o.a && answers[current] !== null && chosenIndex()===idx ? ' chosen' : '');
+    b.setAttribute('aria-label', o.t);
+    b.innerHTML =
+      '<span class="marker"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></span>' +
+      '<span class="otext">'+o.t+'</span>';
+    b.addEventListener('click', function(){ choose(idx); });
+    list.appendChild(b);
+  });
+
+  // back button: hidden intent on first question -> send to intro
+  var backBtn = document.getElementById('backBtn');
+  backBtn.querySelector('.otext'); // noop
+}
+
+/* which option index is currently chosen for this question */
+var chosenIdxByQ = [null,null,null,null,null];
+function chosenIndex(){ return chosenIdxByQ[current]; }
+
+function choose(idx){
+  var Q = QUESTIONS[current];
+  answers[current] = Q.opts[idx].a;
+  chosenIdxByQ[current] = idx;
+
+  // visual mark
+  var list = document.getElementById('optlist').children;
+  for(var i=0;i<list.length;i++){
+    if(i===idx){ list[i].classList.add('chosen'); }
+    else { list[i].classList.remove('chosen'); }
+  }
+
+  // advance shortly after
+  setTimeout(function(){
+    if(current < QUESTIONS.length - 1){
+      current++;
+      renderQuestion();
+    } else {
+      computeResult();
+      show('result');
+    }
+  }, 180);
+}
+
+document.getElementById('backBtn').addEventListener('click', function(){
+  if(current === 0){
+    show('intro');
+  } else {
+    current--;
+    renderQuestion();
+  }
+});
+
+/* ---------- start ---------- */
+document.getElementById('startBtn').addEventListener('click', function(){
+  current = 0;
+  renderQuestion();
+  show('question');
+});
+
+/* ---------- result logic ---------- */
+function computeResult(){
+  var counts = { M:0, I:0, A:0 };
+  answers.forEach(function(a){ if(a){ counts[a]++; } });
+
+  // find max
+  var max = Math.max(counts.M, counts.I, counts.A);
+  var tied = ORDER.filter(function(k){ return counts[k] === max; });
+
+  var chosenArea; // final suggested key (single) OR null if unbreakable tie
+  var unbrokenTie = null;
+
+  if(tied.length === 1){
+    chosenArea = tied[0];
+  } else {
+    // tie-break with Q4 answer if it is among the tied set
+    var q4 = answers[3];
+    if(q4 && tied.indexOf(q4) !== -1){
+      chosenArea = q4;
+    } else {
+      chosenArea = null;
+      unbrokenTie = tied;
+    }
+  }
+
+  // headline + subtext
+  var identity = document.getElementById('identity');
+  var idsub = document.getElementById('idsub');
+
+  if(chosenArea){
+    identity.textContent = 'Your interest points to: ' + AREA[chosenArea].name;
+    idsub.textContent = AREA[chosenArea].why;
+  } else {
+    // clean unbreakable tie: name them
+    var names = unbrokenTie.map(function(k){ return AREA[k].name; });
+    if(names.length === 2){
+      identity.textContent = 'You lean toward ' + names[0] + ' and ' + names[1];
+    } else {
+      identity.textContent = 'You lean toward ' + names.slice(0,-1).join(', ') + ', and ' + names[names.length-1];
+    }
+    idsub.textContent = 'These areas tied for you. Pick the one that excites you most.';
+  }
+
+  // tally line
+  document.getElementById('tally').innerHTML =
+    'Your answers: <b>Models ' + counts.M + '</b>, <b>Inference ' + counts.I + '</b>, <b>Applications ' + counts.A + '</b>.';
+
+  // suggested key for pre-highlight: single chosen, else the tied set
+  buildLockRow(chosenArea, unbrokenTie);
+
+  // reset confirm
+  document.getElementById('confirm').style.display = 'none';
+  resetCopy();
+  lockedArea = null;
+}
+
+/* ---------- lock-in buttons ---------- */
+function buildLockRow(chosenArea, tiedSet){
+  var row = document.getElementById('lockrow');
+  row.innerHTML = '';
+  ORDER.forEach(function(k){
+    var suggested = (chosenArea && k === chosenArea) || (tiedSet && tiedSet.indexOf(k) !== -1);
+    var b = document.createElement('button');
+    b.className = 'lockbtn' + (suggested ? ' suggested' : '');
+    b.setAttribute('data-area', k);
+    b.setAttribute('aria-label', 'Lock in ' + AREA[k].name);
+    b.innerHTML =
+      '<div class="ln">'+AREA[k].name+'</div>' +
+      '<div class="lt '+(suggested?'':'hide')+'">Suggested for you</div>';
+    b.addEventListener('click', function(){ lockIn(k); });
+    row.appendChild(b);
+  });
+}
+
+var lockedArea = null;
+function lockIn(k){
+  lockedArea = k;
+  var btns = document.getElementById('lockrow').children;
+  for(var i=0;i<btns.length;i++){
+    var area = btns[i].getAttribute('data-area');
+    var lt = btns[i].querySelector('.lt');
+    if(area === k){
+      btns[i].classList.add('locked');
+      lt.textContent = 'Locked in';
+      lt.classList.remove('hide');
+    } else {
+      btns[i].classList.remove('locked');
+    }
+  }
+  document.getElementById('clarea').textContent = AREA[k].name;
+  document.getElementById('confirm').style.display = 'flex';
+  resetCopy();
+}
+
+/* ---------- copy ---------- */
+function resetCopy(){
+  var btn = document.getElementById('copyBtn');
+  btn.classList.remove('done');
+  document.getElementById('copyLabel').textContent = 'Copy';
+}
+document.getElementById('copyBtn').addEventListener('click', function(){
+  if(!lockedArea){ return; }
+  var text = AREA[lockedArea].name;
+  var done = function(){
+    var btn = document.getElementById('copyBtn');
+    btn.classList.add('done');
+    document.getElementById('copyLabel').textContent = 'Copied';
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+  } else {
+    fallbackCopy(text, done);
+  }
+});
+function fallbackCopy(text, done){
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '-1000px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch(e){}
+  document.body.removeChild(ta);
+}
+
+/* ---------- retake ---------- */
+document.getElementById('retakeBtn').addEventListener('click', function(){
+  answers = [null,null,null,null,null];
+  chosenIdxByQ = [null,null,null,null,null];
+  current = 0;
+  lockedArea = null;
+  show('intro');
+});
+
+/* ---------- keyboard: real buttons already handle Enter/Space ---------- */
+
+/* ---------- responsive scaling ---------- */
+function scaleStage(){
+  var outer = document.getElementById('outer');
+  var wrap = document.getElementById('deck-wrapper');
+  var cw = outer.clientWidth;
+  var scale = cw / 960;
+  if(scale > 1) scale = 1;
+  wrap.style.transform = 'translateX(' + ((cw - 960*scale)/2) + 'px) scale(' + scale + ')';
+  outer.style.height = (540*scale) + 'px';
+}
+window.addEventListener('resize', scaleStage);
+scaleStage();
+</script>
+</body>
+</html>
