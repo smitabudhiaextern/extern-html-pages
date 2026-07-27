@@ -170,6 +170,13 @@
   .mit-def{font-size:13.5px;line-height:1.55;margin-top:6px}
   .mit-def b{color:var(--ink)}
   .mitempty{font-size:13.5px;color:var(--muted);font-style:italic;margin-top:8px}
+  .mitchip{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:1px 9px;white-space:nowrap}
+
+  /* ---------- end-of-doc completion nudge (screen only) ---------- */
+  #endnudge{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:10px;
+    padding:12px 16px;margin-top:28px;font-size:14px;line-height:1.55}
+  #endnudge b{color:var(--ink)}
 
   /* ---------- executive summary ---------- */
   #execlocked{background:var(--panel);border:1.5px dashed var(--line);border-radius:11px;padding:16px 18px;
@@ -198,9 +205,10 @@
   /* print-value mirrors: hidden on screen, shown in print */
   .pv{display:none}
 
-  /* unlock pulse on Section 1 */
-  @keyframes unlockpulse{0%{box-shadow:0 0 0 0 rgba(46,196,182,.55)}100%{box-shadow:0 0 0 22px rgba(46,196,182,0)}}
-  #sec1.unlockpulse #execopen{border-radius:11px;animation:unlockpulse 1.1s ease-out 2}
+  /* breathing pulse on Section 1 while the summary is unlocked but unwritten */
+  @keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(46,196,182,0)}50%{box-shadow:0 0 0 10px rgba(46,196,182,.18)}}
+  #sec1.needsummary #execopen{border-radius:11px;animation:breathe 2s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){#sec1.needsummary #execopen{animation:none;box-shadow:0 0 0 3px rgba(46,196,182,.25)}}
 
   /* horizontal-scroll wrapper for tables on narrow screens */
   .twrap{overflow-x:auto}
@@ -244,6 +252,7 @@
     .r-crit{background:#fbe3de;color:#b03a26}
     .rsitem.picked{border-color:#0a6e64;background:#f0faf8}
     .topchip{color:#0a6e64}
+    .mitchip{color:#0a6e64;border-color:#0a6e64}
     .rsitem.picked .topchip{display:inline}
     .pv{display:block;font-size:12pt;line-height:1.55;color:#333}
     .pv-rating{display:inline;font-size:10.5pt;color:#555;font-weight:700}
@@ -405,10 +414,12 @@
     <div class="secnum">Section 6 of 6<span class="sectag tag-auto">Mapped from the Attack Lab</span></div>
     <h2>Recommended Mitigations</h2>
     <div class="secbody">
-      <p class="screen-only" style="font-size:13.5px;color:var(--muted)">Every finding you rated High or Critical gets a proposed defense. These are the fixes you met in the Attack Lab, matched to your findings. Read each one and check the match makes sense; the builds come in later weeks.</p>
+      <p class="screen-only" style="font-size:13.5px;color:var(--muted)">Your Top 3 lead the list; every Critical and High finding gets its defense. These are the fixes you met in the Attack Lab, matched to your findings. Read each one and check the match makes sense; the builds come in later weeks.</p>
       <div id="mithost"></div>
     </div>
   </section>
+
+  <div id="endnudge" class="screen-only"></div>
 
   <div class="footerline screen-only">
     <span class="smalltxt">Your work saves in this browser under this page. Nothing is sent anywhere until you download and upload it yourself.</span>
@@ -679,21 +690,32 @@
   function renderMits(){
     var host = $('mithost');
     host.innerHTML = '';
-    var shown = 0;
-    ROWKEYS.forEach(function(key){
+    /* every Critical/High finding gets a row; the student's Top 3 sort first */
+    var keys = ROWKEYS.filter(function(key){
       var e = state.rows[key];
       var r = riskOf(e.lk, e.im);
-      if (r !== 'Critical' && r !== 'High') return;
-      shown++;
+      return r === 'Critical' || r === 'High';
+    });
+    keys.sort(function(a, b){
+      var ai = state.top3.indexOf(a), bi = state.top3.indexOf(b);
+      var aIn = ai >= 0, bIn = bi >= 0;
+      if (aIn !== bIn) return aIn ? -1 : 1;
+      if (aIn && bIn) return ai - bi;
+      return ROWKEYS.indexOf(a) - ROWKEYS.indexOf(b);
+    });
+    keys.forEach(function(key){
+      var e = state.rows[key];
+      var r = riskOf(e.lk, e.im);
+      var chip = state.top3.indexOf(key) >= 0 ? ' <span class="mitchip">Top 3 for Marcus</span>' : '';
       var row = document.createElement('div');
       row.className = 'mitrow';
       row.innerHTML =
         '<div class="mit-find">' + esc(findingLabel(key)) +
-        ' <span class="rb ' + RISKCLS[r] + '">' + r + ' risk</span></div>' +
+        ' <span class="rb ' + RISKCLS[r] + '">' + r + ' risk</span>' + chip + '</div>' +
         '<div class="mit-def">' + MITS[key] + '</div>';
       host.appendChild(row);
     });
-    if (!shown){
+    if (!keys.length){
       var em = document.createElement('p');
       em.className = 'mitempty';
       em.textContent = 'No High or Critical findings yet. Mitigation rows appear here as your ratings come in.';
@@ -747,21 +769,36 @@
         ? 'That PDF is your deliverable. Upload it to the platform.'
         : 'In the print dialog, set Destination to "Save as PDF", then save.')
       : 'When everything is done, download and upload it to the platform.';
+    /* breathing pulse on Section 1 while unlocked but unwritten */
+    $('sec1').classList.toggle('needsummary', sec456Done() && !execFilled());
+    renderNudge();
   }
 
+  /* ---------- end-of-doc completion nudge ---------- */
+  function renderNudge(){
+    var n = $('endnudge');
+    if (allDone()){
+      n.innerHTML = '<b>All done.</b> Download your threat model from the bar at the top.';
+    } else if (sec456Done()){
+      n.innerHTML = '<b>One thing left:</b> <span class="golink">scroll up and write the Executive Summary</span>.';
+    } else {
+      n.innerHTML = '<b>Almost there.</b> Finish rating the scenarios and pick your Top 3, then the Executive Summary opens.';
+    }
+  }
+  $('endnudge').addEventListener('click', function(ev){
+    var t = ev.target;
+    if (t && t.classList && t.classList.contains('golink')){
+      $('sec1').scrollIntoView({ behavior:'smooth' });
+    }
+  });
+
   /* clickable "go write it" link (ptxt is rebuilt on every render, so delegate) */
-  var wasUnlocked;
   $('ptxt').addEventListener('click', function(ev){
     var t = ev.target;
     if (t && t.classList && t.classList.contains('golink')){
       $('sec1').scrollIntoView({ behavior:'smooth' });
     }
   });
-  function pulseUnlock(){
-    var sec = $('sec1');
-    sec.classList.add('unlockpulse');
-    setTimeout(function(){ sec.classList.remove('unlockpulse'); }, 2600);
-  }
 
   function renderAll(){
     ROWKEYS.forEach(renderRow);
@@ -772,10 +809,6 @@
     renderProgress();
     $('nameinline').textContent = state.name.trim() || '[your name]';
     $('prepline').classList.toggle('noname', !state.name.trim());
-    var unlocked = sec456Done();
-    if (wasUnlocked === undefined) wasUnlocked = unlocked; /* no pulse on page load */
-    else if (unlocked && !wasUnlocked) pulseUnlock();
-    wasUnlocked = unlocked;
   }
 
   /* ---------- static wiring ---------- */
