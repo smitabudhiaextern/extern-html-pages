@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find the Flaws, MedVault Threat Model</title>
+<!--
+  Hydroficient P1, Step 3, Module 2: "Find the Flaws" red-pen review game.
+  A condensed MedVault threat model (Riverside General) drafted by a fictional
+  junior analyst, with 5 planted flaws mapped to Module 1 skills:
+    f-exec   (5) Exec Summary claims no Critical risks; Risk Summary lists two.
+    f-rating (1) High x Critical rated "Medium" (breaks the 3x4 matrix).
+    f-vague  (2) "Someone could hack the monitors" vague scenario.
+    f-claim  (3) Dashboard claimed fully analyzed but Denial of Service missing.
+    f-mit    (4) Rate limiting proposed for an eavesdropping (confidentiality) risk.
+  Opens with ONE predict beat ("Marcus reads one section only, which goes first?",
+  answer Executive Summary) before the draft reveals; then the hunt begins.
+  Student clicks suspicious content. Clean regions give one-line "solid" feedback.
+  After 5 found (or revealed after 3), "See the corrected version" swaps in the
+  fixed threat model with corrections highlighted + Maya closing beat.
+  Dark house style. Fixed 960x600 canvas scaled to fit the embed, doc scrolls
+  internally. localStorage key: hydro-fh-v1. Self-contained, no external requests.
+-->
+<style>
+  :root{
+    --bg:#0B1D2A; --panel:#10283A; --panel2:#0E2334; --line:#1E3A4F;
+    --teal:#2EC4B6; --amber:#F5A623; --red:#E4573D; --good:#3ECF8E;
+    --ink:#F2F9FA; --body:#E6F1F4; --muted:#9DBAC6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--body)}
+
+  #deck-wrapper{width:960px;height:600px;position:absolute;top:0;left:0;transform-origin:top left;
+    flex-shrink:0;background:var(--bg);display:flex;flex-direction:column}
+
+  /* ---------- header ---------- */
+  .top{flex-shrink:0;display:flex;align-items:center;gap:14px;padding:12px 22px 10px;border-bottom:1px solid var(--line)}
+  .top .kicker{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--teal)}
+  .top h1{font-size:16.5px;font-weight:800;color:var(--ink);line-height:1.15}
+  .counter{margin-left:auto;flex-shrink:0;background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:6px 14px;font-size:13px;font-weight:800;color:var(--ink);white-space:nowrap}
+  .counter b{color:var(--teal)}
+  .btn{appearance:none;border:none;background:var(--teal);color:#062421;border-radius:9px;padding:8px 15px;
+    font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;transition:transform .12s,filter .12s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.1)}
+  .btn.ghost{background:transparent;color:var(--teal);border:2px solid var(--teal);padding:6px 13px}
+  .hidden{display:none !important}
+
+  /* ---------- matrix overlay ---------- */
+  #matrixpanel{position:absolute;top:56px;right:20px;z-index:40;background:var(--panel);border:2px solid var(--teal);
+    border-radius:12px;padding:12px 14px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  #matrixpanel .mp-t{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:7px}
+  table.matrix{border-collapse:separate;border-spacing:3px}
+  table.matrix th{font-size:10.5px;font-weight:800;color:var(--ink);padding:2px 4px}
+  table.matrix th.rowh{text-align:right;padding-right:8px;color:var(--muted);white-space:nowrap}
+  table.matrix td{border-radius:6px;text-align:center;font-weight:800;font-size:11px;padding:6px 8px;white-space:nowrap}
+  td.r-low{background:rgba(62,207,142,.15);color:#6FE0AB}
+  td.r-med{background:rgba(242,208,107,.15);color:#F2D06B}
+  td.r-high{background:rgba(242,149,78,.18);color:#F4A462}
+  td.r-crit{background:rgba(228,87,61,.20);color:#F1806B}
+
+  /* ---------- scrolling document ---------- */
+  #docscroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px 26px 26px}
+  #docscroll::-webkit-scrollbar{width:9px}
+  #docscroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  .doc{max-width:850px;margin:0 auto}
+
+  .banner{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:700;color:var(--amber);
+    background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.35);border-radius:9px;padding:8px 13px;margin-bottom:16px}
+  .banner .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
+  .banner.fixed{color:#8FE7BE;background:rgba(62,207,142,.08);border-color:rgba(62,207,142,.4)}
+  .banner.fixed .dot{background:var(--good)}
+
+  .rhead{border-bottom:2px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+  .rhead .rk{font-size:10.5px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+  .rhead h2{font-size:21px;font-weight:800;color:var(--ink);line-height:1.15;margin-bottom:7px}
+  .meta{display:flex;flex-wrap:wrap;gap:5px 20px;font-size:11.5px;color:var(--muted)}
+  .meta b{color:var(--ink);font-weight:700}
+
+  .sec{margin-bottom:20px}
+  .sec-h{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .sec-n{flex-shrink:0;width:23px;height:23px;border-radius:6px;background:var(--teal);color:#062421;
+    font-weight:800;font-size:12.5px;display:flex;align-items:center;justify-content:center}
+  .sec-h h3{font-size:15.5px;font-weight:800;color:var(--ink)}
+  .sec p{font-size:13px;line-height:1.55;margin-bottom:7px;color:var(--body)}
+  .sec p:last-child{margin-bottom:0}
+  .lead-in{font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:8px}
+  ul.plain{margin:2px 0 6px;padding-left:19px}
+  ul.plain li{font-size:12.5px;margin-bottom:3px;color:var(--body)}
+  .compname{font-weight:800;color:var(--ink);margin:12px 0 2px;font-size:13px}
+  .compname:first-of-type{margin-top:4px}
+
+  table.dt{width:100%;border-collapse:collapse;margin-top:7px;font-size:11.5px}
+  table.dt th{background:var(--panel);color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    text-align:left;padding:7px 9px;border:1px solid var(--line)}
+  table.dt td{padding:7px 9px;border:1px solid var(--line);vertical-align:top;color:var(--body)}
+  .stride-cat{font-weight:700;color:var(--ink);white-space:nowrap}
+  td.ctr,th.ctr{text-align:center;white-space:nowrap}
+
+  .badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+    padding:1px 8px;border-radius:20px;white-space:nowrap}
+  .b-crit{background:rgba(228,87,61,.16);color:#FF9A88;border:1px solid rgba(228,87,61,.5)}
+  .b-high{background:rgba(245,166,35,.14);color:#F7C877;border:1px solid rgba(245,166,35,.5)}
+  .b-med{background:rgba(46,196,182,.13);color:#7FD8CF;border:1px solid rgba(46,196,182,.45)}
+  .b-low{background:rgba(143,176,188,.12);color:#B4C8D0;border:1px solid rgba(143,176,188,.4)}
+
+  .risk-group{margin-bottom:10px}
+  .risk-group h4{font-size:11.5px;font-weight:800;margin-bottom:5px;color:var(--ink)}
+  .risk-group ol{margin:0;padding-left:19px}
+  .risk-group li{font-size:12.5px;margin-bottom:4px;color:var(--body)}
+  .risk-group li b{color:var(--ink)}
+
+  /* ---------- huntable regions ---------- */
+  .hunt{cursor:pointer;transition:background .15s,box-shadow .15s;border-radius:8px}
+  div.hunt,p.hunt,ul.hunt{padding:6px 9px;margin-left:-9px;margin-right:-9px}
+  .hunt:hover{background:rgba(46,196,182,.07);box-shadow:inset 0 0 0 1px rgba(46,196,182,.4)}
+  tr.hunt:hover td{background:rgba(46,196,182,.07)}
+  .hunt.found{background:rgba(46,196,182,.13);box-shadow:inset 0 0 0 2px var(--teal)}
+  tr.hunt.found td{background:rgba(46,196,182,.13)}
+  tr.hunt.found td:first-child{border-left:3px solid var(--teal)}
+  .hunt.oksolid{background:rgba(62,207,142,.12);box-shadow:inset 0 0 0 1px rgba(62,207,142,.55)}
+  tr.hunt.oksolid td{background:rgba(62,207,142,.12)}
+  table .hunt{border-radius:0}
+
+  /* corrected mode */
+  .fixregion{background:rgba(62,207,142,.09) !important;box-shadow:inset 0 0 0 2px var(--good) !important;cursor:pointer}
+  tr.fixregion td{background:rgba(62,207,142,.09) !important;border-left:none !important}
+  tr.fixregion td:first-child{border-left:3px solid var(--good) !important}
+  .fixtag{display:inline-block;background:rgba(62,207,142,.18);color:#8FE7BE;border:1px solid rgba(62,207,142,.5);
+    font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:20px;padding:1px 7px;margin-right:6px;vertical-align:1px}
+
+  #mayaclose{margin-top:18px;background:var(--panel);border-left:5px solid var(--teal);border-radius:12px;padding:13px 17px}
+  #mayaclose .who{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:5px}
+  #mayaclose p{font-size:13.5px;line-height:1.6;font-style:italic;color:var(--ink)}
+
+  .foot{margin-top:20px;padding-top:11px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);text-align:center}
+
+  /* ---------- intro beat ---------- */
+  #introbeat{position:absolute;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:40px}
+  #introbeat.hidden{display:none}
+  .intro-card{max-width:640px;width:100%}
+  .intro-card .kicker{font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--teal);margin-bottom:10px}
+  .intro-card h2{font-size:26px;font-weight:800;color:var(--ink);line-height:1.2;margin-bottom:10px}
+  .intro-card .lead{font-size:15.5px;line-height:1.6;color:var(--body);margin-bottom:18px}
+  .intro-card .lead b{color:var(--ink)}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .opt{appearance:none;border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:11px;
+    padding:13px 15px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,transform .12s}
+  .opt:hover{border-color:var(--teal);transform:translateY(-1px)}
+  .opt.right{border-color:var(--good);background:rgba(62,207,142,.13)}
+  .opt.wrongpick{border-color:var(--amber);background:rgba(245,166,35,.08)}
+  #introfb{min-height:54px;border-radius:10px;padding:10px 14px;font-size:14px;font-weight:600;line-height:1.45;
+    background:var(--panel);border:1px solid var(--line);color:var(--body)}
+  #introfb.yes{background:rgba(62,207,142,.1);border-color:var(--good);color:#C9F0DD}
+  #introfb.no{background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.5);color:#F2DDB4}
+  #introfb b{color:var(--ink)}
+  #introgo{margin-top:14px}
+
+  /* ---------- feedback bar ---------- */
+  #fbbar{flex-shrink:0;min-height:58px;display:flex;align-items:center;gap:12px;padding:9px 22px;
+    border-top:1px solid var(--line);background:var(--panel2)}
+  #fbicon{flex-shrink:0;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:800;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+  #fbtext{font-size:13px;line-height:1.4;color:var(--body)}
+  #fbtext b{color:var(--ink)}
+  #fbbar.good #fbicon{background:rgba(46,196,182,.15);border-color:var(--teal);color:var(--teal)}
+  #fbbar.good #fbtext b{color:var(--teal)}
+  #fbbar.ok #fbicon{background:rgba(62,207,142,.13);border-color:rgba(62,207,142,.5);color:#8FE7BE}
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <div class="top">
+    <div>
+      <div class="kicker">Red-Pen Review</div>
+      <h1 id="toptitle">MedVault Threat Model, Draft</h1>
+    </div>
+    <button class="btn ghost" id="matrixbtn">Risk matrix</button>
+    <button class="btn ghost hidden" id="revealbtn">Stuck? Reveal the rest</button>
+    <button class="btn hidden" id="correctbtn">See the corrected version</button>
+    <button class="btn ghost hidden" id="backbtn">Back to the draft</button>
+    <div class="counter">Flaws found: <b id="foundnum">0</b> of 5</div>
+  </div>
+
+  <div id="matrixpanel" class="hidden">
+    <div class="mp-t">Likelihood × Impact</div>
+    <table class="matrix">
+      <tr><th></th><th>Low</th><th>Med</th><th>High</th><th>Critical</th></tr>
+      <tr><th class="rowh">High</th><td class="r-med">Med</td><td class="r-high">High</td><td class="r-crit">Crit</td><td class="r-crit">Crit</td></tr>
+      <tr><th class="rowh">Medium</th><td class="r-low">Low</td><td class="r-med">Med</td><td class="r-high">High</td><td class="r-crit">Crit</td></tr>
+      <tr><th class="rowh">Low</th><td class="r-low">Low</td><td class="r-low">Low</td><td class="r-med">Med</td><td class="r-high">High</td></tr>
+    </table>
+  </div>
+
+  <div id="docscroll">
+    <div class="doc">
+
+      <div class="banner" id="docbanner"><span class="dot"></span><span id="bannertext">SAMPLE, PAST ENGAGEMENT · Junior analyst's draft, five mistakes inside. Click anything that looks wrong.</span></div>
+
+      <div class="rhead">
+        <div class="rk">Security Threat Model</div>
+        <h2>MedVault Patient Monitoring System</h2>
+        <div class="meta">
+          <span><b>Client:</b> Riverside General Hospital</span>
+          <span><b>Prepared by:</b> Junior Security Analyst</span>
+          <span><b>Status:</b> <span id="docstatus">Draft, awaiting review</span></span>
+        </div>
+      </div>
+
+      <!-- 1 EXEC SUMMARY -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">1</span><h3>Executive Summary</h3></div>
+        <p class="hunt" data-id="c-exec1">Riverside General Hospital relies on MedVault patient monitoring devices to track vital signs across the ICU and general wards. These 50 devices continuously send heart rate, blood pressure, and oxygen level data to nurses' stations and physician dashboards. When a patient's vitals fall outside safe ranges, the system triggers immediate alerts.</p>
+        <p class="hunt" data-id="c-exec2">This threat model identifies security risks that could affect patient safety, data privacy, and hospital operations.</p>
+        <p class="hunt" data-id="f-exec" id="el-f-exec"><b>Good news: our review found no Critical risks in the MedVault deployment.</b> The highest severity identified is High, and nothing requires immediate attention before the next audit cycle.</p>
+      </div>
+
+      <!-- 2 SYSTEM OVERVIEW -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">2</span><h3>System Overview</h3></div>
+        <ul class="plain hunt" data-id="c-sys">
+          <li>300-bed hospital (MedVault customer)</li>
+          <li>50 MedVault patient monitoring devices (ICU and general wards)</li>
+          <li>Cloud-based data storage and analytics</li>
+          <li>Clinical dashboard for nurses and physicians</li>
+          <li>Real-time vital alerts with escalation protocols</li>
+          <li>Integration with Electronic Health Records (EHR)</li>
+        </ul>
+        <p class="lead-in hunt" data-id="c-flow" style="margin-top:4px">Devices measure vitals every 5 seconds → hospital WiFi → local gateway → MedVault cloud (thresholds, alerts) → clinical dashboard and nurses' mobile devices.</p>
+      </div>
+
+      <!-- 3 ASSET INVENTORY -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">3</span><h3>Asset Inventory</h3></div>
+        <p class="lead-in">What is worth protecting, and which security property matters most. C = Confidentiality, I = Integrity, A = Availability.</p>
+        <table class="dt">
+          <thead><tr><th>Asset</th><th>Description</th><th class="ctr">C</th><th class="ctr">I</th><th class="ctr">A</th></tr></thead>
+          <tbody class="hunt" data-id="c-assets">
+            <tr><td>MedVault Devices</td><td>50 patient monitoring units</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+            <tr><td>Clinical Dashboard</td><td>Nurse / physician interface</td><td class="ctr">High</td><td class="ctr">High</td><td class="ctr">Critical</td></tr>
+            <tr><td>Cloud Server</td><td>Data processing and storage</td><td class="ctr">High</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+            <tr><td>Patient Vital Data</td><td>Heart rate, BP, oxygen readings</td><td class="ctr">High</td><td class="ctr">Critical</td><td class="ctr">High</td></tr>
+            <tr><td>Alert System</td><td>Threshold monitoring, notifications</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr">Critical</td></tr>
+            <tr><td>EHR Integration</td><td>Connection to hospital records</td><td class="ctr">High</td><td class="ctr">High</td><td class="ctr">Med</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 4 STRIDE ANALYSIS -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">4</span><h3>STRIDE Analysis</h3></div>
+        <p class="lead-in hunt" data-id="f-claim" id="el-f-claim">The core of the model. Both components below are fully analyzed: all six STRIDE families reviewed for each.</p>
+
+        <div class="compname">Component 1: Patient Monitors</div>
+        <table class="dt">
+          <thead><tr><th>Threat</th><th>Scenario</th><th class="ctr">Likely</th><th class="ctr">Impact</th><th class="ctr">Risk</th></tr></thead>
+          <tbody>
+            <tr class="hunt" data-id="c-mspoof"><td class="stride-cat">Spoofing</td><td>Attacker introduces a fake device that sends false vitals for a non-existent "Patient Room 401".</td><td class="ctr">Med</td><td class="ctr">High</td><td class="ctr"><span class="badge b-high">High</span></td></tr>
+            <tr class="hunt" data-id="f-vague" id="el-f-vague"><td class="stride-cat">Tampering</td><td id="vague-cell">Someone could hack the monitors and mess with the data.</td><td class="ctr">Low</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-high">High</span></td></tr>
+            <tr class="hunt" data-id="c-mrepud"><td class="stride-cat">Repudiation</td><td>Device sends an alert but no log proves which device or when, "the system never alerted us".</td><td class="ctr">Med</td><td class="ctr">Med</td><td class="ctr"><span class="badge b-med">Medium</span></td></tr>
+            <tr class="hunt" data-id="f-rating" id="el-f-rating"><td class="stride-cat">Info Disclosure</td><td>Attacker on hospital WiFi captures unencrypted vital transmissions and learns patient conditions.</td><td class="ctr">High</td><td class="ctr">Critical</td><td class="ctr" id="rating-cell"><span class="badge b-med">Medium</span></td></tr>
+            <tr class="hunt" data-id="c-mdos"><td class="stride-cat">Denial of Service</td><td>Attacker jams wireless signals in the ICU wing; monitors can't transmit for 30 minutes.</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-crit">Critical</span></td></tr>
+            <tr class="hunt" data-id="c-melev"><td class="stride-cat">Elevation of Privilege</td><td>Attacker exploits a monitor vulnerability to reach the hospital network and pivot to other systems.</td><td class="ctr">Low</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-high">High</span></td></tr>
+          </tbody>
+        </table>
+
+        <div class="compname">Component 2: Clinical Dashboard</div>
+        <table class="dt">
+          <thead><tr><th>Threat</th><th>Scenario</th><th class="ctr">Likely</th><th class="ctr">Impact</th><th class="ctr">Risk</th></tr></thead>
+          <tbody>
+            <tr class="hunt" data-id="c-dspoof"><td class="stride-cat">Spoofing</td><td>Attacker uses stolen nurse credentials (from a phishing email) to access the dashboard from outside the hospital.</td><td class="ctr">High</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-crit">Critical</span></td></tr>
+            <tr class="hunt" data-id="c-dtamp"><td class="stride-cat">Tampering</td><td>Attacker with dashboard access raises the heart-rate alert threshold from 120 to 200 BPM.</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-crit">Critical</span></td></tr>
+            <tr class="hunt" data-id="c-drepud"><td class="stride-cat">Repudiation</td><td>Nurse claims they never acknowledged an alert; no audit trail of who saw what and when.</td><td class="ctr">Med</td><td class="ctr">Med</td><td class="ctr"><span class="badge b-med">Medium</span></td></tr>
+            <tr class="hunt" data-id="c-dinfo"><td class="stride-cat">Info Disclosure</td><td>Attacker with dashboard access exports 6 months of vital history for 300 patients.</td><td class="ctr">Med</td><td class="ctr">High</td><td class="ctr"><span class="badge b-high">High</span></td></tr>
+            <tr id="dash-dos" class="hidden"><td class="stride-cat">Denial of Service</td><td>Attacker floods the dashboard with requests during the night shift; nurses can't view any vitals.</td><td class="ctr">Med</td><td class="ctr">Critical</td><td class="ctr"><span class="badge b-crit">Critical</span></td></tr>
+            <tr class="hunt" data-id="c-delev"><td class="stride-cat">Elevation of Privilege</td><td>A nurse account exploits a bug to gain admin access and modify system configuration.</td><td class="ctr">Low</td><td class="ctr">High</td><td class="ctr"><span class="badge b-med">Medium</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 5 RISK SUMMARY -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">5</span><h3>Risk Summary</h3></div>
+        <p class="lead-in">Top findings, sorted by priority, for the reader who won't read the full grid.</p>
+        <div class="hunt" data-id="c-risks">
+          <div class="risk-group">
+            <h4><span class="badge b-crit">Critical</span></h4>
+            <ol>
+              <li><b>Weak dashboard authentication</b> (Spoofing), one stolen credential means full access to patient data and alert settings.</li>
+              <li><b>Unencrypted device communications</b> (Info Disclosure), vitals cross the hospital WiFi with no encryption; anyone on the network can capture them.</li>
+            </ol>
+          </div>
+          <div class="risk-group">
+            <h4><span class="badge b-high">High</span></h4>
+            <ol>
+              <li><b>Firmware tampering</b> (Tampering), physical access allows firmware changes with no integrity check.</li>
+              <li><b>Device network pivot</b> (Elevation of Privilege), a compromised monitor becomes an entry point to the hospital network.</li>
+              <li><b>Patient data export</b> (Info Disclosure), bulk export allowed with no extra authorization.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 MITIGATIONS -->
+      <div class="sec">
+        <div class="sec-h"><span class="sec-n">6</span><h3>Recommended Mitigations</h3></div>
+        <p class="lead-in">For each Critical and High risk, a defense and how hard it is to put in place.</p>
+        <table class="dt">
+          <thead><tr><th>Risk</th><th>Proposed mitigation</th><th class="ctr">Complexity</th></tr></thead>
+          <tbody>
+            <tr class="hunt" data-id="c-mfa"><td>Weak dashboard authentication</td><td>Enable multi-factor authentication for all clinical dashboard users.</td><td class="ctr"><span class="badge b-med">Low</span></td></tr>
+            <tr class="hunt" data-id="f-mit" id="el-f-mit"><td>Unencrypted device communications</td><td id="mit-cell">Add rate limiting to device traffic so the network can't be overloaded with requests.</td><td class="ctr"><span class="badge b-high">Medium</span></td></tr>
+            <tr class="hunt" data-id="c-firm"><td>Firmware tampering</td><td>Enable secure boot and signed firmware verification.</td><td class="ctr"><span class="badge b-crit">High</span></td></tr>
+            <tr class="hunt" data-id="c-vlan"><td>Device network pivot</td><td>Segment monitors on an isolated VLAN, separate from the hospital network.</td><td class="ctr"><span class="badge b-high">Medium</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="mayaclose" class="hidden">
+        <div class="who">Maya</div>
+        <p>"That's the shape you're about to build: six sections, scenarios specific enough to rate, ratings that follow the matrix, and fixes that actually answer their risks. You just reviewed a threat model the way a lead reviews mine. Now let's make one for the Grand Marina."</p>
+      </div>
+
+      <div class="foot">MedVault Patient Monitoring System · Riverside General Hospital · For learning use in the Hydroficient externship</div>
+    </div>
+  </div>
+
+  <div id="introbeat">
+    <div class="intro-card">
+      <div class="kicker">Before You Open It</div>
+      <h2>Marcus reads one section only. Which goes first?</h2>
+      <p class="lead">A finished threat model has six sections. Busy clients like Marcus rarely read past the first one, so its order is a decision, not a habit. Which section should open the threat model?</p>
+      <div class="opts">
+        <button class="opt" data-opt="exec">Executive Summary</button>
+        <button class="opt" data-opt="sys">System Overview</button>
+        <button class="opt" data-opt="stride">STRIDE Analysis</button>
+        <button class="opt" data-opt="mit">Recommended Mitigations</button>
+      </div>
+      <div id="introfb">Pick the section you would put on page one.</div>
+      <button class="btn hidden" id="introgo">Open the junior analyst's draft &rarr;</button>
+    </div>
+  </div>
+
+  <div id="fbbar">
+    <div id="fbicon">?</div>
+    <div id="fbtext">Five mistakes are hiding in this draft: a bad rating, a vague scenario, a missing threat family, a mismatched fix, and a claim the threat model itself disagrees with. Click anything that looks wrong. Clicking a solid part costs you nothing.</div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var LS_KEY = 'hydro-fh-v1';
+
+  /* ---------- content ---------- */
+  var CLEAN = {
+    'c-exec1':  'This part is solid. It says what the system does, who depends on it, and what is at stake, in plain language before any technical detail.',
+    'c-exec2':  'Solid. One line that names the three things the client cares about: patient safety, privacy, and operations.',
+    'c-sys':    'Solid. Six facts, no filler. A reviewer can picture the whole system from this list.',
+    'c-flow':   'Solid. The data path runs from the patient’s bedside to the nurse’s screen in one line. That path is where most of the threats live.',
+    'c-assets': 'Solid. Each asset gets a C, I, and A priority, and the logic holds: wrong readings cause wrong treatment, so integrity is critical for monitors and vitals.',
+    'c-mspoof': 'Solid row. A named move (a fake device), a concrete detail (Patient Room 401), and Medium × High is High on the matrix.',
+    'c-mrepud': 'Solid row. No log means no proof, which is exactly Repudiation, and Medium × Medium is Medium.',
+    'c-mdos':   'Solid row. Specific method (signal jamming), specific scope (the ICU wing, 30 minutes), and Medium × Critical is Critical.',
+    'c-melev':  'Solid row. A compromised monitor becoming a door into the hospital network is Elevation of Privilege, and Low × Critical is High.',
+    'c-dspoof': 'Solid row. Stolen credentials used from outside the hospital, and High × Critical is Critical. This backs up the Risk Summary’s top finding.',
+    'c-dtamp':  'Solid row. Notice how specific it is: the exact threshold, 120 raised to 200 BPM. That is the level of detail a scenario needs.',
+    'c-drepud': 'Solid row. No audit trail of who acknowledged an alert is Repudiation, and the Medium rating follows the matrix.',
+    'c-dinfo':  'Solid row. A bulk export of six months of history is concrete, and Medium × High is High.',
+    'c-delev':  'Solid row. A normal account gaining admin power is the definition of Elevation of Privilege, and Low × High is Medium.',
+    'c-risks':  'Solid section. These rankings match the ratings in the tables above. Hold on to what it says about Critical risks, though. Does anything else in this threat model disagree with it?',
+    'c-mfa':    'Solid row. Multi-factor authentication directly attacks the stolen-credential problem, and it is a low-effort fix, which is why it tops the list.',
+    'c-firm':   'Solid row. Signed firmware means a tampered monitor won’t boot, which answers exactly the risk named on the left.',
+    'c-vlan':   'Solid row. An isolated network segment means a compromised monitor has nowhere to pivot to.'
+  };
+
+  var FLAWS = {
+    'f-exec': {
+      fb: '<b>Flaw found: the summary contradicts the model.</b> Check the Risk Summary below, it lists two Critical risks. The summary is the one section the client’s leadership will definitely read, and this draft tells them the opposite of what the model found.',
+      fixNote: '<b>What changed:</b> the summary now reports the two Critical risks the model actually found, so the busiest reader gets the true picture.'
+    },
+    'f-rating': {
+      fb: '<b>Flaw found: the rating breaks the matrix.</b> High likelihood × Critical impact is Critical, not Medium. Rated Medium, the most urgent finding in this table would sink to the bottom of the fix list.',
+      fixNote: '<b>What changed:</b> the rating now follows the matrix. High × Critical is Critical.'
+    },
+    'f-vague': {
+      fb: '<b>Flaw found: the scenario is too vague to use.</b> "Someone could hack the monitors" names no attacker, no method, and no consequence, so there is nothing to rate. Compare it with the dashboard row that names the exact threshold change, 120 to 200 BPM.',
+      fixNote: '<b>What changed:</b> the scenario now names the attacker’s method and the consequence, so its likelihood and impact can actually be rated.'
+    },
+    'f-claim': {
+      fb: '<b>Flaw found: a family is missing.</b> Count the Clinical Dashboard rows: five, not six. Denial of Service is skipped, and it clearly applies. If the dashboard goes down, nurses lose sight of all their patients at once.',
+      fixNote: '<b>What changed:</b> the missing Denial of Service row was added to the Clinical Dashboard, so the claim of full coverage is now true.'
+    },
+    'f-mit': {
+      fb: '<b>Flaw found: the fix doesn’t match the risk.</b> Rate limiting keeps a service alive when it is flooded with requests. It does nothing to stop someone from reading traffic. This risk is about eavesdropping, so the fix has to make the data unreadable: encryption.',
+      fixNote: '<b>What changed:</b> the fix is now encryption, which makes intercepted vitals unreadable. That answers an eavesdropping risk; rate limiting never could.'
+    }
+  };
+
+  var CORRECTED = {
+    'f-exec': '<span class="fixtag">Fixed</span><b>Our analysis identified two Critical risks requiring immediate attention:</b> weak authentication on the clinical dashboard, and unencrypted device communications that anyone on the hospital network can read. We recommend fixing both before the next audit cycle.',
+    'f-claim': '<span class="fixtag">Fixed</span>The core of the model. Both components below are analyzed across all six STRIDE families.'
+  };
+  var CORRECTED_VAGUE = '<span class="fixtag">Fixed</span>Attacker with physical access modifies a monitor’s firmware so it reports normal vitals regardless of the patient’s actual readings.';
+  var CORRECTED_RATING = '<span class="fixtag">Fixed</span><span class="badge b-crit">Critical</span>';
+  var CORRECTED_MIT = '<span class="fixtag">Fixed</span>Implement TLS encryption for all device-to-gateway communication, so vitals can’t be read in transit.';
+
+  /* ---------- state ---------- */
+  var found = {};
+  var correctedMode = false;
+  var flawIds = Object.keys(FLAWS);
+
+  var introDone = false;
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (saved && saved.found) saved.found.forEach(function(id){ if (FLAWS[id]) found[id] = true; });
+    if (saved && saved.intro) introDone = true;
+  } catch(e){}
+
+  function save(){
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ v:1, found:Object.keys(found), intro:introDone })); } catch(e){}
+  }
+  function foundCount(){ return Object.keys(found).length; }
+
+  /* ---------- dom ---------- */
+  var fbbar = document.getElementById('fbbar');
+  var fbtext = document.getElementById('fbtext');
+  var fbicon = document.getElementById('fbicon');
+  var foundnum = document.getElementById('foundnum');
+  var revealbtn = document.getElementById('revealbtn');
+  var correctbtn = document.getElementById('correctbtn');
+  var backbtn = document.getElementById('backbtn');
+  var matrixbtn = document.getElementById('matrixbtn');
+  var matrixpanel = document.getElementById('matrixpanel');
+  var bannertext = document.getElementById('bannertext');
+  var docbanner = document.getElementById('docbanner');
+  var docstatus = document.getElementById('docstatus');
+  var toptitle = document.getElementById('toptitle');
+  var mayaclose = document.getElementById('mayaclose');
+  var dashDosRow = document.getElementById('dash-dos');
+
+  var originals = {};
+  ['el-f-exec','el-f-claim'].forEach(function(id){
+    originals[id] = document.getElementById(id).innerHTML;
+  });
+  originals['vague-cell'] = document.getElementById('vague-cell').innerHTML;
+  originals['rating-cell'] = document.getElementById('rating-cell').innerHTML;
+  originals['mit-cell'] = document.getElementById('mit-cell').innerHTML;
+
+  function setFeedback(html, mode, icon){
+    fbtext.innerHTML = html;
+    fbbar.className = mode || '';
+    fbicon.textContent = icon || '?';
+  }
+
+  function elFor(id){ return document.querySelector('.hunt[data-id="' + id + '"]'); }
+
+  function updateChrome(){
+    var n = foundCount();
+    foundnum.textContent = n;
+    revealbtn.classList.toggle('hidden', correctedMode || n < 3 || n >= 5);
+    correctbtn.classList.toggle('hidden', correctedMode || n < 5);
+    backbtn.classList.toggle('hidden', !correctedMode);
+    flawIds.forEach(function(id){
+      var el = elFor(id);
+      if (el) el.classList.toggle('found', !!found[id] && !correctedMode);
+    });
+  }
+
+  function markFound(id, silent){
+    var isNew = !found[id];
+    found[id] = true;
+    save();
+    updateChrome();
+    if (silent) return;
+    setFeedback(FLAWS[id].fb, 'good', '✓');
+    if (foundCount() >= 5){
+      setFeedback(FLAWS[id].fb + ' <b>That was the last one, all five found.</b> Now see how the fixed version shipped to the client.', 'good', '✓');
+    }
+  }
+
+  /* ---------- clicks ---------- */
+  document.querySelectorAll('.hunt').forEach(function(el){
+    el.addEventListener('click', function(){
+      var id = el.dataset.id;
+      if (correctedMode){
+        if (FLAWS[id]) setFeedback(FLAWS[id].fixNote, 'good', '✓');
+        else if (CLEAN[id]) setFeedback(CLEAN[id], 'ok', '✓');
+        return;
+      }
+      if (FLAWS[id]){
+        markFound(id);
+      } else if (CLEAN[id]){
+        setFeedback(CLEAN[id], 'ok', '✓');
+        el.classList.remove('oksolid'); void el.offsetWidth; el.classList.add('oksolid');
+        setTimeout(function(){ el.classList.remove('oksolid'); }, 1400);
+      }
+    });
+  });
+
+  revealbtn.addEventListener('click', function(){
+    flawIds.forEach(function(id){ found[id] = true; });
+    save();
+    updateChrome();
+    setFeedback('The remaining flaws are now highlighted in teal. Click each one to read why it is wrong, then see the corrected version.', 'good', '✓');
+  });
+
+  matrixbtn.addEventListener('click', function(){
+    matrixpanel.classList.toggle('hidden');
+    matrixbtn.textContent = matrixpanel.classList.contains('hidden') ? 'Risk matrix' : 'Hide matrix';
+  });
+
+  /* ---------- corrected mode ---------- */
+  function applyCorrected(){
+    correctedMode = true;
+    document.getElementById('el-f-exec').innerHTML = CORRECTED['f-exec'];
+    document.getElementById('el-f-claim').innerHTML = CORRECTED['f-claim'];
+    document.getElementById('vague-cell').innerHTML = CORRECTED_VAGUE;
+    document.getElementById('rating-cell').innerHTML = CORRECTED_RATING;
+    document.getElementById('mit-cell').innerHTML = CORRECTED_MIT;
+    dashDosRow.classList.remove('hidden');
+    dashDosRow.classList.add('fixregion');
+    flawIds.forEach(function(id){
+      var el = elFor(id);
+      if (el){ el.classList.remove('found'); el.classList.add('fixregion'); }
+    });
+    docbanner.classList.add('fixed');
+    bannertext.textContent = 'CORRECTED VERSION · This is what shipped to the client. Green marks each fix. Click a fix to see what changed.';
+    docstatus.textContent = 'Final, delivered to client';
+    toptitle.textContent = 'MedVault Threat Model, Corrected';
+    mayaclose.classList.remove('hidden');
+    updateChrome();
+    setFeedback('Every fix is marked in green. Click any of them to see exactly what changed, then read Maya’s note at the bottom.', 'good', '✓');
+    document.getElementById('docscroll').scrollTop = 0;
+  }
+
+  function backToDraft(){
+    correctedMode = false;
+    document.getElementById('el-f-exec').innerHTML = originals['el-f-exec'];
+    document.getElementById('el-f-claim').innerHTML = originals['el-f-claim'];
+    document.getElementById('vague-cell').innerHTML = originals['vague-cell'];
+    document.getElementById('rating-cell').innerHTML = originals['rating-cell'];
+    document.getElementById('mit-cell').innerHTML = originals['mit-cell'];
+    dashDosRow.classList.add('hidden');
+    dashDosRow.classList.remove('fixregion');
+    flawIds.forEach(function(id){
+      var el = elFor(id);
+      if (el) el.classList.remove('fixregion');
+    });
+    docbanner.classList.remove('fixed');
+    bannertext.textContent = 'SAMPLE, PAST ENGAGEMENT · Junior analyst’s draft, five mistakes inside. Click anything that looks wrong.';
+    docstatus.textContent = 'Draft, awaiting review';
+    toptitle.textContent = 'MedVault Threat Model, Draft';
+    mayaclose.classList.add('hidden');
+    updateChrome();
+    setFeedback('Back in the draft. The five flaws stay highlighted. Click any of them to re-read why they are wrong.', '', '?');
+  }
+
+  correctbtn.addEventListener('click', applyCorrected);
+  backbtn.addEventListener('click', backToDraft);
+
+  /* ---------- intro beat ---------- */
+  var introbeat = document.getElementById('introbeat');
+  var introfb = document.getElementById('introfb');
+  var introgo = document.getElementById('introgo');
+  var INTRO_WRONG = {
+    'sys':    'Useful, but it is evidence. The overview tells Marcus how the system works, not what he should do about it. Pick again.',
+    'stride': 'That is the engine room of the threat model, where the real analysis lives. But a busy decision-maker will not start with a six-row grid. Pick again.',
+    'mit':    'Close. The fixes matter most to Marcus, but they only make sense once he knows what the risks are. Pick again.'
+  };
+  document.querySelectorAll('.opt').forEach(function(b){
+    b.addEventListener('click', function(){
+      var v = b.dataset.opt;
+      document.querySelectorAll('.opt').forEach(function(o){ o.classList.remove('wrongpick'); });
+      if (v === 'exec'){
+        b.classList.add('right');
+        introfb.className = 'yes';
+        introfb.innerHTML = '<b>Right.</b> Decision-makers read the summary; the rest of the threat model is the evidence behind it. The twist: it is written last, but placed first. Keep that in mind, you are about to catch a summary lying.';
+        introgo.classList.remove('hidden');
+      } else {
+        b.classList.add('wrongpick');
+        introfb.className = 'no';
+        introfb.textContent = INTRO_WRONG[v];
+      }
+    });
+  });
+  introgo.addEventListener('click', function(){
+    introDone = true;
+    save();
+    introbeat.classList.add('hidden');
+  });
+  if (introDone) introbeat.classList.add('hidden');
+
+  /* ---------- restore ---------- */
+  updateChrome();
+  if (foundCount() > 0 && foundCount() < 5){
+    setFeedback('Welcome back. You have found ' + foundCount() + ' of 5 flaws so far. The ones you found stay highlighted, keep hunting.', '', '?');
+  } else if (foundCount() >= 5){
+    setFeedback('Welcome back, all five flaws found. See the corrected version, or click any highlighted flaw to re-read why it is wrong.', 'good', '✓');
+  }
+
+  /* ---------- fit-inside-embed scaling ---------- */
+  var wrapper = document.getElementById('deck-wrapper');
+  function scaleDeck(){
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 600);
+    wrapper.style.transform = 'scale(' + s + ')';
+    wrapper.style.left = ((window.innerWidth  - 960 * s) / 2) + 'px';
+    wrapper.style.top  = ((window.innerHeight - 600 * s) / 2) + 'px';
+  }
+  window.addEventListener('resize', scaleDeck);
+  scaleDeck();
+})();
+</script>
+</body>
+</html>
