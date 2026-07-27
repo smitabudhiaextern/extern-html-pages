@@ -1,414 +1,663 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Place Your Bet: The Models Layer</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Models Layer: Which AI Bet Would You Back?</title>
 <style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
   :root{
     --bg:#FDF8F8;
     --title:#1C1B1B;
     --body:#484646;
     --fill:#DCE1FF;
     --accent:#001D69;
+    --font:"Inter", -apple-system, "Segoe UI", sans-serif;
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{background:var(--bg);}
-  body{
-    font-family:"Inter",-apple-system,"Segoe UI",sans-serif;
-    color:var(--body);
-    min-height:100vh;
-    display:flex;
-    align-items:flex-start;
-    justify-content:center;
-    overflow-x:hidden;
-  }
-  #scaler{position:relative;width:100%;}
+
+  html,body{ background:#EFE9E9; font-family:var(--font); }
+
+  #outer{ width:100%; display:flex; justify-content:center; overflow:hidden; }
+
   #deck-wrapper{
-    width:960px;height:540px;flex-shrink:0;transform-origin:top left;
-    position:relative;overflow:hidden;background:var(--bg);
+    width:960px;
+    height:540px;
+    flex-shrink:0;
+    transform-origin:top left;
+  }
+
+  #stage{
+    width:960px;
+    height:540px;
+    background:var(--bg);
+    color:var(--body);
+    position:relative;
+    overflow:hidden;
   }
 
   .screen{
-    position:absolute;inset:0;
-    padding:44px 56px;
+    position:absolute;
+    inset:0;
+    padding:38px 56px 30px;
     display:none;
     flex-direction:column;
   }
-  .screen.active{display:flex;}
+  .screen.active{ display:flex; }
 
-  /* ---------- SCREEN 1 ---------- */
-  #screen1{align-items:center;justify-content:center;text-align:center;}
-  .wallet-wrap{margin-bottom:26px;position:relative;}
-  .chip-label{
-    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-weight:800;font-size:23px;color:var(--accent);letter-spacing:.5px;
-    transform:translateY(2px);
+  /* top bar: step indicator */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+    min-height:26px;
   }
-  h1.hero{
-    font-size:44px;line-height:1.06;font-weight:800;color:var(--title);
-    max-width:760px;letter-spacing:-1px;
+  .kicker{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:1.4px;
+    color:var(--accent);
+    text-transform:uppercase;
   }
-  .subline{
-    margin-top:18px;font-size:18px;line-height:1.5;color:var(--body);
-    max-width:640px;
+  .dots{ display:flex; gap:8px; align-items:center; }
+  .dot{
+    width:9px; height:9px; border-radius:50%;
+    background:#CDCACA;
   }
+  .dot.on{ background:var(--accent); }
+  .dotlabel{
+    font-size:11px; font-weight:600; color:var(--body);
+    letter-spacing:.3px; margin-right:4px;
+  }
+
+  h1{
+    font-size:34px;
+    line-height:1.15;
+    color:var(--title);
+    font-weight:800;
+    letter-spacing:-.5px;
+    margin-bottom:14px;
+  }
+
+  .lead{
+    font-size:19px;
+    line-height:1.5;
+    color:var(--body);
+    max-width:760px;
+  }
+  .lead b{ color:var(--title); font-weight:700; }
+
+  .grow{ flex:1; }
+
+  .footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-top:14px;
+  }
+  .hint{ font-size:13px; color:#7A7777; }
+
+  button{ font-family:var(--font); cursor:pointer; }
+
   .btn{
-    font-family:inherit;cursor:pointer;border:none;border-radius:999px;
-    font-weight:700;transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+    background:var(--accent);
+    color:#F3F5FF;
+    border:none;
+    border-radius:11px;
+    padding:14px 30px;
+    font-size:16px;
+    font-weight:700;
+    letter-spacing:.2px;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    transition:transform .08s ease, box-shadow .15s ease;
   }
-  .btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px;}
-  .btn-primary{
-    background:var(--accent);color:#F4F6FF;padding:15px 34px;font-size:17px;
-    box-shadow:0 6px 18px rgba(0,29,105,.22);
-  }
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,29,105,.28);}
-  #screen1 .btn-primary{margin-top:34px;}
+  .btn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,29,105,.22); }
+  .btn svg{ width:18px; height:18px; stroke:#F3F5FF; }
 
-  /* ---------- SCREEN 2 ---------- */
-  .s2-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
-  h2.s2-title{font-size:26px;font-weight:800;color:var(--title);letter-spacing:-.5px;}
-  .s2-kicker{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:.4px;text-transform:uppercase;}
-  .bet-grid{
-    display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
-    gap:16px;flex:1;
+  .btn.ghost{
+    background:transparent;
+    color:var(--accent);
+    border:2px solid var(--accent);
   }
-  .bet-card{
-    background:var(--fill);border:1.5px solid transparent;border-radius:16px;
-    padding:20px 22px;cursor:pointer;text-align:left;
-    display:flex;flex-direction:column;justify-content:space-between;
-    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-    font-family:inherit;color:var(--body);
-  }
-  .bet-card:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(0,29,105,.14);border-color:var(--accent);}
-  .bet-card:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
-  .bet-card.backed{border-color:var(--accent);}
-  .bet-num{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;}
-  .bet-name{font-size:21px;font-weight:800;color:var(--title);line-height:1.12;margin-top:6px;letter-spacing:-.4px;}
-  .bet-tease{font-size:14.5px;line-height:1.4;color:var(--body);margin-top:8px;}
-  .bet-open{
-    margin-top:14px;display:flex;align-items:center;gap:7px;
-    font-size:13px;font-weight:700;color:var(--accent);
-  }
-  .s2-foot{margin-top:14px;text-align:center;font-size:14px;color:var(--body);font-weight:600;}
+  .btn.ghost svg{ stroke:var(--accent); }
+  .btn.ghost:hover{ box-shadow:none; background:rgba(0,29,105,.06); }
 
-  /* ---------- OVERLAY ---------- */
-  #overlay{
-    position:absolute;inset:0;background:rgba(28,27,27,.34);
-    display:none;align-items:center;justify-content:center;padding:26px;z-index:20;
+  button.textlink{
+    background:none; border:none;
+    color:var(--accent);
+    font-size:13px; font-weight:600;
+    text-decoration:underline;
+    padding:4px 2px;
   }
-  #overlay.active{display:flex;}
-  .panel{
-    background:var(--bg);border-radius:18px;width:100%;height:100%;
-    padding:26px 30px;position:relative;
-    display:flex;flex-direction:column;
-    box-shadow:0 24px 60px rgba(0,29,105,.28);
-    border:1.5px solid var(--fill);
+
+  :focus-visible{
+    outline:3px solid #001D69;
+    outline-offset:3px;
+    border-radius:8px;
   }
-  .panel-close{
-    position:absolute;top:16px;right:16px;width:34px;height:34px;border-radius:50%;
-    background:var(--fill);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
-    color:var(--accent);transition:background .12s ease;
+
+  /* ===== Screen 3: card grid ===== */
+  .instruct{
+    font-size:15px;
+    color:var(--body);
+    margin-bottom:14px;
   }
-  .panel-close:hover{background:#c9d1ff;}
-  .panel-close:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
-  .panel-num{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;}
-  .panel-name{font-size:26px;font-weight:800;color:var(--title);line-height:1.1;margin-top:5px;letter-spacing:-.5px;max-width:80%;}
-  .panel-cols{display:grid;grid-template-columns:1.15fr 1fr;gap:26px;flex:1;margin-top:16px;min-height:0;}
-  .col-label{font-size:12.5px;font-weight:800;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:8px;}
-  .panel-explain{font-size:15.5px;line-height:1.55;color:var(--body);}
-  .panel-right{display:flex;flex-direction:column;min-height:0;}
-  .chips{display:flex;flex-direction:column;gap:9px;overflow:hidden;flex:1;}
+  .instruct b{ color:var(--title); }
+
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:14px;
+    flex:1;
+  }
+  .card{
+    background:var(--fill);
+    border:2px solid transparent;
+    border-radius:14px;
+    padding:15px 18px;
+    text-align:left;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    transition:transform .08s ease, border-color .15s ease;
+  }
+  .card:hover{ transform:translateY(-2px); border-color:var(--accent); }
+  .card.read{ border-color:var(--accent); }
+  .card .catchy{
+    font-size:19px;
+    font-weight:800;
+    color:var(--title);
+    line-height:1.15;
+    margin-bottom:6px;
+  }
   .chip{
-    background:var(--fill);border-radius:11px;padding:9px 12px;
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--accent);
+    background:#F3F5FF;
+    border:1px solid #B9C2F0;
+    border-radius:20px;
+    padding:3px 10px;
+    margin-bottom:8px;
+    width:fit-content;
   }
-  .chip-name{font-size:13.5px;font-weight:800;color:var(--accent);}
-  .chip-desc{font-size:12.5px;line-height:1.35;color:var(--body);margin-top:2px;}
-  .btn-back{
-    background:var(--accent);color:#F4F6FF;padding:14px 20px;font-size:16px;width:100%;
-    margin-top:14px;display:flex;align-items:center;justify-content:center;gap:9px;
-    box-shadow:0 6px 16px rgba(0,29,105,.22);
+  .card .tease{
+    font-size:13.5px;
+    color:var(--body);
+    line-height:1.4;
   }
-  .btn-back:hover{transform:translateY(-2px);}
+  .card .taprow{
+    display:flex; align-items:center; gap:6px;
+    margin-top:9px;
+    font-size:12px; font-weight:700; color:var(--accent);
+  }
+  .card .taprow svg{ width:14px; height:14px; stroke:var(--accent); flex-shrink:0; }
+  .card .readmark{ display:none; }
+  .card.read .readmark{ display:inline; }
+  .card.read .taptext{ display:none; }
 
-  /* ---------- SCREEN 3 ---------- */
-  #screen3{justify-content:center;}
-  .id-top{display:flex;align-items:flex-start;gap:20px;}
-  .id-badge{
-    width:70px;height:70px;border-radius:16px;background:var(--accent);
-    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  /* ===== overlay inside stage ===== */
+  #overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(28,27,27,.42);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:20;
   }
-  .id-eyebrow{font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--accent);text-transform:uppercase;}
-  .id-name{font-size:34px;font-weight:800;color:var(--title);line-height:1.05;letter-spacing:-.8px;margin-top:2px;}
-  .id-line{font-size:17px;line-height:1.45;color:var(--body);margin-top:8px;max-width:560px;}
-  .id-maps{
-    margin-top:12px;display:inline-block;background:var(--fill);color:var(--accent);
-    font-size:13.5px;font-weight:700;padding:8px 14px;border-radius:999px;
+  #overlay.show{ display:flex; }
+  .sheet{
+    width:820px;
+    max-height:470px;
+    background:var(--bg);
+    border-radius:16px;
+    padding:26px 30px;
+    position:relative;
+    box-shadow:0 20px 50px rgba(0,0,0,.28);
   }
-  .recap{margin-top:22px;border-top:1.5px solid var(--fill);padding-top:16px;}
-  .recap-h{font-size:13px;font-weight:800;letter-spacing:.5px;color:var(--accent);text-transform:uppercase;margin-bottom:11px;}
-  .recap-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 26px;}
-  .recap-item{display:flex;gap:10px;align-items:baseline;}
-  .recap-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;transform:translateY(-1px);}
-  .recap-name{font-size:14px;font-weight:800;color:var(--title);}
-  .recap-gloss{font-size:13px;color:var(--body);}
-  .close-line{margin-top:20px;font-size:15.5px;line-height:1.5;color:var(--body);max-width:720px;}
-  .change-bet{
-    margin-top:14px;background:none;border:none;cursor:pointer;font-family:inherit;
-    font-size:14px;font-weight:700;color:var(--accent);text-decoration:underline;text-underline-offset:3px;
-    align-self:flex-start;padding:4px 0;
+  .sheet .chip{ margin-bottom:6px; }
+  .sheet h2{
+    font-size:26px;
+    color:var(--title);
+    font-weight:800;
+    line-height:1.15;
+    margin-bottom:16px;
+    padding-right:40px;
   }
-  .change-bet:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+  .closex{
+    position:absolute;
+    top:16px; right:16px;
+    width:34px; height:34px;
+    border-radius:50%;
+    border:none;
+    background:var(--fill);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .closex svg{ width:18px; height:18px; stroke:var(--accent); }
+  .closex:hover{ background:#C7CFFA; }
+
+  .cols{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:24px;
+  }
+  .part-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.8px;
+    color:var(--accent);
+    margin-bottom:6px;
+  }
+  .part-text{
+    font-size:15px;
+    line-height:1.5;
+    color:var(--body);
+    margin-bottom:16px;
+  }
+  .companies{ display:flex; flex-wrap:wrap; gap:8px; }
+  .cochip{
+    font-size:13px;
+    font-weight:600;
+    color:var(--title);
+    background:#fff;
+    border:1.5px solid #B9C2F0;
+    border-radius:8px;
+    padding:6px 12px;
+  }
+
+  /* ===== Screen 4: option buttons ===== */
+  .optgrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    flex:1;
+  }
+  .opt{
+    background:#fff;
+    border:2px solid #C9CEEC;
+    border-radius:14px;
+    padding:18px 22px;
+    text-align:left;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    transition:transform .08s ease, border-color .15s, background .15s;
+  }
+  .opt:hover{ transform:translateY(-2px); border-color:var(--accent); background:var(--fill); }
+  .opt .oc{
+    font-size:20px; font-weight:800; color:var(--title); line-height:1.15;
+    margin-bottom:5px;
+  }
+  .opt .orn{
+    font-size:13px; font-weight:600; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.6px;
+  }
+
+  /* ===== Screen 5: result ===== */
+  .resultwrap{ display:flex; flex-direction:column; height:100%; }
+  .backline{ font-size:16px; color:var(--body); margin-bottom:4px; }
+  .backline b{ color:var(--title); }
+  .identity{
+    font-size:32px; font-weight:800; color:var(--accent);
+    line-height:1.1; margin-bottom:8px;
+  }
+  .idsub{ font-size:18px; color:var(--body); line-height:1.4; max-width:720px; margin-bottom:16px; }
+
+  .recap{
+    background:var(--fill);
+    border-radius:14px;
+    padding:15px 20px;
+  }
+  .recap h3{
+    font-size:13px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.8px; color:var(--accent); margin-bottom:11px;
+  }
+  .recaprow{
+    display:flex; align-items:baseline; gap:8px;
+    margin-bottom:8px; font-size:14px; line-height:1.35;
+  }
+  .recaprow:last-child{ margin-bottom:0; }
+  .recaprow .rc{ font-weight:800; color:var(--title); }
+  .recaprow .rn{ font-size:12px; color:var(--accent); font-weight:600; }
+  .recaprow .rg{ color:var(--body); }
+
+  .closing{ font-size:15px; color:var(--body); line-height:1.5; margin-top:14px; max-width:760px; }
+  .closing b{ color:var(--title); }
+
+  /* wallet icon block on screen 2 */
+  .wallet{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .wallet svg{ width:30px; height:30px; stroke:var(--accent); fill:none; }
 </style>
 </head>
 <body>
-<div id="scaler">
+<div id="outer">
   <div id="deck-wrapper">
+    <div id="stage">
 
-    <!-- SCREEN 1 -->
-    <section id="screen1" class="screen active">
-      <div class="wallet-wrap">
-        <svg width="188" height="118" viewBox="0 0 188 118" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="10" y="20" width="168" height="88" rx="16" fill="#DCE1FF" stroke="#001D69" stroke-width="2.5"/>
-          <path d="M10 44 H178" stroke="#001D69" stroke-width="2.5"/>
-          <rect x="128" y="58" width="50" height="34" rx="9" fill="#FDF8F8" stroke="#001D69" stroke-width="2.5"/>
-          <circle cx="150" cy="75" r="7" fill="none" stroke="#001D69" stroke-width="2.5"/>
-          <ellipse cx="94" cy="24" rx="52" ry="15" fill="#FDF8F8" stroke="#001D69" stroke-width="2.5"/>
-        </svg>
-        <div class="chip-label">$1,000,000</div>
-      </div>
-      <h1 class="hero">You've got $1M. Where's the future of AI brains?</h1>
-      <p class="subline">Four bets. Four kinds of startups racing to build the next generation of AI models. Read each one, then back the bet your gut believes in.</p>
-      <button class="btn btn-primary" id="startBtn">See the four bets</button>
-    </section>
-
-    <!-- SCREEN 2 -->
-    <section id="screen2" class="screen">
-      <div class="s2-head">
-        <h2 class="s2-title">Place your bet on AI's brains</h2>
-        <span class="s2-kicker">The Models Layer</span>
-      </div>
-      <div class="bet-grid" id="betGrid"><!-- cards injected --></div>
-      <p class="s2-foot">Read as many as you want. Back the one your gut believes.</p>
-    </section>
-
-    <!-- SCREEN 3 -->
-    <section id="screen3" class="screen">
-      <div class="id-top">
-        <div class="id-badge">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21l1.18-6.88-5-4.87 7.1-1.01L12 2z" stroke="#F4F6FF" stroke-width="1.6" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div>
-          <div class="id-eyebrow">You backed this bet</div>
-          <div class="id-name" id="idName">The Economist</div>
-          <div class="id-line" id="idLine"></div>
-          <div class="id-maps" id="idMaps"></div>
-        </div>
-      </div>
-
-      <div class="recap">
-        <div class="recap-h">The four bets on AI brains:</div>
-        <div class="recap-grid" id="recapGrid"><!-- injected --></div>
-      </div>
-
-      <p class="close-line">No wrong answer, this was instinct. Models is one of three areas you can focus on. If this layer pulls you, you will claim it in the next task.</p>
-      <button class="change-bet" id="changeBet">Change my bet</button>
-    </section>
-
-    <!-- OVERLAY -->
-    <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="panelName">
-      <div class="panel">
-        <button class="panel-close" id="panelClose" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" stroke="#001D69" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <div class="panel-num" id="panelNum"></div>
-        <div class="panel-name" id="panelName"></div>
-        <div class="panel-cols">
-          <div>
-            <div class="col-label">The bet</div>
-            <div class="panel-explain" id="panelExplain"></div>
-          </div>
-          <div class="panel-right">
-            <div class="col-label">Who's already in</div>
-            <div class="chips" id="panelChips"></div>
-            <button class="btn btn-back" id="backBtn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" stroke="#F4F6FF" stroke-width="1.8"/>
-                <path d="M12 7v10M9.5 9.2c0-1.2 1.1-1.9 2.5-1.9s2.5.7 2.5 1.9c0 2.6-5 1.4-5 4 0 1.2 1.1 1.9 2.5 1.9s2.5-.7 2.5-1.9" stroke="#F4F6FF" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-              Back this bet ($1M)
-            </button>
+      <!-- ===== SCREEN 1 ===== -->
+      <section class="screen active" id="s1">
+        <div class="topbar">
+          <span class="kicker">Step 1: Learn</span>
+          <div class="dots"><span class="dotlabel">Step 1 of 4</span>
+            <span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
           </div>
         </div>
+        <h1>What is an AI model?</h1>
+        <div class="grow">
+          <p class="lead">
+            You have used ChatGPT, right? <b>ChatGPT is a model.</b> A model is the AI "brain" itself.
+            It learned from millions of examples, so now it can answer questions, write stories, and make pictures.
+            <br><br>
+            Every time you type to ChatGPT, you are talking to a model. The AI that picks your next video,
+            or turns your words into an image, those are models too.
+          </p>
+        </div>
+        <div class="footer">
+          <span class="hint">This takes about 2 minutes.</span>
+          <button class="btn" data-go="s2">Next
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN 2 ===== -->
+      <section class="screen" id="s2">
+        <div class="topbar">
+          <span class="kicker">Step 2: What You Will Do</span>
+          <div class="dots"><span class="dotlabel">Step 2 of 4</span>
+            <span class="dot"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+        </div>
+        <div class="wallet">
+          <svg viewBox="0 0 24 24" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 10h-5a2 2 0 0 0 0 4h5"/></svg>
+        </div>
+        <h1>Who builds these AI brains?</h1>
+        <div class="grow">
+          <p class="lead">
+            Lots of companies build AI brains. Together, they are called the <b>Models layer</b>.
+            But they do not all build the same way. There are <b>4 different kinds</b>.
+            <br><br>
+            First you will meet all 4. Then you will make a call: if you were an investor with <b>$1M</b>,
+            which kind would you back?
+          </p>
+        </div>
+        <div class="footer">
+          <button class="btn ghost" data-go="s1">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            Back
+          </button>
+          <button class="btn" data-go="s3">Meet the 4 kinds
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN 3 ===== -->
+      <section class="screen" id="s3">
+        <div class="topbar">
+          <span class="kicker">Step 3: Read All 4</span>
+          <div class="dots"><span class="dotlabel">Step 3 of 4</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot on"></span><span class="dot"></span>
+          </div>
+        </div>
+        <p class="instruct"><b>Tap each card</b> to read what it is. Read all 4, then pick Continue.</p>
+        <div class="grid" id="cardgrid">
+          <!-- cards injected by JS -->
+        </div>
+        <div class="footer">
+          <span class="hint"><span id="readcount">0</span> of 4 read</span>
+          <button class="btn" data-go="s4">Continue to your call
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN 4 ===== -->
+      <section class="screen" id="s4">
+        <div class="topbar">
+          <span class="kicker">Step 4: Your Call</span>
+          <div class="dots"><span class="dotlabel">Step 4 of 4</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on"></span>
+          </div>
+        </div>
+        <h1 style="margin-bottom:6px;">You have $1M. Which kind would you back?</h1>
+        <p class="instruct" style="margin-bottom:16px;">Pick the one your gut believes in. There is no wrong answer.</p>
+        <div class="optgrid" id="optgrid">
+          <!-- options injected by JS -->
+        </div>
+        <div class="footer">
+          <button class="btn ghost" data-go="s3">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            Back to the 4 kinds
+          </button>
+          <span class="hint">Tap a card to lock in your bet.</span>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN 5 ===== -->
+      <section class="screen" id="s5">
+        <div class="topbar">
+          <span class="kicker">Your Result</span>
+          <div class="dots"><span class="dotlabel">Done</span>
+            <span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span>
+          </div>
+        </div>
+        <div class="resultwrap">
+          <p class="backline" id="backline">You backed ...</p>
+          <div class="identity" id="identity">The ...</div>
+          <p class="idsub" id="idsub"></p>
+
+          <div class="recap">
+            <h3>The 4 kinds of model startups</h3>
+            <div class="recaprow"><span class="rc">AI that fits in your pocket</span><span class="rn">(Edge AI)</span><span class="rg">runs right on your phone or car</span></div>
+            <div class="recaprow"><span class="rc">AI that becomes an expert</span><span class="rn">(Fine-Tuning)</span><span class="rg">trained deep on one subject</span></div>
+            <div class="recaprow"><span class="rc">AI that costs way less</span><span class="rn">(Efficiency)</span><span class="rg">clever tricks to make AI cheaper</span></div>
+            <div class="recaprow"><span class="rc">AI built a whole new way</span><span class="rn">(Post-Transformer)</span><span class="rg">a brand new recipe for AI</span></div>
+          </div>
+
+          <p class="closing">No wrong answer, this was your gut. <b>Next, you will pick which layer of AI excites you most.</b></p>
+          <div style="margin-top:auto; padding-top:8px;">
+            <button class="textlink" data-go="s4">Change my pick</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== OVERLAY ===== -->
+      <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+        <div class="sheet">
+          <button class="closex" id="closeOverlay" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+          <span class="chip" id="ovChip">REAL NAME</span>
+          <h2 id="ovTitle">Catchy name</h2>
+          <div class="cols">
+            <div>
+              <div class="part-label">What it is</div>
+              <div class="part-text" id="ovWhat"></div>
+            </div>
+            <div>
+              <div class="part-label">Why it matters</div>
+              <div class="part-text" id="ovWhy"></div>
+              <div class="part-label">Real companies doing this</div>
+              <div class="companies" id="ovCos"></div>
+            </div>
+          </div>
+        </div>
       </div>
+
     </div>
-
   </div>
 </div>
 
 <script>
-  var BETS = [
-    {
-      num:"Bet 1",
-      name:"AI escapes the data center",
-      tease:"What if the AI lived in your pocket, not a warehouse?",
-      bet:"Big AI runs in giant data centers. This bet says the future is AI small and efficient enough to run right on your phone, your car, or your glasses, with no internet needed. Some startups shrink big models down; others design tiny-but-mighty ones from scratch. If they are right, AI gets instant, private, and works anywhere, across billions of devices.",
-      players:[
-        {n:"Liquid AI", d:"Builds a new kind of foundation model designed to run fast directly on phones, laptops, and cars."},
-        {n:"Mistral (Ministral)", d:"A major AI lab whose small Ministral models are built specifically for on-device use."}
-      ],
-      identity:"The Escapist",
-      identityLine:"You believe AI belongs in your pocket, not a warehouse.",
-      maps:"You backed: On-device AI, shrinking and designing tiny efficient models.",
-      gloss:"AI small enough to run on your phone."
-    },
-    {
-      num:"Bet 2",
-      name:"Every industry gets its own AI",
-      tease:"One AI for doctors. One for lawyers. Winner takes the field.",
-      bet:"A general AI knows a little about everything. This bet says the real money is training it deep on ONE field, medicine, law, or finance, until it performs like a specialist, plus building the tools that make that cheap and repeatable. If they are right, every serious industry ends up with its own expert AI, because generic models are not good enough for real professional work.",
-      players:[
-        {n:"Hugging Face", d:"The hub where the world shares and fine-tunes open AI models."},
-        {n:"Together AI and Fireworks AI", d:"Platforms that let companies fine-tune and run open models fast."},
-        {n:"Contextual AI", d:"Builds specialized AI for regulated, technical industries."}
-      ],
-      identity:"The Specialist",
-      identityLine:"You believe the winners go deep, not wide.",
-      maps:"You backed: Industry-specific AI, fine-tuning general models into experts.",
-      gloss:"Deep expert AI for one field."
-    },
-    {
-      num:"Bet 3",
-      name:"Someone makes AI dirt cheap",
-      tease:"Whoever breaks the cost of AI breaks the whole game open.",
-      bet:"Today's AI is expensive to train and to run. This bet backs the teams changing that math three ways. Mixture-of-experts: a huge model that only switches on the small part it needs for each question. Small language models: compact models trained so well they punch far above their size. Synthetic data: realistic made-up training data for when real data is private or scarce. If they are right, cheaper AI rewrites the economics of the entire field.",
-      players:[
-        {n:"Mistral (Mixtral)", d:"Popularized the mixture-of-experts approach in open models."},
-        {n:"Arcee AI", d:"Builds small, specialized models for enterprises."},
-        {n:"Gretel", d:"The synthetic-data company (now part of NVIDIA)."}
-      ],
-      identity:"The Economist",
-      identityLine:"You believe whoever makes AI cheap wins everything.",
-      maps:"You backed: Efficiency breakthroughs, MoE, small models, synthetic data.",
-      gloss:"Efficiency that makes AI cheap."
-    },
-    {
-      num:"Bet 4",
-      name:"The transformer gets overthrown",
-      tease:"Everyone builds on one design. What if it's not the last one?",
-      bet:"Almost every AI today is built on one design called the transformer. It has a weakness: it gets expensive fast as the input gets longer. This bet backs the challengers. State-space models process information as a flowing stream, staying cheap even on very long inputs. World models are a new kind of model that learns an internal simulation of the physical world. This is the riskiest bet on the board, and if any of it replaces the transformer, the earliest backers win huge.",
-      players:[
-        {n:"Cartesia", d:"Builds state-space voice models, founded by the researchers who invented the approach."},
-        {n:"World Labs", d:"Fei-Fei Li's company, building world models that generate explorable 3D spaces."},
-        {n:"Decart", d:"Builds real-time world models that generate live video."}
-      ],
-      identity:"The Revolutionary",
-      identityLine:"You are betting against the thing everyone else builds on.",
-      maps:"You backed: New architectures, state-space models and world models.",
-      gloss:"New designs beyond the transformer."
-    }
-  ];
-
-  var deck = document.getElementById('deck-wrapper');
-  var scaler = document.getElementById('scaler');
-
-  function fit(){
-    var w = scaler.clientWidth;
-    var scale = w/960;
-    deck.style.transform = 'translateX(' + ((w-960*scale)/2) + 'px) scale(' + scale + ')';
-    scaler.style.height = (540*scale) + 'px';
+/* ---------- data ---------- */
+var CARDS = [
+  {
+    id:"edge",
+    catchy:"AI that fits in your pocket",
+    real:"Edge AI Models",
+    realChip:"EDGE AI MODELS",
+    tease:"What if the AI lived in your phone, not far away?",
+    what:"Most AI is huge. It lives in giant buildings full of computers, and your phone has to call it over the internet to get an answer. These startups make AI small enough to live right inside your phone, car, or glasses. No internet needed.",
+    why:"It is faster, it works anywhere, and your private stuff never leaves your device.",
+    cos:["Liquid AI","Mistral"],
+    identity:"The Escapist",
+    idsub:"You believe AI belongs in your pocket, not a warehouse."
+  },
+  {
+    id:"finetune",
+    catchy:"AI that becomes an expert",
+    real:"Fine-Tuning",
+    realChip:"FINE-TUNING",
+    tease:"One AI for doctors. One for lawyers.",
+    what:"A regular AI knows a little about everything, like a brand new intern. These startups train it deeply on one subject, like medicine or law, until it becomes a real expert at that one thing.",
+    why:"A doctor wants an AI that is amazing at medicine, not just okay at everything. Every industry wants its own expert.",
+    cos:["Hugging Face","Together AI","Contextual AI"],
+    identity:"The Specialist",
+    idsub:"You believe the winners go deep, not wide."
+  },
+  {
+    id:"efficiency",
+    catchy:"AI that costs way less",
+    real:"Efficiency Breakthroughs",
+    realChip:"EFFICIENCY BREAKTHROUGHS",
+    tease:"Make AI cheap, and everything changes.",
+    what:"Building and running AI is really expensive. These startups find clever tricks to make it cheaper. They turn on only the part of the AI you need, or build tiny AIs that still work great, or make fake practice data when real data is hard to get.",
+    why:"If AI gets cheap, way more people and companies can use it. Cheaper changes everything.",
+    cos:["Mistral","Arcee AI","Gretel"],
+    identity:"The Economist",
+    idsub:"You believe whoever makes AI cheap wins everything."
+  },
+  {
+    id:"posttransformer",
+    catchy:"AI built a whole new way",
+    real:"Post-Transformer Models",
+    realChip:"POST-TRANSFORMER MODELS",
+    tease:"Everyone uses one recipe. What if it is not the best one?",
+    what:"Almost every AI today is built from the same basic recipe, called a transformer. It has one problem: it gets slow and pricey when you give it a lot to read. These startups are trying brand new recipes that could work better. It is the riskiest bet, but the payoff could be huge.",
+    why:"If a new recipe beats the transformer, whoever bet on it early wins big.",
+    cos:["Cartesia","World Labs","Decart"],
+    identity:"The Revolutionary",
+    idsub:"You are betting against the thing everyone else builds on."
   }
-  window.addEventListener('resize', fit);
-  fit();
+];
 
-  // ---- Build bet cards ----
-  var grid = document.getElementById('betGrid');
-  BETS.forEach(function(b, i){
-    var card = document.createElement('button');
-    card.className = 'bet-card';
-    card.setAttribute('type','button');
-    card.setAttribute('data-i', i);
-    card.innerHTML =
-      '<div>' +
-        '<div class="bet-num">' + b.num + '</div>' +
-        '<div class="bet-name">' + b.name + '</div>' +
-        '<div class="bet-tease">' + b.tease + '</div>' +
-      '</div>' +
-      '<div class="bet-open">Tap to read the bet' +
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="#001D69" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-      '</div>';
-    card.addEventListener('click', function(){ openBet(i); });
-    grid.appendChild(card);
+/* ---------- screen switching ---------- */
+function show(id){
+  var screens = document.querySelectorAll('.screen');
+  for(var i=0;i<screens.length;i++){ screens[i].classList.remove('active'); }
+  document.getElementById(id).classList.add('active');
+}
+document.addEventListener('click', function(e){
+  var t = e.target.closest ? e.target.closest('[data-go]') : null;
+  if(t){ show(t.getAttribute('data-go')); }
+});
+
+/* ---------- build screen 3 cards ---------- */
+var readSet = {};
+var grid = document.getElementById('cardgrid');
+CARDS.forEach(function(c){
+  var b = document.createElement('button');
+  b.className = 'card';
+  b.setAttribute('data-id', c.id);
+  b.setAttribute('aria-label', 'Read about ' + c.catchy);
+  b.innerHTML =
+    '<div>' +
+      '<span class="chip">'+c.realChip+'</span>' +
+      '<div class="catchy">'+c.catchy+'</div>' +
+      '<div class="tease">'+c.tease+'</div>' +
+    '</div>' +
+    '<div class="taprow">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>' +
+      '<span class="taptext">Tap to read</span>' +
+      '<span class="readmark">Read. Tap to read again.</span>' +
+    '</div>';
+  b.addEventListener('click', function(){ openOverlay(c.id); });
+  grid.appendChild(b);
+});
+
+/* ---------- overlay ---------- */
+var overlay = document.getElementById('overlay');
+var lastFocused = null;
+function openOverlay(id){
+  var c = CARDS.filter(function(x){return x.id===id;})[0];
+  document.getElementById('ovChip').textContent = c.realChip;
+  document.getElementById('ovTitle').textContent = c.catchy;
+  document.getElementById('ovWhat').textContent = c.what;
+  document.getElementById('ovWhy').textContent = c.why;
+  var cos = document.getElementById('ovCos');
+  cos.innerHTML = '';
+  c.cos.forEach(function(name){
+    var s = document.createElement('span');
+    s.className = 'cochip';
+    s.textContent = name;
+    cos.appendChild(s);
   });
+  overlay.classList.add('show');
+  lastFocused = document.activeElement;
+  document.getElementById('closeOverlay').focus();
 
-  // ---- Build recap ----
-  var recap = document.getElementById('recapGrid');
-  BETS.forEach(function(b){
-    var el = document.createElement('div');
-    el.className = 'recap-item';
-    el.innerHTML = '<span class="recap-dot"></span><span><span class="recap-name">' + b.name + '.</span> <span class="recap-gloss">' + b.gloss + '</span></span>';
-    recap.appendChild(el);
-  });
+  // mark card read
+  readSet[id] = true;
+  var cardEl = document.querySelector('.card[data-id="'+id+'"]');
+  if(cardEl){ cardEl.classList.add('read'); }
+  document.getElementById('readcount').textContent = Object.keys(readSet).length;
+}
+function closeOverlay(){
+  overlay.classList.remove('show');
+  if(lastFocused){ lastFocused.focus(); }
+}
+document.getElementById('closeOverlay').addEventListener('click', closeOverlay);
+overlay.addEventListener('click', function(e){ if(e.target===overlay){ closeOverlay(); } });
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape' && overlay.classList.contains('show')){ closeOverlay(); }
+});
 
-  // ---- Screens ----
-  function show(id){
-    var screens = document.querySelectorAll('.screen');
-    for(var i=0;i<screens.length;i++){ screens[i].classList.remove('active'); }
-    document.getElementById(id).classList.add('active');
-  }
-  document.getElementById('startBtn').addEventListener('click', function(){ show('screen2'); });
-  document.getElementById('changeBet').addEventListener('click', function(){ show('screen2'); });
+/* ---------- build screen 4 options ---------- */
+var optgrid = document.getElementById('optgrid');
+CARDS.forEach(function(c){
+  var b = document.createElement('button');
+  b.className = 'opt';
+  b.setAttribute('aria-label', 'Back ' + c.catchy);
+  b.innerHTML =
+    '<div class="oc">'+c.catchy+'</div>' +
+    '<div class="orn">'+c.real+'</div>';
+  b.addEventListener('click', function(){ pick(c.id); });
+  optgrid.appendChild(b);
+});
 
-  // ---- Overlay ----
-  var overlay = document.getElementById('overlay');
-  var current = -1;
-  var lastCard = null;
+/* ---------- result ---------- */
+function pick(id){
+  var c = CARDS.filter(function(x){return x.id===id;})[0];
+  document.getElementById('backline').innerHTML =
+    'You backed <b>'+c.catchy+'</b> ('+c.real+').';
+  document.getElementById('identity').textContent = c.identity;
+  document.getElementById('idsub').textContent = c.idsub;
+  show('s5');
+}
 
-  function openBet(i){
-    current = i;
-    lastCard = document.querySelector('.bet-card[data-i="' + i + '"]');
-    var b = BETS[i];
-    document.getElementById('panelNum').textContent = b.num;
-    document.getElementById('panelName').textContent = b.name;
-    document.getElementById('panelExplain').textContent = b.bet;
-    var chips = document.getElementById('panelChips');
-    chips.innerHTML = '';
-    b.players.forEach(function(p){
-      var c = document.createElement('div');
-      c.className = 'chip';
-      c.innerHTML = '<div class="chip-name">' + p.n + '</div><div class="chip-desc">' + p.d + '</div>';
-      chips.appendChild(c);
-    });
-    overlay.classList.add('active');
-    document.getElementById('panelClose').focus();
-  }
-
-  function closeOverlay(){
-    overlay.classList.remove('active');
-    if(lastCard){ lastCard.focus(); }
-  }
-
-  document.getElementById('panelClose').addEventListener('click', closeOverlay);
-  overlay.addEventListener('click', function(e){ if(e.target === overlay){ closeOverlay(); } });
-
-  document.getElementById('backBtn').addEventListener('click', function(){
-    var b = BETS[current];
-    document.getElementById('idName').textContent = b.identity;
-    document.getElementById('idLine').textContent = b.identityLine;
-    document.getElementById('idMaps').textContent = b.maps;
-    document.querySelectorAll('.bet-card').forEach(function(c){ c.classList.remove('backed'); });
-    if(lastCard){ lastCard.classList.add('backed'); }
-    overlay.classList.remove('active');
-    show('screen3');
-  });
-
-  document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && overlay.classList.contains('active')){ closeOverlay(); }
-  });
+/* ---------- responsive scaling ---------- */
+function scaleStage(){
+  var outer = document.getElementById('outer');
+  var wrap = document.getElementById('deck-wrapper');
+  var cw = outer.clientWidth;
+  var scale = cw / 960;
+  if(scale > 1) scale = 1;
+  wrap.style.transform = 'translateX(' + ((cw - 960*scale)/2) + 'px) scale(' + scale + ')';
+  outer.style.height = (540*scale) + 'px';
+}
+window.addEventListener('resize', scaleStage);
+scaleStage();
 </script>
 </body>
 </html>
