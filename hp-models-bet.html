@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Place Your Bet: The Models Layer</title>
+<style>
+  :root{
+    --bg:#FDF8F8;
+    --title:#1C1B1B;
+    --body:#484646;
+    --fill:#DCE1FF;
+    --accent:#001D69;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);}
+  body{
+    font-family:"Inter",-apple-system,"Segoe UI",sans-serif;
+    color:var(--body);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    overflow-x:hidden;
+  }
+  #scaler{position:relative;width:100%;}
+  #deck-wrapper{
+    width:960px;height:540px;flex-shrink:0;transform-origin:top left;
+    position:relative;overflow:hidden;background:var(--bg);
+  }
+
+  .screen{
+    position:absolute;inset:0;
+    padding:44px 56px;
+    display:none;
+    flex-direction:column;
+  }
+  .screen.active{display:flex;}
+
+  /* ---------- SCREEN 1 ---------- */
+  #screen1{align-items:center;justify-content:center;text-align:center;}
+  .wallet-wrap{margin-bottom:26px;position:relative;}
+  .chip-label{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:23px;color:var(--accent);letter-spacing:.5px;
+    transform:translateY(2px);
+  }
+  h1.hero{
+    font-size:44px;line-height:1.06;font-weight:800;color:var(--title);
+    max-width:760px;letter-spacing:-1px;
+  }
+  .subline{
+    margin-top:18px;font-size:18px;line-height:1.5;color:var(--body);
+    max-width:640px;
+  }
+  .btn{
+    font-family:inherit;cursor:pointer;border:none;border-radius:999px;
+    font-weight:700;transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px;}
+  .btn-primary{
+    background:var(--accent);color:#F4F6FF;padding:15px 34px;font-size:17px;
+    box-shadow:0 6px 18px rgba(0,29,105,.22);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,29,105,.28);}
+  #screen1 .btn-primary{margin-top:34px;}
+
+  /* ---------- SCREEN 2 ---------- */
+  .s2-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
+  h2.s2-title{font-size:26px;font-weight:800;color:var(--title);letter-spacing:-.5px;}
+  .s2-kicker{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:.4px;text-transform:uppercase;}
+  .bet-grid{
+    display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+    gap:16px;flex:1;
+  }
+  .bet-card{
+    background:var(--fill);border:1.5px solid transparent;border-radius:16px;
+    padding:20px 22px;cursor:pointer;text-align:left;
+    display:flex;flex-direction:column;justify-content:space-between;
+    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    font-family:inherit;color:var(--body);
+  }
+  .bet-card:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(0,29,105,.14);border-color:var(--accent);}
+  .bet-card:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+  .bet-card.backed{border-color:var(--accent);}
+  .bet-num{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;}
+  .bet-name{font-size:21px;font-weight:800;color:var(--title);line-height:1.12;margin-top:6px;letter-spacing:-.4px;}
+  .bet-tease{font-size:14.5px;line-height:1.4;color:var(--body);margin-top:8px;}
+  .bet-open{
+    margin-top:14px;display:flex;align-items:center;gap:7px;
+    font-size:13px;font-weight:700;color:var(--accent);
+  }
+  .s2-foot{margin-top:14px;text-align:center;font-size:14px;color:var(--body);font-weight:600;}
+
+  /* ---------- OVERLAY ---------- */
+  #overlay{
+    position:absolute;inset:0;background:rgba(28,27,27,.34);
+    display:none;align-items:center;justify-content:center;padding:26px;z-index:20;
+  }
+  #overlay.active{display:flex;}
+  .panel{
+    background:var(--bg);border-radius:18px;width:100%;height:100%;
+    padding:26px 30px;position:relative;
+    display:flex;flex-direction:column;
+    box-shadow:0 24px 60px rgba(0,29,105,.28);
+    border:1.5px solid var(--fill);
+  }
+  .panel-close{
+    position:absolute;top:16px;right:16px;width:34px;height:34px;border-radius:50%;
+    background:var(--fill);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    color:var(--accent);transition:background .12s ease;
+  }
+  .panel-close:hover{background:#c9d1ff;}
+  .panel-close:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+  .panel-num{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;}
+  .panel-name{font-size:26px;font-weight:800;color:var(--title);line-height:1.1;margin-top:5px;letter-spacing:-.5px;max-width:80%;}
+  .panel-cols{display:grid;grid-template-columns:1.15fr 1fr;gap:26px;flex:1;margin-top:16px;min-height:0;}
+  .col-label{font-size:12.5px;font-weight:800;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:8px;}
+  .panel-explain{font-size:15.5px;line-height:1.55;color:var(--body);}
+  .panel-right{display:flex;flex-direction:column;min-height:0;}
+  .chips{display:flex;flex-direction:column;gap:9px;overflow:hidden;flex:1;}
+  .chip{
+    background:var(--fill);border-radius:11px;padding:9px 12px;
+  }
+  .chip-name{font-size:13.5px;font-weight:800;color:var(--accent);}
+  .chip-desc{font-size:12.5px;line-height:1.35;color:var(--body);margin-top:2px;}
+  .btn-back{
+    background:var(--accent);color:#F4F6FF;padding:14px 20px;font-size:16px;width:100%;
+    margin-top:14px;display:flex;align-items:center;justify-content:center;gap:9px;
+    box-shadow:0 6px 16px rgba(0,29,105,.22);
+  }
+  .btn-back:hover{transform:translateY(-2px);}
+
+  /* ---------- SCREEN 3 ---------- */
+  #screen3{justify-content:center;}
+  .id-top{display:flex;align-items:flex-start;gap:20px;}
+  .id-badge{
+    width:70px;height:70px;border-radius:16px;background:var(--accent);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .id-eyebrow{font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--accent);text-transform:uppercase;}
+  .id-name{font-size:34px;font-weight:800;color:var(--title);line-height:1.05;letter-spacing:-.8px;margin-top:2px;}
+  .id-line{font-size:17px;line-height:1.45;color:var(--body);margin-top:8px;max-width:560px;}
+  .id-maps{
+    margin-top:12px;display:inline-block;background:var(--fill);color:var(--accent);
+    font-size:13.5px;font-weight:700;padding:8px 14px;border-radius:999px;
+  }
+  .recap{margin-top:22px;border-top:1.5px solid var(--fill);padding-top:16px;}
+  .recap-h{font-size:13px;font-weight:800;letter-spacing:.5px;color:var(--accent);text-transform:uppercase;margin-bottom:11px;}
+  .recap-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 26px;}
+  .recap-item{display:flex;gap:10px;align-items:baseline;}
+  .recap-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;transform:translateY(-1px);}
+  .recap-name{font-size:14px;font-weight:800;color:var(--title);}
+  .recap-gloss{font-size:13px;color:var(--body);}
+  .close-line{margin-top:20px;font-size:15.5px;line-height:1.5;color:var(--body);max-width:720px;}
+  .change-bet{
+    margin-top:14px;background:none;border:none;cursor:pointer;font-family:inherit;
+    font-size:14px;font-weight:700;color:var(--accent);text-decoration:underline;text-underline-offset:3px;
+    align-self:flex-start;padding:4px 0;
+  }
+  .change-bet:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+</style>
+</head>
+<body>
+<div id="scaler">
+  <div id="deck-wrapper">
+
+    <!-- SCREEN 1 -->
+    <section id="screen1" class="screen active">
+      <div class="wallet-wrap">
+        <svg width="188" height="118" viewBox="0 0 188 118" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="10" y="20" width="168" height="88" rx="16" fill="#DCE1FF" stroke="#001D69" stroke-width="2.5"/>
+          <path d="M10 44 H178" stroke="#001D69" stroke-width="2.5"/>
+          <rect x="128" y="58" width="50" height="34" rx="9" fill="#FDF8F8" stroke="#001D69" stroke-width="2.5"/>
+          <circle cx="150" cy="75" r="7" fill="none" stroke="#001D69" stroke-width="2.5"/>
+          <ellipse cx="94" cy="24" rx="52" ry="15" fill="#FDF8F8" stroke="#001D69" stroke-width="2.5"/>
+        </svg>
+        <div class="chip-label">$1,000,000</div>
+      </div>
+      <h1 class="hero">You've got $1M. Where's the future of AI brains?</h1>
+      <p class="subline">Four bets. Four kinds of startups racing to build the next generation of AI models. Read each one, then back the bet your gut believes in.</p>
+      <button class="btn btn-primary" id="startBtn">See the four bets</button>
+    </section>
+
+    <!-- SCREEN 2 -->
+    <section id="screen2" class="screen">
+      <div class="s2-head">
+        <h2 class="s2-title">Place your bet on AI's brains</h2>
+        <span class="s2-kicker">The Models Layer</span>
+      </div>
+      <div class="bet-grid" id="betGrid"><!-- cards injected --></div>
+      <p class="s2-foot">Read as many as you want. Back the one your gut believes.</p>
+    </section>
+
+    <!-- SCREEN 3 -->
+    <section id="screen3" class="screen">
+      <div class="id-top">
+        <div class="id-badge">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21l1.18-6.88-5-4.87 7.1-1.01L12 2z" stroke="#F4F6FF" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="id-eyebrow">You backed this bet</div>
+          <div class="id-name" id="idName">The Economist</div>
+          <div class="id-line" id="idLine"></div>
+          <div class="id-maps" id="idMaps"></div>
+        </div>
+      </div>
+
+      <div class="recap">
+        <div class="recap-h">The four bets on AI brains:</div>
+        <div class="recap-grid" id="recapGrid"><!-- injected --></div>
+      </div>
+
+      <p class="close-line">No wrong answer, this was instinct. Models is one of three areas you can focus on. If this layer pulls you, you will claim it in the next task.</p>
+      <button class="change-bet" id="changeBet">Change my bet</button>
+    </section>
+
+    <!-- OVERLAY -->
+    <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="panelName">
+      <div class="panel">
+        <button class="panel-close" id="panelClose" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="#001D69" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div class="panel-num" id="panelNum"></div>
+        <div class="panel-name" id="panelName"></div>
+        <div class="panel-cols">
+          <div>
+            <div class="col-label">The bet</div>
+            <div class="panel-explain" id="panelExplain"></div>
+          </div>
+          <div class="panel-right">
+            <div class="col-label">Who's already in</div>
+            <div class="chips" id="panelChips"></div>
+            <button class="btn btn-back" id="backBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="#F4F6FF" stroke-width="1.8"/>
+                <path d="M12 7v10M9.5 9.2c0-1.2 1.1-1.9 2.5-1.9s2.5.7 2.5 1.9c0 2.6-5 1.4-5 4 0 1.2 1.1 1.9 2.5 1.9s2.5-.7 2.5-1.9" stroke="#F4F6FF" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              Back this bet ($1M)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var BETS = [
+    {
+      num:"Bet 1",
+      name:"AI escapes the data center",
+      tease:"What if the AI lived in your pocket, not a warehouse?",
+      bet:"Big AI runs in giant data centers. This bet says the future is AI small and efficient enough to run right on your phone, your car, or your glasses, with no internet needed. Some startups shrink big models down; others design tiny-but-mighty ones from scratch. If they are right, AI gets instant, private, and works anywhere, across billions of devices.",
+      players:[
+        {n:"Liquid AI", d:"Builds a new kind of foundation model designed to run fast directly on phones, laptops, and cars."},
+        {n:"Mistral (Ministral)", d:"A major AI lab whose small Ministral models are built specifically for on-device use."}
+      ],
+      identity:"The Escapist",
+      identityLine:"You believe AI belongs in your pocket, not a warehouse.",
+      maps:"You backed: On-device AI, shrinking and designing tiny efficient models.",
+      gloss:"AI small enough to run on your phone."
+    },
+    {
+      num:"Bet 2",
+      name:"Every industry gets its own AI",
+      tease:"One AI for doctors. One for lawyers. Winner takes the field.",
+      bet:"A general AI knows a little about everything. This bet says the real money is training it deep on ONE field, medicine, law, or finance, until it performs like a specialist, plus building the tools that make that cheap and repeatable. If they are right, every serious industry ends up with its own expert AI, because generic models are not good enough for real professional work.",
+      players:[
+        {n:"Hugging Face", d:"The hub where the world shares and fine-tunes open AI models."},
+        {n:"Together AI and Fireworks AI", d:"Platforms that let companies fine-tune and run open models fast."},
+        {n:"Contextual AI", d:"Builds specialized AI for regulated, technical industries."}
+      ],
+      identity:"The Specialist",
+      identityLine:"You believe the winners go deep, not wide.",
+      maps:"You backed: Industry-specific AI, fine-tuning general models into experts.",
+      gloss:"Deep expert AI for one field."
+    },
+    {
+      num:"Bet 3",
+      name:"Someone makes AI dirt cheap",
+      tease:"Whoever breaks the cost of AI breaks the whole game open.",
+      bet:"Today's AI is expensive to train and to run. This bet backs the teams changing that math three ways. Mixture-of-experts: a huge model that only switches on the small part it needs for each question. Small language models: compact models trained so well they punch far above their size. Synthetic data: realistic made-up training data for when real data is private or scarce. If they are right, cheaper AI rewrites the economics of the entire field.",
+      players:[
+        {n:"Mistral (Mixtral)", d:"Popularized the mixture-of-experts approach in open models."},
+        {n:"Arcee AI", d:"Builds small, specialized models for enterprises."},
+        {n:"Gretel", d:"The synthetic-data company (now part of NVIDIA)."}
+      ],
+      identity:"The Economist",
+      identityLine:"You believe whoever makes AI cheap wins everything.",
+      maps:"You backed: Efficiency breakthroughs, MoE, small models, synthetic data.",
+      gloss:"Efficiency that makes AI cheap."
+    },
+    {
+      num:"Bet 4",
+      name:"The transformer gets overthrown",
+      tease:"Everyone builds on one design. What if it's not the last one?",
+      bet:"Almost every AI today is built on one design called the transformer. It has a weakness: it gets expensive fast as the input gets longer. This bet backs the challengers. State-space models process information as a flowing stream, staying cheap even on very long inputs. World models are a new kind of model that learns an internal simulation of the physical world. This is the riskiest bet on the board, and if any of it replaces the transformer, the earliest backers win huge.",
+      players:[
+        {n:"Cartesia", d:"Builds state-space voice models, founded by the researchers who invented the approach."},
+        {n:"World Labs", d:"Fei-Fei Li's company, building world models that generate explorable 3D spaces."},
+        {n:"Decart", d:"Builds real-time world models that generate live video."}
+      ],
+      identity:"The Revolutionary",
+      identityLine:"You are betting against the thing everyone else builds on.",
+      maps:"You backed: New architectures, state-space models and world models.",
+      gloss:"New designs beyond the transformer."
+    }
+  ];
+
+  var deck = document.getElementById('deck-wrapper');
+  var scaler = document.getElementById('scaler');
+
+  function fit(){
+    var w = scaler.clientWidth;
+    var scale = w/960;
+    deck.style.transform = 'translateX(' + ((w-960*scale)/2) + 'px) scale(' + scale + ')';
+    scaler.style.height = (540*scale) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // ---- Build bet cards ----
+  var grid = document.getElementById('betGrid');
+  BETS.forEach(function(b, i){
+    var card = document.createElement('button');
+    card.className = 'bet-card';
+    card.setAttribute('type','button');
+    card.setAttribute('data-i', i);
+    card.innerHTML =
+      '<div>' +
+        '<div class="bet-num">' + b.num + '</div>' +
+        '<div class="bet-name">' + b.name + '</div>' +
+        '<div class="bet-tease">' + b.tease + '</div>' +
+      '</div>' +
+      '<div class="bet-open">Tap to read the bet' +
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="#001D69" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</div>';
+    card.addEventListener('click', function(){ openBet(i); });
+    grid.appendChild(card);
+  });
+
+  // ---- Build recap ----
+  var recap = document.getElementById('recapGrid');
+  BETS.forEach(function(b){
+    var el = document.createElement('div');
+    el.className = 'recap-item';
+    el.innerHTML = '<span class="recap-dot"></span><span><span class="recap-name">' + b.name + '.</span> <span class="recap-gloss">' + b.gloss + '</span></span>';
+    recap.appendChild(el);
+  });
+
+  // ---- Screens ----
+  function show(id){
+    var screens = document.querySelectorAll('.screen');
+    for(var i=0;i<screens.length;i++){ screens[i].classList.remove('active'); }
+    document.getElementById(id).classList.add('active');
+  }
+  document.getElementById('startBtn').addEventListener('click', function(){ show('screen2'); });
+  document.getElementById('changeBet').addEventListener('click', function(){ show('screen2'); });
+
+  // ---- Overlay ----
+  var overlay = document.getElementById('overlay');
+  var current = -1;
+  var lastCard = null;
+
+  function openBet(i){
+    current = i;
+    lastCard = document.querySelector('.bet-card[data-i="' + i + '"]');
+    var b = BETS[i];
+    document.getElementById('panelNum').textContent = b.num;
+    document.getElementById('panelName').textContent = b.name;
+    document.getElementById('panelExplain').textContent = b.bet;
+    var chips = document.getElementById('panelChips');
+    chips.innerHTML = '';
+    b.players.forEach(function(p){
+      var c = document.createElement('div');
+      c.className = 'chip';
+      c.innerHTML = '<div class="chip-name">' + p.n + '</div><div class="chip-desc">' + p.d + '</div>';
+      chips.appendChild(c);
+    });
+    overlay.classList.add('active');
+    document.getElementById('panelClose').focus();
+  }
+
+  function closeOverlay(){
+    overlay.classList.remove('active');
+    if(lastCard){ lastCard.focus(); }
+  }
+
+  document.getElementById('panelClose').addEventListener('click', closeOverlay);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay){ closeOverlay(); } });
+
+  document.getElementById('backBtn').addEventListener('click', function(){
+    var b = BETS[current];
+    document.getElementById('idName').textContent = b.identity;
+    document.getElementById('idLine').textContent = b.identityLine;
+    document.getElementById('idMaps').textContent = b.maps;
+    document.querySelectorAll('.bet-card').forEach(function(c){ c.classList.remove('backed'); });
+    if(lastCard){ lastCard.classList.add('backed'); }
+    overlay.classList.remove('active');
+    show('screen3');
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && overlay.classList.contains('active')){ closeOverlay(); }
+  });
+</script>
+</body>
+</html>
