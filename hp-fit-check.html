@@ -112,7 +112,7 @@
     gap:16px;
     margin-top:10px;
   }
-  .hint{ font-size:13px; color:#7A7777; max-width:540px; line-height:1.4; }
+  .hint{ font-size:13px; color:#6B6868; max-width:540px; line-height:1.4; }
 
   button{ font-family:var(--font); cursor:pointer; }
 
@@ -159,7 +159,7 @@
     padding:11px 15px;
     width:330px;
   }
-  input[type=text]:focus{ border-color:var(--accent); outline:none; }
+  input[type=text]:focus{ border-color:var(--accent); }
 
   /* check rows */
   .rows{ display:flex; flex-direction:column; gap:7px; }
@@ -212,7 +212,6 @@
     background:var(--fill);
     border-color:var(--accent);
     color:var(--accent);
-    font-weight:800;
   }
 
   /* result */
@@ -241,6 +240,7 @@
     color:var(--body);
   }
   .flag svg{ width:17px; height:17px; flex-shrink:0; margin-top:1px; stroke:var(--accent); }
+  .flag.fail{ border-left:4px solid var(--accent); }
   .flag b{ color:var(--title); font-weight:700; }
 
   .copybtn{
@@ -297,7 +297,7 @@
   <section class="screen" id="s2">
     <div class="topbar">
       <span class="kicker" id="ckKicker">Checking your pick</span>
-      <span class="rule" id="ckCount">0 of 5 answered</span>
+      <span class="rule" id="ckCount" aria-live="polite">0 of 5 answered</span>
     </div>
     <h2>Five quick checks</h2>
     <p class="sub">Pick whichever option is closest to true. The first three are HP's hard rules. The last two are about you.</p>
@@ -418,16 +418,20 @@ CHECKS.forEach(function(c, ci){
   row.appendChild(q);
   var opts = document.createElement('div');
   opts.className = 'opts';
+  opts.setAttribute('role','group');
+  opts.setAttribute('aria-label', c.q);
   c.opts.forEach(function(o, oi){
     var b = document.createElement('button');
     b.className = 'opt';
     b.type = 'button';
     b.textContent = o.t;
+    b.setAttribute('aria-pressed','false');
     b.addEventListener('click', function(){
       answers[ci] = oi;
       var sibs = opts.querySelectorAll('.opt');
-      for(var k=0;k<sibs.length;k++){ sibs[k].classList.remove('on'); }
+      for(var k=0;k<sibs.length;k++){ sibs[k].classList.remove('on'); sibs[k].setAttribute('aria-pressed','false'); }
       b.classList.add('on');
+      b.setAttribute('aria-pressed','true');
       refresh();
     });
     opts.appendChild(b);
@@ -452,7 +456,10 @@ function refresh(){
 function show(id){
   var all = document.querySelectorAll('.screen');
   for(var i=0;i<all.length;i++){ all[i].classList.remove('active'); }
-  document.getElementById(id).classList.add('active');
+  var s = document.getElementById(id);
+  s.classList.add('active');
+  s.setAttribute('tabindex','-1');
+  s.focus();
 }
 var navBtns = document.querySelectorAll('[data-go]');
 for(var i=0;i<navBtns.length;i++){
@@ -461,7 +468,7 @@ for(var i=0;i<navBtns.length;i++){
 
 document.getElementById('startBtn').addEventListener('click', function(){
   var nm = companyName();
-  document.getElementById('ckKicker').textContent = 'Checking ' + nm;
+  document.getElementById('ckKicker').textContent = 'Checking ' + (nm === 'Your pick' ? 'your pick' : nm);
   show('s2');
 });
 
@@ -472,7 +479,7 @@ document.getElementById('seeBtn').addEventListener('click', function(){
 
 function companyName(){
   var v = document.getElementById('cname').value.trim();
-  return v || 'your pick';
+  return v || 'Your pick';
 }
 
 /* ---------- verdict ---------- */
@@ -480,8 +487,8 @@ function buildVerdict(){
   var fails = [], warns = [];
   for(var i=0;i<CHECKS.length;i++){
     var o = CHECKS[i].opts[answers[i]];
-    if(o.v === 'fail') fails.push(o.f);
-    else if(o.v === 'warn') warns.push(o.f);
+    if(o.v === 'fail' && o.f) fails.push(o.f);
+    else if(o.v === 'warn' && o.f) warns.push(o.f);
   }
   var nm = companyName();
   var t = document.getElementById('vTitle');
@@ -504,13 +511,20 @@ function buildVerdict(){
 
   var fl = document.getElementById('flags');
   fl.innerHTML = '';
-  var all = fails.concat(warns).slice(0, 3);
-  all.forEach(function(txt){
+  var everything = fails.map(function(t){ return {t:t, s:'fail'}; })
+                        .concat(warns.map(function(t){ return {t:t, s:'warn'}; }));
+  everything.slice(0, 3).forEach(function(item){
     var f = document.createElement('div');
-    f.className = 'flag';
-    f.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>' + txt + '</span>';
+    f.className = 'flag ' + item.s;
+    f.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>' + item.t + '</span>';
     fl.appendChild(f);
   });
+  if(everything.length > 3){
+    var more = document.createElement('div');
+    more.className = 'flag';
+    more.innerHTML = '<span>Plus ' + (everything.length - 3) + ' more, included when you copy your results.</span>';
+    fl.appendChild(more);
+  }
 }
 
 /* ---------- copy ---------- */
@@ -528,10 +542,11 @@ document.getElementById('copyBtn').addEventListener('click', function(){
   var text = lines.join('\n');
 
   function done(){
-    var original = btn.innerHTML;
+    if(!btn.getAttribute('data-orig')) btn.setAttribute('data-orig', btn.innerHTML);
+    clearTimeout(btn._t);
     btn.classList.add('done');
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Copied';
-    setTimeout(function(){ btn.classList.remove('done'); btn.innerHTML = original; }, 1800);
+    btn._t = setTimeout(function(){ btn.classList.remove('done'); btn.innerHTML = btn.getAttribute('data-orig'); }, 1800);
   }
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(done, function(){ fallback(text, done); });
@@ -541,6 +556,7 @@ document.getElementById('copyBtn').addEventListener('click', function(){
 });
 
 function fallback(text, done){
+  var prev = document.activeElement;
   var ta = document.createElement('textarea');
   ta.value = text;
   ta.style.position = 'fixed';
@@ -548,8 +564,9 @@ function fallback(text, done){
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
-  try { document.execCommand('copy'); done(); } catch(e){}
+  try { if(document.execCommand('copy')) done(); } catch(e){}
   document.body.removeChild(ta);
+  if(prev && prev.focus) prev.focus();
 }
 
 /* ---------- responsive scaling ---------- */
