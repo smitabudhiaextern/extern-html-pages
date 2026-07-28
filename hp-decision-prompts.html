@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick One: The Prompt Sequence</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root{
+    --bg:#FDF8F8;
+    --title:#1C1B1B;
+    --body:#484646;
+    --fill:#DCE1FF;
+    --accent:#001D69;
+    --font:"Inter", -apple-system, "Segoe UI", sans-serif;
+    --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  html,body{ background:#EFE9E9; font-family:var(--font); }
+
+  #outer{ width:100%; overflow:hidden; }
+
+  #deck-wrapper{
+    width:960px;
+    height:540px;
+    flex-shrink:0;
+    transform-origin:top left;
+  }
+
+  #stage{
+    width:960px;
+    height:540px;
+    background:var(--bg);
+    color:var(--body);
+    position:relative;
+    overflow:hidden;
+  }
+
+  .screen{
+    position:absolute;
+    inset:0;
+    padding:34px 56px 28px;
+    display:none;
+    flex-direction:column;
+  }
+  .screen.active{ display:flex; }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+    min-height:26px;
+  }
+  .kicker{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:1.4px;
+    color:var(--accent);
+    text-transform:uppercase;
+  }
+  .dots{ display:flex; gap:8px; align-items:center; }
+  .dot{ width:9px; height:9px; border-radius:50%; background:#CDCACA; }
+  .dot.on{ background:var(--accent); }
+
+  .rule{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.4px;
+    color:var(--accent);
+    background:var(--fill);
+    border-radius:999px;
+    padding:5px 13px;
+  }
+
+  h1{
+    font-size:34px;
+    line-height:1.15;
+    color:var(--title);
+    font-weight:800;
+    letter-spacing:-.5px;
+    margin-bottom:14px;
+  }
+  h2{
+    font-size:25px;
+    line-height:1.2;
+    color:var(--title);
+    font-weight:800;
+    letter-spacing:-.3px;
+    margin-bottom:6px;
+  }
+
+  .lead{
+    font-size:19px;
+    line-height:1.5;
+    color:var(--body);
+    max-width:790px;
+  }
+  .lead b{ color:var(--title); font-weight:700; }
+
+  .sub{
+    font-size:15px;
+    line-height:1.45;
+    color:var(--body);
+    max-width:800px;
+    margin-bottom:10px;
+  }
+  .sub b{ color:var(--title); font-weight:700; }
+
+  .grow{ flex:1; }
+
+  .footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-top:12px;
+  }
+  .hint{ font-size:13px; color:#7A7777; max-width:520px; line-height:1.4; }
+
+  button{ font-family:var(--font); cursor:pointer; }
+
+  .btn{
+    background:var(--accent);
+    color:#F3F5FF;
+    border:none;
+    border-radius:11px;
+    padding:13px 28px;
+    font-size:16px;
+    font-weight:700;
+    letter-spacing:.2px;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    transition:transform .08s ease, box-shadow .15s ease;
+    flex-shrink:0;
+  }
+  .btn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,29,105,.22); }
+  .btn svg{ width:18px; height:18px; stroke:#F3F5FF; }
+
+  .btn.ghost{
+    background:transparent;
+    color:var(--accent);
+    border:2px solid var(--accent);
+    padding:11px 20px;
+    font-size:15px;
+  }
+  .btn.ghost svg{ stroke:var(--accent); }
+  .btn.ghost:hover{ box-shadow:none; background:rgba(0,29,105,.06); }
+
+  .navpair{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+
+  /* prompt card */
+  .card{
+    background:#fff;
+    border:1.5px solid #E4DFDF;
+    border-radius:14px;
+    padding:16px 18px 14px;
+    position:relative;
+  }
+  .card pre{
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.62;
+    color:var(--title);
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .card pre.tight{
+    font-size:11.5px;
+    line-height:1.52;
+  }
+  .card pre .fillin{
+    background:var(--fill);
+    border-radius:4px;
+    padding:1px 5px;
+    font-weight:700;
+  }
+  .cardhead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:9px;
+  }
+  .cardlabel{
+    font-size:11px; font-weight:700; letter-spacing:1.1px;
+    text-transform:uppercase; color:#7A7777;
+  }
+  .copybtn{
+    background:var(--accent);
+    color:#F3F5FF;
+    border:none;
+    border-radius:8px;
+    padding:7px 15px;
+    font-size:13px;
+    font-weight:700;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+  }
+  .copybtn svg{ width:15px; height:15px; stroke:#F3F5FF; }
+  .copybtn.done{ background:#1C6B4A; }
+
+  /* callout */
+  .note{
+    background:var(--fill);
+    border-radius:11px;
+    padding:12px 16px;
+    font-size:14px;
+    line-height:1.5;
+    color:var(--title);
+    margin-top:12px;
+  }
+  .note b{ font-weight:800; }
+
+  .steps{ display:flex; gap:12px; margin-top:6px; }
+  .stepcard{
+    flex:1;
+    background:#fff;
+    border:1.5px solid #E4DFDF;
+    border-radius:13px;
+    padding:15px 16px 16px;
+  }
+  .stepcard .n{
+    width:26px; height:26px; border-radius:8px;
+    background:var(--fill); color:var(--accent);
+    font-size:14px; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:9px;
+  }
+  .stepcard .t{ font-size:15px; font-weight:700; color:var(--title); margin-bottom:5px; line-height:1.25; }
+  .stepcard .d{ font-size:13px; line-height:1.45; color:var(--body); }
+
+  a.link{
+    color:var(--accent);
+    font-weight:700;
+    text-decoration:underline;
+  }
+
+  .warnbox{
+    background:#fff;
+    border:1.5px solid #E4DFDF;
+    border-left:5px solid var(--accent);
+    border-radius:12px;
+    padding:14px 17px;
+    margin-top:12px;
+  }
+  .warnbox .wt{ font-size:14px; font-weight:800; color:var(--title); margin-bottom:5px; }
+  .warnbox .wd{ font-size:13.5px; line-height:1.5; color:var(--body); }
+
+  :focus-visible{
+    outline:3px solid #001D69;
+    outline-offset:3px;
+    border-radius:8px;
+  }
+</style>
+</head>
+<body>
+<div id="outer">
+<div id="deck-wrapper">
+<div id="stage">
+
+  <!-- 1. INTRO -->
+  <section class="screen active" id="s1">
+    <div class="topbar">
+      <span class="kicker">Choose one startup</span>
+      <span class="rule">The AI recommends. You decide.</span>
+    </div>
+    <h1>Three startups. You can only take one forward.</h1>
+    <p class="lead">Project 2 gives you room to dig into <b>one</b> company, not three, and "they all seem good" won't narrow it down for you.</p>
+    <p class="lead" style="margin-top:12px;">So you'll hand all three to an AI, make it show its working, and then check the answer yourself. Three prompts, in order. Copy each one when you reach it.</p>
+    <div class="grow"></div>
+    <div class="steps">
+      <div class="stepcard">
+        <div class="n">1</div>
+        <div class="t">Set up the investor</div>
+        <div class="d">Give the AI HP's thesis and the rules it has to judge by.</div>
+      </div>
+      <div class="stepcard">
+        <div class="n">2</div>
+        <div class="t">Hand over your three</div>
+        <div class="d">Make it look at each company one at a time.</div>
+      </div>
+      <div class="stepcard">
+        <div class="n">3</div>
+        <div class="t">Make it show its work</div>
+        <div class="d">A rubric, scores, and one pick you can argue with.</div>
+      </div>
+    </div>
+    <div class="footer">
+      <span class="hint">Open ChatGPT, Claude, or Gemini in another tab before you start.</span>
+      <button class="btn" data-go="s2">Start with prompt 1
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- 2. PROMPT 1 -->
+  <section class="screen" id="s2">
+    <div class="topbar">
+      <span class="kicker">Prompt 1 of 3</span>
+      <span class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span></span>
+    </div>
+    <h2>Set up the investor</h2>
+    <div class="card">
+      <div class="cardhead">
+        <span class="cardlabel">HP's thesis is already in here. Just copy and paste.</span>
+        <button class="copybtn" data-copy="p1">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy
+        </button>
+      </div>
+      <pre id="p1" class="tight">You're a Venture Capital investor at HP Tech Ventures (https://hptechventures.com/).
+Judge startups against this thesis.
+
+TIER 1, the hard rules. A startup must pass all three or it's out.
+1. Where: US-based, or global but does business with the US.
+2. Size: raised between $1M and $40M, valued under about $200M.
+3. What: builds AI technology in Models, Inference, or Applications.
+
+TIER 2, tie-breakers only. These never rescue a startup that failed Tier 1.
+Tech that's hard to copy. A market over $1B or fast-growing customers.
+Founders from strong schools, known accelerators, or big-name companies.
+Well-known investors, patents, or serious media coverage.
+
+I'll share 3 startups with you. Evaluate them, pick 1 to research deeply, and
+reject the other 2. Tell me when you're ready.</pre>
+    </div>
+    <div class="grow"></div>
+    <div class="footer">
+      <span class="hint">This is the same thesis you learned in the thesis read. Wait for it to reply before you send prompt 2.</span>
+      <div class="navpair">
+        <button class="btn ghost" data-go="s1">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="btn" data-go="s3">Prompt 2
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. PROMPT 2 -->
+  <section class="screen" id="s3">
+    <div class="topbar">
+      <span class="kicker">Prompt 2 of 3</span>
+      <span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot"></span></span>
+    </div>
+    <h2>Hand over your three</h2>
+    <p class="sub">Copy your three rows straight out of your shortlist sheet, whatever columns you filled in.</p>
+    <div class="card">
+      <div class="cardhead">
+        <span class="cardlabel">Paste this into your AI</span>
+        <button class="copybtn" data-copy="p2">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy
+        </button>
+      </div>
+      <pre id="p2" class="tight">Here's what I have on my 3 companies:
+
+<span class="fillin">paste your 3 rows from your shortlist sheet here</span>
+
+Visit each company's website. Then go company by company, and use what you find
+on the website plus the information above to give me your investor point of view
+on that company.
+
+Start with the first company. Finish it before you move to the next one.</pre>
+    </div>
+    <div class="note"><b>Why one at a time?</b> Judging three at once makes an AI mix their numbers up, attaching one company's funding to another. Slowing it down keeps the facts where they belong.</div>
+    <div class="grow"></div>
+    <div class="footer">
+      <span class="hint">Skim what it says about each company as it goes.</span>
+      <div class="navpair">
+        <button class="btn ghost" data-go="s2">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="btn" data-go="s4">Prompt 3
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. PROMPT 3 -->
+  <section class="screen" id="s4">
+    <div class="topbar">
+      <span class="kicker">Prompt 3 of 3</span>
+      <span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span></span>
+    </div>
+    <h2>Make it show its work</h2>
+    <p class="sub">If it just names a winner, you've got nothing to push back on. Asking for a rubric and scores gives you something you can actually argue with.</p>
+    <div class="card">
+      <div class="cardhead">
+        <span class="cardlabel">Paste this into your AI</span>
+        <button class="copybtn" data-copy="p3">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy
+        </button>
+      </div>
+      <pre id="p3" class="tight">If you had to pick one company to research further out of these three, which one
+would it be?
+
+Answer using this exact process:
+1. Define an evaluation rubric.
+2. Score each company on every dimension of that rubric.
+3. Say which company is the best fit, and why you rejected the other two.
+
+Check each company against the Tier 1 rules explicitly. For every number you use,
+tell me where it came from.</pre>
+    </div>
+    <div class="note">Keep this answer open. You'll check it in the next task, and you're allowed to overrule it.</div>
+    <div class="grow"></div>
+    <div class="footer">
+      <span class="hint">That's all three prompts.</span>
+      <div class="navpair">
+        <button class="btn ghost" data-go="s3">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="btn" data-go="s5">See a real run
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. SAMPLE RUN -->
+  <section class="screen" id="s5">
+    <div class="topbar">
+      <span class="kicker">See it done</span>
+      <span class="rule">Two minutes</span>
+    </div>
+    <h2>What a finished run looks like</h2>
+    <p class="sub">This is a real conversation an investor ran using these three prompts, from setup to final pick.</p>
+    <div class="card" style="padding:18px 20px;">
+      <a class="link" href="https://chatgpt.com/share/693317ac-de54-8006-91c2-948ff632c7e2" target="_blank" rel="noopener" style="font-size:16px;">Open the sample ChatGPT conversation &#8599;</a>
+      <p style="font-size:13.5px;line-height:1.5;margin-top:9px;color:var(--body);">Watch how it reviews each company on its own before comparing them, then builds a rubric, scores all three, and commits to one with reasons. That's the output you're aiming for.</p>
+    </div>
+    <div class="warnbox">
+      <div class="wt">One thing to know before you open it</div>
+      <div class="wd">This run is from an earlier version of this program, so the three companies in it are 3D printing and climate companies rather than AI ones. The <b>method</b> is what you're looking at. Your own three companies are the ones that matter.</div>
+    </div>
+    <div class="grow"></div>
+    <div class="footer">
+      <span class="hint">Then come back and finish your own run.</span>
+      <div class="navpair">
+        <button class="btn ghost" data-go="s4">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="btn" data-go="s6">Last thing
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. CLOSE -->
+  <section class="screen" id="s6">
+    <div class="topbar">
+      <span class="kicker">Before you move on</span>
+    </div>
+    <h1>What you've got back is a recommendation.</h1>
+    <p class="lead">The AI hasn't opened these websites the way you have, and it doesn't have to live with the answer. <b>You do.</b> You'll spend Projects 2, 3 and 4 on whichever company you pick, so you're allowed to disagree with it.</p>
+    <div class="note" style="margin-top:16px;">
+      <b>Two things happen next.</b> You check the pick against HP's Tier 1 rules, which takes about a minute. Then you commit to a company and Project 1 is done.
+    </div>
+    <div class="grow"></div>
+    <div class="footer">
+      <span class="hint">If you'd rather take your second choice, that's a legitimate call. Just say why in the task.</span>
+      <div class="navpair">
+        <button class="btn ghost" data-go="s1">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Start over
+        </button>
+      </div>
+    </div>
+  </section>
+
+</div>
+</div>
+</div>
+
+<script>
+/* ---------- navigation ---------- */
+function show(id){
+  var all = document.querySelectorAll('.screen');
+  for(var i=0;i<all.length;i++){ all[i].classList.remove('active'); }
+  document.getElementById(id).classList.add('active');
+}
+var navBtns = document.querySelectorAll('[data-go]');
+for(var i=0;i<navBtns.length;i++){
+  navBtns[i].addEventListener('click', function(){ show(this.getAttribute('data-go')); });
+}
+
+/* ---------- copy ---------- */
+var copyBtns = document.querySelectorAll('[data-copy]');
+for(var j=0;j<copyBtns.length;j++){
+  copyBtns[j].addEventListener('click', function(){
+    var btn = this;
+    var text = document.getElementById(btn.getAttribute('data-copy')).innerText;
+    function done(){
+      var original = btn.innerHTML;
+      btn.classList.add('done');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Copied';
+      setTimeout(function(){ btn.classList.remove('done'); btn.innerHTML = original; }, 1800);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallback(text, done); });
+    } else {
+      fallback(text, done);
+    }
+  });
+}
+function fallback(text, done){
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '-1000px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch(e){}
+  document.body.removeChild(ta);
+}
+
+/* ---------- responsive scaling ---------- */
+function scaleStage(){
+  var outer = document.getElementById('outer');
+  var wrap = document.getElementById('deck-wrapper');
+  var cw = outer.clientWidth;
+  var scale = cw / 960;
+  if(scale > 1) scale = 1;
+  wrap.style.transform = 'translateX(' + ((cw - 960*scale)/2) + 'px) scale(' + scale + ')';
+  outer.style.height = (540*scale) + 'px';
+}
+window.addEventListener('resize', scaleStage);
+scaleStage();
+</script>
+</body>
+</html>
