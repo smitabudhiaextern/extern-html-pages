@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Something Doesn't Add Up — Spotting Anomalies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg: #FDF8F8;
+    --color-surface-highlight: #DCE1FF;
+    --color-accent: #001D69;
+    --color-title: #1C1B1B;
+    --color-body: #484646;
+    --color-white: #FFFFFF;
+    --color-green: #10B981;
+    --color-green-tint: #D1FAE5;
+    --color-amber: #D97706;
+    --color-amber-tint: #FEF3C7;
+    --color-blue: #2563EB;
+    --color-blue-tint: #DBEAFE;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: var(--color-bg);
+    font-family: 'Inter', sans-serif;
+  }
+
+  body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  #deck-wrapper {
+    width: 960px;
+    height: 540px;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    background: var(--color-bg);
+  }
+
+  .slide {
+    width: 960px;
+    height: 540px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 38px 64px 60px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .slide[aria-hidden="true"] { display: none; }
+
+  .kicker {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--color-title);
+    line-height: 1.18;
+    margin: 0 0 18px;
+  }
+
+  h2 {
+    font-size: 23px;
+    font-weight: 700;
+    color: var(--color-title);
+    line-height: 1.2;
+    margin: 0 0 10px;
+  }
+
+  p { color: var(--color-body); line-height: 1.5; margin: 0; }
+
+  .lead {
+    font-size: 16px;
+    color: var(--color-body);
+    line-height: 1.5;
+    max-width: 780px;
+  }
+
+  .body-sm { font-size: 14px; }
+
+  /* Title slide */
+  .title-slide { justify-content: center; }
+  .title-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--color-surface-highlight);
+    color: var(--color-accent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    width: fit-content;
+    margin-bottom: 18px;
+  }
+
+  /* Query block */
+  .query-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 0;
+  }
+  .query-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+  .query-label svg { flex-shrink: 0; }
+
+  .ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: var(--color-surface-highlight);
+    padding: 7px 13px;
+    border-radius: 999px;
+    width: fit-content;
+    margin: 14px 0 0;
+  }
+  .ref-chip svg { flex-shrink: 0; }
+
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-accent);
+    color: var(--color-white);
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .copy-btn:hover { background: #002a8f; }
+  .copy-btn.copied { background: var(--color-green); }
+  .copy-btn svg { flex-shrink: 0; }
+
+  pre.code {
+    background: #0f1a3a;
+    color: #e8ecff;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 8px 0 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.45;
+    overflow: hidden;
+    white-space: pre;
+    tab-size: 4;
+  }
+  pre.code .kw  { color: #8fb4ff; font-weight: 500; }
+  pre.code .fn  { color: #7ee0c0; }
+  pre.code .num { color: #f4b678; }
+  pre.code .cmt { color: #8a97c2; font-style: italic; }
+  pre.code .ph  { color: #f4b678; }
+
+  .note {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 12px;
+    background: var(--color-surface-highlight);
+    border-radius: 8px;
+    padding: 11px 14px;
+    font-size: 13px;
+    line-height: 1.42;
+    color: var(--color-body);
+  }
+  .note svg { flex-shrink: 0; margin-top: 1px; }
+  .note strong { color: var(--color-accent); }
+
+  .note.amber {
+    background: var(--color-amber-tint);
+  }
+  .note.amber svg { color: var(--color-amber) !important; }
+  .note.amber strong { color: var(--color-amber); }
+
+  code.inline {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--color-surface-highlight);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--color-accent);
+    font-size: 13px;
+  }
+
+  /* Numbered question cards */
+  .qcards { display: flex; flex-direction: column; gap: 11px; margin-top: 10px; }
+  .qcard {
+    display: flex;
+    gap: 14px;
+    background: var(--color-white);
+    border-radius: 12px;
+    padding: 13px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .qnum {
+    flex-shrink: 0;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: var(--color-surface-highlight);
+    color: var(--color-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+  }
+  .qcard h4 { margin: 2px 0 3px; font-size: 15px; font-weight: 700; color: var(--color-title); }
+  .qcard p { font-size: 13.5px; line-height: 1.42; }
+
+  .closing {
+    margin-top: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+
+  /* Nav */
+  #nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--color-accent);
+    z-index: 100;
+  }
+  .nav-btn {
+    background: none;
+    border: none;
+    color: var(--color-white);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0 16px;
+    height: 48px;
+  }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  #dots { display: flex; align-items: center; gap: 7px; }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+  .dot.active {
+    background: var(--color-surface-highlight);
+    transform: scale(1.25);
+  }
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- Slide 1: Title -->
+  <section class="slide title-slide" aria-hidden="false">
+    <div class="title-badge">Project 4 &middot; Step 2 &middot; Pattern Detection</div>
+    <h1>Something Doesn't Add Up &mdash;<br>Spotting Anomalies</h1>
+    <p class="lead">The senior analyst's superpower is noticing that something's off before you know exactly what. Five checks follow &mdash; copy each query, run it in DB Browser, and look at the shape of what comes back.</p>
+  </section>
+
+  <!-- Slide 2: Pattern 1 -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Pattern 1</p>
+    <h2>The distribution that's too flat</h2>
+    <p class="lead body-sm">Real e-commerce traffic has clear daily and weekly rhythms &mdash; busy at lunch, busy in the evening, quiet overnight. If you GROUP BY hour and every hour comes back with nearly the same count, that flatness itself is the red flag. It's not normal customer behavior. It's automation.</p>
+
+    <div class="ref-chip">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      The hour-of-day GROUP BY query lives in the previous module (4.2.1)
+    </div>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>On Breaking Games' real data this looks healthy: carts peak around lunchtime and evening, and go quiet overnight. That's the pattern you want to see &mdash; one class of automation ruled out.</span>
+    </div>
+  </section>
+
+  <!-- Slide 3: Pattern 2 -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Pattern 2</p>
+    <h2>The same email, too many times</h2>
+    <p class="lead body-sm">A repeat customer is normal. A repeat customer with 30 carts and zero purchases is not.</p>
+
+    <div class="query-head">
+      <span class="query-label">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M9 4v16"/></svg>
+        Repeat carts by email
+      </span>
+      <button class="copy-btn" data-sql="p2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <pre class="code"><span class="kw">SELECT</span>
+    email,
+    <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> name) <span class="kw">AS</span> cart_count
+<span class="kw">FROM</span> shopify_checkouts
+<span class="kw">WHERE</span> email <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY</span> email
+<span class="kw">HAVING</span> cart_count &gt; <span class="num">5</span>
+<span class="kw">ORDER BY</span> cart_count <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="num">20</span>;</pre>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span><strong>Comes back empty</strong> here &mdash; the busiest email in the export has <strong>3 carts</strong>. A legitimate finding, not a broken query: you've just ruled out a whole class of bot behavior.</span>
+    </div>
+  </section>
+
+  <!-- Slide 4: Pattern 3 -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Pattern 3</p>
+    <h2>Cart values that don't make sense</h2>
+    <p class="lead body-sm">Carts with extreme <code class="inline">lineitem_quantity</code> (6+ of the same product) deserve a second look. Sometimes it's a real reseller; most of the time it's automation or test data.</p>
+
+    <div class="query-head">
+      <span class="query-label">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Carts with 6+ of one item
+      </span>
+      <button class="copy-btn" data-sql="p3">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <pre class="code"><span class="kw">SELECT</span>
+    name, email, lineitem_name, lineitem_quantity, total
+<span class="kw">FROM</span> shopify_checkouts
+<span class="kw">WHERE</span> lineitem_quantity &gt; <span class="num">5</span>
+<span class="kw">ORDER BY</span> lineitem_quantity <span class="kw">DESC</span>;</pre>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>This query returns <strong>30 rows</strong>, topping out at the real max of <strong>12</strong>: <code class="inline">customer_1009@example.com</code>'s cart, two line items of "GAME of PHONES," both quantity 12. Notice <code class="inline">total</code> is blank on that cart's second line item: only the first line item of a multi-item cart carries the cart-level total.</span>
+    </div>
+  </section>
+
+  <!-- Slide 5: Pattern 4 -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Pattern 4</p>
+    <h2>Carts that violate physical constraints</h2>
+    <p class="lead body-sm">If a cart was created at 3:47:01 AM and another by the same email at 3:47:09 AM in a different country, that's not a human. A single email tied to multiple billing countries is almost always test data or fraud.</p>
+
+    <div class="query-head">
+      <span class="query-label">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Countries per email
+      </span>
+      <button class="copy-btn" data-sql="p4">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <pre class="code"><span class="kw">SELECT</span>
+    email,
+    <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> billing_country) <span class="kw">AS</span> countries,
+    <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> name) <span class="kw">AS</span> carts
+<span class="kw">FROM</span> shopify_checkouts
+<span class="kw">WHERE</span> email <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY</span> email
+<span class="kw">HAVING</span> countries &gt; <span class="num">1</span>
+<span class="kw">ORDER BY</span> countries <span class="kw">DESC</span>;</pre>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>This query comes back <strong>empty</strong>: no single email is tied to more than one billing country in this data. That's a legitimate finding, not a broken query &mdash; you've just ruled out a whole class of fraud/test-data behavior. Write it down and move on.</span>
+    </div>
+  </section>
+
+  <!-- Slide 6: Pattern 5 -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Pattern 5</p>
+    <h2>Data older than the story it's telling</h2>
+    <p class="lead body-sm">Every table has a time range, and it rarely matches the question you're asking. Check before you trust:</p>
+
+    <div class="query-head">
+      <span class="query-label">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Carts by year
+      </span>
+      <button class="copy-btn" data-sql="p5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <pre class="code"><span class="kw">SELECT</span> <span class="fn">substr</span>(created_at, <span class="num">1</span>, <span class="num">4</span>) <span class="kw">AS</span> year, <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> name) <span class="kw">AS</span> carts
+<span class="kw">FROM</span> shopify_checkouts
+<span class="kw">GROUP BY</span> year
+<span class="kw">ORDER BY</span> year;</pre>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>Confirmed on the real data: carts reach back to <strong>2016</strong>, <strong>2021</strong> spikes to <strong>272</strong> carts, and <strong>551 of the 1,062</strong> total carts (52%) predate 2025. Any rate computed against this year's orders was never comparing like with like.</span>
+    </div>
+  </section>
+
+  <!-- Slide 7: Three questions -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">From observation to diagnosis</p>
+    <h2>Three questions</h2>
+    <div class="qcards">
+      <div class="qcard">
+        <div class="qnum">1</div>
+        <div>
+          <h4>Is it a measurement artifact?</h4>
+          <p>Could this weirdness come from how the data was exported, joined, or summed, rather than from real customer behavior? Always check this first.</p>
+        </div>
+      </div>
+      <div class="qcard">
+        <div class="qnum">2</div>
+        <div>
+          <h4>Is it real but explainable?</h4>
+          <p>A weird spike might just be a sale event; a weird country might be a wholesale partner. Real behavior with a real explanation is not a problem to solve.</p>
+        </div>
+      </div>
+      <div class="qcard">
+        <div class="qnum">3</div>
+        <div>
+          <h4>Is it real, unexplained, and material?</h4>
+          <p>If yes, you have a finding. Document it, quantify it, and decide whether it changes the recommendation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 8: Forensic template -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">Okay, it's a real finding. Now prove it.</p>
+    <h2>A reusable 3-step dig</h2>
+    <p class="lead body-sm">Once you've confirmed a finding is real and material, dig deeper with sequential queries. Replace <code class="inline">[pattern]</code> with your condition, e.g. <code class="inline">lineitem_quantity &gt; 5</code>.</p>
+
+    <div class="query-head">
+      <span class="query-label">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        Forensic 3-step template
+      </span>
+      <button class="copy-btn" data-sql="forensic">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <pre class="code"><span class="cmt">-- Step 1: How widespread is the pattern?</span>
+<span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">FROM</span> shopify_checkouts <span class="kw">WHERE</span> <span class="ph">[pattern]</span>;
+
+<span class="cmt">-- Step 2: Who exhibits it?</span>
+<span class="kw">SELECT</span> email, <span class="fn">COUNT</span>(*) <span class="kw">FROM</span> shopify_checkouts <span class="kw">WHERE</span> <span class="ph">[pattern]</span>
+<span class="kw">GROUP BY</span> email <span class="kw">ORDER BY</span> <span class="num">2</span> <span class="kw">DESC</span>;
+
+<span class="cmt">-- Step 3: What's the impact if we exclude it?</span>
+<span class="kw">SELECT</span> <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> name) <span class="kw">FROM</span> shopify_checkouts <span class="kw">WHERE NOT</span> <span class="ph">[pattern]</span>;</pre>
+
+    <p class="closing">Three queries, one pattern, a clear before-and-after.</p>
+  </section>
+
+</div>
+
+<div id="nav">
+  <button class="nav-btn" id="prevBtn">&larr; Prev</button>
+  <div id="dots"></div>
+  <button class="nav-btn" id="nextBtn">Next &rarr;</button>
+</div>
+
+<script>
+  // Raw SQL sources — the single source of truth for the Copy buttons.
+  // Stored here (not read from the DOM) so copying works even when other
+  // slides are display:none, and never picks up HTML entities or line numbers.
+  var SQL = {
+    p2: "SELECT \n    email,\n    COUNT(DISTINCT name) AS cart_count\nFROM shopify_checkouts\nWHERE email IS NOT NULL\nGROUP BY email\nHAVING cart_count > 5\nORDER BY cart_count DESC\nLIMIT 20;",
+    p3: "SELECT \n    name, email, lineitem_name, lineitem_quantity, total\nFROM shopify_checkouts\nWHERE lineitem_quantity > 5\nORDER BY lineitem_quantity DESC;",
+    p4: "SELECT \n    email,\n    COUNT(DISTINCT billing_country) AS countries,\n    COUNT(DISTINCT name) AS carts\nFROM shopify_checkouts\nWHERE email IS NOT NULL\nGROUP BY email\nHAVING countries > 1\nORDER BY countries DESC;",
+    p5: "SELECT substr(created_at, 1, 4) AS year, COUNT(DISTINCT name) AS carts\nFROM shopify_checkouts\nGROUP BY year\nORDER BY year;",
+    forensic: "-- Step 1: How widespread is the pattern?\nSELECT COUNT(*) FROM shopify_checkouts WHERE [pattern];\n\n-- Step 2: Who exhibits it?\nSELECT email, COUNT(*) FROM shopify_checkouts WHERE [pattern] \nGROUP BY email ORDER BY 2 DESC;\n\n-- Step 3: What's the impact if we exclude it?\nSELECT COUNT(DISTINCT name) FROM shopify_checkouts WHERE NOT [pattern];"
+  };
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-sql');
+      var text = SQL[key];
+      var label = btn.querySelector('.copy-label');
+      var done = function () {
+        btn.classList.add('copied');
+        if (label) label.textContent = 'Copied!';
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          if (label) label.textContent = 'Copy';
+        }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      } else {
+        fallbackCopy(text);
+        done();
+      }
+    });
+  });
+
+  // Slide navigation
+  var slides = document.querySelectorAll('#deck-wrapper .slide');
+  var total = slides.length;
+  var current = 0;
+
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var dotsContainer = document.getElementById('dots');
+
+  for (var i = 0; i < total; i++) {
+    (function (idx) {
+      var dot = document.createElement('button');
+      dot.className = 'dot';
+      dot.addEventListener('click', function () { goTo(idx); });
+      dotsContainer.appendChild(dot);
+    })(i);
+  }
+  var dots = dotsContainer.querySelectorAll('.dot');
+
+  function goTo(idx) {
+    current = Math.max(0, Math.min(total - 1, idx));
+    slides.forEach(function (s, i) {
+      s.setAttribute('aria-hidden', i === current ? 'false' : 'true');
+    });
+    dots.forEach(function (d, i) { d.classList.toggle('active', i === current); });
+    prevBtn.disabled = current === 0;
+    nextBtn.textContent = current === total - 1 ? 'Finish' : 'Next →';
+  }
+
+  prevBtn.addEventListener('click', function () { goTo(current - 1); });
+  nextBtn.addEventListener('click', function () {
+    if (current === total - 1) return;
+    goTo(current + 1);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') goTo(current - 1);
+    if (e.key === 'ArrowRight') goTo(current + 1);
+  });
+
+  // Notion-embed clipping fix — scale from top-left and translate to center.
+  function scaleDeck() {
+    var wrapper = document.getElementById('deck-wrapper');
+    var scale = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    var tx = Math.max(0, (window.innerWidth - 960 * scale) / 2);
+    var ty = Math.max(0, (window.innerHeight - 540 * scale) / 2);
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  }
+  window.addEventListener('resize', scaleDeck);
+  window.addEventListener('load', scaleDeck);
+  if (window.ResizeObserver) new ResizeObserver(scaleDeck).observe(document.documentElement);
+  scaleDeck();
+
+  goTo(0);
+</script>
+</body>
+</html>
