@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Read Mike's Printout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+    --yellow:#FFF3C4;
+    --yellow-line:#E9C84A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.4cqw 3.4cqw 1.2cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- sheet (reusable DB table) ---- */
+  .sheet{
+    width:100%;border-collapse:separate;border-spacing:0;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;font-size:1.55cqw;
+    box-shadow:0 5px 16px rgba(0,29,105,.08);
+  }
+  .sheet th{
+    background:#F0F1FA;color:var(--ink);text-align:left;
+    font-weight:800;padding:.85cqw 1.4cqw;font-size:1.5cqw;
+    border-bottom:2px solid var(--line);user-select:none;
+  }
+  .sheet th.num{text-align:right;}
+  .sheet td{
+    padding:.6cqw 1.4cqw;border-bottom:1px solid var(--line);
+    font-weight:600;color:var(--body);vertical-align:middle;
+  }
+  .sheet td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .sheet tr:last-child td{border-bottom:none;}
+  .sheet td.prod{font-weight:800;color:var(--ink);}
+  .price{color:var(--accent);font-weight:800;}
+
+  /* Mike's yellow highlighter on the rows he picked */
+  .sheet tr.picked td{
+    background:var(--yellow)!important;
+    box-shadow:inset 0 1px 0 var(--yellow-line),inset 0 -1px 0 var(--yellow-line);
+  }
+  .sheet tr.picked td.prod{color:#7a5e00;}
+  .hi-tag{
+    display:inline-flex;align-items:center;gap:.5cqw;
+    background:var(--yellow);border:1.3px solid var(--yellow-line);border-radius:5px;
+    padding:.15cqw .7cqw;font-size:1.35cqw;font-weight:800;color:#7a5e00;
+  }
+  .hi-tag i{font-size:1.5cqw;color:#b8901a;}
+
+  .note-illustrative{font-size:1.32cqw;font-weight:700;color:var(--body);font-style:italic;display:flex;align-items:center;gap:.7cqw;}
+  .note-illustrative i{font-size:1.6cqw;color:var(--accent);font-style:normal;}
+
+  /* ---- intro split layout ---- */
+  .row-2{display:flex;gap:2.6cqw;align-items:stretch;flex:1 1 auto;min-height:0;}
+  .col-table{flex:1.85;min-width:0;display:flex;flex-direction:column;gap:.9cqw;}
+  .col-side{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.2cqw;}
+
+  .prompt-card{
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:10px;padding:1.5cqw 1.7cqw;box-shadow:0 4px 12px rgba(0,29,105,.07);
+  }
+  .prompt-card .q{font-size:1.75cqw;font-weight:800;color:var(--ink);line-height:1.3;}
+  .prompt-card .a{font-size:1.5cqw;font-weight:500;color:var(--body);margin-top:.7cqw;line-height:1.4;}
+  .prompt-card .a b{color:var(--ink);}
+
+  /* ---- MCQ (reusable, predict-then-reveal) ---- */
+  .quiz-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+  .qcount{font-size:1.4cqw;font-weight:800;color:var(--accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.3cqw;}
+  .qtext{font-size:1.95cqw;font-weight:800;color:var(--ink);line-height:1.28;}
+  .qtext .em{color:var(--accent);}
+  .opts{display:flex;flex-direction:column;gap:.8cqw;margin-top:1.1cqw;}
+  .opt{
+    text-align:left;background:#fff;border:1.6px solid var(--line);border-radius:9px;
+    padding:1.0cqw 1.6cqw;font-family:inherit;font-size:1.6cqw;font-weight:600;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,transform .08s;line-height:1.3;
+    display:flex;align-items:center;gap:1.1cqw;
+  }
+  .opt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .opt:active:not(:disabled){transform:scale(.995);}
+  .opt .mark{width:2.1cqw;height:2.1cqw;flex:0 0 auto;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;}
+  .opt .mark i{font-size:1.4cqw;color:#fff;display:none;}
+  .opt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .opt.correct .mark{border-color:var(--good);background:var(--good);}
+  .opt.correct .mark i.check{display:block;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .opt.wrong .mark{border-color:var(--bad);background:var(--bad);}
+  .opt.wrong .mark i.cross{display:block;}
+  .opt:disabled{cursor:default;}
+  .feedback{
+    margin-top:1.0cqw;font-size:1.5cqw;font-weight:600;line-height:1.4;
+    padding:1.0cqw 1.4cqw;border-radius:9px;display:none;
+  }
+  .feedback.show{display:block;}
+  .feedback.good{background:var(--hl);color:var(--accent);border-left:4px solid var(--accent);}
+  .feedback.good b{color:var(--ink);}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad);border-left:4px solid var(--bad);}
+
+  /* ---- recap screen ---- */
+  .recap-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+  .recap-intro{font-size:1.65cqw;font-weight:600;color:var(--body);line-height:1.4;margin-top:.6cqw;}
+  .recap-intro b{color:var(--ink);}
+  .qlist{display:flex;flex-direction:column;gap:.7cqw;margin-top:1.1cqw;}
+  .qrow{
+    display:flex;align-items:flex-start;gap:1.2cqw;
+    background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:9px;
+    padding:.85cqw 1.4cqw;box-shadow:0 3px 9px rgba(0,29,105,.06);
+  }
+  .qnum{flex:0 0 auto;width:2.4cqw;height:2.4cqw;border-radius:50%;background:var(--hl);color:var(--accent);
+    font-weight:900;font-size:1.4cqw;display:flex;align-items:center;justify-content:center;}
+  .qbody{font-size:1.5cqw;font-weight:600;color:var(--body);line-height:1.32;}
+  .qbody b{color:var(--ink);font-weight:800;}
+  .recap-close{
+    margin-top:1.1cqw;font-size:1.65cqw;font-weight:700;color:var(--accent);line-height:1.36;
+    display:flex;align-items:flex-start;gap:1.0cqw;
+  }
+  .recap-close i{font-size:2.1cqw;color:var(--accent);flex:0 0 auto;margin-top:.1cqw;}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-table" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Read Mike's Printout</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 1 (intro + the printout) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">Step 4 &middot; The Reorder Pressure</div>
+      <h1 class="title" style="font-size:2.9cqw;">Read Mike's printout.</h1>
+      <div class="row-2" style="margin-top:1.2cqw;">
+        <div class="col-table">
+          <div class="note-illustrative"><i class="ph ph-info"></i>Illustrative numbers &mdash; a small slice of the 99-product catalog</div>
+          <table class="sheet" id="printout"></table>
+        </div>
+        <div class="col-side">
+          <div class="prompt-card">
+            <div class="q">Mike reorders by highlighting a printout &mdash; top sellers in <span class="hi-tag"><i class="ph ph-highlighter"></i>yellow</span>.</div>
+            <div class="a">It works fine at <b>15 products</b>. Let's see where it breaks at <b>99</b>. The three yellow rows are the ones he picked.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 (traffic without sales) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Predict, then reveal</div>
+      <div class="quiz-wrap" id="quiz1"></div>
+    </section>
+
+    <!-- ============ SCREEN 3 (revenue hides AOV) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Predict, then reveal</div>
+      <div class="quiz-wrap" id="quiz2"></div>
+    </section>
+
+    <!-- ============ SCREEN 4 (invisible middle / tail) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Predict, then reveal</div>
+      <div class="quiz-wrap" id="quiz3"></div>
+    </section>
+
+    <!-- ============ SCREEN 5 (decide once and commit) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="kicker">Predict, then reveal</div>
+      <div class="quiz-wrap" id="quiz4"></div>
+    </section>
+
+    <!-- ============ SCREEN 6 (recap) ============ -->
+    <section class="screen" data-screen="5">
+      <div class="recap-wrap">
+        <div class="kicker">What Mike can't see &mdash; and you'll build</div>
+        <h1 class="title" style="font-size:2.5cqw;">Mike isn't wrong. He's a busy human reading a printout.</h1>
+        <div class="recap-intro">Across this Project you'll build the views he <b>can't</b> build himself. Here are the five questions the rest of the Project answers:</div>
+        <div class="qlist">
+          <div class="qrow"><div class="qnum">1</div><div class="qbody">What's the <b>AOV distribution</b> &mdash; where's the revenue-per-unit cliff?</div></div>
+          <div class="qrow"><div class="qnum">2</div><div class="qbody">Which products get <b>traffic but don't convert</b>? (promote, don't kill)</div></div>
+          <div class="qrow"><div class="qnum">3</div><div class="qbody">Which products <b>convert but get no traffic</b>? (spend to surface them)</div></div>
+          <div class="qrow"><div class="qnum">4</div><div class="qbody">What share of revenue is the <b>long tail</b>? (how much can you ignore?)</div></div>
+          <div class="qrow"><div class="qnum">5</div><div class="qbody">Are there products that <b>haven't sold a single unit</b>? (e.g. Cardboard Castles &mdash; stop printing)</div></div>
+        </div>
+        <div class="recap-close"><i class="ph ph-arrow-bend-down-right"></i><span>Next you'll learn the vocabulary to measure these &mdash; then frame Mike's questions.</span></div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Next</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ SCREEN-READER / NO-JS FALLBACK ============ -->
+<div class="sr-only">
+  <h2>Read Mike's Printout &mdash; full text</h2>
+  <p>Mike reorders by highlighting a printout, marking top sellers in yellow. It works at 15 products. Here is where it breaks at 99. The three rows Mike highlighted are Dwellings of Eldervale, POOP: The Game, and Sparkle Kitty Nights.</p>
+  <p>Printout (illustrative numbers). Columns: Product, Units in 90 days, Revenue, Page views.</p>
+  <ul>
+    <li>Dwellings of Eldervale &mdash; 320 units &mdash; $42,000 &mdash; 9,500 page views (highlighted)</li>
+    <li>POOP: The Game &mdash; 410 units &mdash; $4,100 &mdash; 7,200 page views (highlighted)</li>
+    <li>Sparkle Kitty Nights &mdash; 180 units &mdash; $5,400 &mdash; 4,300 page views (highlighted)</li>
+    <li>Quokka Dash &mdash; 22 units &mdash; $660 &mdash; 6,800 page views (not highlighted)</li>
+    <li>Tiny Dungeons &mdash; 8 units &mdash; $240 &mdash; 5,100 page views (not highlighted)</li>
+    <li>Cardboard Castles &mdash; 0 units &mdash; $0 &mdash; 95 page views (not highlighted)</li>
+  </ul>
+  <h3>Question 1 &mdash; Traffic without sales</h3>
+  <p>Quokka Dash got 6,800 page views, more than Sparkle Kitty, but sold only 22 copies, and Mike didn't highlight it. What's the most likely story? Correct answer: Lots of interest but few buyers, a conversion problem worth investigating. High traffic with few sales is a conversion problem (maybe price, photos, or description). This is a product to fix or promote, not kill, and Mike's printout can't see it.</p>
+  <h3>Question 2 &mdash; Revenue hides AOV</h3>
+  <p>A $40 game selling 100 units and a $200 game selling 20 units both earn $4,000. Mike's printout shows the same revenue for each. What is it NOT showing him? Correct answer: How much each individual sale is worth (AOV). Same revenue, very different products: one is volume, one is premium. Revenue alone hides AOV (dollars per unit).</p>
+  <h3>Question 3 &mdash; The invisible middle and tail</h3>
+  <p>Mike instantly knows his top sellers because they're loud: support tickets, restock requests, BoardGameGeek threads. Which part of the 99-product catalog is invisible to him? Correct answer: The quiet middle and the long tail. The loud bestsellers are easy. The quiet middle and tail are where reorder mistakes hide, and that's exactly what SQL is good at surfacing.</p>
+  <h3>Question 4 &mdash; Decide once and commit</h3>
+  <p>Once a product falls off Mike's list, it stays off until someone in the office happens to mention it. Why is that risky? Correct answer: A quietly-growing product can be missed for months. His method decides once, then commits. A product slowly gaining steam in the tail never gets a second look.</p>
+  <h3>Recap &mdash; the five questions the rest of the Project answers</h3>
+  <ol>
+    <li>What's the AOV distribution &mdash; where's the revenue-per-unit cliff?</li>
+    <li>Which products get traffic but don't convert? (promote, don't kill)</li>
+    <li>Which products convert but get no traffic? (spend to surface them)</li>
+    <li>What share of revenue is the long tail? (how much can you ignore?)</li>
+    <li>Are there products that haven't sold a single unit? (e.g. Cardboard Castles &mdash; stop printing)</li>
+  </ol>
+</div>
+
+<script>
+/* ============================================================
+   PRINTOUT DATA -- 6 illustrative rows; Mike highlighted 3.
+   ============================================================ */
+const PRINTOUT=[
+  {prod:'Dwellings of Eldervale', units:'320', rev:'$42,000', views:'9,500', picked:true},
+  {prod:'POOP: The Game',         units:'410', rev:'$4,100',  views:'7,200', picked:true},
+  {prod:'Sparkle*Kitty Nights',   units:'180', rev:'$5,400',  views:'4,300', picked:true},
+  {prod:'Quokka Dash',            units:'22',  rev:'$660',    views:'6,800', picked:false},
+  {prod:'Tiny Dungeons',          units:'8',   rev:'$240',    views:'5,100', picked:false},
+  {prod:'Cardboard Castles',      units:'0',   rev:'$0',      views:'95',    picked:false},
+];
+
+function renderPrintout(){
+  let head='<thead><tr>'
+    +'<th>Product</th>'
+    +'<th class="num">Units (90 days)</th>'
+    +'<th class="num">Revenue</th>'
+    +'<th class="num">Page views</th>'
+    +'</tr></thead>';
+  let body='<tbody>';
+  PRINTOUT.forEach(r=>{
+    body+=`<tr class="${r.picked?'picked':''}">`;
+    body+=`<td class="prod">${r.prod}</td>`;
+    body+=`<td class="num">${r.units}</td>`;
+    body+=`<td class="num price">${r.rev}</td>`;
+    body+=`<td class="num">${r.views}</td>`;
+    body+='</tr>';
+  });
+  body+='</tbody>';
+  document.getElementById('printout').innerHTML=head+body;
+}
+renderPrintout();
+
+/* ============================================================
+   MCQ COMPONENT -- single-pick, predict-then-reveal, gated.
+   Correct pick locks all options + reveals teaching feedback.
+   Wrong pick: encouraging "look again" nudge, retry allowed.
+   ============================================================ */
+const checkSVG='<i class="ph-bold ph-check check"></i>';
+const crossSVG='<i class="ph-bold ph-x cross"></i>';
+
+function buildMCQ(containerEl, q, gateKey){
+  let html=`<div class="qcount">${q.count}</div>`;
+  html+=`<div class="qtext">${q.question}</div><div class="opts">`;
+  q.options.forEach((o,i)=>{
+    html+=`<button class="opt" type="button" data-i="${i}"><span class="mark">${checkSVG}${crossSVG}</span><span>${o.text}</span></button>`;
+  });
+  html+='</div><div class="feedback good"></div>';
+  containerEl.innerHTML=html;
+
+  const fb=containerEl.querySelector('.feedback');
+  const btns=containerEl.querySelectorAll('.opt');
+
+  btns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(gate[gateKey]) return; // already solved
+      const o=q.options[+btn.dataset.i];
+      if(o.correct){
+        btn.classList.add('correct');
+        btns.forEach(b=>b.disabled=true);
+        fb.classList.remove('bad');
+        fb.classList.add('good','show');
+        fb.innerHTML=q.reveal;
+        gate[gateKey]=true;
+        refreshNav();
+      } else {
+        btn.classList.add('wrong');
+        btn.disabled=true;
+        fb.classList.remove('good');
+        fb.classList.add('bad','show');
+        fb.textContent='Not quite — look again.';
+      }
+    });
+  });
+}
+
+const Q1={
+  count:'Question 1 of 4 · Traffic without sales',
+  question:'Quokka Dash got 6,800 page views — more than Sparkle*Kitty — but sold only 22 copies, and Mike didn\'t highlight it. What\'s the most likely story?',
+  options:[
+    {text:"It's a bad game, ignore it", correct:false},
+    {text:"Lots of interest but few buyers — a conversion problem worth investigating", correct:true},
+    {text:"The page views must be a mistake", correct:false}
+  ],
+  reveal:'High traffic and few sales is a <b>conversion problem</b> — maybe the price, the photos, or the description. This is a product to <b>fix or promote, not kill</b> — and Mike\'s printout can\'t see it.'
+};
+const Q2={
+  count:'Question 2 of 4 · Revenue hides AOV',
+  question:'A $40 game selling 100 units and a $200 game selling 20 units <span class="em">both</span> earn $4,000. Mike\'s printout shows the same revenue for each. What is it NOT showing him?',
+  options:[
+    {text:"How much each individual sale is worth (AOV)", correct:true},
+    {text:"Nothing — they're identical", correct:false},
+    {text:"The box color", correct:false}
+  ],
+  reveal:'Same revenue, very different products — one is <b>volume</b>, one is <b>premium</b>. Revenue alone hides <b>AOV</b> (dollars per unit), so two products that need opposite decisions look identical on the printout.'
+};
+const Q3={
+  count:'Question 3 of 4 · The invisible middle',
+  question:'Mike instantly knows his TOP sellers because they\'re loud — support tickets, restock requests, BoardGameGeek threads. Which part of the 99-product catalog is invisible to him?',
+  options:[
+    {text:"The top sellers", correct:false},
+    {text:"The quiet middle and the long tail", correct:true},
+    {text:"The highlighted ones", correct:false}
+  ],
+  reveal:'The loud bestsellers are easy. The <b>quiet middle and tail</b> are where reorder mistakes hide — and that\'s exactly what SQL is good at surfacing, because it reads every row equally, loud or not.'
+};
+const Q4={
+  count:'Question 4 of 4 · Decide once and commit',
+  question:'Once a product falls "off Mike\'s list," it stays off until someone in the office happens to mention it. Why is that risky?',
+  options:[
+    {text:"It isn't risky", correct:false},
+    {text:"A quietly-growing product can be missed for months", correct:true},
+    {text:"Because printouts are always wrong", correct:false}
+  ],
+  reveal:'His method <b>decides once, then commits</b>. A product slowly gaining steam down in the tail never gets a second look — so a real winner can sit unnoticed for months.'
+};
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+const gate={q1:false, q2:false, q3:false, q4:false};
+
+buildMCQ(document.getElementById('quiz1'), Q1, 'q1');
+buildMCQ(document.getElementById('quiz2'), Q2, 'q2');
+buildMCQ(document.getElementById('quiz3'), Q3, 'q3');
+buildMCQ(document.getElementById('quiz4'), Q4, 'q4');
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+/* which gate must be satisfied to leave a given screen */
+const gateForScreen={1:'q1', 2:'q2', 3:'q3', 4:'q4'};
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  // last screen: nothing after
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+
+  // MCQ screens gate Next on a correct answer
+  const g=gateForScreen[current];
+  nextLabel.textContent='Next';
+  nextBtn.disabled = g ? !gate[g] : false;
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  const g=gateForScreen[current];
+  if(g && !gate[g]) return; // gated
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>

@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick the Right Number</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --accent:#001D69;
+    --ink:#1C1B1B;
+    --body:#484646;
+    --bg:#FDF8F8;
+    --hl:#DCE1FF;
+    --card:#FFFFFF;
+    --line:#ECE6E6;
+    --bad:#C5453B;
+    --bad-bg:#FBE6E4;
+    --good:#2E8B57;
+    --good-bg:#E4F4EA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;color:var(--ink);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:12px;}
+
+  /* ---- 16:9 stage, no scroll ---- */
+  .stage{
+    width:100%;
+    max-width:960px;
+    aspect-ratio:16/9;
+    container-type:inline-size;
+    overflow:hidden;
+    background:var(--bg);
+    border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,29,105,.18);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.9cqw 3cqw;
+    background:var(--accent);
+    color:#fff;
+    flex:0 0 auto;
+  }
+  .brandtag{display:flex;align-items:center;gap:1.3cqw;font-weight:700;font-size:1.55cqw;letter-spacing:.05em;text-transform:uppercase;color:#fff;}
+  .stepcount{font-size:1.5cqw;font-weight:600;color:rgba(255,255,255,.8);}
+
+  /* ---- screen container ---- */
+  .screens{flex:1 1 auto;position:relative;min-height:0;}
+  .screen{
+    position:absolute;inset:0;
+    padding:2.4cqw 3.4cqw 1.2cqw;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{font-size:3.4cqw;font-weight:900;color:var(--ink);line-height:1.08;letter-spacing:-.01em;}
+  .kicker{font-size:1.45cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:.4cqw;}
+  p.lead{font-size:1.9cqw;font-weight:500;color:var(--body);line-height:1.4;margin-top:1cqw;}
+
+  /* ---- intro screen ---- */
+  .intro-wrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:1.2cqw;max-width:74cqw;}
+  .intro-icon{width:6cqw;height:6cqw;color:var(--accent);}
+  .intro-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:11px;
+    padding:1.5cqw 1.9cqw;font-size:1.85cqw;font-weight:700;color:var(--accent);line-height:1.35;margin-top:.6cqw;
+  }
+  .intro-rule b{font-weight:900;}
+
+  /* ---- scenario card (prose, BLOCK not flex) ---- */
+  .scenario{
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:11px;padding:1.5cqw 1.9cqw;box-shadow:0 4px 12px rgba(0,29,105,.07);
+    display:block;
+  }
+  .scenario .who{
+    font-size:1.4cqw;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+    margin-bottom:.7cqw;display:block;
+  }
+  .scenario .q{font-size:1.95cqw;font-weight:800;color:var(--ink);line-height:1.3;display:block;}
+  .scenario .q em{font-style:italic;color:var(--accent);}
+  .scenario .detail{font-size:1.55cqw;font-weight:500;color:var(--body);line-height:1.42;margin-top:.8cqw;display:block;}
+
+  /* split layout for screens with a data nugget on the side */
+  .split{display:flex;gap:2.2cqw;align-items:stretch;flex:1 1 auto;min-height:0;margin-top:1.3cqw;}
+  .split-main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.1cqw;}
+  .split-side{flex:0 0 27cqw;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.1cqw;}
+
+  /* compare cards (screen 4 AOV) */
+  .compare{display:flex;flex-direction:column;gap:1.0cqw;}
+  .pie-card{
+    background:#fff;border:1.4px solid var(--line);border-radius:10px;
+    padding:1.0cqw 1.3cqw;box-shadow:0 3px 10px rgba(0,29,105,.06);display:block;
+  }
+  .pie-card .pname{font-size:1.5cqw;font-weight:800;color:var(--ink);display:block;}
+  .pie-card .pmath{font-size:1.32cqw;font-weight:600;color:var(--body);line-height:1.35;margin-top:.35cqw;display:block;}
+  .pie-card .ptot{color:var(--accent);font-weight:900;white-space:nowrap;}
+
+  /* MCQ (reusable) */
+  .quiz-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;}
+  .qcount{font-size:1.4cqw;font-weight:800;color:var(--accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.5cqw;}
+  .opts{display:flex;flex-direction:column;gap:.85cqw;margin-top:1.2cqw;}
+  .opt{
+    text-align:left;background:#fff;border:1.6px solid var(--line);border-radius:9px;
+    padding:1.05cqw 1.6cqw;font-family:inherit;font-size:1.62cqw;font-weight:600;color:var(--body);
+    cursor:pointer;transition:border-color .15s,background .15s,transform .08s;line-height:1.3;
+    display:flex;align-items:center;gap:1.1cqw;
+  }
+  .opt:hover:not(:disabled){border-color:var(--accent);background:#F0F1FA;}
+  .opt:active:not(:disabled){transform:scale(.995);}
+  .opt .mark{width:2.1cqw;height:2.1cqw;flex:0 0 auto;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;}
+  .opt .mark i{font-size:1.4cqw;color:#fff;display:none;}
+  .opt .otext{display:block;}
+  .opt.correct{border-color:var(--good);background:var(--good-bg);color:var(--good);}
+  .opt.correct .mark{border-color:var(--good);background:var(--good);}
+  .opt.correct .mark i.check{display:block;}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg);color:var(--bad);}
+  .opt.wrong .mark{border-color:var(--bad);background:var(--bad);}
+  .opt.wrong .mark i.cross{display:block;}
+  .opt:disabled{cursor:default;}
+  .feedback{
+    margin-top:1.1cqw;font-size:1.52cqw;font-weight:600;line-height:1.4;
+    padding:1.0cqw 1.4cqw;border-radius:9px;display:none;
+  }
+  .feedback.show{display:block;}
+  .feedback.good{background:var(--good-bg);color:var(--good);border-left:4px solid var(--good);}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad);border-left:4px solid var(--bad);}
+  .feedback b{color:inherit;font-weight:900;}
+
+  /* ---- recap / done screen ---- */
+  .recap-wrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .recap-grid{display:flex;flex-direction:column;gap:.7cqw;margin-top:1.0cqw;flex:0 0 auto;}
+  .recap-item{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:.75cqw 1.4cqw;display:flex;align-items:baseline;gap:1.1cqw;
+    box-shadow:0 3px 9px rgba(0,29,105,.05);
+  }
+  .recap-item .term{font-size:1.55cqw;font-weight:900;color:var(--accent);flex:0 0 22cqw;display:block;}
+  .recap-item .mean{font-size:1.5cqw;font-weight:500;color:var(--body);line-height:1.3;display:block;}
+  .recap-rule{
+    background:var(--hl);border:1.4px solid var(--accent);border-radius:10px;
+    padding:1.2cqw 1.6cqw;margin-top:1.1cqw;font-size:1.75cqw;font-weight:900;color:var(--accent);
+    line-height:1.32;display:block;flex:0 0 auto;
+  }
+  .recap-close{font-size:1.55cqw;font-weight:600;color:var(--body);line-height:1.4;margin-top:1.0cqw;display:block;}
+  .recap-close b{color:var(--ink);}
+
+  /* ---- nav footer ---- */
+  .nav{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:1.3cqw 3.4cqw;border-top:1px solid var(--line);background:rgba(255,255,255,.55);
+  }
+  .dots{display:flex;gap:1.0cqw;}
+  .dot-nav{width:1.4cqw;height:1.4cqw;border-radius:50%;background:#D8D2D2;transition:all .2s;}
+  .dot-nav.on{background:var(--accent);transform:scale(1.15);}
+  .dot-nav.done{background:var(--accent);}
+  .btns{display:flex;gap:1.3cqw;}
+  .btn{
+    font-family:inherit;font-size:1.65cqw;font-weight:700;padding:.95cqw 2.2cqw;border-radius:9px;
+    cursor:pointer;border:1.8px solid var(--accent);transition:all .15s;display:flex;align-items:center;gap:.7cqw;
+  }
+  .btn.back{background:transparent;color:var(--accent);}
+  .btn.back:hover:not(:disabled){background:rgba(0,29,105,.08);}
+  .btn.next{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.next:hover:not(:disabled){background:var(--accent);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ---- no-JS / screen-reader fallback ---- */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="brandtag">
+      <i class="ph ph-chart-line-up" style="font-size:2.4cqw;color:#fff;"></i>
+      Breaking Games &middot; Data
+    </div>
+    <div class="stepcount">Pick the Right Number</div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- ============ SCREEN 0 (intro) ============ -->
+    <section class="screen active" data-screen="0">
+      <div class="kicker">Step 4 &middot; The Reorder Pressure</div>
+      <div class="intro-wrap">
+        <i class="ph-fill ph-target intro-icon"></i>
+        <h1 class="title">Pick the Right Number</h1>
+        <p class="lead" style="margin-top:.3cqw;">A KPI is just the one number that tells you whether something's working. A whole business can ride on a single, well-chosen number.</p>
+        <div class="intro-rule">The skill isn't the math &mdash; it's picking the <b>RIGHT</b> number for the question you're actually asking.</div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 1 (pizza: revenue) ============ -->
+    <section class="screen" data-screen="1">
+      <div class="kicker">Pizza shop &middot; Pick one</div>
+      <div class="quiz-wrap" data-q="0">
+        <div class="scenario">
+          <span class="who"><i class="ph-fill ph-storefront" style="font-size:1.4cqw;"></i> Tony's pizza shop</span>
+          <span class="q">Tony runs a pizza shop and wants to know one thing: <em>are we making money?</em> Which single number answers that best?</span>
+        </div>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 2 (pizza: conversion rate) ============ -->
+    <section class="screen" data-screen="2">
+      <div class="kicker">Pizza shop &middot; Pick one</div>
+      <div class="quiz-wrap" data-q="1">
+        <div class="scenario">
+          <span class="who"><i class="ph-fill ph-storefront" style="font-size:1.4cqw;"></i> Tony's pizza shop</span>
+          <span class="q">Tony notices his Hawaiian pizza page gets <em>tons of visitors</em> but almost nobody orders it. Which number tells him something's wrong?</span>
+        </div>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 3 (pizza: AOV) ============ -->
+    <section class="screen" data-screen="3">
+      <div class="kicker">Pizza shop &middot; Pick one</div>
+      <div class="split">
+        <div class="split-main quiz-wrap" data-q="2">
+          <div class="scenario">
+            <span class="who"><i class="ph-fill ph-storefront" style="font-size:1.4cqw;"></i> Tony's pizza shop</span>
+            <span class="q">Two pizzas each earned <em>$300 today.</em> Same kind of seller?</span>
+          </div>
+          <div class="opts"></div>
+          <div class="feedback"></div>
+        </div>
+        <div class="split-side">
+          <div class="compare">
+            <div class="pie-card">
+              <span class="pname">Margherita</span>
+              <span class="pmath">30 sold &times; $10 each = <span class="ptot">$300</span></span>
+            </div>
+            <div class="pie-card">
+              <span class="pname">Deluxe</span>
+              <span class="pmath">6 sold &times; $50 each = <span class="ptot">$300</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 4 (vanity vs actionable: followers) ============ -->
+    <section class="screen" data-screen="4">
+      <div class="kicker">Vanity or actionable? &middot; Pick one</div>
+      <div class="quiz-wrap" data-q="3">
+        <div class="scenario">
+          <span class="who"><i class="ph-fill ph-instagram-logo" style="font-size:1.4cqw;"></i> Tony's pizza shop</span>
+          <span class="q">&ldquo;Our pizza shop has <em>12,000 Instagram followers.</em>&rdquo; Vanity metric, or actionable metric?</span>
+          <span class="detail">A <b>vanity metric</b> feels good to report. An <b>actionable metric</b> actually changes what you'd do next.</span>
+        </div>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 5 (vanity vs actionable: transfer to BG) ============ -->
+    <section class="screen" data-screen="5">
+      <div class="kicker">Vanity or actionable? &middot; Breaking Games</div>
+      <div class="quiz-wrap" data-q="4">
+        <div class="scenario">
+          <span class="who"><i class="ph-fill ph-game-controller" style="font-size:1.4cqw;"></i> Breaking Games</span>
+          <span class="q">&ldquo;<em>POOP: The Game</em> has a 5x higher add-to-cart rate than our average game.&rdquo; Vanity, or actionable?</span>
+        </div>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 6 (transfer: Mike's reorder) ============ -->
+    <section class="screen" data-screen="6">
+      <div class="kicker">Mike's reorder &middot; Pick one</div>
+      <div class="quiz-wrap" data-q="5">
+        <div class="scenario">
+          <span class="who"><i class="ph-fill ph-package" style="font-size:1.4cqw;"></i> Breaking Games &middot; Mike</span>
+          <span class="q">Mike has to choose which of <em>99 games</em> to reprint before the Nov 1 deadline. Which number should LEAD the decision?</span>
+        </div>
+        <div class="opts"></div>
+        <div class="feedback"></div>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN 7 (recap, meaningful close) ============ -->
+    <section class="screen" data-screen="7">
+      <div class="recap-wrap">
+        <div class="kicker">Your five KPIs, in plain English</div>
+        <h1 class="title" style="font-size:2.7cqw;">The vocabulary you just earned</h1>
+        <div class="recap-grid">
+          <div class="recap-item"><span class="term">Revenue</span><span class="mean">Total dollars earned. What made money.</span></div>
+          <div class="recap-item"><span class="term">Units sold</span><span class="mean">How many sold. What was popular.</span></div>
+          <div class="recap-item"><span class="term">AOV</span><span class="mean">Dollars per item. Cheap-and-many vs pricey-and-few.</span></div>
+          <div class="recap-item"><span class="term">Conversion rate</span><span class="mean">Of visitors, how many bought. How efficient the traffic is.</span></div>
+          <div class="recap-item"><span class="term">Long-tail share</span><span class="mean">How concentrated revenue is across products.</span></div>
+        </div>
+        <span class="recap-rule">Pick the number that answers the question. Actionable over vanity.</span>
+        <span class="recap-close">You've got the vocabulary &mdash; next you'll use it to frame <b>Mike's reorder questions</b>.</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <div class="btns">
+      <button class="btn back" id="backBtn" type="button">
+        <i class="ph ph-arrow-left" style="font-size:1.6cqw;color:#001D69;"></i>Back
+      </button>
+      <button class="btn next" id="nextBtn" type="button"><span id="nextLabel">Start</span>
+        <i class="ph ph-arrow-right" style="font-size:1.6cqw;color:#fff;"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     NO-JS / SCREEN-READER FALLBACK: every question + correct answer
+     ============================================================ -->
+<div class="sr-only">
+  <h2>Pick the Right Number &mdash; what's a KPI? (text version)</h2>
+  <p>A KPI is the one number that tells you whether something is working. The skill is picking the right number for the question you are asking.</p>
+  <ol>
+    <li>Tony wants to know if the pizza shop is making money. Best single number? Answer: Total dollars earned (revenue). Followers and menu size don't tell you if you're profitable.</li>
+    <li>Tony's Hawaiian pizza page gets tons of visitors but almost nobody orders. Which number flags the problem? Answer: Conversion rate &mdash; of the people who looked, how many actually bought. Lots of traffic plus low conversion means go investigate the price, photo, or description.</li>
+    <li>Two pizzas each earned $300: Margherita (30 sold at $10) and Deluxe (6 sold at $50). Same kind of seller? Answer: No &mdash; one is cheap-and-many, one is pricey-and-few. AOV (average order value), the money per item, tells them apart.</li>
+    <li>"Our pizza shop has 12,000 Instagram followers." Vanity or actionable? Answer: Vanity. It feels good but doesn't change any specific decision.</li>
+    <li>"POOP: The Game has a 5x higher add-to-cart rate than our average game." Vanity or actionable? Answer: Actionable. It's a strong reason to spend more ad money on that product's page.</li>
+    <li>Mike must choose which of 99 games to reprint before Nov 1. Which number should lead? Answer: Revenue plus units sold &mdash; what made money and what was popular &mdash; then layer AOV and conversion for the full picture.</li>
+  </ol>
+  <p>The five KPIs: Revenue (total dollars earned), Units sold (how many sold), AOV (dollars per item), Conversion rate (of visitors, how many bought), Long-tail share (how concentrated revenue is across products). Rule: pick the number that answers the question, actionable over vanity.</p>
+</div>
+
+<script>
+/* ============================================================
+   QUESTION DATA -- every question is single-pick, predict-then-reveal.
+   Each option has a "tip" shown when it's wrongly picked, so even a
+   wrong pick teaches. The correct pick reveals the full plain-English
+   explanation in `feedback`.
+   ============================================================ */
+const QUESTIONS=[
+  /* 0 -- revenue */
+  {
+    options:[
+      {text:"Number of Instagram followers", correct:false,
+       tip:"Not quite — look again. Followers are an audience count, not a money count. You can have a big following and still lose money."},
+      {text:"Total dollars earned (revenue)", correct:true},
+      {text:"Number of pizzas on the menu", correct:false,
+       tip:"Not quite — look again. Menu size is just how many options exist. It says nothing about whether those pizzas sell or earn."}
+    ],
+    feedback:"Yes. <b>B is revenue</b> — the money number. Followers and menu size don't tell you whether you're profitable. When the question is &ldquo;are we making money?&rdquo;, start with the dollars you actually earned."
+  },
+  /* 1 -- conversion rate */
+  {
+    options:[
+      {text:"Revenue", correct:false,
+       tip:"Not quite — look again. Revenue tells you the total earned, but not WHY the Hawaiian page is failing. You need a number about the visitors-to-buyers gap."},
+      {text:"Conversion rate — of the people who looked, how many actually bought", correct:true},
+      {text:"Menu size", correct:false,
+       tip:"Not quite — look again. Menu size is fixed. It can't explain why one specific page has lots of lookers but few buyers."}
+    ],
+    feedback:"Right. <b>Conversion rate</b> = lookers who become buyers. Lots of traffic plus low conversion is a red flag: go investigate. Is the price too high? Is the photo bad? Is the description confusing? The number points you straight at the problem."
+  },
+  /* 2 -- AOV */
+  {
+    options:[
+      {text:"Yes, same revenue", correct:false,
+       tip:"Not quite — look again. The revenue total is identical, but HOW they got there is completely different. Same finish line, different race."},
+      {text:"No — one is cheap-and-many, one is pricey-and-few", correct:true}
+    ],
+    feedback:"Exactly. Meet <b>AOV (average order value)</b> — the money per item. Margherita earns $10 an order; Deluxe earns $50 an order. Same revenue, totally different story: one shop runs on volume, the other on a few high-ticket sales. AOV is the number that tells them apart."
+  },
+  /* 3 -- vanity (followers) */
+  {
+    options:[
+      {text:"Vanity", correct:true},
+      {text:"Actionable", correct:false,
+       tip:"Not quite — look again. Ask the test: what would Tony actually DO differently because of 12,000 followers? Nothing specific. That's the tell."}
+    ],
+    feedback:"Right. 12,000 followers is a <b>vanity metric</b> — it feels good to report but doesn't change a decision. The test for any metric: &ldquo;what would I do differently because of this number?&rdquo; If the honest answer is &ldquo;nothing specific,&rdquo; it's vanity."
+  },
+  /* 4 -- actionable (BG add-to-cart) */
+  {
+    options:[
+      {text:"Vanity", correct:false,
+       tip:"Not quite — look again. Run the test: a 5x higher add-to-cart rate WOULD change what you do. That makes it the opposite of vanity."},
+      {text:"Actionable", correct:true}
+    ],
+    feedback:"Yes. This one <b>changes a decision</b>: a 5x higher add-to-cart rate is a strong reason to spend more ad money on that product's page. A metric you'd act on is an <b>actionable metric</b> — and those are the ones worth tracking."
+  },
+  /* 5 -- Mike's reorder */
+  {
+    options:[
+      {text:"Instagram followers", correct:false,
+       tip:"Not quite — look again. Followers won't tell Mike which GAMES to reprint. He needs numbers tied to actual sales of each title."},
+      {text:"Revenue + units sold", correct:true},
+      {text:"Menu size", correct:false,
+       tip:"Not quite — look again. There's no menu here — and even the catalog size won't tell Mike WHICH games to reprint. He needs sales-driven numbers."}
+    ],
+    feedback:"Right. Start with what <b>made money</b> (revenue) and what was <b>popular</b> (units sold). Those lead. Then layer in AOV and conversion rate for the full picture — but revenue and units are what put a game on the reprint list in the first place."
+  }
+];
+
+/* ============================================================
+   MCQ RENDERER -- binds one .quiz-wrap (by data-q index) to its data.
+   Gated: must pick the correct option to clear that screen's gate.
+   Wrong pick shows an encouraging-but-teaching tip and lets you retry.
+   ============================================================ */
+const checkSVG='<i class="ph-bold ph-check check"></i>';
+const crossSVG='<i class="ph-bold ph-x cross"></i>';
+const cleared=QUESTIONS.map(()=>false);
+
+document.querySelectorAll('.quiz-wrap[data-q]').forEach(wrap=>{
+  const qi=+wrap.dataset.q;
+  const q=QUESTIONS[qi];
+  const optsEl=wrap.querySelector('.opts');
+  const fb=wrap.querySelector('.feedback');
+
+  q.options.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt';
+    btn.type='button';
+    btn.dataset.i=i;
+    btn.innerHTML='<span class="mark">'+checkSVG+crossSVG+'</span><span class="otext">'+o.text+'</span>';
+    btn.addEventListener('click', ()=>{
+      if(cleared[qi]) return;            // already solved -> locked
+      if(o.correct){
+        btn.classList.add('correct');
+        optsEl.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+        fb.className='feedback good show';
+        fb.innerHTML=q.feedback;
+        cleared[qi]=true;
+        refreshNav();
+      } else {
+        btn.classList.add('wrong');
+        btn.disabled=true;               // remove the wrong option, leave the rest pickable
+        fb.className='feedback bad show';
+        fb.innerHTML=o.tip;
+      }
+    });
+    optsEl.appendChild(btn);
+  });
+});
+
+/* ============================================================
+   SCREEN NAVIGATION + gating + progress dots
+   Screen 0 = intro (free). Screens 1..6 = gated questions.
+   Screen 7 = recap (no question, meaningful close, no CTA).
+   ============================================================ */
+const screens=[...document.querySelectorAll('.screen')];
+const dotsEl=document.getElementById('dots');
+const backBtn=document.getElementById('backBtn');
+const nextBtn=document.getElementById('nextBtn');
+const nextLabel=document.getElementById('nextLabel');
+let current=0;
+
+/* map each screen index -> the question index it gates on (or null) */
+const screenGate=[null,0,1,2,3,4,5,null];
+
+screens.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot-nav'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+const dotNodes=[...dotsEl.children];
+
+function refreshNav(){
+  backBtn.disabled=(current===0);
+  dotNodes.forEach((d,i)=>{
+    d.classList.toggle('on', i===current);
+    d.classList.toggle('done', i<current);
+  });
+
+  // last screen (recap): nothing after, no dead CTA
+  if(current===screens.length-1){
+    nextLabel.textContent='Done';
+    nextBtn.disabled=true;
+    return;
+  }
+
+  // intro screen
+  if(current===0){
+    nextLabel.textContent='Start';
+    nextBtn.disabled=false;
+    return;
+  }
+
+  // question screens: Next unlocks once the correct option is picked
+  nextLabel.textContent='Next';
+  const g=screenGate[current];
+  nextBtn.disabled=(g!==null && !cleared[g]);
+}
+
+function show(i){
+  current=i;
+  screens.forEach((s,si)=>s.classList.toggle('active', si===i));
+  refreshNav();
+}
+
+nextBtn.addEventListener('click', ()=>{
+  if(current>=screens.length-1) return;
+  const g=screenGate[current];
+  if(g!==null && !cleared[g]) return;   // gate
+  show(current+1);
+});
+
+backBtn.addEventListener('click', ()=>{
+  if(current>0) show(current-1);
+});
+
+refreshNav();
+</script>
+</body>
+</html>
