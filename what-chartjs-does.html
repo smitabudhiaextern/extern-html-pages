@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What Chart.js Actually Does</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FDF8F8;
+    --hl: #DCE1FF;
+    --accent: #001D69;
+    --title: #1C1B1B;
+    --body: #484646;
+    --white: #FFFFFF;
+    --line: #D8D2D2;
+    --line-soft: #E5DFDF;
+    --bar: #2a8a6a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    width:100%; height:100%; margin:0; padding:0;
+    overflow:hidden; background:var(--bg); font-family:'Inter',sans-serif;
+  }
+  body { display:flex; align-items:flex-start; justify-content:flex-start; }
+  #deck-wrapper {
+    width:960px; height:540px; flex-shrink:0;
+    overflow:hidden; position:relative; background:var(--bg);
+  }
+  .slide {
+    width:960px; height:540px; position:absolute; top:0; left:0;
+    padding:32px 60px 58px; display:flex; flex-direction:column;
+  }
+  .slide[aria-hidden="true"] { display:none; }
+
+  .kicker {
+    font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 7px;
+  }
+  h1 { font-size:36px; font-weight:700; color:var(--title); line-height:1.16; margin:0 0 16px; }
+  h2 { font-size:25px; font-weight:700; color:var(--title); line-height:1.2; margin:0 0 10px; }
+  p { color:var(--body); line-height:1.55; margin:0; font-size:16.5px; }
+  .sm { font-size:15px; }
+  strong { color:var(--title); }
+  code {
+    font-family:'JetBrains Mono',monospace; font-variant-ligatures:none; font-feature-settings:'liga' 0,'calt' 0;
+    background:var(--hl); padding:1px 5px; border-radius:4px; color:var(--accent); font-size:.88em;
+  }
+  .title-slide { justify-content:center; align-items:center; text-align:center; }
+  .title-slide p { max-width:700px; }
+
+  .verdict { margin-top:auto; font-size:16.5px; font-weight:600; color:var(--accent); line-height:1.42; }
+  .stage { display:flex; gap:34px; align-items:center; margin-top:14px; flex:1; }
+  .stage > .col { flex:1; min-width:0; }
+  .lbl {
+    font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 7px;
+  }
+
+  /* ---- spreadsheet ---- */
+  .sheet { border:1px solid var(--line); border-radius:6px; overflow:hidden; background:var(--white); }
+  .sheet .r { display:flex; border-top:1px solid var(--line-soft); font-size:13.5px; }
+  .sheet .r:first-child { border-top:none; background:#F0EDED; font-weight:600; color:var(--body); font-size:11.5px;
+                          letter-spacing:.04em; text-transform:uppercase; }
+  .sheet .c1 { flex:1; padding:7px 11px; color:var(--title); }
+  .sheet .c2 { width:104px; padding:7px 11px; text-align:right; color:var(--title);
+               font-family:'JetBrains Mono',monospace; }
+  .sheet .r.on { background:var(--hl); }
+
+  /* ---- code lists ---- */
+  pre.code {
+    font-family:'JetBrains Mono',monospace; font-variant-ligatures:none; font-feature-settings:'liga' 0,'calt' 0;
+    background:var(--hl); color:var(--accent); border-radius:8px; padding:11px 13px; margin:0;
+    font-size:12.5px; line-height:1.7; white-space:pre-wrap; word-break:break-word;
+  }
+  .listbox { background:var(--hl); border-radius:8px; padding:11px 13px;
+             font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.75; color:var(--accent); }
+  .listbox .k { display:block; }
+  .listbox .it { padding:0 2px; border-radius:3px; transition:background .25s, color .25s; }
+  .listbox .it.on { background:var(--accent); color:var(--white); }
+
+  /* ---- bar chart ---- */
+  .chart {
+    background:var(--white); border:1px solid var(--line); border-radius:8px;
+    padding:14px 16px 8px;
+  }
+  .chart h3 { margin:0 0 10px; font-size:13px; font-weight:600; color:var(--title); }
+  .bars { display:flex; align-items:stretch; gap:14px; height:168px; }
+  .bwrap { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .barbox { flex:1; display:flex; align-items:flex-end; }
+  .bar {
+    width:100%; background:var(--bar); border-radius:3px 3px 0 0;
+    height:0; transition:height .75s cubic-bezier(.22,.9,.3,1);
+  }
+  .bar.on { height:var(--h); }
+  .bcap {
+    margin-top:7px; height:28px; font-size:10.5px; color:var(--body);
+    text-align:center; line-height:1.25;
+  }
+
+  /* buttons */
+  .btn {
+    display:inline-flex; align-items:center; gap:7px; margin-top:12px;
+    background:var(--accent); color:var(--white); border:none; border-radius:7px;
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600;
+    padding:9px 15px; cursor:pointer;
+  }
+  .btn:hover { opacity:.9; }
+  .btn.ghost { background:none; color:var(--accent); border:1.5px solid var(--accent); }
+
+  .note {
+    display:flex; align-items:flex-start; gap:9px; margin-top:12px;
+    background:var(--hl); border-radius:9px; padding:11px 14px;
+    font-size:14.5px; line-height:1.48; color:var(--body);
+  }
+  .note svg { flex-shrink:0; margin-top:2px; }
+  .note strong { color:var(--accent); }
+
+  #nav {
+    position:fixed; bottom:0; left:0; right:0; height:48px;
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    background:var(--accent); z-index:100;
+  }
+  .nav-btn {
+    background:none; border:none; color:var(--white);
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:500;
+    cursor:pointer; padding:0 16px; height:48px;
+  }
+  #dots { display:flex; align-items:center; gap:7px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.3);
+         cursor:pointer; border:none; padding:0; }
+  .dot.active { background:var(--hl); transform:scale(1.25); }
+</style>
+</head>
+<body>
+<div id="deck-wrapper">
+
+  <!-- 1 -->
+  <section class="slide title-slide" aria-hidden="false">
+    <h1>What Chart.js<br>Actually Does</h1>
+    <p>You give it a list of names and a list of numbers. It gives you back a picture. That is the whole idea, and the rest of this module is just where to type them.</p>
+  </section>
+
+  <!-- 2: the Excel comparison -->
+  <section class="slide" aria-hidden="true" data-anim="s2">
+    <p class="kicker">Something you've already done</p>
+    <h2>You have made a chart before</h2>
+    <p class="sm">In Excel you highlight some numbers and click the chart button. You never think about how the bars get drawn.</p>
+
+    <div class="stage">
+      <div class="col">
+        <p class="lbl">Your numbers</p>
+        <div class="sheet" id="sheet2">
+          <div class="r"><div class="c1">Channel</div><div class="c2">Pageviews</div></div>
+          <div class="r"><div class="c1">Direct</div><div class="c2">153,759</div></div>
+          <div class="r"><div class="c1">Paid Social</div><div class="c2">90,863</div></div>
+          <div class="r"><div class="c1">Organic Search</div><div class="c2">78,933</div></div>
+          <div class="r"><div class="c1">Everything else</div><div class="c2">9,995</div></div>
+        </div>
+        <button class="btn" id="btn2">Click the chart button</button>
+      </div>
+
+      <div class="col">
+        <p class="lbl">What Excel gives you</p>
+        <div class="chart">
+          <h3>Traffic by Channel</h3>
+          <div class="bars" id="bars2">
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:100%"></div></div><div class="bcap">Direct</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:59%"></div></div><div class="bcap">Paid<br>Social</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:51%"></div></div><div class="bcap">Organic<br>Search</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:6.5%"></div></div><div class="bcap">Everything<br>else</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3: same thing, typed -->
+  <section class="slide" aria-hidden="true" data-anim="s3">
+    <p class="kicker">The same job, typed instead of clicked</p>
+    <h2>Chart.js reads two lists</h2>
+    <p class="sm">One list of names, one list of numbers, in the same order. Each pair becomes one bar.</p>
+
+    <div class="stage">
+      <div class="col">
+        <div class="listbox" id="list3">
+          <span class="k">labels: [</span>
+          <span class="it" data-i="0">'Direct'</span>,
+          <span class="it" data-i="1">'Paid Social'</span>,
+          <span class="it" data-i="2">'Organic Search'</span>,
+          <span class="it" data-i="3">'Everything else'</span>
+          <span class="k">]</span>
+          <span class="k" style="margin-top:8px">data: [</span>
+          <span class="it" data-i="0">153759</span>,
+          <span class="it" data-i="1">90863</span>,
+          <span class="it" data-i="2">78933</span>,
+          <span class="it" data-i="3">9995</span>
+          <span class="k">]</span>
+        </div>
+        <button class="btn ghost" id="btn3">Watch it draw again</button>
+      </div>
+
+      <div class="col">
+        <div class="chart">
+          <h3>Traffic by Channel</h3>
+          <div class="bars" id="bars3">
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:100%"></div></div><div class="bcap">Direct</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:59%"></div></div><div class="bcap">Paid<br>Social</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:51%"></div></div><div class="bcap">Organic<br>Search</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar" style="--h:6.5%"></div></div><div class="bcap">Everything<br>else</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4: change a number -->
+  <section class="slide" aria-hidden="true" data-anim="s4">
+    <p class="kicker">Why this matters to you</p>
+    <h2>Change a number, the chart changes</h2>
+    <p class="sm">You never touch the drawing. You only touch the list. Press the button and watch the second bar.</p>
+
+    <div class="stage">
+      <div class="col">
+        <div class="listbox">
+          <span class="k">data: [</span>
+          <span class="it">153759</span>,
+          <span class="it" id="num4" style="transition:background .3s">90863</span>,
+          <span class="it">78933</span>,
+          <span class="it">9995</span>
+          <span class="k">]</span>
+        </div>
+        <button class="btn" id="btn4">Change 90863 to 140000</button>
+      </div>
+
+      <div class="col">
+        <div class="chart">
+          <h3>Traffic by Channel</h3>
+          <div class="bars" id="bars4">
+            <div class="bwrap"><div class="barbox"><div class="bar on" style="--h:100%"></div></div><div class="bcap">Direct</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar on" id="bar4" style="--h:59%"></div></div><div class="bcap">Paid<br>Social</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar on" style="--h:51%"></div></div><div class="bcap">Organic<br>Search</div></div>
+            <div class="bwrap"><div class="barbox"><div class="bar on" style="--h:6.5%"></div></div><div class="bcap">Everything<br>else</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5: closer -->
+  <section class="slide" aria-hidden="true">
+    <p class="kicker">What this means for your dashboard</p>
+    <h2>Both of your charts are already built</h2>
+
+    <p>Your template already has Chart.js switched on and both charts already set up. The chart types are chosen, the colours are chosen, the names are written. There is nothing to install and nothing to download.</p>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+      <div>The only thing wrong with them is the numbers, because they are examples rather than yours. Replacing those numbers is the entire job in this module.</div>
+    </div>
+
+    <p class="verdict">Two lists per chart. Names, then numbers. That is all you are looking for.</p>
+  </section>
+
+</div>
+
+<div id="nav">
+  <button class="nav-btn" id="prevBtn">&larr; Back</button>
+  <div id="dots"></div>
+  <button class="nav-btn" id="nextBtn">Next &rarr;</button>
+</div>
+
+<script>
+  var slides = document.querySelectorAll('#deck-wrapper .slide');
+  var total = slides.length, current = 0;
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var dotsContainer = document.getElementById('dots');
+  var timers = [];
+
+  for (var i = 0; i < total; i++) {
+    (function (idx) {
+      var dot = document.createElement('button');
+      dot.className = 'dot';
+      dot.addEventListener('click', function () { goTo(idx); });
+      dotsContainer.appendChild(dot);
+    })(i);
+  }
+  var dots = dotsContainer.querySelectorAll('.dot');
+
+  function clearTimers() {
+    timers.forEach(function (t) { clearTimeout(t); });
+    timers = [];
+  }
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+
+  function resetBars(id) {
+    document.querySelectorAll('#' + id + ' .bar').forEach(function (b) { b.classList.remove('on'); });
+  }
+  function clearHighlights() {
+    document.querySelectorAll('.listbox .it.on').forEach(function (e) { e.classList.remove('on'); });
+    document.querySelectorAll('#sheet2 .r.on').forEach(function (e) { e.classList.remove('on'); });
+  }
+
+  // slide 2: click the button, all bars grow together
+  function runS2() {
+    resetBars('bars2'); clearHighlights();
+  }
+  document.getElementById('btn2').addEventListener('click', function () {
+    resetBars('bars2');
+    var rows = document.querySelectorAll('#sheet2 .r');
+    for (var i = 1; i < rows.length; i++) rows[i].classList.add('on');
+    later(function () {
+      document.querySelectorAll('#bars2 .bar').forEach(function (b) { b.classList.add('on'); });
+    }, 120);
+  });
+
+  // slide 3: staggered, each pair lights up then its bar grows
+  function runS3() {
+    clearTimers(); resetBars('bars3'); clearHighlights();
+    var bars = document.querySelectorAll('#bars3 .bar');
+    for (var i = 0; i < 4; i++) {
+      (function (i) {
+        later(function () {
+          clearHighlights();
+          document.querySelectorAll('#list3 .it[data-i="' + i + '"]')
+            .forEach(function (e) { e.classList.add('on'); });
+          bars[i].classList.add('on');
+        }, 500 + i * 700);
+      })(i);
+    }
+    later(clearHighlights, 500 + 4 * 700);
+  }
+  document.getElementById('btn3').addEventListener('click', runS3);
+
+  // slide 4: swap the number, rerun that one bar
+  var swapped = false;
+  document.getElementById('btn4').addEventListener('click', function () {
+    var n = document.getElementById('num4'), bar = document.getElementById('bar4');
+    swapped = !swapped;
+    n.textContent = swapped ? '140000' : '90863';
+    bar.style.setProperty('--h', swapped ? '91%' : '59%');
+    n.classList.add('on');
+    later(function () { n.classList.remove('on'); }, 700);
+    this.textContent = swapped ? 'Change it back to 90863' : 'Change 90863 to 140000';
+  });
+  function runS4() {
+    document.querySelectorAll('#bars4 .bar').forEach(function (b) { b.classList.add('on'); });
+  }
+
+  var runners = { s2: runS2, s3: runS3, s4: runS4 };
+
+  function goTo(idx) {
+    clearTimers();
+    current = Math.max(0, Math.min(total - 1, idx));
+    slides.forEach(function (s, i) {
+      s.setAttribute('aria-hidden', i === current ? 'false' : 'true');
+    });
+    dots.forEach(function (d, i) { d.classList.toggle('active', i === current); });
+    prevBtn.style.visibility = current === 0 ? 'hidden' : 'visible';
+    nextBtn.style.visibility = current === total - 1 ? 'hidden' : 'visible';
+    var key = slides[current].getAttribute('data-anim');
+    if (key && runners[key]) later(runners[key], 60);
+  }
+
+  prevBtn.addEventListener('click', function () { goTo(current - 1); });
+  nextBtn.addEventListener('click', function () { goTo(current + 1); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') goTo(current - 1);
+    if (e.key === 'ArrowRight') goTo(current + 1);
+  });
+
+  // Notion-embed clipping fix: scale from top-left, translate to centre.
+  function scaleDeck() {
+    var wrapper = document.getElementById('deck-wrapper');
+    var scale = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    var tx = Math.max(0, (window.innerWidth - 960 * scale) / 2);
+    var ty = Math.max(0, (window.innerHeight - 540 * scale) / 2);
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  }
+  window.addEventListener('resize', scaleDeck);
+  window.addEventListener('load', scaleDeck);
+  if (window.ResizeObserver) new ResizeObserver(scaleDeck).observe(document.documentElement);
+  scaleDeck();
+
+  goTo(0);
+</script>
+</body>
+</html>
