@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Node picker — build-first embed</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#6b6a66;--line:#e3e1da;--card:#fff;--accent:#185FA5;--accent-bg:#E6F1FB;
+        --core-bg:#E1F5EE;--core-tx:#085041;--alt-bg:#FAEEDA;--alt-tx:#854F0B;--later-bg:#F1EFE8;--later-tx:#444441;}
+  *{box-sizing:border-box;margin:0;}
+  body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.55;
+       background:#f7f6f2;padding:20px;}
+  .card{max-width:680px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;}
+  .eyebrow{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  h1{font-size:17px;font-weight:600;margin-bottom:8px;}
+  .brief{font-size:13.5px;color:#4a4945;margin-bottom:16px;}
+  .ask{font-size:13.5px;font-weight:600;margin-bottom:9px;}
+  #palette{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
+  .chip{font-size:13px;padding:6px 14px;border-radius:16px;border:1px solid #cfcdc5;background:#fff;cursor:pointer;
+        font-family:inherit;color:var(--ink);transition:background .12s;}
+  .chip:hover{background:#f2f1ec;}
+  .chip.on{background:var(--accent-bg);border-color:#9cc2e8;font-weight:600;}
+  .go{font-size:13.5px;padding:8px 18px;border-radius:8px;border:1px solid #b3b1a9;background:#fff;cursor:pointer;font-family:inherit;font-weight:600;}
+  .go:hover{background:#f2f1ec;}
+  .hint{font-size:12px;color:var(--muted);margin-top:9px;}
+  .out{margin-top:18px;border-top:1px solid var(--line);padding-top:15px;}
+  .score{font-size:13.5px;margin-bottom:11px;}
+  .row{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px dashed var(--line);}
+  .badge{flex:0 0 auto;font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:8px;white-space:nowrap;}
+  .nm{font-size:13.5px;font-weight:600;}
+  .nm span{font-weight:400;color:var(--muted);font-size:11.5px;}
+  .why{font-size:12.5px;color:#5c5b57;margin-top:1px;}
+  .box{margin-top:15px;border-radius:9px;padding:12px 14px;}
+  .box.steps{background:#f7f6f2;}
+  .box.test{background:var(--accent-bg);}
+  .box h2{font-size:13.5px;font-weight:600;margin-bottom:6px;}
+  .box.test h2{color:var(--accent);}
+  .box p{font-size:12.5px;line-height:1.75;color:#4a4945;}
+  .box.test p{color:#12446f;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;background:rgba(0,0,0,.05);padding:1px 4px;border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <p class="eyebrow" id="eyebrow"></p>
+  <h1 id="title"></h1>
+  <p class="brief" id="brief"></p>
+  <p class="ask">Which nodes would you use? Pick as many as you think it takes.</p>
+  <div id="palette"></div>
+  <button class="go" id="go">Reveal the reference build</button>
+  <p class="hint" id="hint">Pick at least one node. There's no penalty for guessing wrong — the comparison is the point.</p>
+  <div id="out"></div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — this is the only block L&D edits per stage.
+   Copy this file, change CONFIG, publish as an HTML embed.
+   verdict: 'core'  = in the reference build
+            'alt'   = defensible alternative, not used here
+            'later' = belongs to a different stage
+   ============================================================ */
+const CONFIG = {
+  eyebrow: "Project 2 · Stage 1 · Input & routing",
+  title:   "Before you build: what does this stage need?",
+  brief:   "A user types a message into your agent. If it's a real trend request for a rug category, the workflow should continue. If it's something like \"what is jute?\", the agent should stop early and reply — no scraping, no expensive LLM calls.",
+  nodes: [
+    {name:"Chat Trigger",     verdict:"core",  why:"Starts the workflow when a user sends a message."},
+    {name:"Code",             verdict:"core",  why:"This is Input Parser1 — pulls the category and any URLs out of raw text."},
+    {name:"IF",               verdict:"core",  why:"This is Category Validator1 — the branch that ends the run for invalid input."},
+    {name:"Respond to Chat",  verdict:"core",  why:"The early exit needs to actually say something back."},
+    {name:"Switch",           verdict:"alt",   why:"Works instead of IF if you route more than two ways. Reference uses IF."},
+    {name:"AI Agent",         verdict:"alt",   why:"Could parse intent, but it is the expensive call this stage exists to avoid."},
+    {name:"Manual Trigger",   verdict:"alt",   why:"Useful for testing before chat is wired up."},
+    {name:"HTTP Request",     verdict:"later", why:"Stage 2A. No external data is fetched yet."},
+    {name:"Hugging Face",     verdict:"later", why:"Stage 4, image generation."},
+    {name:"Merge",            verdict:"later", why:"Not needed — nothing to recombine yet."}
+  ],
+  steps: [
+    "Add a Chat Trigger and send yourself a test message.",
+    "Add a Code node named Input Parser1 — return <code>{category, urls, isValid}</code>.",
+    "Add an IF node named Category Validator1 reading <code>isValid</code>.",
+    "On the false branch, respond: \"I can only analyse rug categories.\""
+  ],
+  goldenTest: "Send <em>\"trend analysis for outdoor rugs\"</em> → should pass through with category = outdoor.<br>Send <em>\"what is jute?\"</em> → should stop at the IF and reply. If both behave, Stage 1 is correct."
+};
+/* ================= end config ================= */
+
+const LABEL={core:"In the reference build",alt:"Defensible alternative",later:"Belongs to a later stage"};
+const TONE={core:["var(--core-bg)","var(--core-tx)"],alt:["var(--alt-bg)","var(--alt-tx)"],later:["var(--later-bg)","var(--later-tx)"]};
+
+document.getElementById("eyebrow").textContent = CONFIG.eyebrow;
+document.getElementById("title").textContent   = CONFIG.title;
+document.getElementById("brief").textContent   = CONFIG.brief;
+
+const picked = new Set();
+const pal = document.getElementById("palette");
+CONFIG.nodes.forEach(o=>{
+  const b=document.createElement("button");
+  b.className="chip"; b.type="button"; b.textContent=o.name;
+  b.onclick=()=>{ b.classList.toggle("on"); picked.has(o.name)?picked.delete(o.name):picked.add(o.name); };
+  pal.appendChild(b);
+});
+
+document.getElementById("go").onclick=()=>{
+  if(!picked.size) return;
+  const core=CONFIG.nodes.filter(o=>o.verdict==="core");
+  const got=core.filter(o=>picked.has(o.name)).length;
+  let h='<div class="out"><p class="score"><strong>You identified '+got+' of '+core.length+' core nodes.</strong> '
+      + '<span style="color:var(--muted)">Here is what the reference build uses, and why.</span></p>';
+  CONFIG.nodes.filter(o=>picked.has(o.name)||o.verdict==="core").forEach(o=>{
+    const t=TONE[o.verdict];
+    h+='<div class="row"><span class="badge" style="background:'+t[0]+';color:'+t[1]+'">'+LABEL[o.verdict]+'</span>'
+      +'<div><p class="nm">'+o.name+' <span>· '+(picked.has(o.name)?"you picked this":"you missed this")+'</span></p>'
+      +'<p class="why">'+o.why+'</p></div></div>';
+  });
+  h+='<div class="box steps"><h2>Now go build it</h2><p>'
+    + CONFIG.steps.map((s,i)=>(i+1)+". "+s).join("<br>") +'</p></div>';
+  h+='<div class="box test"><h2>Check yourself before you submit</h2><p>'+CONFIG.goldenTest+'</p></div></div>';
+  document.getElementById("out").innerHTML=h;
+  document.getElementById("hint").style.display="none";
+};
+</script>
+</body>
+</html>
