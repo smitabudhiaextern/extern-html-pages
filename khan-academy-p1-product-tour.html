@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The product tour: seven things worth a second look</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth.
+     Shared shell with khan-academy-p1-s1-memory-hook.html: same
+     custom properties, same scale to fit, same breakpoint strategy,
+     same motion timings, same focus ring.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;   /* cards, panels, highlighted blocks      */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
+    --bg:#FDF8F8;          /* canvas background, negative space      */
+    --body:#484646;        /* body copy, captions                    */
+    --title:#1C1B1B;       /* headings, primary text                 */
+
+    --t-fast:160ms;   /* UI feedback            */
+    --t-frame:300ms;  /* between-frame movement */
+    --t-open:250ms;   /* evidence height expansion */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto matters. As a shrinkable flex item the stage collapses
+     to the viewport width between 600 and 899px, so the canvas gets
+     narrower AND the transform scales it again, which crushed the right
+     column and pushed the card down onto the nav bar. The canvas must
+     hold 960 in layout and let the transform do all the fitting. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  #frame{
+    position:absolute;inset:0;
+    padding:30px 48px 26px;
+    display:flex;flex-direction:column;
+  }
+
+  /* ---- header: progress reads 1 of 7 from the first frame ---- */
+  .head{flex:0 0 auto;margin-bottom:14px}
+  .progress{
+    font-size:13px;font-weight:500;color:var(--body);
+    letter-spacing:.02em;margin-bottom:8px;
+  }
+  .mhead{display:none}
+  .seg{display:flex;gap:5px;margin-bottom:10px}
+  .seg i{
+    display:block;width:34px;height:4px;border-radius:2px;
+    background:var(--highlight);
+    border:1px solid var(--highlight);
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  .seg i.done{background:var(--on-highlight);border-color:var(--on-highlight)}
+  .lede{font-size:15px;line-height:1.45;color:var(--body);max-width:76ch}
+
+  /* ---- the card, one per frame on desktop ---- */
+  .deck{flex:1 1 auto;min-height:0;position:relative}
+  .card{
+    display:none;
+    background:var(--highlight);
+    border-radius:12px;
+    padding:18px;
+    grid-template-columns:420px 1fr;
+    gap:22px;align-items:center;
+    cursor:pointer;min-width:0;
+  }
+  .card.on{display:grid}
+  .card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* ---- image slot. Fixed box, so a real capture drops in
+          later without reflowing anything around it. ---- */
+  .slot{
+    width:420px;height:236px;flex:0 0 auto;
+    background:var(--highlight);
+    border:2px dashed var(--on-highlight);
+    border-radius:8px;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    text-align:center;padding:16px 18px;gap:7px;
+    color:var(--on-highlight);
+  }
+  .slot .status{
+    font-size:11px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;
+    border:1px solid var(--on-highlight);border-radius:4px;
+    padding:3px 7px;
+  }
+  .slot .cap{font-size:13px;line-height:1.4;font-weight:600;max-width:34ch}
+  .slot .note{font-size:11.5px;line-height:1.4;max-width:38ch}
+
+  /* ---- right column: title, affordance, evidence ---- */
+  .col{min-width:0}
+  .ttl{
+    font-size:25px;line-height:1.18;font-weight:600;color:var(--title);
+    display:flex;align-items:flex-start;gap:9px;margin-bottom:12px;
+  }
+  .ttl .ico{flex:0 0 auto;width:22px;height:22px;margin-top:3px}
+  .ttl .ico svg{width:22px;height:22px;display:block}
+
+  .exp{
+    font-family:inherit;font-size:14px;font-weight:600;
+    color:var(--on-highlight);background:transparent;
+    border:2px solid var(--on-highlight);border-radius:8px;
+    padding:9px 13px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;
+    transition:background var(--t-fast) var(--ease-out),
+               color var(--t-fast) var(--ease-out);
+  }
+  .exp .ico{width:17px;height:17px;flex:0 0 auto}
+  .exp .ico svg{width:17px;height:17px;display:block;
+    transition:transform var(--t-fast) var(--ease-out)}
+  .exp:hover{background:var(--on-highlight);color:var(--bg)}
+  .exp:hover .ico svg{stroke:var(--bg)}
+  .exp:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .exp[aria-expanded="true"] .ico svg{transform:rotate(45deg)}
+
+  /* height animated in JS so the 250ms expansion is a real
+     height change, not a max-height approximation */
+  .ev{height:0;overflow:hidden;transition:height var(--t-open) var(--ease-io)}
+  .ev-in{padding-top:12px}
+  .ev p{
+    font-size:15.5px;line-height:1.5;color:var(--body);
+    border-left:3px solid var(--on-highlight);padding-left:12px;
+  }
+  /* padding, not margin, so the accent rule runs unbroken down both lines */
+  .src{font-size:12.5px;line-height:1.45;padding-top:8px;color:var(--body)}
+  .src a{color:var(--on-highlight);font-weight:600;text-decoration:underline}
+  .src a:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- controls ---- */
+  .bar{
+    margin-top:auto;padding-top:14px;flex:0 0 auto;
+    display:flex;align-items:center;gap:10px;
+  }
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;
+    padding:10px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    display:inline-flex;align-items:center;gap:8px;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.nav svg{width:16px;height:16px;display:block}
+  .hint{font-size:13px;line-height:1.4;color:var(--body)}
+
+  /* ---- frame transition ---- */
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .mprog{display:none}
+
+  /* ---- mobile: 3:4 portrait, restacked, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item, #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushed content
+       off screen and clipped the copy. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    #frame{position:relative;inset:auto;padding:22px 18px 30px;min-height:100vh}
+    .progress,.seg{display:none}
+    .mhead{
+      display:block;font-size:13px;font-weight:500;color:var(--body);
+      letter-spacing:.02em;margin-bottom:8px;
+    }
+    .lede{font-size:16px}
+    .deck{display:flex;flex-direction:column;gap:14px}
+    /* every card visible, stacked, in source order */
+    .card{display:block!important;padding:15px}
+    .mprog{
+      display:block;font-size:12px;font-weight:600;color:var(--on-highlight);
+      letter-spacing:.04em;margin-bottom:8px;
+    }
+    .slot{width:100%;height:auto;aspect-ratio:16/9;min-height:150px;margin-bottom:14px}
+    .slot .cap{font-size:12.5px}
+    .ttl{font-size:21px}
+    .ev p{font-size:16px}
+    .bar{display:none}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+
+  /* ---- static fallback, shown only when scripting is off ---- */
+  #fallback{display:none;max-width:680px;padding:26px 22px 40px;margin:0 auto}
+  #fallback h1{font-size:24px;line-height:1.25;color:var(--title);margin-bottom:10px}
+  #fallback .fl{font-size:16px;line-height:1.5;margin-bottom:18px}
+  #fallback ol{list-style:none;counter-reset:c}
+  #fallback li{
+    counter-increment:c;background:var(--highlight);border-radius:10px;
+    padding:14px 16px;margin-bottom:10px;
+  }
+  #fallback li h2{
+    font-size:17px;line-height:1.3;color:var(--title);margin-bottom:6px;
+  }
+  #fallback li h2::before{content:counter(c) ". ";color:var(--on-highlight)}
+  #fallback li p{font-size:15px;line-height:1.5;color:var(--body)}
+  #fallback li .fs{font-size:12.5px;margin-top:6px}
+  #fallback li .fs a{color:var(--on-highlight);font-weight:600}
+  #fallback .imgnote{
+    font-size:12px;line-height:1.4;color:var(--on-highlight);
+    font-weight:600;margin-bottom:6px;
+  }
+  #fallback .out{
+    display:inline-block;margin-top:14px;font-size:15px;font-weight:600;
+    color:var(--on-highlight);
+  }
+</style>
+
+<!-- Scripting off: hide the tour, show the plain seven card list.
+     This block has to come AFTER the stylesheet above. Placed before it,
+     the later #fallback{display:none} rule wins on source order and the
+     fallback never appears. -->
+<noscript><style>
+  /* body must drop out of flex here too. A centred flex item taller than
+     the viewport overflows past the top edge, and that overflow cannot be
+     scrolled back to, so the first cards would be unreachable. */
+  body{display:block;align-items:initial;justify-content:initial;height:auto}
+  #stage{display:none}
+  #fallback{display:block}
+</style></noscript>
+</head>
+<body>
+
+<div id="stage">
+  <div id="frame">
+
+    <div class="head">
+      <div class="progress" id="prog" aria-live="polite">1 of 7</div>
+      <div class="mhead">Seven things worth a second look. Scroll through all of them.</div>
+      <div class="seg" id="seg" aria-hidden="true">
+        <i class="done"></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <p class="lede">Two minutes. Find the one thing that most clearly cost real money to build, and note why you think so. Tap a card to see what to look for. Nothing here is scored.</p>
+    </div>
+
+    <div class="deck" id="deck">
+
+      <!-- ============ CARD 1 ============ -->
+      <section class="card on" data-i="1" tabindex="-1" aria-label="Card 1 of 7: Khanmigo, the AI tutor">
+        <span class="mprog">1 of 7</span>
+        <div class="slot">
+          <span class="status">[Needs account capture]</span>
+          <span class="cap">Khanmigo mid-conversation: a student question typed in, the tutor's reply appearing on screen.</span>
+          <span class="note">Three second muted clip preferred, poster frame required. Sits behind a teacher, district, or parent login.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-4 3z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg></span>
+            <span>Khanmigo, the AI tutor</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e1">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e1">
+            <div class="ev-in">
+              <p>It answers in real time, in whatever a student actually typed, the way a private tutor would, not a page of pre-written text.</p>
+              <p class="src">Source: <a href="https://www.khanmigo.ai/pricing" target="_blank" rel="noopener">khanmigo.ai/pricing</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 2 ============ -->
+      <section class="card" data-i="2" tabindex="-1" aria-label="Card 2 of 7: Pixar in a Box">
+        <span class="mprog">2 of 7</span>
+        <div class="slot">
+          <span class="status">[Screenshot available]</span>
+          <span class="cap">A still from one of the animated segments inside Pixar in a Box.</span>
+          <span class="note">Public page, no account needed: khanacademy.org/computing/pixar. Capture this one yourself.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="M4 10h16M8 6v4M8 14v4M16 6v4M16 14v4"/></svg></span>
+            <span>Pixar in a Box</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e2">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e2">
+            <div class="ev-in">
+              <p>This is studio-quality animation, made in collaboration with Pixar's own artists, not a screen recording of a whiteboard.</p>
+              <p class="src">Sources: <a href="https://www.pixar.com/pixar-in-a-box" target="_blank" rel="noopener">Pixar, Pixar in a Box</a> and <a href="https://www.khanacademy.org/computing/pixar" target="_blank" rel="noopener">Khan Academy, Pixar in a Box</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 3 ============ -->
+      <section class="card" data-i="3" tabindex="-1" aria-label="Card 3 of 7: The SAT practice platform">
+        <span class="mprog">3 of 7</span>
+        <div class="slot">
+          <span class="status">[Screenshot available]</span>
+          <span class="cap">One official SAT practice question with its full explanation open.</span>
+          <span class="note">Public practice platform, no account needed to view a sample question. Capture this one yourself.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 11h8M8 15h5"/></svg></span>
+            <span>The SAT practice platform</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e3">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e3">
+            <div class="ev-in">
+              <p>This is official practice content built with the organization that owns the SAT, kept current every time College Board changes the test.</p>
+              <p class="src">Source: <a href="https://satsuite.collegeboard.org/practice/khan-academy" target="_blank" rel="noopener">College Board, How to Use Khan Academy</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 4 ============ -->
+      <section class="card" data-i="4" tabindex="-1" aria-label="Card 4 of 7: Teacher dashboards">
+        <span class="mprog">4 of 7</span>
+        <div class="slot">
+          <span class="status">[Needs account capture]</span>
+          <span class="cap">A teacher's class roster view with live per-student progress bars.</span>
+          <span class="note">Requires a teacher account with a real class attached. Cannot be captured cold.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 15V9M12 15v-3M16 15v-5"/></svg></span>
+            <span>Teacher dashboards</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e4">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e4">
+            <div class="ev-in">
+              <p>A teacher can see per-student progress across an entire class, updating as students work, not a static end-of-unit report.</p>
+              <p class="src">Source: <a href="https://thejournal.com/articles/2025/10/14/khan-academy-revamps-platform-for-school-districts.aspx" target="_blank" rel="noopener">THE Journal, Khan Academy Revamps Platform for School Districts</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 5 ============ -->
+      <section class="card" data-i="5" tabindex="-1" aria-label="Card 5 of 7: Khan Kids">
+        <span class="mprog">5 of 7</span>
+        <div class="slot">
+          <span class="status">[Needs account capture]</span>
+          <span class="cap">One of the app's original characters mid-story, inside the Khan Kids app.</span>
+          <span class="note">Three second muted clip preferred, poster frame required. Needs the app installed on a device, so a parent or guardian capture.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M10 10h.01M14 10h.01M9.5 14a3.5 3 0 0 0 5 0"/></svg></span>
+            <span>Khan Kids</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e5">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e5">
+            <div class="ev-in">
+              <p>This app runs on its own cast of original characters, more than 5,000 games and activities, and a library of storybooks and videos built for kids who can't read yet.</p>
+              <p class="src">Source: <a href="https://apps.apple.com/us/app/khan-academy-kids/id1378467217" target="_blank" rel="noopener">Khan Academy Kids, App Store</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 6 ============ -->
+      <section class="card" data-i="6" tabindex="-1" aria-label="Card 6 of 7: The math video library">
+        <span class="mprog">6 of 7</span>
+        <div class="slot">
+          <span class="status">[Screenshot available]</span>
+          <span class="cap">The same math lesson rendered in two different languages, side by side.</span>
+          <span class="note">Public video library, no account needed. Capture both language versions yourself.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.4 2.5 14.1 0 17M12 3.5c-2.5 2.4-2.5 14.1 0 17"/></svg></span>
+            <span>The math video library</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e6">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e6">
+            <div class="ev-in">
+              <p>Khan Academy's content reaches learners in more than 190 countries, translated into more than 55 languages, not just recorded once in English and left there.</p>
+              <p class="src">Source: <a href="https://annualreport.khanacademy.org/" target="_blank" rel="noopener">Khan Academy Annual Report, SY24 to SY25</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CARD 7 ============ -->
+      <section class="card" data-i="7" tabindex="-1" aria-label="Card 7 of 7: District reporting">
+        <span class="mprog">7 of 7</span>
+        <div class="slot">
+          <span class="status">[Needs account capture]</span>
+          <span class="cap">A district administrator's cross-school summary view.</span>
+          <span class="note">Requires a district partner login. Cannot be captured without one.</span>
+        </div>
+        <div class="col">
+          <h2 class="ttl">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l5-3 5 3v11"/><path d="M14 20V12h6v8M4 20h16"/><path d="M7.5 12h1M7.5 15.5h1"/></svg></span>
+            <span>District reporting</span>
+          </h2>
+          <button class="exp" aria-expanded="false" aria-controls="e7">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span>What to look for</span>
+          </button>
+          <div class="ev" id="e7">
+            <div class="ev-in">
+              <p>A district partnership comes with aggregated reporting across every school and classroom, rostering set up through Clever or ClassLink, and a named implementation manager assigned to that district, not a generic support inbox.</p>
+              <p class="src">Source: <a href="https://blog.khanacademy.org/becoming-a-khan-academy-districts-partner/" target="_blank" rel="noopener">Khan Academy Blog, Becoming a Khan Academy Districts Partner</a></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" id="prev" disabled aria-label="Previous card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <button class="nav" id="next" aria-label="Next card">
+        <span>Next</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <span class="hint" id="hint">Arrow keys and swipe work too.</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- Static fallback. Same seven cards, evidence already visible, no tapping. -->
+<noscript>
+<div id="fallback">
+  <h1>The product tour: seven things worth a second look</h1>
+  <p class="fl">Khan Academy looks simple from the outside. Parts of it are expensive in ways that are not obvious at a glance. Read the seven below and pick the one that most clearly cost real money to build. Nothing here is scored.</p>
+  <ol>
+    <li>
+      <p class="imgnote">Image slot: Khanmigo mid-conversation. [Needs account capture]</p>
+      <h2>Khanmigo, the AI tutor</h2>
+      <p>It answers in real time, in whatever a student actually typed, the way a private tutor would, not a page of pre-written text.</p>
+      <p class="fs">Source: <a href="https://www.khanmigo.ai/pricing" target="_blank" rel="noopener">khanmigo.ai/pricing</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: a still from an animated segment. [Screenshot available]</p>
+      <h2>Pixar in a Box</h2>
+      <p>This is studio-quality animation, made in collaboration with Pixar's own artists, not a screen recording of a whiteboard.</p>
+      <p class="fs">Sources: <a href="https://www.pixar.com/pixar-in-a-box" target="_blank" rel="noopener">Pixar, Pixar in a Box</a> and <a href="https://www.khanacademy.org/computing/pixar" target="_blank" rel="noopener">Khan Academy, Pixar in a Box</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: one practice question with its full explanation. [Screenshot available]</p>
+      <h2>The SAT practice platform</h2>
+      <p>This is official practice content built with the organization that owns the SAT, kept current every time College Board changes the test.</p>
+      <p class="fs">Source: <a href="https://satsuite.collegeboard.org/practice/khan-academy" target="_blank" rel="noopener">College Board, How to Use Khan Academy</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: a class roster with live progress bars. [Needs account capture]</p>
+      <h2>Teacher dashboards</h2>
+      <p>A teacher can see per-student progress across an entire class, updating as students work, not a static end-of-unit report.</p>
+      <p class="fs">Source: <a href="https://thejournal.com/articles/2025/10/14/khan-academy-revamps-platform-for-school-districts.aspx" target="_blank" rel="noopener">THE Journal, Khan Academy Revamps Platform for School Districts</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: an original character mid-story. [Needs account capture]</p>
+      <h2>Khan Kids</h2>
+      <p>This app runs on its own cast of original characters, more than 5,000 games and activities, and a library of storybooks and videos built for kids who can't read yet.</p>
+      <p class="fs">Source: <a href="https://apps.apple.com/us/app/khan-academy-kids/id1378467217" target="_blank" rel="noopener">Khan Academy Kids, App Store</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: the same lesson in two languages. [Screenshot available]</p>
+      <h2>The math video library</h2>
+      <p>Khan Academy's content reaches learners in more than 190 countries, translated into more than 55 languages, not just recorded once in English and left there.</p>
+      <p class="fs">Source: <a href="https://annualreport.khanacademy.org/" target="_blank" rel="noopener">Khan Academy Annual Report, SY24 to SY25</a></p>
+    </li>
+    <li>
+      <p class="imgnote">Image slot: a cross-school summary view. [Needs account capture]</p>
+      <h2>District reporting</h2>
+      <p>A district partnership comes with aggregated reporting across every school and classroom, rostering set up through Clever or ClassLink, and a named implementation manager assigned to that district, not a generic support inbox.</p>
+      <p class="fs">Source: <a href="https://blog.khanacademy.org/becoming-a-khan-academy-districts-partner/" target="_blank" rel="noopener">Khan Academy Blog, Becoming a Khan Academy Districts Partner</a></p>
+    </li>
+  </ol>
+  <p class="fl" style="margin-top:16px">Noticed something the seven cards did not show? Use the <strong>Something else</strong> option in the question below.</p>
+  <a class="out" href="https://www.khanacademy.org/" target="_blank" rel="noopener">Or go look at the real thing on khanacademy.org</a>
+</div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var TOTAL = 7,
+      deck  = document.getElementById("deck"),
+      cards = Array.prototype.slice.call(deck.querySelectorAll(".card")),
+      segs  = Array.prototype.slice.call(document.querySelectorAll("#seg i")),
+      prog  = document.getElementById("prog"),
+      prev  = document.getElementById("prev"),
+      next  = document.getElementById("next"),
+      hint  = document.getElementById("hint"),
+      i     = 0;
+
+  var reduce = window.matchMedia("(prefers-reduced-motion:reduce)");
+  function stacked(){ return window.matchMedia("(max-width:599px)").matches; }
+
+  /* ---- evidence expansion: a real 250ms height change ---- */
+  function panelFor(btn){ return document.getElementById(btn.getAttribute("aria-controls")); }
+
+  function setOpen(btn, open){
+    var p = panelFor(btn), inner = p.firstElementChild;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.lastElementChild.textContent = open ? "Hide what to look for" : "What to look for";
+    if (open){
+      p.style.height = inner.offsetHeight + "px";
+      p.dataset.open = "1";
+    } else {
+      p.style.height = "0px";
+      delete p.dataset.open;
+    }
+  }
+
+  function toggle(btn){ setOpen(btn, btn.getAttribute("aria-expanded") !== "true"); }
+
+  cards.forEach(function(card){
+    var btn = card.querySelector(".exp");
+
+    /* One handler on the card. The button's own click bubbles here, so a
+       tap anywhere on the card and an Enter press on the button take the
+       same path and cannot double fire. */
+    card.addEventListener("click", function(e){
+      if (e.target.closest("a")) return;   /* source links stay links */
+      toggle(btn);
+    });
+  });
+
+  /* an open panel keeps a pixel height, so recompute it if the box reflows */
+  function remeasure(){
+    cards.forEach(function(card){
+      var p = card.querySelector(".ev");
+      if (p.dataset.open) p.style.height = p.firstElementChild.offsetHeight + "px";
+    });
+  }
+
+  /* ---- frame navigation, desktop only. On mobile every card is visible. ---- */
+  function show(n, moveFocus){
+    if (n < 0 || n > TOTAL - 1) return;
+    i = n;
+    cards.forEach(function(c, k){ c.classList.toggle("on", k === i); });
+    segs.forEach(function(s, k){ s.classList.toggle("done", k <= i); });
+    prog.textContent = (i + 1) + " of " + TOTAL;
+    prev.disabled = (i === 0);
+    next.disabled = (i === TOTAL - 1);
+    hint.textContent = (i === TOTAL - 1)
+      ? "That is all seven. Pick the one that most clearly cost money."
+      : "Arrow keys and swipe work too.";
+
+    var card = cards[i];
+    if (!reduce.matches){
+      card.classList.remove("fade"); void card.offsetWidth; card.classList.add("fade");
+    }
+    remeasure();
+    if (moveFocus) card.focus();
+  }
+
+  prev.addEventListener("click", function(){ show(i - 1, true); });
+  next.addEventListener("click", function(){ show(i + 1, true); });
+
+  document.addEventListener("keydown", function(e){
+    if (stacked()) return;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown"){ e.preventDefault(); show(i + 1, true); }
+    if (e.key === "ArrowLeft"  || e.key === "ArrowUp"){   e.preventDefault(); show(i - 1, true); }
+  });
+
+  /* ---- swipe ---- */
+  var x0 = null, y0 = null;
+  deck.addEventListener("touchstart", function(e){
+    var t = e.changedTouches[0]; x0 = t.clientX; y0 = t.clientY;
+  }, {passive:true});
+  deck.addEventListener("touchend", function(e){
+    if (x0 === null || stacked()) { x0 = null; return; }
+    var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) show(dx < 0 ? i + 1 : i - 1, false);
+    x0 = null; y0 = null;
+  }, {passive:true});
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if (stacked()){ stage.style.transform = ""; remeasure(); return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+    remeasure();
+  }
+  window.addEventListener("resize", fit);
+  fit();
+  show(0, false);
+})();
+</script>
+</body>
+</html>

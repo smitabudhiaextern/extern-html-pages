@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What does it cost to run Khan Academy for a year?</title>
+<style>
+  /* Extern design system. These five values are the entire palette. */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:650ms;          /* the one place to spend real craft */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06); /* slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    /* Must not shrink. As a shrinkable flex item the canvas laid out at the
+       viewport width AND got scaled again, double-shrinking the design and
+       re-wrapping text at a width it was never designed for. */
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:34px 56px 30px;display:flex;flex-direction:column}
+  #f2{display:none}
+
+  .progress{font-size:13px;font-weight:500;letter-spacing:.02em;margin-bottom:12px;flex:0 0 auto}
+  h1{font-size:28px;line-height:1.22;font-weight:600;color:var(--title);margin-bottom:8px;flex:0 0 auto}
+  .sub{font-size:17px;line-height:1.5;max-width:64ch;flex:0 0 auto}
+
+  /* ---- Frame 1: three options ---- */
+  .opts{margin-top:26px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;flex:0 0 auto}
+  .opt{
+    background:var(--highlight);border:2px solid transparent;border-radius:12px;
+    padding:26px 18px;cursor:pointer;font-family:inherit;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    transition:background var(--t-fast) var(--ease-out),
+               border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  .opt .amt{font-size:27px;font-weight:600;color:var(--title);line-height:1.1}
+  .opt .unit{font-size:14px;font-weight:500;color:var(--body)}
+  .opt:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  .opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .opt[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight)}
+  .opt[aria-pressed="true"] .amt,.opt[aria-pressed="true"] .unit{color:var(--bg)}
+
+  /* ---- Frame 2: the gap ---- */
+  .rows{margin-top:20px;flex:0 0 auto}
+  .row{margin-bottom:16px}
+  .lab{font-size:14px;font-weight:600;margin-bottom:6px;letter-spacing:.01em}
+  .lab.you{color:var(--body)}
+  .lab.real{color:var(--on-highlight)}
+  .track{background:var(--highlight);border-radius:7px;height:38px;position:relative;overflow:hidden}
+  .fill{
+    position:absolute;left:0;top:0;bottom:0;width:0;border-radius:7px;
+    display:flex;align-items:center;justify-content:flex-end;padding-right:12px;
+  }
+  .fill.you{background:#b9c2f2}                 /* tint of --highlight, not a new hue */
+  .fill.real{background:var(--on-highlight)}
+  .fill .v{font-size:16px;font-weight:600;white-space:nowrap}
+  .fill.you .v{color:var(--title)}
+  .fill.real .v{color:var(--bg)}
+  .animate .fill{transition:width var(--t-reveal) var(--ease-over)}
+
+  .handoff{
+    margin-top:6px;font-size:17px;line-height:1.5;max-width:64ch;color:var(--title);
+    opacity:0;transform:translateY(6px);
+  }
+  .handoff.in{opacity:1;transform:none;transition:opacity 320ms var(--ease-io) 420ms,transform 320ms var(--ease-io) 420ms}
+  .handoff strong{font-weight:600}
+  .src{font-size:13px;line-height:1.45;margin-top:10px}
+  .src a{color:var(--on-highlight)}
+
+  .bar{margin-top:auto;padding-top:12px;flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:11px 20px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:13px}
+
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:24px 20px 30px;min-height:100vh}
+    h1{font-size:23px}
+    .sub,.handoff{font-size:16px}
+    .opts{grid-template-columns:1fr;gap:10px;margin-top:18px}
+    .opt{flex-direction:row;justify-content:space-between;padding:16px 18px}
+    .opt .amt{font-size:22px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .opt:hover{transform:none}
+    .handoff{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ===== FRAME 1 ===== -->
+  <div class="frame fade" id="f1">
+    <div class="progress">1 of 2</div>
+    <h1>You just looked at seven things. What do you think it costs to run all of Khan Academy for one year?</h1>
+    <p class="sub">Nobody gets this right. The point is where you are surprised.</p>
+
+    <div class="opts" id="opts" role="group" aria-label="Estimate the annual cost">
+      <button class="opt" data-v="5" aria-pressed="false">
+        <span class="amt">$5 million</span><span class="unit">a year</span>
+      </button>
+      <button class="opt" data-v="20" aria-pressed="false">
+        <span class="amt">$20 million</span><span class="unit">a year</span>
+      </button>
+      <button class="opt" data-v="90" aria-pressed="false">
+        <span class="amt">$90 million</span><span class="unit">a year</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="go" disabled>Lock it in</button>
+      <span class="hint" id="hint">Pick one to continue.</span>
+    </div>
+  </div>
+
+  <!-- ===== FRAME 2 ===== -->
+  <div class="frame" id="f2">
+    <div class="progress">2 of 2</div>
+    <h1 id="h2">Here is the real number.</h1>
+
+    <div class="rows" id="rows">
+      <div class="row">
+        <div class="lab you">Your guess</div>
+        <div class="track"><div class="fill you" id="fillYou"><span class="v" id="vYou"></span></div></div>
+      </div>
+      <div class="row">
+        <div class="lab real">What it actually cost</div>
+        <div class="track"><div class="fill real" id="fillReal"><span class="v" id="vReal">$0</span></div></div>
+      </div>
+    </div>
+
+    <p class="handoff" id="handoff">
+      That is the bill. <strong>Somebody pays it every year, and it is not the people using the site.</strong>
+    </p>
+
+    <p class="src">
+      Total expenses of $87,533,668 for the fiscal year ending June 30, 2025.
+      <a href="https://projects.propublica.org/nonprofits/organizations/261544963" target="_blank" rel="noopener">Form 990, via ProPublica</a>
+    </p>
+
+    <div class="bar">
+      <button class="nav ghost" id="back">Back</button>
+    </div>
+  </div>
+
+</div>
+
+<noscript>
+  <div style="max-width:660px;padding:28px;font-size:17px;line-height:1.55">
+    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:12px">What does it cost to run Khan Academy for one year?</h1>
+    <p style="margin-bottom:12px">Three options: about $5 million a year, about $20 million a year, or about $90 million a year. Pick one before you read on.</p>
+    <p style="margin-bottom:12px"><strong>The answer is about $87.5 million.</strong> Total expenses were $87,533,668 for the fiscal year ending June 30, 2025.</p>
+    <p>That is the bill. Somebody pays it every year, and it is not the people using the site.</p>
+    <p style="margin-top:12px"><a href="https://projects.propublica.org/nonprofits/organizations/261544963">Form 990, via ProPublica</a></p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var REAL = 87.5;                 // millions, display value
+  var REAL_EXACT = "$87.5 million";
+  var picked = null;
+
+  var f1=document.getElementById("f1"), f2=document.getElementById("f2"),
+      opts=Array.prototype.slice.call(document.querySelectorAll(".opt")),
+      go=document.getElementById("go"), hint=document.getElementById("hint"),
+      back=document.getElementById("back"),
+      fillYou=document.getElementById("fillYou"), fillReal=document.getElementById("fillReal"),
+      vYou=document.getElementById("vYou"), vReal=document.getElementById("vReal"),
+      rows=document.getElementById("rows"), handoff=document.getElementById("handoff"),
+      h2=document.getElementById("h2");
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function select(btn){
+    opts.forEach(function(o){ o.setAttribute("aria-pressed", o===btn ? "true":"false"); });
+    picked = parseFloat(btn.getAttribute("data-v"));
+    go.disabled = false; hint.textContent = "";
+  }
+
+  opts.forEach(function(o,i){
+    o.addEventListener("click", function(){ select(o); });
+    o.addEventListener("keydown", function(e){
+      var n=null;
+      if(e.key==="ArrowRight"||e.key==="ArrowDown") n=opts[(i+1)%opts.length];
+      if(e.key==="ArrowLeft"||e.key==="ArrowUp")   n=opts[(i-1+opts.length)%opts.length];
+      if(n){ e.preventDefault(); n.focus(); }
+    });
+  });
+
+  function countTo(el, target, ms){
+    if(reduce){ el.textContent = REAL_EXACT; return; }
+    var start = performance.now();
+    function step(now){
+      /* Clamp to [0,1]. An out-of-range delta (clock adjustment, or headless
+         virtual time) otherwise drives the cubic ease far negative and the
+         counter renders a nonsense figure. */
+      var p = Math.min(Math.max((now-start)/ms, 0), 1);
+      var eased = 1-Math.pow(1-p,3);            // ease-out
+      var val = Math.max(target*eased, 0);
+      el.textContent = "$" + val.toFixed(1) + " million";
+      if(p<1) requestAnimationFrame(step); else el.textContent = REAL_EXACT;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function forward(){
+    if(picked===null) return;
+
+    // Their guess is drawn immediately, the truth animates in beside it,
+    // so what they actually see is the size of the gap.
+    var max = Math.max(picked, REAL);
+    vYou.textContent = "$" + picked + " million";
+    h2.textContent = (picked === 90) ? "You were close. Most people are not." : "Here is the real number.";
+
+    f1.style.display="none";
+    f2.style.display="flex";
+    f2.classList.remove("fade"); void f2.offsetWidth; f2.classList.add("fade");
+
+    fillYou.style.width = "0%"; fillReal.style.width = "0%";
+    vReal.textContent = "$0";
+    handoff.classList.remove("in");
+    rows.classList.remove("animate");
+
+    requestAnimationFrame(function(){
+      rows.classList.add("animate");
+      fillYou.style.width  = Math.max((picked/max)*100, 12) + "%";
+      fillReal.style.width = Math.max((REAL/max)*100, 12) + "%";
+      countTo(vReal, REAL, 650);
+      handoff.classList.add("in");
+    });
+
+    f2.setAttribute("tabindex","-1"); f2.focus();
+  }
+
+  function backward(){
+    f2.style.display="none";
+    f1.style.display="flex";
+    f1.classList.remove("fade"); void f1.offsetWidth; f1.classList.add("fade");
+    var sel=document.querySelector('.opt[aria-pressed="true"]'); if(sel) sel.focus();
+  }
+
+  go.addEventListener("click", forward);
+  back.addEventListener("click", backward);
+  document.addEventListener("keydown", function(e){
+    if(e.key==="Escape" && f2.style.display==="flex") backward();
+  });
+
+  var stage=document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform=""; return; }
+    var s=Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+    stage.style.transform="scale("+s+")";
+  }
+  window.addEventListener("resize", fit); fit();
+})();
+</script>
+</body>
+</html>

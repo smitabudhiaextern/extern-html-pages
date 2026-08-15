@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What did you use Khan Academy for?</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;   /* cards, panels, highlighted blocks      */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
+    --bg:#FDF8F8;          /* canvas background, negative space      */
+    --body:#484646;        /* body copy, captions                    */
+    --title:#1C1B1B;       /* headings, primary text                 */
+
+    --t-fast:160ms;   /* UI feedback            */
+    --t-frame:300ms;  /* between-frame movement */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ---- */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    /* Must not shrink. As a shrinkable flex item the canvas laid out at the
+       viewport width AND got scaled again, double-shrinking the design and
+       re-wrapping text at a width it was never designed for. */
+    flex:0 0 auto;
+  }
+  #frame{
+    position:absolute;inset:0;
+    padding:34px 56px 30px;
+    display:flex;flex-direction:column;
+  }
+
+  .progress{
+    font-size:13px;font-weight:500;color:var(--body);
+    letter-spacing:.02em;margin-bottom:12px;flex:0 0 auto;
+  }
+
+  h1{
+    font-size:28px;line-height:1.2;font-weight:600;color:var(--title);
+    margin-bottom:8px;flex:0 0 auto;
+  }
+  .sub{font-size:17px;line-height:1.5;max-width:62ch;flex:0 0 auto}
+
+  /* ---- Frame 1: the memory cards ---- */
+  .grid{
+    margin-top:22px;
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:12px;flex:1 1 auto;align-content:start;
+  }
+  .card{
+    background:var(--highlight);
+    min-width:0;overflow-wrap:break-word;
+    border:2px solid transparent;border-radius:10px;
+    padding:14px 15px;
+    display:flex;align-items:flex-start;gap:10px;
+    font-size:15px;font-weight:500;line-height:1.35;color:var(--title);
+    text-align:left;cursor:pointer;
+    font-family:inherit;
+    transition:background var(--t-fast) var(--ease-out),
+               border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  .card:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  .card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .card .ico{flex:0 0 auto;width:20px;height:20px;margin-top:1px}
+  .card .ico svg{width:20px;height:20px;display:block}
+  /* selection is the ONE thing the accent marks */
+  .card[aria-pressed="true"]{
+    background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight);
+  }
+  .card[aria-pressed="true"] .ico svg{stroke:var(--bg)}
+  .card.never{grid-column:1 / -1;justify-content:flex-start}
+
+  /* ---- Frame 2: the reflection ---- */
+  #f2{display:none}
+  #f2.on{display:flex}
+  .echo{
+    background:var(--highlight);border-left:4px solid var(--on-highlight);
+    border-radius:8px;padding:14px 16px;margin:16px 0 14px;
+    font-size:17px;line-height:1.5;color:var(--title);max-width:70ch;
+  }
+  .echo .lead{font-weight:600;display:block;margin-bottom:5px;color:var(--on-highlight)}
+  .turn{font-size:17px;line-height:1.55;max-width:66ch}
+  .turn p{margin-bottom:8px}
+  .turn strong{color:var(--title);font-weight:600}
+
+  /* ---- controls ---- */
+  .bar{
+    margin-top:auto;padding-top:12px;flex:0 0 auto;
+    display:flex;align-items:center;gap:12px;
+  }
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;
+    padding:11px 20px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:13px;color:var(--body)}
+
+  /* ---- frame transition ---- */
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- mobile: 3:4 portrait, restacked, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item, #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushed the cards
+       off-screen and clipped the copy. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    #frame{position:relative;inset:auto;padding:24px 20px 32px;min-height:100vh}
+    h1{font-size:23px}
+    .sub,.turn,.echo{font-size:16px}
+    .grid{grid-template-columns:1fr;gap:10px;margin-top:18px}
+    .card{font-size:15px;padding:15px}
+    .bar{flex-wrap:wrap}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .card:hover{transform:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ============ FRAME 1 ============ -->
+  <div id="frame" class="fade">
+    <div class="progress">1 of 2</div>
+    <h1>Before anything else, one question.</h1>
+    <p class="sub">What did you use Khan Academy for? Pick the closest one. There is no right answer here and nothing is scored.</p>
+
+    <div class="grid" id="grid" role="group" aria-label="What did you use Khan Academy for?">
+      <!-- Icons below are outline-style placeholders in the Phosphor manner.
+           Per the style guide, swap in real Phosphor (regular weight) before ship. -->
+      <button class="card" data-k="cram" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        <span>Cramming the night before a test</span>
+      </button>
+
+      <button class="card" data-k="sat" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h5"/></svg></span>
+        <span>SAT or other test prep</span>
+      </button>
+
+      <button class="card" data-k="clicked" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11z"/></svg></span>
+        <span>A subject that never clicked in class</span>
+      </button>
+
+      <button class="card" data-k="someone" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/></svg></span>
+        <span>Helping a sibling or a friend</span>
+      </button>
+
+      <button class="card" data-k="curious" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg></span>
+        <span>Nothing. Just curious, down a rabbit hole</span>
+      </button>
+
+      <button class="card never" data-k="never" aria-pressed="false">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 8.5l7 7"/></svg></span>
+        <span>I have never used Khan Academy</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="go" disabled>Continue</button>
+      <span class="hint" id="hint">Pick one to continue.</span>
+    </div>
+  </div>
+
+  <!-- ============ FRAME 2 ============ -->
+  <div id="f2" style="position:absolute;inset:0;padding:34px 56px 30px;flex-direction:column">
+    <div class="progress">2 of 2</div>
+    <h1 id="h2">So here is the part nobody mentions.</h1>
+
+    <div class="echo"><span class="lead" id="echoLead"></span><span id="echoBody"></span></div>
+
+    <div class="turn" id="turn"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back">Back</button>
+    </div>
+  </div>
+
+</div>
+
+<noscript>
+  <div style="max-width:640px;padding:28px;font-size:17px;line-height:1.55">
+    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:12px">What did you use Khan Academy for?</h1>
+    <p style="margin-bottom:12px">Cramming the night before a test. SAT or other test prep. A subject that never clicked in class. Helping a sibling or a friend. Pure curiosity. Or you have never used it at all, which is a genuine advantage here, because you get to look at this with fresh eyes.</p>
+    <p style="margin-bottom:12px">Whichever it was, the same thing is true. Nobody asked you for a card number. Nobody made you sit through an ad. Nobody made you sign up before the second video.</p>
+    <p><strong>Somebody paid for that.</strong> Somebody is still paying for the version that is up right now. Working out who is the job you are starting today.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var COPY = {
+    cram:{
+      lead:"The night before a test.",
+      body:"A bad hour, a topic you did not have yet, and a video that was already there waiting. It was the same video whether you watched it once or six times in a row."
+    },
+    sat:{
+      lead:"Test prep, for free.",
+      body:"There is a version of that same practice that costs real money. You used the one that did not, and it was not a stripped-down trial either. It was the whole thing."
+    },
+    clicked:{
+      lead:"The subject that would not click.",
+      body:"Someone had already explained it twice in a classroom. A stranger explained it a third time, at whatever hour you needed it, and did not make you feel slow for needing a third time."
+    },
+    someone:{
+      lead:"You passed it to someone else.",
+      body:"No seat licence. No per-user fee. No limit on how many people you handed it to. Try that with almost any other piece of software you have used."
+    },
+    curious:{
+      lead:"No test, no grade, no reason.",
+      body:"Just a rabbit hole that happened to be free at the exact moment you were curious. That is rarer than it sounds."
+    },
+    never:{
+      lead:"Never used it. Good.",
+      body:"You get to look at this with genuinely fresh eyes, which is an advantage on this team, not a gap. More than a hundred million people a year do use it, and the question in front of you is about them: who is paying for their free lessons?"
+    }
+  };
+
+  /* Two versions. The second-person one does not work for someone who
+     never used the product, so that path talks about users instead. */
+  var TURN =
+    '<p>Whichever one you picked, the same three things did not happen. <strong>Nobody asked you for a card number. Nobody made you sit through an ad. Nobody made you sign up before the second video.</strong></p>' +
+    '<p>You have never had a reason to wonder why. Free things do not invite questions, and that is most of what makes them feel free.</p>' +
+    '<p>Somebody paid for it, and somebody is still paying for the version up today. <strong>Working out who is your job for the next seven weeks.</strong></p>';
+
+  var TURN_NEVER =
+    '<p>Here is what does not happen to any of those people either. <strong>Nobody asks them for a card number. Nobody makes them sit through an ad. Nobody makes them sign up before the second video.</strong></p>' +
+    '<p>Almost none of them ever wonder why. Free things do not invite questions, and that is most of what makes them feel free.</p>' +
+    '<p>Somebody paid for it, and somebody is still paying for the version up today. <strong>Working out who is your job for the next seven weeks.</strong></p>';
+
+  var f1 = document.getElementById("frame"),
+      f2 = document.getElementById("f2"),
+      grid = document.getElementById("grid"),
+      cards = Array.prototype.slice.call(grid.querySelectorAll(".card")),
+      go = document.getElementById("go"),
+      hint = document.getElementById("hint"),
+      back = document.getElementById("back"),
+      picked = null;
+
+  function select(btn){
+    cards.forEach(function(c){ c.setAttribute("aria-pressed", c === btn ? "true" : "false"); });
+    picked = btn.getAttribute("data-k");
+    go.disabled = false;
+    hint.textContent = "";
+  }
+
+  cards.forEach(function(c, i){
+    c.addEventListener("click", function(){ select(c); });
+    c.addEventListener("keydown", function(e){
+      var n = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") n = cards[(i+1) % cards.length];
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = cards[(i-1+cards.length) % cards.length];
+      if (n){ e.preventDefault(); n.focus(); }
+    });
+  });
+
+  function forward(){
+    if (!picked) return;
+    var c = COPY[picked];
+    document.getElementById("echoLead").textContent = c.lead;
+    document.getElementById("echoBody").textContent = c.body;
+    document.getElementById("turn").innerHTML = (picked === "never") ? TURN_NEVER : TURN;
+    f1.style.display = "none";
+    f2.style.display = "flex";
+    f2.classList.remove("fade"); void f2.offsetWidth; f2.classList.add("fade");
+    f2.setAttribute("tabindex","-1"); f2.focus();
+  }
+
+  function backward(){
+    f2.style.display = "none";
+    f1.style.display = "flex";
+    f1.classList.remove("fade"); void f1.offsetWidth; f1.classList.add("fade");
+    var sel = grid.querySelector('[aria-pressed="true"]');
+    if (sel) sel.focus();
+  }
+
+  go.addEventListener("click", forward);
+  back.addEventListener("click", backward);
+
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Enter" && f1.style.display !== "none" && picked && document.activeElement === go) return;
+    if (e.key === "Escape" && f2.style.display === "flex") backward();
+  });
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+})();
+</script>
+</body>
+</html>
