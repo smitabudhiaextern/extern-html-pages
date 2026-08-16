@@ -167,6 +167,9 @@
   }
   button.nav.ghost{background:transparent;color:var(--on-highlight)}
   button.nav:disabled{opacity:.35;cursor:not-allowed}
+  /* .nav sets display, which outranks the UA [hidden] rule, so hiding
+     Next on the last card needs saying explicitly. */
+  button.nav[hidden]{display:none}
   button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
   button.nav svg{width:16px;height:16px;display:block}
   .hint{font-size:13px;line-height:1.4;color:var(--body)}
@@ -311,6 +314,22 @@
   .q-more:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
   .q-more:disabled{opacity:.4;cursor:not-allowed}
 
+  /* The footer swaps one control for the other inside a fixed footprint,
+     so finishing the question never moves anything above it. */
+  .q-foot{min-height:32px;display:flex;align-items:center}
+  .q-foot[data-done] .q-more{display:none}
+  .q-foot[data-done] .q-done{display:inline-flex}
+  .q-done{
+    display:none;align-items:center;gap:8px;
+    font-size:12.5px;font-weight:600;color:var(--title);
+    background:var(--bg);
+    border:2px solid #166B36;border-radius:8px;
+    /* padding and border match .q-more exactly so the swap is pixel neutral */
+    padding:6px 12px;
+  }
+  .q-done .q-mark{background:#166B36;border-color:#166B36}
+  .q-done .q-mark .tick{display:block}
+
   .vh{
     position:absolute;width:1px;height:1px;padding:0;margin:-1px;
     overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
@@ -336,6 +355,8 @@
     .q-strip{height:auto;min-height:104px;padding:10px 11px;margin-bottom:12px}
     .q-strip p{font-size:14px;line-height:1.4}
     .q-more{font-size:15px;padding:10px 15px}
+    .q-foot{min-height:44px}
+    .q-done{font-size:15px;padding:9px 14px}
   }
   /* narrowest phones wrap the closing line to five lines, so they need more
      reserved height. Same reason, measured worst case 120px at 320px wide. */
@@ -680,10 +701,16 @@
           <p id="qtext"></p>
         </div>
 
+        <div class="q-foot" id="qfoot">
         <button type="button" class="q-more" id="qmore">
           <svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
           <span>Show me the rest</span>
         </button>
+        <p class="q-done" id="qdone">
+          <span class="q-mark"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <span>Done. You have been through all twelve.</span>
+        </p>
+        </div>
 
         <p class="vh" id="qlive" role="status" aria-live="polite"></p>
       </section>
@@ -858,7 +885,10 @@
     segs.forEach(function(s, k){ s.classList.toggle("done", k <= i); });
     prog.textContent = (i + 1) + " of " + TOTAL;
     prev.disabled = (i === 0);
+    /* card 8 is the end of the road, so Next is removed rather than greyed:
+       nothing to press, and it leaves the tab order too. */
     next.disabled = (i === TOTAL - 1);
+    next.hidden   = (i === TOTAL - 1);
     /* the seven-things line moves to card 7, where the seven have just
        finished. Card 8 is the question and gets its own hint. */
     hint.textContent = (i === TOTAL - 1)
@@ -909,8 +939,17 @@
       qlive  = document.getElementById("qlive"),
       qmore  = document.getElementById("qmore"),
       qopts  = Array.prototype.slice.call(document.querySelectorAll(".q-opt")),
+      qfoot  = document.getElementById("qfoot"),
       qowner = null,      /* the option whose explanation the strip is holding */
       qdone  = false;     /* set once "Show me the rest" has run */
+
+  /* the celebration fires when all twelve carry a verdict, however the
+     student got there: twelve taps, or the shortcut. */
+  function qcheckAll(){
+    var all = qopts.every(function(b){ return b.hasAttribute("data-state"); });
+    qfoot.toggleAttribute("data-done", all);
+    return all;
+  }
 
   function qsay(kind, msg){
     qtext.textContent = msg || "";
@@ -937,6 +976,7 @@
         btn.setAttribute("aria-pressed", "false");
         qstate(btn, false);
         if (qowner === btn){ qowner = null; qsay(null, ""); }
+        qcheckAll();                        /* un-picking un-finishes it */
         qlive.textContent = "Cleared.";
         return;
       }
@@ -947,6 +987,7 @@
         qowner = btn;
         qsay("wrong", btn.getAttribute("data-x"));
       }
+      if (qcheckAll()) qlive.textContent = "Done. You have been through all twelve.";
     });
   });
 
@@ -959,6 +1000,7 @@
     qowner = null;
     qsay("close", QCLOSE);
     qmore.disabled = true;
+    qcheckAll();
     qlive.textContent = "All twelve are now marked. " + QCLOSE;
   });
 
