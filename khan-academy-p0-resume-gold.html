@@ -47,9 +47,15 @@ body{
   width:960px;height:540px;position:relative;
   transform-origin:center center;flex:0 0 auto;
 }
+/* VERTICAL BUDGET. The canvas is a hard 540px and one reveal panel adds
+   about 121px, so the frame is costed to hold the tallest single open
+   state with room to spare and no scrollbar. The trims that bought that
+   room live in this block, in .list, .item and .panel: frame padding,
+   header card padding, list margin, item padding and panel padding.
+   Measured at 960x540: list client 392px, tallest open content 364px. */
 #frame{
   position:absolute;inset:0;
-  padding:30px 52px 26px;
+  padding:24px 52px 20px;
   display:flex;flex-direction:column;
 }
 
@@ -57,7 +63,7 @@ body{
 .entry{
   flex:0 0 auto;
   background:#DCE1FF;border-radius:12px;
-  padding:13px 16px;
+  padding:10px 16px;
   display:flex;align-items:center;gap:14px;
 }
 .tile{
@@ -79,17 +85,19 @@ h1{
 }
 
 /* ===== the timeline ===== */
+/* No overflow-y here on purpose. Only one panel is ever open, and the
+   frame is sized to hold the tallest of the three, so the list never
+   needs to scroll and never shows a scrollbar. */
 .list{
-  list-style:none;margin-top:14px;
-  flex:1 1 auto;min-height:0;overflow-y:auto;
-  padding-right:4px;
+  list-style:none;margin-top:10px;
+  flex:1 1 auto;min-height:0;
 }
 .item{
   position:relative;
   display:grid;
   grid-template-columns:26px 1fr 44px;
   column-gap:14px;
-  padding-bottom:12px;
+  padding-bottom:9px;
 }
 .item:last-child{padding-bottom:0}
 
@@ -147,9 +155,9 @@ h1{
   transition:height 560ms cubic-bezier(.2,.7,.3,1);
 }
 .panel{
-  margin-top:10px;
+  margin-top:8px;
   background:#DCE1FF;border-radius:10px;
-  padding:12px 15px;
+  padding:10px 15px;
   max-width:64ch;
 }
 .plabel{
@@ -185,7 +193,7 @@ h1{
     flex:1 1 100%;padding-top:10px;
   }
 
-  .list{overflow-y:visible;margin-top:16px;padding-right:0}
+  .list{margin-top:16px}
   .item{grid-template-columns:22px 1fr;column-gap:12px;padding-bottom:18px}
   .dot{margin-top:5px}
   .bullet{grid-column:2;grid-row:1;font-size:16px;line-height:1.5}
@@ -241,7 +249,7 @@ document.documentElement.className="";
             data-note="Placeholder tile. Swap in the real Extern logo asset here. Never a Khan Academy brand asset.">X</span>
       <div class="who">
         <h1>Extern, Khan Academy</h1>
-        <span class="meta">7 weeks</span><br>
+        <span class="meta">September 14, 2026 - November 2, 2026 &bull; 7 weeks</span><br>
         <span class="meta">Remote</span>
       </div>
       <span class="hint">Open each line to see why a recruiter cares.</span>
@@ -304,7 +312,7 @@ document.documentElement.className="";
       <span class="tile" aria-hidden="true">X</span>
       <div class="who">
         <h1>Extern, Khan Academy</h1>
-        <span class="meta">7 weeks</span><br>
+        <span class="meta">September 14, 2026 - November 2, 2026 &bull; 7 weeks</span><br>
         <span class="meta">Remote</span>
       </div>
     </div>
@@ -347,8 +355,9 @@ document.documentElement.className="";
     btn.setAttribute("aria-label", open ? "Hide why this lands" : "Why this lands");
   }
 
-  /* Keep an opened panel in view inside the scrolling list without
-     dragging the whole embed around. */
+  /* In the portrait layout the page itself scrolls, so pull a freshly
+     opened panel into view. On the 960x540 canvas nothing scrolls and
+     this is a no op, which is the point: the frame already fits. */
   function reveal(wrap){
     if (typeof wrap.scrollIntoView !== "function") return;
     try{
@@ -358,45 +367,63 @@ document.documentElement.className="";
     }
   }
 
+  /* offsetHeight, not scrollHeight or getBoundingClientRect, for the
+     starting value. It reads the live animated height when a transition
+     is interrupted mid flight, and it is in layout pixels, so the
+     scale() on the stage cannot skew it. */
   function openPanel(btn, wrap){
     btn.setAttribute("aria-expanded", "true");
     setLabel(btn, true);
     wrap.hidden = false;
     if (reduce){ wrap.style.height = "auto"; reveal(wrap); return; }
-    var target = wrap.scrollHeight;
-    wrap.style.height = "0px";
+    wrap.style.height = wrap.offsetHeight + "px";
     void wrap.offsetHeight;
-    wrap.style.height = target + "px";
+    wrap.style.height = wrap.scrollHeight + "px";
   }
 
   function closePanel(btn, wrap){
     btn.setAttribute("aria-expanded", "false");
     setLabel(btn, false);
     if (reduce){ wrap.style.height = "0px"; wrap.hidden = true; return; }
-    wrap.style.height = wrap.scrollHeight + "px";
+    wrap.style.height = wrap.offsetHeight + "px";
     void wrap.offsetHeight;
     wrap.style.height = "0px";
   }
 
+  /* One open panel at a time. Opening a second closes the first in the
+     same click, so the two heights run on the same duration and easing
+     and read as one movement rather than a collapse then a jump. */
+  var rows = [];
   toggles.forEach(function(btn){
     var wrap = document.getElementById(btn.getAttribute("aria-controls"));
-    if (!wrap) return;
+    if (wrap){ rows.push({btn:btn, wrap:wrap}); }
+  });
 
-    setLabel(btn, false);
+  var openRow = null;
+
+  rows.forEach(function(row){
+    setLabel(row.btn, false);
 
     /* A real button, so Enter and Space both fire click already. */
-    btn.addEventListener("click", function(){
-      var open = btn.getAttribute("aria-expanded") === "true";
-      if (open){ closePanel(btn, wrap); } else { openPanel(btn, wrap); }
+    row.btn.addEventListener("click", function(){
+      var wasOpen = openRow === row;
+      if (openRow){
+        closePanel(openRow.btn, openRow.wrap);
+        openRow = null;
+      }
+      if (!wasOpen){
+        openPanel(row.btn, row.wrap);
+        openRow = row;
+      }
     });
 
-    wrap.addEventListener("transitionend", function(e){
+    row.wrap.addEventListener("transitionend", function(e){
       if (e.propertyName !== "height") return;
-      if (btn.getAttribute("aria-expanded") === "true"){
-        wrap.style.height = "auto";
-        reveal(wrap);
+      if (row.btn.getAttribute("aria-expanded") === "true"){
+        row.wrap.style.height = "auto";
+        reveal(row.wrap);
       } else {
-        wrap.hidden = true;
+        row.wrap.hidden = true;
       }
     });
   });
