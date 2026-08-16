@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Would you back Kian's idea?</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    --t-fast:160ms;    /* UI feedback                       */
+    --t-frame:300ms;   /* between-frame movement            */
+    --t-reveal:650ms;  /* the distribution bars filling     */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06); /* slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load-bearing. Without it the stage is a shrinkable
+     flex item, lays out at the viewport width between 600 and 899px, and
+     then the JS transform shrinks it a second time. Double-shrunk text
+     re-wraps at a width the design never targeted. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:30px 52px 26px;display:flex;flex-direction:column}
+  #f2,#f3{display:none}
+  .frame:focus{outline:none}   /* focus lands on a real control, not the slide */
+
+  /* header, same shell as the other interactives in this project */
+  .top{display:flex;align-items:center;gap:10px;margin-bottom:9px;flex:0 0 auto}
+  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .pips{display:flex;gap:4px}
+  .pip{width:16px;height:6px;border-radius:3px;background:rgba(0,29,105,.18)}
+  .pip.on{background:var(--on-highlight)}
+  h1{font-size:27px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:7px;flex:0 0 auto}
+  .sub{font-size:16px;line-height:1.45;max-width:78ch;flex:0 0 auto}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- Frame 1: the thread ---- */
+  .threadwrap{position:relative;flex:1 1 auto;min-height:0;display:flex;margin-top:12px}
+  .thread{
+    flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
+    background:var(--highlight);border-radius:11px;padding:10px 14px 11px;
+  }
+  .threadwrap::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:24px;pointer-events:none;
+    border-radius:0 0 11px 11px;
+    background:linear-gradient(to bottom,rgba(220,225,255,0),rgba(220,225,255,.98));
+    opacity:0;transition:opacity var(--t-fast) var(--ease-out);
+  }
+  .threadwrap.more::after{opacity:1}
+  .blk{display:flex;gap:9px;margin-bottom:5px}
+  .blk:last-child{margin-bottom:0}
+  .av{
+    flex:0 0 auto;width:24px;height:24px;border-radius:6px;margin-top:1px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  .msgs{min-width:0;flex:1 1 auto}
+  .nm{font-size:12.5px;font-weight:600;color:var(--title);margin-bottom:1px}
+  .nm .tm{font-size:11.5px;font-weight:500;color:var(--body);margin-left:6px}
+  .msg{font-size:13px;line-height:1.36;color:var(--body);margin-bottom:1px;overflow-wrap:break-word}
+
+  /* ---- Frame 2: the three-way commit ---- */
+  .opts{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;flex:0 0 auto}
+  .opt{
+    background:var(--highlight);border:2px solid transparent;border-radius:11px;
+    padding:16px 14px;cursor:pointer;font-family:inherit;min-width:0;
+    display:flex;align-items:center;gap:9px;text-align:left;
+    font-size:16px;font-weight:600;color:var(--title);line-height:1.25;
+    transition:background var(--t-fast) var(--ease-out),
+               border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  .opt .dot{
+    flex:0 0 auto;width:17px;height:17px;border-radius:50%;
+    border:2px solid var(--on-highlight);position:relative;
+  }
+  .opt:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  .opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .opt[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  .opt[aria-pressed="true"] .dot{border-color:var(--bg);background:var(--bg)}
+  .opt[aria-pressed="true"] .dot::after{
+    content:"";position:absolute;inset:3px;border-radius:50%;background:var(--on-highlight);
+  }
+
+  .why{margin-top:15px;flex:0 0 auto}
+  label.wl{display:block;font-size:14px;font-weight:600;color:var(--title);margin-bottom:6px}
+  textarea{
+    width:100%;font-family:inherit;font-size:15px;line-height:1.45;color:var(--title);
+    background:var(--bg);border:2px solid var(--highlight);border-radius:9px;
+    padding:10px 12px;resize:none;height:66px;
+  }
+  textarea:focus{outline:none;border-color:var(--on-highlight)}
+  textarea:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .count{font-size:12px;margin-top:4px}
+  .note{margin-top:13px;font-size:14px;line-height:1.45;max-width:74ch;color:var(--body)}
+
+  /* ---- Frame 3: the non-resolving reward ---- */
+  .echo{
+    margin-top:12px;background:var(--highlight);border-left:4px solid var(--on-highlight);
+    border-radius:8px;padding:10px 13px;flex:0 0 auto;
+  }
+  .echo .el{display:block;font-size:13px;font-weight:600;color:var(--on-highlight);margin-bottom:3px}
+  .echo .ev{font-size:14.5px;line-height:1.4;color:var(--title);overflow-wrap:break-word}
+
+  .dlab{margin-top:13px;font-size:13px;flex:0 0 auto}
+  .dlab b{color:var(--title);font-weight:600}
+  .dist{margin-top:8px;flex:0 0 auto}
+  .drow{margin-bottom:9px}
+  .drow:last-child{margin-bottom:0}
+  .dtop{display:flex;align-items:baseline;gap:8px;font-size:13px;margin-bottom:3px}
+  .dtop .dn{font-weight:600;color:var(--title)}
+  .mine{
+    font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--bg);
+    background:var(--on-highlight);border-radius:20px;padding:2px 8px;
+  }
+  .track{background:var(--highlight);border-radius:6px;height:24px;position:relative;overflow:hidden}
+  .fill{
+    position:absolute;left:0;top:0;bottom:0;width:0;border-radius:6px;
+    background:var(--on-highlight);
+    display:flex;align-items:center;justify-content:flex-end;padding-right:9px;
+  }
+  .fill .v{font-size:12.5px;font-weight:600;color:var(--bg);white-space:nowrap}
+  .animate .fill{transition:width var(--t-reveal) var(--ease-over)}
+
+  .wes{
+    margin-top:12px;display:flex;gap:9px;flex:0 0 auto;
+    background:var(--highlight);border-radius:10px;padding:10px 13px;
+  }
+
+  /* ---- controls ---- */
+  .bar{margin-top:auto;padding-top:11px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 19px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:13px;line-height:1.35;max-width:60ch}
+  .hint b{color:var(--title);font-weight:600}
+
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the panels
+       off-screen and clips the controls. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:22px 18px 30px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    /* flex:1 1 auto made the thread stretch to fill a tall phone screen, which
+       left a band of empty highlight under the last message. Size to content. */
+    .threadwrap{display:block;margin-top:12px;flex:0 0 auto}
+    .threadwrap::after{display:none}
+    .thread{overflow-y:visible;max-height:none}
+    .msg{font-size:14.5px;line-height:1.45}
+    .opts{grid-template-columns:1fr;gap:9px;margin-top:14px}
+    .opt{font-size:16px;padding:14px}
+    .note{font-size:15px}
+    .echo .ev{font-size:16px}
+    .dlab{font-size:14.5px}
+    .dtop{font-size:14px}
+    /* margin-top:auto pins the bar to the bottom of a 100vh frame on a phone,
+       which opened a screen-height dead gap between the content and the only
+       button on the slide. On a portrait restack the bar follows the content. */
+    .bar{margin-top:16px;padding-top:0;flex-wrap:wrap}
+    button.nav{font-size:16px;padding:13px 20px}
+    .hint{font-size:13.5px;max-width:none}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .opt:hover{transform:none}
+  }
+</style>
+
+<!-- No-JS override. This block MUST sit after the main stylesheet: an earlier
+     build on this project put its override first and lost on source order, so
+     the fallback was styled but the flex-centred body still pushed it off the
+     top edge and nothing was reachable. Rules here win because they come last
+     and because the interactive canvas is removed outright. -->
+<noscript>
+<style>
+  html,body{height:auto;min-height:100%}
+  body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+  #stage{display:none}
+  .nsf{max-width:680px;padding:28px 24px 40px;font-size:17px;line-height:1.55;color:#484646}
+  .nsf h1{font-size:24px;color:#1C1B1B;margin-bottom:12px;line-height:1.2}
+  .nsf p{margin-bottom:12px}
+  .nsf a{color:#001D69}
+  .nsf blockquote{margin:0 0 14px 0;padding:12px 15px;background:#DCE1FF;border-radius:10px;font-size:15px;line-height:1.45;color:#1C1B1B}
+  .nsf blockquote p{margin-bottom:6px}
+  .nsf blockquote p:last-child{margin-bottom:0}
+  .nsf strong{color:#1C1B1B}
+  .nsf .opts3{margin:0 0 12px 20px}
+  .nsf .opts3 li{margin-bottom:5px}
+  .nsf .wesline{background:#DCE1FF;border-left:4px solid #001D69;border-radius:8px;padding:11px 14px;color:#1C1B1B;margin-bottom:12px}
+</style>
+</noscript>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ================= FRAME 1: what Kian posted ================= -->
+  <div class="frame fade" id="f1">
+    <div class="top">
+      <span class="progress">1 of 3 &middot; his pitch</span>
+      <span class="pips" aria-hidden="true"><span class="pip on"></span><span class="pip"></span><span class="pip"></span></span>
+    </div>
+    <h1>Kian posted this in the team channel. Nobody has answered it.</h1>
+    <p class="sub">He named a category, not a company. <b>Make your own call before anyone tells you theirs.</b></p>
+
+    <div class="threadwrap" id="threadwrap">
+      <div class="thread" id="thread">
+        <div class="blk">
+          <span class="av" aria-hidden="true">K</span>
+          <div class="msgs">
+            <div class="nm">Kian <span class="tm">2:47 PM</span></div>
+            <p class="msg">ok hear me out</p>
+            <p class="msg">one of the big national banks. everyone's grandma has an account there</p>
+            <p class="msg">we build them a "banking basics" hub inside Financial Literacy. their logo's on it, we get a check that isn't embarrassing, and every writeup about it reads "Khan Academy partners with [Big Bank]"</p>
+          </div>
+        </div>
+        <div class="blk">
+          <span class="av" aria-hidden="true">W</span>
+          <div class="msgs">
+            <div class="nm">Wes <span class="tm">2:51 PM</span></div>
+            <p class="msg">how big a check are we talking</p>
+          </div>
+        </div>
+        <div class="blk">
+          <span class="av" aria-hidden="true">K</span>
+          <div class="msgs">
+            <div class="nm">Kian <span class="tm">2:51 PM</span></div>
+            <p class="msg">big enough that Sarah stops asking me what I've found so far lol</p>
+            <p class="msg">and the reach sells itself. everybody watching our videos right now grows up and opens a checking account somewhere. that's the whole pitch</p>
+          </div>
+        </div>
+        <div class="blk">
+          <span class="av" aria-hidden="true">W</span>
+          <div class="msgs">
+            <div class="nm">Wes <span class="tm">2:53 PM</span></div>
+            <p class="msg">ok. and what do they get that they can't already get from a billboard</p>
+          </div>
+        </div>
+        <div class="blk">
+          <span class="av" aria-hidden="true">K</span>
+          <div class="msgs">
+            <div class="nm">Kian <span class="tm">2:54 PM</span></div>
+            <p class="msg">their name next to the most trusted name in free education. that's worth more than any billboard</p>
+            <p class="msg">writing it up tonight, will have something for Sarah by Friday</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="toCall" type="button">Make my call</button>
+      <span class="hint">That is the whole thread. Nobody has told him he is wrong, and nobody is going to today.</span>
+    </div>
+  </div>
+
+  <!-- ================= FRAME 2: the three-way commit ================= -->
+  <div class="frame" id="f2">
+    <div class="top">
+      <span class="progress">2 of 3 &middot; your call</span>
+      <span class="pips" aria-hidden="true"><span class="pip on"></span><span class="pip on"></span><span class="pip"></span></span>
+    </div>
+    <h1>Would you back it, as he has pitched it?</h1>
+    <p class="sub">Three ways to answer, and no wrong button. Nothing here is scored, and nothing you write is compared to anyone.</p>
+
+    <div class="opts" id="opts" role="group" aria-label="Would you back it">
+      <button class="opt" data-c="back" aria-pressed="false" type="button">
+        <span class="dot" aria-hidden="true"></span><span>I'd back it</span>
+      </button>
+      <button class="opt" data-c="no" aria-pressed="false" type="button">
+        <span class="dot" aria-hidden="true"></span><span>I wouldn't</span>
+      </button>
+      <button class="opt" data-c="fact" aria-pressed="false" type="button">
+        <span class="dot" aria-hidden="true"></span><span>I'd want one more fact</span>
+      </button>
+    </div>
+
+    <div class="why">
+      <label class="wl" for="why">In one sentence: why, or what is the one fact that would change your answer?</label>
+      <textarea id="why" maxlength="260" placeholder="One sentence is enough."></textarea>
+      <div class="count" id="count">0 of 260</div>
+      <p class="note">No partial credit for picking the safe one. The point is that you commit to a real position instead of hedging in your head. You will not see how your answer compares to Kian's, and neither will he.</p>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="lock" type="button" disabled>Lock in my call</button>
+      <button class="nav ghost" id="backTo1" type="button">Back to the thread</button>
+      <span class="hint" id="hint2">Pick one of the three, then add your sentence.</span>
+    </div>
+  </div>
+
+  <!-- ================= FRAME 3: closure without an answer ================= -->
+  <div class="frame" id="f3">
+    <div class="top">
+      <span class="progress">3 of 3 &middot; locked in</span>
+      <span class="pips" aria-hidden="true"><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span></span>
+    </div>
+    <h1>Your call is in.</h1>
+
+    <div class="echo">
+      <span class="el" id="echoLead">Your read</span>
+      <span class="ev" id="echoVal"></span>
+    </div>
+
+    <p class="dlab"><b>Where the cohort has landed so far.</b> Not a leaderboard, and not a score. Nobody is being ranked against anybody.</p>
+
+    <!-- BUILD NOTE: the three percentages below are illustrative placeholder
+         figures, not measured cohort data. They exist so the frame reads as
+         finished. Wire them to the real per-cohort tally before launch, and
+         if no tally is available, replace this block with the Wes line only.
+         Nothing in the teaching depends on the exact split. -->
+    <div class="dist" id="dist">
+      <div class="drow" data-c="back">
+        <div class="dtop"><span class="dn">I'd back it</span><span class="mine" data-mine hidden>your call</span></div>
+        <div class="track"><div class="fill"><span class="v">0%</span></div></div>
+      </div>
+      <div class="drow" data-c="no">
+        <div class="dtop"><span class="dn">I wouldn't</span><span class="mine" data-mine hidden>your call</span></div>
+        <div class="track"><div class="fill"><span class="v">0%</span></div></div>
+      </div>
+      <div class="drow" data-c="fact">
+        <div class="dtop"><span class="dn">I'd want one more fact</span><span class="mine" data-mine hidden>your call</span></div>
+        <div class="track"><div class="fill"><span class="v">0%</span></div></div>
+      </div>
+    </div>
+
+    <div class="wes">
+      <span class="av" aria-hidden="true">W</span>
+      <div class="msgs">
+        <div class="nm">Wes <span class="tm">3:02 PM</span></div>
+        <p class="msg">Here's the question I'd ask him. I'll tell you what he said on Monday.</p>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" id="backTo2" type="button">Change my call</button>
+      <button class="nav" id="copy" type="button">Copy my answer</button>
+      <span class="hint" id="hint3">That is everything for today. Your call is stored, and Project 2 opens with it.</span>
+    </div>
+  </div>
+
+</div>
+
+<p class="sr" id="live" role="status" aria-live="polite"></p>
+
+<noscript>
+  <div class="nsf">
+    <h1>Would you back Kian's idea?</h1>
+    <p>Kian, the other new intern, posted this in the team channel and nobody has answered it. He has named a category, not a company.</p>
+    <blockquote>
+      <p><strong>Kian, 2:47 PM:</strong> ok hear me out</p>
+      <p><strong>Kian, 2:47 PM:</strong> one of the big national banks. everyone's grandma has an account there</p>
+      <p><strong>Kian, 2:48 PM:</strong> we build them a "banking basics" hub inside Financial Literacy. their logo's on it, we get a check that isn't embarrassing, and every writeup about it reads "Khan Academy partners with [Big Bank]"</p>
+      <p><strong>Wes, 2:51 PM:</strong> how big a check are we talking</p>
+      <p><strong>Kian, 2:51 PM:</strong> big enough that Sarah stops asking me what I've found so far lol</p>
+      <p><strong>Kian, 2:52 PM:</strong> and the reach sells itself. everybody watching our videos right now grows up and opens a checking account somewhere. that's the whole pitch</p>
+      <p><strong>Wes, 2:53 PM:</strong> ok. and what do they get that they can't already get from a billboard</p>
+      <p><strong>Kian, 2:54 PM:</strong> their name next to the most trusted name in free education. that's worth more than any billboard</p>
+      <p><strong>Kian, 2:54 PM:</strong> writing it up tonight, will have something for Sarah by Friday</p>
+    </blockquote>
+    <p>Notice what his case is built on. Every line is about what Khan Academy gets: the check, the reach, the name in the writeup. When Wes hands him the exact question, what does the partner get that they cannot get anywhere else, Kian answers by describing Khan Academy's reputation again, not the bank's problem. He never says who at the bank has to sign off, or what that person needs this deal to do for them.</p>
+    <p><strong>Make your call.</strong> One of three:</p>
+    <ul class="opts3">
+      <li>I'd back it</li>
+      <li>I wouldn't</li>
+      <li>I'd want one more fact</li>
+    </ul>
+    <p>Then one sentence on why, or on the one fact that would change your answer. There is no wrong option and no partial credit for picking the safe one. The point is that you commit to a real position instead of hedging in your head. This is your read, not a scorecard. You will not see how your answer compares to Kian's, and neither will he.</p>
+    <p>Write both into the table in Step 3 below.</p>
+    <p class="wesline"><strong>Wes, 3:02 PM:</strong> Here's the question I'd ask him. I'll tell you what he said on Monday.</p>
+    <p>That is everything for today. No reveal. Your call is stored, and Project 2 opens with it.</p>
+    <p>Scripts are switched off in this frame, so the interactive version is not running. <a href="https://smitabudhiaextern.github.io/extern-html-pages/khan-academy-p1-kian-call.html">Open this activity in its own tab</a> to use the buttons.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var NAMES = { back:"I'd back it", no:"I wouldn't", fact:"I'd want one more fact" };
+
+  /* Illustrative placeholder split, not measured data. See the BUILD NOTE
+     above the markup. Must total 100. */
+  var SPLIT = { back:13, no:38, fact:49 };
+
+  var f1=document.getElementById("f1"), f2=document.getElementById("f2"), f3=document.getElementById("f3"),
+      thread=document.getElementById("thread"), twrap=document.getElementById("threadwrap"),
+      toCall=document.getElementById("toCall"), backTo1=document.getElementById("backTo1"),
+      backTo2=document.getElementById("backTo2"), lock=document.getElementById("lock"),
+      copyBtn=document.getElementById("copy"),
+      why=document.getElementById("why"), count=document.getElementById("count"),
+      hint2=document.getElementById("hint2"), hint3=document.getElementById("hint3"),
+      echoVal=document.getElementById("echoVal"), dist=document.getElementById("dist"),
+      live=document.getElementById("live"),
+      opts=Array.prototype.slice.call(document.querySelectorAll(".opt")),
+      picked=null;
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function say(t){ live.textContent = t; }
+
+  /* ---- frame 1: scroll affordance on the thread ---- */
+  function moreCue(){
+    var over = thread.scrollHeight - thread.clientHeight - thread.scrollTop;
+    twrap.classList.toggle("more", over > 4);
+  }
+  thread.addEventListener("scroll", moreCue);
+  window.addEventListener("resize", moreCue);
+
+  /* ---- frame 2: the commit ---- */
+  function ready(){
+    var ok = !!picked && why.value.trim().length >= 3;
+    lock.disabled = !ok;
+    if (!picked) hint2.innerHTML = "Pick one of the three, then add your sentence.";
+    else if (why.value.trim().length < 3) hint2.innerHTML = "<b>" + NAMES[picked] + ".</b> Now one sentence on why.";
+    else hint2.innerHTML = "Ready. <b>Lock it in.</b>";
+    return ok;
+  }
+
+  function select(btn){
+    opts.forEach(function(o){ o.setAttribute("aria-pressed", o===btn ? "true" : "false"); });
+    picked = btn.getAttribute("data-c");
+    ready();
+    say(NAMES[picked] + " selected.");
+  }
+
+  opts.forEach(function(o,i){
+    o.addEventListener("click", function(){ select(o); });
+    o.addEventListener("keydown", function(e){
+      var n=null;
+      if(e.key==="ArrowRight"||e.key==="ArrowDown") n=opts[(i+1)%opts.length];
+      if(e.key==="ArrowLeft" ||e.key==="ArrowUp")   n=opts[(i-1+opts.length)%opts.length];
+      if(n){ e.preventDefault(); n.focus(); }
+    });
+  });
+
+  why.addEventListener("input", function(){
+    count.textContent = why.value.length + " of 260";
+    ready();
+  });
+
+  /* ---- the count-up on each bar ---- */
+  function countTo(el, target, ms){
+    if(reduce){ el.textContent = target + "%"; return; }
+    var start = performance.now(), settled = false;
+    function finish(){ settled = true; el.textContent = target + "%"; }
+    function step(now){
+      if(settled) return;   /* the loop must never outlive the final figure */
+      /* Clamp to [0,1]. An out-of-range delta (clock adjustment, or headless
+         virtual time) otherwise drives the cubic ease far out of range and the
+         figure renders as nonsense. */
+      var p = Math.min(Math.max((now-start)/ms, 0), 1);
+      var eased = 1-Math.pow(1-p,3);
+      el.textContent = Math.max(Math.round(target*eased), 0) + "%";
+      if(p<1) requestAnimationFrame(step); else finish();
+    }
+    requestAnimationFrame(step);
+    /* Belt and braces. If the frame loop stalls or its clock delta never
+       advances, the figure still lands on the real one and the loop stops. */
+    setTimeout(finish, ms + 90);
+  }
+
+  /* ---- frame navigation ---- */
+  function show(el, focusEl){
+    [f1,f2,f3].forEach(function(f){ f.style.display = (f===el) ? "flex" : "none"; });
+    el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+    if (focusEl) focusEl.focus();
+  }
+
+  toCall.addEventListener("click", function(){
+    show(f2, pickedBtn());
+    ready();
+  });
+
+  backTo1.addEventListener("click", function(){ show(f1, toCall); moreCue(); });
+  function pickedBtn(){
+    for (var i=0;i<opts.length;i++){ if (opts[i].getAttribute("aria-pressed")==="true") return opts[i]; }
+    return opts[0];
+  }
+  backTo2.addEventListener("click", function(){ show(f2, pickedBtn()); ready(); });
+
+  lock.addEventListener("click", function(){
+    if (!ready()) return;
+
+    echoVal.textContent = NAMES[picked] + ". " + why.value.trim();
+
+    /* The student's own row is tagged with a word, never with colour alone. */
+    Array.prototype.forEach.call(dist.querySelectorAll(".drow"), function(r){
+      var tag = r.querySelector("[data-mine]");
+      tag.hidden = (r.getAttribute("data-c") !== picked);
+      r.querySelector(".fill").style.width = "0%";
+      r.querySelector(".fill .v").textContent = "0%";
+    });
+    dist.classList.remove("animate");
+
+    show(f3, backTo2);
+    hint3.textContent = "That is everything for today. Your call is stored, and Project 2 opens with it.";
+
+    /* The reveal must never be gated on requestAnimationFrame alone. A deferred
+       frame callback (hidden iframe, backgrounded tab, low-power mode, headless)
+       left every bar at zero width showing 0%, which is the information itself,
+       not just the animation. Fire from whichever of the two arrives first and
+       let the guard drop the second. */
+    var revealed = false;
+    function reveal(){
+      if (revealed) return;
+      revealed = true;
+      dist.classList.add("animate");
+      Array.prototype.forEach.call(dist.querySelectorAll(".drow"), function(r){
+        var pct = SPLIT[r.getAttribute("data-c")];
+        r.querySelector(".fill").style.width = Math.max(pct, 9) + "%";
+        countTo(r.querySelector(".fill .v"), pct, 650);
+      });
+    }
+    requestAnimationFrame(reveal);
+    setTimeout(reveal, 50);
+
+    say("Locked in: " + NAMES[picked] + ". The cohort split is now shown. No reveal today.");
+  });
+
+  /* ---- copy-out for the platform table ---- */
+  copyBtn.addEventListener("click", function(){
+    var text = "Would you back Kian's bank-sponsorship idea, as he pitched it? " + NAMES[picked] +
+               "\nWhy, in one sentence: " + why.value.trim();
+    var done = function(){ hint3.textContent = "Copied. Paste it into the table in Step 3."; };
+    var fail = function(){ hint3.textContent = "Copy did not work in this frame. Your answer is above: select it and copy."; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+    } catch(e){ fallback(); }
+    function fallback(){
+      try{
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.setAttribute("readonly","");
+        ta.style.position="fixed"; ta.style.opacity="0"; ta.style.top="0";
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (ok) done(); else fail();
+      } catch(err){ fail(); }
+    }
+  });
+
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape") return;
+    if (f3.style.display === "flex") backTo2.click();
+    else if (f2.style.display === "flex") backTo1.click();
+  });
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage=document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform=""; return; }
+    var s=Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+    stage.style.transform="scale("+s+")";
+  }
+  window.addEventListener("resize", fit); fit();
+  moreCue();
+
+  /* test hook, used only by the render QA harness */
+  window.__kian = {
+    toCall:function(){ toCall.click(); },
+    choose:function(c, sentence){
+      toCall.click();
+      opts.forEach(function(o){ if(o.getAttribute("data-c")===c) select(o); });
+      why.value = sentence || "";
+      count.textContent = why.value.length + " of 260";
+      ready();
+    },
+    lock:function(){ lock.click(); }
+  };
+})();
+</script>
+</body>
+</html>

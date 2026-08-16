@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reverse-engineer the College Board exchange</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Tints below are rgba of #001D69, not new hues.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
+    --on-highlight:#001D69; /* accents, the thing THEY did           */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    --line:rgba(0,29,105,.24);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.12);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between-frame movement    */
+    --t-reveal:420ms;  /* a value resolving         */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     laid out at the viewport width between 600 and 899px and the JS
+     transform then scaled it again, double-shrinking the design and
+     moving every drop target. It must always hold 960 in layout. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:22px 44px 18px;display:flex;flex-direction:column}
+
+  /* ---- header ---- */
+  .top{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .pips{display:flex;gap:4px}
+  .pip{width:16px;height:6px;border-radius:3px;background:var(--tint2)}
+  .pip.on{background:var(--on-highlight)}
+  h1{font-size:23px;line-height:1.2;font-weight:600;color:var(--title);margin:7px 0 4px;flex:0 0 auto}
+  .sub{font-size:13.5px;line-height:1.45;max-width:96ch;flex:0 0 auto}
+  .sub b{color:var(--title);font-weight:600}
+
+  .board{margin-top:11px;flex:1 1 auto;display:grid;grid-template-columns:330px 1fr;gap:15px;min-height:0;min-width:0}
+
+  /* ---- left: one card at a time, with its source on it ---- */
+  .panel{
+    background:var(--highlight);border-radius:12px;padding:11px 13px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  /* the results panel takes focus when it opens, so screen readers land on
+     it. Pin the ring to the palette rather than the browser default. */
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .pnav{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:0 0 auto}
+  .pcount{font-size:12px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em}
+  .icob{
+    width:24px;height:24px;border-radius:6px;border:1.5px solid var(--on-highlight);
+    background:transparent;color:var(--on-highlight);font-family:inherit;font-size:13px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  .icob:hover{background:var(--tint2)}
+  .icob:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .icob.text{width:auto;padding:0 9px;height:24px;font-size:11.5px;font-weight:600;margin-left:auto}
+
+  .cardview{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;
+    padding:11px 12px;flex:1 1 auto;min-height:0;overflow-y:auto;cursor:grab;
+    transition:border-color var(--t-fast) var(--ease-out);
+  }
+  .cardview:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .cardview.dragging{border-color:var(--on-highlight);opacity:.6}
+  .clabel{font-size:14px;font-weight:600;color:var(--title);margin-bottom:5px;line-height:1.25}
+  .cquote{font-size:12.5px;line-height:1.46}
+  .cquote b{color:var(--title);font-weight:600}
+  .needs{
+    margin-top:8px;font-size:10.5px;line-height:1.35;color:var(--on-highlight);
+    border:1.5px dashed var(--on-highlight);border-radius:6px;padding:5px 6px;background:var(--tint);
+    font-weight:600;letter-spacing:.01em;
+  }
+  .csrc{margin-top:8px;font-size:11.5px;line-height:1.35}
+  .csrc a{color:var(--on-highlight)}
+  .cwhere{margin-top:8px;font-size:11.5px;font-weight:600;color:var(--on-highlight);line-height:1.3}
+
+  .tokens{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;flex:0 0 auto}
+  .tok{
+    width:25px;height:25px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;
+    border:1.5px solid var(--on-highlight);background:transparent;color:var(--on-highlight);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  .tok[data-placed="1"]{background:var(--on-highlight);color:var(--bg)}
+  .tok[aria-current="true"]{outline:2px solid var(--on-highlight);outline-offset:2px}
+  .tok:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- right: three bins as bands ---- */
+  /* the third bin is the designed attractor: it holds the three undisclosed
+     cards plus either card that is also defensible there, so it gets the
+     taller band and its chips never sit half cut by the bin edge */
+  .bins{display:grid;grid-template-rows:1fr 1fr 1.2fr;gap:9px;min-width:0;min-height:0}
+  .bin{
+    display:flex;gap:9px;padding:6px;border-radius:12px;min-width:0;min-height:0;
+    background:var(--tint);border:2px dashed var(--line);
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  .bin.over{border-style:solid;border-color:var(--on-highlight);background:var(--tint2)}
+  .bin.ack{animation:ack var(--t-frame) var(--ease-out)}
+  @keyframes ack{
+    0%{border-color:var(--on-highlight);background:var(--tint2)}
+    100%{border-color:var(--line);background:var(--tint)}
+  }
+  .binbtn{
+    flex:0 0 134px;min-width:0;text-align:left;font-family:inherit;cursor:pointer;
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;padding:7px 8px;
+    color:var(--title);display:flex;flex-direction:column;gap:3px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  .binbtn:hover{border-color:var(--on-highlight)}
+  .binbtn:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .bname{font-size:12.5px;font-weight:600;line-height:1.25}
+  .bmeta{font-size:10.5px;color:var(--body);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10px;font-weight:600;color:var(--on-highlight)}
+
+  .drop{
+    flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:4px;
+    align-content:flex-start;overflow-y:auto;padding:1px;
+  }
+  .empty{font-size:11px;color:var(--body);opacity:.75;align-self:center;padding-left:2px}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;max-width:100%;
+    background:var(--highlight);border:1.5px solid transparent;border-radius:999px;
+    padding:3px 8px;font-family:inherit;font-size:11px;font-weight:600;color:var(--title);
+    cursor:grab;text-align:left;line-height:1.25;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  .chip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .chip[data-cur="1"]{border-color:var(--on-highlight)}
+  .chip .g{
+    flex:0 0 auto;width:13px;height:13px;border-radius:50%;font-size:9px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+  }
+  .chip[data-r="ok"]{background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight)}
+  .chip[data-r="ok"] .g{border-color:var(--bg);color:var(--bg)}
+  .chip[data-r="alt"]{background:var(--bg);border-color:var(--on-highlight)}
+  .chip[data-r="move"]{background:var(--bg);border-style:dashed;border-color:var(--on-highlight)}
+  .chip.settle{animation:settle 220ms var(--ease-over) both}
+  @keyframes settle{from{opacity:0;transform:translateY(-7px) scale(.94)}to{opacity:1;transform:none}}
+
+  /* ---- results panel, replaces the card panel on check ---- */
+  .rhead{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex:0 0 auto}
+  .score{font-size:13px;font-weight:600;color:var(--on-highlight)}
+  .score b{font-size:17px}
+  .legend{font-size:10.5px;line-height:1.4;color:var(--body);margin-bottom:7px;flex:0 0 auto}
+  .rlist{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:7px}
+  .r{background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:8px 9px}
+  .r.altr{border-style:solid;border-color:var(--on-highlight)}
+  .r.mover{border-style:dashed;border-color:var(--on-highlight)}
+  .rl{font-size:12px;font-weight:600;color:var(--title);display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .rl .g{
+    flex:0 0 auto;width:15px;height:15px;border-radius:50%;font-size:10px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+  }
+  .rtag{font-size:10px;font-weight:600;color:var(--on-highlight);letter-spacing:.03em;text-transform:uppercase}
+  .rq{font-size:11.5px;line-height:1.45}
+  .rq b{color:var(--title);font-weight:600}
+  .done p{font-size:11.5px;line-height:1.45;margin-bottom:6px}
+  .done p b{color:var(--title);font-weight:600}
+  .starterlab{font-size:11px;font-weight:600;color:var(--on-highlight);margin:2px 0 4px;line-height:1.35}
+  textarea#starter{
+    width:100%;font-family:inherit;font-size:11px;line-height:1.4;color:var(--body);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:6px 7px;resize:none;
+  }
+  textarea#starter:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{font-size:10.5px;font-weight:600;color:var(--on-highlight);margin-top:5px;flex:0 0 auto}
+
+  /* ---- controls ---- */
+  .bar{margin-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:11.5px;padding:6px 11px;margin-top:6px}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a card at a time with three bin buttons,
+         not a miniature drag surface ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushed the board
+       off-screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:20px 16px 30px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px;line-height:1.5}
+    .pip{width:14px}
+    /* size to content. Stretching the board to fill a tall phone screen left
+       a pool of empty space inside the card and under every bin. */
+    .board{grid-template-columns:1fr;gap:14px;margin-top:14px;flex:0 0 auto;align-items:start}
+    .cardview{flex:0 0 auto}
+    .panel{padding:13px}
+    .icob{width:32px;height:32px;font-size:16px}
+    .icob.text{width:auto;height:32px;font-size:13px}
+    .pcount{font-size:14px}
+    .cardview{overflow:visible;cursor:default;padding:13px}
+    .clabel{font-size:17px}
+    .cquote{font-size:16px}
+    .needs{font-size:13px}
+    .csrc{font-size:13px}
+    .cwhere{font-size:14px}
+    .tok{width:30px;height:30px;font-size:13px}
+    .bins{grid-template-rows:none;gap:11px}
+    .bin{flex-direction:column;padding:9px;border-radius:14px}
+    .binbtn{flex:0 0 auto;width:100%;flex-direction:row;align-items:center;justify-content:space-between;gap:9px;padding:14px 13px}
+    .bname{font-size:16px}
+    .bmeta{font-size:13px;justify-content:flex-end}
+    .key{display:none}
+    .drop{overflow:visible}
+    .empty{font-size:13px;padding:2px 2px 0}
+    .chip{font-size:13px;padding:8px 13px}
+    .score{font-size:15px}
+    .score b{font-size:19px}
+    .legend,.rq,.done p{font-size:14px;line-height:1.5}
+    .rl{font-size:15px}
+    .starterlab{font-size:13px}
+    textarea#starter{font-size:14px;line-height:1.5}
+    .more{display:none}
+    .rlist{overflow:visible}
+    .bar{margin-top:16px}
+    button.nav{font-size:16px;padding:13px 20px}
+    button.nav.small{font-size:14px;padding:9px 14px}
+    .hint{font-size:13px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame">
+
+    <div class="top">
+      <span class="progress" id="prog">0 of 9 placed</span>
+      <span class="pips" id="pips" aria-hidden="true"></span>
+    </div>
+
+    <h1>Sort the nine cards into the bin each one belongs in.</h1>
+    <p class="sub">Every card is a line from something College Board or Khan Academy actually published, with the link on the card. Cards stay where you put them. <b>Nothing is checked until you hit Check my sort.</b></p>
+
+    <div class="board">
+
+      <!-- ===== the card, one at a time, with its own source ===== -->
+      <section class="panel" id="panel" aria-label="Current card">
+        <div class="pnav">
+          <button class="icob" id="prev" aria-label="Previous card" type="button">&#8249;</button>
+          <button class="icob" id="next" aria-label="Next card" type="button">&#8250;</button>
+          <span class="pcount" id="pcount">Card 1 of 9</span>
+        </div>
+
+        <div class="cardview" id="cardview" draggable="true" tabindex="0" role="group" aria-labelledby="clabel">
+          <div class="clabel" id="clabel"></div>
+          <div class="cquote" id="cquote"></div>
+          <div class="needs" id="cneeds" hidden></div>
+          <div class="csrc" id="csrc"></div>
+          <div class="cwhere" id="cwhere"></div>
+        </div>
+
+        <div class="tokens" id="tokens" role="group" aria-label="All nine cards"></div>
+      </section>
+
+      <!-- ===== results, shown after a check ===== -->
+      <section class="panel" id="results" hidden aria-label="Check results">
+        <div class="rhead">
+          <span class="score" id="score"></span>
+          <button class="icob text" id="backCards" type="button">Back to the cards</button>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="rlist" id="rlist"></div>
+        <div class="more" id="more" hidden>More below. Scroll inside this panel.</div>
+      </section>
+
+      <!-- ===== the three bins ===== -->
+      <div class="bins" id="bins"></div>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="check" type="button" disabled>Check my sort</button>
+      <button class="nav ghost" id="reset" type="button">Start over</button>
+      <span class="hint" id="hint">Place all nine cards to check. Keyboard: arrow keys change card, then <b>1</b>, <b>2</b> or <b>3</b> places it.</span>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>.nsf a{color:#001D69}.nsf h2{color:#1C1B1B}</style>
+  <div class="nsf" style="max-width:680px;padding:28px;font-size:16px;line-height:1.55;color:#484646">
+    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:10px">Reverse-engineer the College Board exchange</h1>
+    <p style="margin-bottom:14px">The sort below has three bins, not two. The third bin is where the honest answers go: the commercial terms of this partnership are not public, and an analyst who says so is more useful than one who guesses. Here are the nine cards already in their bins.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:6px">College Board gives</h2>
+    <ul style="margin:0 0 14px 20px">
+      <li style="margin-bottom:6px"><strong>The real material.</strong> Current, official SAT Suite questions and score data, kept accurate every time the test itself changes. [NEEDS VERIFIED VERBATIM QUOTE FROM PRIMARY SOURCE: see link] <a href="https://satsuite.collegeboard.org/practice/khan-academy">College Board, How to Use Khan Academy</a></li>
+      <li style="margin-bottom:6px"><strong>The referral.</strong> Every Bluebook score report carries a button labeled, verbatim, "Practice on Khan Academy." <a href="https://satsuite.collegeboard.org/practice/khan-academy">College Board, How to Use Khan Academy</a></li>
+      <li><strong>The proof.</strong> College Board's own research team published data connecting hours of practice on Khan Academy to real score gains. [NEEDS VERIFIED VERBATIM QUOTE FROM PRIMARY SOURCE: see link] <a href="https://newsroom.collegeboard.org/new-data-links-20-hours-personalized-official-sat-practice-khan-academy-115-point-average-score">College Board Newsroom</a></li>
+    </ul>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:6px">Khan Academy gives</h2>
+    <ul style="margin:0 0 14px 20px">
+      <li style="margin-bottom:6px"><strong>The build.</strong> The course structure itself: three levels (Foundations, Medium, Advanced), video walkthroughs College Board's page calls, verbatim, "around 5 minutes long," plus course challenges, skill quizzes and unit tests. <a href="https://satsuite.collegeboard.org/practice/khan-academy">College Board, How to Use Khan Academy</a></li>
+      <li style="margin-bottom:6px"><strong>The support.</strong> The help center material teachers run this on, including an article titled, verbatim, "Helping your students prepare for the Digital SAT on Khan Academy." <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821-Helping-your-students-prepare-for-the-Digital-SAT-on-Khan-Academy">Khan Academy Help Center</a></li>
+      <li><strong>The audience already there.</strong> Khan Academy's own base of test-takers. The two organizations jointly marked passing 10 million Official SAT Practice sign-ups in January 2020. <a href="https://blog.khanacademy.org/college-board-khan-academy-mark-10-million/">Khan Academy blog</a></li>
+    </ul>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:6px">Can't tell from public information</h2>
+    <ul style="margin:0 0 14px 20px">
+      <li style="margin-bottom:6px"><strong>Which way the money moves.</strong> Neither organization has published which direction any money moves in this deal, or whether any does at all. No public page says.</li>
+      <li style="margin-bottom:6px"><strong>Who's covering the discount.</strong> College Board's page for full SAT Suite districts describes them getting, verbatim, "preferential pricing on Khan Academy Districts." It does not say whether Khan Academy cut its own price or College Board is subsidizing it. <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts">College Board, Khan Academy Districts</a></li>
+      <li><strong>Where it lands in the filing.</strong> 96% of what Khan Academy earns sits in one line, "development fees," on its Form 990. That line covers partner-funded work broadly and breaks out no single partner. <a href="https://projects.propublica.org/nonprofits/organizations/261544963">Form 990, via ProPublica</a></li>
+    </ul>
+
+    <p><strong>Two cards are defensible in more than one bin.</strong> "The real material" sits in College Board gives on the strength of the question content, but College Board account linking and SAT score import into Khan Academy have been discontinued, so a case for the third bin is real. "The audience already there" sits in Khan Academy gives, but the 10 million milestone was marked jointly and neither post breaks out whose users those sign-ups came from.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------------------------------------------------------
+     Bins. Order is fixed: it is also the 1 / 2 / 3 keyboard order.
+     --------------------------------------------------------------- */
+  var BINS = [
+    {id:"cb", name:"College Board gives",             key:"1"},
+    {id:"ka", name:"Khan Academy gives",              key:"2"},
+    {id:"ct", name:"Can't tell from public information", key:"3"}
+  ];
+  var BINNAME = {};
+  BINS.forEach(function(b){ BINNAME[b.id] = b.name; });
+
+  /* ---------------------------------------------------------------
+     The nine cards. Quote text is verbatim material from a primary
+     source, or, where no verified verbatim line exists yet, it
+     carries the [NEEDS VERIFIED ...] marker rather than an invented
+     wording. No feedback string anywhere asserts a direction for
+     money in this partnership, because nobody has published one.
+     --------------------------------------------------------------- */
+  var CARDS = [
+    {
+      id:"material", label:"The real material", bin:"cb", alt:"ct",
+      quote:"College Board hands over current, official SAT Suite questions and score data, kept accurate every time the test itself changes.",
+      needs:"[NEEDS VERIFIED VERBATIM QUOTE FROM PRIMARY SOURCE: see link]",
+      src:{t:'College Board, "How to Use Khan Academy"', u:"https://satsuite.collegeboard.org/practice/khan-academy"},
+      q:{ ka:"Who owns the SAT itself? Khan Academy cannot hand over official test questions or score data it does not own. Ask which side had the material before the partnership existed." },
+      altwhy:"Also defensible, and for a good reason. The question content is clearly College Board's to give, and its own page documents that. The score data half is narrower than it was: College Board account linking and SAT score import into Khan Academy have been discontinued, and no public page spells out what data still moves. If that is why you put this here, you are reading the sources rather than the summary. The primary answer stays College Board gives, on the strength of the item content."
+    },
+    {
+      id:"referral", label:"The referral", bin:"cb",
+      quote:"Every Bluebook score report a student sees carries a button, labeled verbatim, <b>&ldquo;Practice on Khan Academy,&rdquo;</b> that sends them straight into targeted review.",
+      src:{t:'College Board, "How to Use Khan Academy"', u:"https://satsuite.collegeboard.org/practice/khan-academy"},
+      q:{
+        ka:"Whose app is Bluebook, and whose score report is that button sitting on? The traffic is being handed over by the side that owns the screen.",
+        ct:"This one is not hidden. The button is on the score report and its wording is published on a public page. Ask who owns the screen it appears on."
+      }
+    },
+    {
+      id:"proof", label:"The proof", bin:"cb",
+      quote:"College Board&rsquo;s own research team has published data connecting hours of practice on Khan Academy to real score gains, under a newsroom headline built around exactly that claim.",
+      needs:"[NEEDS VERIFIED VERBATIM QUOTE FROM PRIMARY SOURCE: see link]",
+      src:{t:"College Board Newsroom", u:"https://newsroom.collegeboard.org/new-data-links-20-hours-personalized-official-sat-practice-khan-academy-115-point-average-score"},
+      q:{
+        ka:"Which research team ran the analysis, and whose newsroom published the headline? Khan Academy is what the study is about, not what produced it.",
+        ct:"The study is public and it carries College Board's own byline. Which part of it do you think has not been disclosed?"
+      }
+    },
+    {
+      id:"build", label:"The build", bin:"ka",
+      quote:"Khan Academy designed and built the actual course structure: three levels (Foundations, Medium, Advanced), each with short video walkthroughs College Board&rsquo;s own page describes, verbatim, as <b>&ldquo;around 5 minutes long,&rdquo;</b> plus course challenges, skill quizzes, and unit tests.",
+      src:{t:'College Board, "How to Use Khan Academy"', u:"https://satsuite.collegeboard.org/practice/khan-academy"},
+      q:{
+        cb:"College Board's page describes the course. Does describing something mean building it? Ask who designed the three levels, wrote the quizzes, and made the videos.",
+        ct:"Every piece named here is public: the level names, the video length, the exercise types. What is undisclosed about it?"
+      }
+    },
+    {
+      id:"support", label:"The support", bin:"ka",
+      quote:"Khan Academy maintains the help center material that lets teachers actually run this in a classroom: an article titled, verbatim, <b>&ldquo;Helping your students prepare for the Digital SAT on Khan Academy.&rdquo;</b>",
+      src:{t:"Khan Academy Help Center", u:"https://support.khanacademy.org/hc/en-us/articles/23298985511821-Helping-your-students-prepare-for-the-Digital-SAT-on-Khan-Academy"},
+      q:{
+        cb:"Read the link. Which organization's help center is that article published in, and which one keeps it current?",
+        ct:"The article is live and titled. Nothing about who maintains it is undisclosed."
+      }
+    },
+    {
+      id:"audience", label:"The audience already there", bin:"ka", alt:"ct",
+      quote:"Khan Academy&rsquo;s own base of test-takers became the pipeline for this: the two organizations jointly marked passing 10 million Official SAT Practice sign-ups back in January 2020.",
+      src:{t:"Khan Academy blog", u:"https://blog.khanacademy.org/college-board-khan-academy-mark-10-million/"},
+      q:{ cb:"Which side already had tens of millions of learners on its site before this launched, and which side had a test but no free practice platform of its own?" },
+      altwhy:"Also defensible, and it is the sharper read of the two. Khan Academy's existing base of test-takers is a real thing it brought to the table, which is why the primary answer is Khan Academy gives. But that 10 million milestone was marked jointly, and neither post breaks out how many of those sign-ups came from Khan Academy's own learners rather than from a College Board referral. Calling the whole pipeline Khan Academy's is an inference, and catching that is exactly the instinct the third bin is for."
+    },
+    {
+      id:"money", label:"Which way the money moves", bin:"ct",
+      quote:"Neither organization has published which direction any money moves in this deal, or whether any does at all. No public page, including the ones on the other cards, says.",
+      srcnote:"No public source states this. That absence is the finding.",
+      q:{
+        cb:"Point at the sentence, on any public page, that says so. There is not one. Neither organization has published anything about whether money changes hands here, and nothing in this exercise will tell you. A bin is a claim, so this card only has one honest home.",
+        ka:"Point at the sentence, on any public page, that says so. There is not one. Neither organization has published anything about whether money changes hands here, and nothing in this exercise will tell you. A bin is a claim, so this card only has one honest home."
+      },
+      starter:"I put “Which way the money moves” in can't tell from public information because neither organization has published whether money changes hands in this deal at all. Either giving bin would be a guess written up as a finding."
+    },
+    {
+      id:"discount", label:"Who's covering the discount", bin:"ct",
+      quote:"College Board&rsquo;s own page for full SAT Suite districts describes them getting, verbatim, <b>&ldquo;preferential pricing on Khan Academy Districts.&rdquo;</b> What it doesn&rsquo;t say is whether Khan Academy cut its own price for this or College Board is subsidizing it.",
+      src:{t:'College Board, "Khan Academy Districts"', u:"https://satsuite.collegeboard.org/k12-educators/khan-academy-districts"},
+      q:{
+        cb:"You have picked one of the two possibilities the page leaves open. It says districts get preferential pricing on Khan Academy Districts. It never says who absorbs the difference. Which sentence on that page would you cite?",
+        ka:"You have picked one of the two possibilities the page leaves open. It says districts get preferential pricing on Khan Academy Districts. It never says who absorbs the difference. Which sentence on that page would you cite?"
+      },
+      starter:"I put “Who's covering the discount” in can't tell from public information because College Board's page says districts get preferential pricing on Khan Academy Districts but never says who absorbs that cost. Either giving bin would be my assumption, not the page's."
+    },
+    {
+      id:"filing", label:"Where it lands in the filing", bin:"ct",
+      quote:"You already know that 96% of what Khan Academy earns sits inside one line, <b>&ldquo;development fees,&rdquo;</b> on its Form 990. That line covers Khan Academy&rsquo;s partner-funded work broadly. It doesn&rsquo;t break out how much, if any, is College Board&rsquo;s money.",
+      src:{t:"Form 990, via ProPublica", u:"https://projects.propublica.org/nonprofits/organizations/261544963"},
+      q:{
+        cb:"The filing has one line covering partner-funded work broadly. Does it name a single partner, or split that line by deal? Putting this card in a giving bin claims something the filing does not say.",
+        ka:"The filing has one line covering partner-funded work broadly. Does it name a single partner, or split that line by deal? Putting this card in a giving bin claims something the filing does not say."
+      },
+      starter:"I put “Where it lands in the filing” in can't tell from public information because the Form 990 reports partner-funded work in a single “development fees” line and never breaks out an individual partner, so it cannot tell me what this deal contributed."
+    }
+  ];
+
+  var GLYPH = {ok:"✓", alt:"≈", move:"?"};
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var cur = 0;                 /* index of the selected card          */
+  var placed = {};             /* card id  ->  bin id                 */
+  var marks = null;            /* card id  ->  "ok" | "alt" | "move"  */
+
+  var el = {};
+  ["prog","pips","panel","results","prev","next","pcount","cardview","clabel","cquote",
+   "cneeds","csrc","cwhere","tokens","bins","check","reset","hint","live","score",
+   "legend","rlist","more","backCards"].forEach(function(k){ el[k] = document.getElementById(k); });
+
+  function byId(id){
+    for(var i=0;i<CARDS.length;i++){ if(CARDS[i].id===id) return CARDS[i]; }
+    return null;
+  }
+  function indexOfId(id){
+    for(var i=0;i<CARDS.length;i++){ if(CARDS[i].id===id) return i; }
+    return -1;
+  }
+  function countPlaced(){
+    var n=0; CARDS.forEach(function(c){ if(placed[c.id]) n++; }); return n;
+  }
+  function announce(msg){ el.live.textContent = msg; }
+
+  /* ---------------- the card panel ---------------- */
+
+  function renderCard(){
+    var c = CARDS[cur];
+    el.pcount.textContent = "Card " + (cur+1) + " of " + CARDS.length;
+    el.clabel.textContent = c.label;
+    el.cquote.innerHTML = c.quote;
+
+    if(c.needs){ el.cneeds.hidden = false; el.cneeds.textContent = c.needs; }
+    else { el.cneeds.hidden = true; el.cneeds.textContent = ""; }
+
+    if(c.src){
+      el.csrc.innerHTML = 'Source: <a href="' + c.src.u + '" target="_blank" rel="noopener">' +
+                          c.src.t + '</a>';
+    } else {
+      el.csrc.textContent = c.srcnote || "";
+    }
+
+    var b = placed[c.id];
+    el.cwhere.textContent = b ? ("In this bin now: " + BINNAME[b]) : "Not placed yet.";
+    el.cardview.setAttribute("aria-label", c.label + ". " + (b ? "Placed in " + BINNAME[b] : "Not placed yet"));
+  }
+
+  function renderTokens(){
+    var out = "";
+    CARDS.forEach(function(c,i){
+      var p = placed[c.id];
+      out += '<button class="tok" type="button" data-i="' + i + '" data-placed="' + (p?1:0) + '"' +
+             (i===cur ? ' aria-current="true"' : '') +
+             ' aria-label="Card ' + (i+1) + ', ' + c.label + ', ' +
+             (p ? "in " + BINNAME[p] : "not placed") + '">' + (i+1) + '</button>';
+    });
+    el.tokens.innerHTML = out;
+  }
+
+  function renderProgress(){
+    var n = countPlaced();
+    el.prog.textContent = n + " of " + CARDS.length + " placed";
+    var out = "";
+    for(var i=0;i<CARDS.length;i++){
+      out += '<span class="pip' + (placed[CARDS[i].id] ? " on" : "") + '"></span>';
+    }
+    el.pips.innerHTML = out;
+    el.check.disabled = (n < CARDS.length);
+  }
+
+  /* ---------------- the bins ---------------- */
+
+  function buildBins(){
+    var out = "";
+    BINS.forEach(function(b){
+      out +=
+        '<section class="bin" id="bin-' + b.id + '" data-bin="' + b.id + '" aria-labelledby="bt-' + b.id + '">' +
+          '<button class="binbtn" id="bt-' + b.id + '" type="button" data-bin="' + b.id + '">' +
+            '<span class="bname">' + b.name + '</span>' +
+            '<span class="bmeta"><span class="key" aria-hidden="true">' + b.key + '</span>' +
+            '<span class="bcount" id="bc-' + b.id + '">0 cards</span></span>' +
+          '</button>' +
+          '<div class="drop" id="dr-' + b.id + '"></div>' +
+        '</section>';
+    });
+    el.bins.innerHTML = out;
+
+    BINS.forEach(function(b){
+      var sec = document.getElementById("bin-" + b.id);
+      var btn = document.getElementById("bt-" + b.id);
+      btn.addEventListener("click", function(){ place(CARDS[cur].id, b.id); });
+      sec.addEventListener("dragover", function(e){
+        e.preventDefault(); sec.classList.add("over");
+      });
+      sec.addEventListener("dragleave", function(){ sec.classList.remove("over"); });
+      sec.addEventListener("drop", function(e){
+        e.preventDefault(); sec.classList.remove("over");
+        var id = e.dataTransfer.getData("text/plain");
+        if(id && byId(id)) place(id, b.id);
+      });
+    });
+  }
+
+  function renderBins(justPlaced){
+    /* keep keyboard focus on a chip across a rebuild */
+    var wasFocused = null, a = document.activeElement;
+    if(a && a.classList && a.classList.contains("chip")) wasFocused = a.getAttribute("data-id");
+
+    BINS.forEach(function(b){
+      var drop = document.getElementById("dr-" + b.id), n = 0, out = "";
+      CARDS.forEach(function(c){
+        if(placed[c.id] !== b.id) return;
+        n++;
+        var m = marks ? marks[c.id] : null;
+        var g = m ? '<span class="g" aria-hidden="true">' + GLYPH[m] + '</span>' : "";
+        var say = m === "ok" ? ", right bin" : m === "alt" ? ", also defensible" : m === "move" ? ", move this one" : "";
+        out += '<button class="chip" type="button" draggable="true" data-id="' + c.id + '"' +
+               (m ? ' data-r="' + m + '"' : "") +
+               (c.id === CARDS[cur].id ? ' data-cur="1"' : "") +
+               (c.id === justPlaced ? ' data-settle="1"' : "") +
+               ' aria-label="' + c.label + ", in " + b.name + say + '">' +
+               g + '<span>' + c.label + '</span></button>';
+      });
+      drop.innerHTML = out || '<span class="empty">Empty</span>';
+      document.getElementById("bc-" + b.id).textContent = n + (n === 1 ? " card" : " cards");
+    });
+
+    Array.prototype.slice.call(el.bins.querySelectorAll(".chip")).forEach(function(ch){
+      var id = ch.getAttribute("data-id");
+      if(ch.getAttribute("data-settle") && !reduce) ch.classList.add("settle");
+      ch.addEventListener("click", function(){ selectCard(indexOfId(id)); });
+      ch.addEventListener("dragstart", function(e){
+        e.dataTransfer.setData("text/plain", id);
+        e.dataTransfer.effectAllowed = "move";
+        selectCard(indexOfId(id));
+      });
+      if(wasFocused === id) ch.focus();
+    });
+  }
+
+  /* ---------------- placing, which never snaps back ---------------- */
+
+  function place(cardId, binId){
+    var c = byId(cardId);
+    if(!c) return;
+    var moved = placed[cardId] !== binId;
+    placed[cardId] = binId;
+
+    /* a placement made after a check invalidates that check, so the
+       student has to ask for validation again rather than probing */
+    var invalidated = !!marks;
+    if(invalidated){
+      marks = null;
+      showPanel("cards");
+      el.hint.innerHTML = "You moved a card, so the last check no longer applies. <b>Check my sort</b> again when you are ready.";
+    }
+
+    renderProgress();
+    renderTokens();
+    renderBins(cardId);
+
+    var sec = document.getElementById("bin-" + binId);
+    if(!reduce && moved){ sec.classList.remove("ack"); void sec.offsetWidth; sec.classList.add("ack"); }
+
+    announce(c.label + " placed in " + BINNAME[binId] + ". " + countPlaced() + " of 9 placed.");
+
+    var nxt = nextUnplaced();
+    if(nxt !== -1){ selectCard(nxt); }
+    else {
+      renderCard();
+      /* do not overwrite the message that says the last check is stale */
+      if(!invalidated) el.hint.innerHTML = "All nine placed. <b>Check my sort</b> when you are ready.";
+    }
+  }
+
+  function nextUnplaced(){
+    for(var k=1;k<=CARDS.length;k++){
+      var i = (cur + k) % CARDS.length;
+      if(!placed[CARDS[i].id]) return i;
+    }
+    return -1;
+  }
+
+  function selectCard(i){
+    if(i < 0 || i >= CARDS.length) return;
+    cur = i;
+    renderCard();
+    renderTokens();
+    /* chips carry a current marker, so they repaint too */
+    Array.prototype.slice.call(el.bins.querySelectorAll(".chip")).forEach(function(ch){
+      if(ch.getAttribute("data-id") === CARDS[cur].id) ch.setAttribute("data-cur","1");
+      else ch.removeAttribute("data-cur");
+    });
+  }
+
+  /* ---------------- validation, on an explicit check only ---------------- */
+
+  function grade(){
+    var m = {}, right = 0;
+    CARDS.forEach(function(c){
+      var p = placed[c.id];
+      if(p === c.bin){ m[c.id] = "ok"; right++; }
+      else if(c.alt && p === c.alt){ m[c.id] = "alt"; right++; }
+      else { m[c.id] = "move"; }
+    });
+    return {marks:m, right:right};
+  }
+
+  /* clamp progress to [0,1]. an out of range delta, from a clock
+     adjustment or from headless virtual time, otherwise drives the
+     ease far out of range and the counter shows a nonsense figure */
+  function countTo(node, target, ms){
+    if(reduce || target === 0){ node.textContent = String(target); return; }
+    var start = performance.now();
+    function step(now){
+      var p = Math.min(Math.max((now - start) / ms, 0), 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      node.textContent = String(Math.max(Math.round(target * eased), 0));
+      if(p < 1) requestAnimationFrame(step); else node.textContent = String(target);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function doCheck(){
+    if(countPlaced() < CARDS.length) return;
+    var g = grade();
+    marks = g.marks;
+    renderBins(null);
+    showPanel("results");
+
+    var allGood = g.right === CARDS.length;
+    el.score.innerHTML = '<b id="sc">0</b> of ' + CARDS.length + " in a defensible bin";
+    countTo(document.getElementById("sc"), g.right, 420);
+
+    el.legend.hidden = allGood;
+    el.legend.innerHTML =
+      '<span aria-hidden="true">' + GLYPH.ok + '</span> right bin &nbsp;&middot;&nbsp; ' +
+      '<span aria-hidden="true">' + GLYPH.alt + '</span> also defensible &nbsp;&middot;&nbsp; ' +
+      '<span aria-hidden="true">' + GLYPH.move + '</span> move this one';
+
+    var out = "", moves = 0, alts = 0;
+    CARDS.forEach(function(c){
+      var m = marks[c.id];
+      if(m === "move"){
+        moves++;
+        var q = (c.q && c.q[placed[c.id]]) ||
+                "Ask which side that line is actually evidence about, and which side published it.";
+        out += '<div class="r mover"><div class="rl"><span class="g" aria-hidden="true">' + GLYPH.move +
+               '</span>' + c.label + '</div><div class="rq">' + q + '</div></div>';
+      } else if(m === "alt"){
+        alts++;
+        out += '<div class="r altr"><div class="rl"><span class="g" aria-hidden="true">' + GLYPH.alt +
+               '</span>' + c.label + ' <span class="rtag">also defensible</span></div>' +
+               '<div class="rq">' + c.altwhy + '</div></div>';
+      }
+    });
+
+    if(allGood){
+      var starter = "";
+      for(var i=0;i<CARDS.length;i++){
+        var c2 = CARDS[i];
+        if(c2.starter && placed[c2.id] === "ct"){ starter = c2.starter; break; }
+      }
+      out +=
+        '<div class="done">' +
+          '<p><b>Every card is in a bin you could defend to Wes.</b> Three of these nine cannot be settled from anything either organization has published. Saying so is the finding, not a gap.</p>' +
+          '<div class="starterlab">Starter line for question 1, adjust it to sound like you:</div>' +
+          '<textarea id="starter" readonly rows="5"></textarea>' +
+          '<button class="nav ghost small" id="copy" type="button">Copy this line</button>' +
+          '<p style="margin-top:8px">Question 2 is yours: what would each side lose if this ended tomorrow? Be specific, for both.</p>' +
+        '</div>';
+      el.rlist.innerHTML = out;
+      var ta = document.getElementById("starter");
+      if(ta) ta.value = starter;
+      var cp = document.getElementById("copy");
+      if(cp) cp.addEventListener("click", function(){ copyStarter(cp, ta); });
+      el.hint.textContent = "All nine are defensible. Take your starter line across to the ask.";
+      announce("All nine cards are in a defensible bin.");
+      flagOverflow();
+    } else {
+      el.rlist.innerHTML = out;
+      flagOverflow();
+      el.hint.innerHTML = moves === 1
+        ? "One card to move. Read the question on it, then drag it or press <b>1</b>, <b>2</b> or <b>3</b>."
+        : moves + " cards to move. Read the question on each, then drag it or press <b>1</b>, <b>2</b> or <b>3</b>.";
+      announce(g.right + " of 9 in a defensible bin. " + moves + " to move.");
+    }
+  }
+
+  /* the results list is a contained scroller. Say so, rather than letting a
+     sentence end at the panel edge with no affordance. */
+  function flagOverflow(){
+    var overflows = el.rlist.scrollHeight - el.rlist.clientHeight > 4;
+    el.more.hidden = !overflows;
+  }
+
+  function copyStarter(btn, ta){
+    var done = function(){
+      btn.textContent = "Copied";
+      window.setTimeout(function(){ btn.textContent = "Copy this line"; }, 1600);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value).then(done, function(){ legacyCopy(ta, done); });
+    } else { legacyCopy(ta, done); }
+  }
+  function legacyCopy(ta, done){
+    ta.removeAttribute("readonly"); ta.select();
+    try{ document.execCommand("copy"); done(); }catch(e){}
+    ta.setAttribute("readonly","readonly");
+  }
+
+  function showPanel(which){
+    var results = which === "results";
+    el.panel.hidden = results;
+    el.results.hidden = !results;
+    if(results){ el.results.setAttribute("tabindex","-1"); el.results.focus(); }
+  }
+
+  function resetAll(){
+    placed = {}; marks = null; cur = 0;
+    renderProgress(); renderTokens(); renderBins(null); renderCard();
+    showPanel("cards");
+    el.hint.innerHTML = "Place all nine cards to check. Keyboard: arrow keys change card, then <b>1</b>, <b>2</b> or <b>3</b> places it.";
+    announce("Board cleared. Nine cards to place.");
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  el.prev.addEventListener("click", function(){ selectCard((cur - 1 + CARDS.length) % CARDS.length); });
+  el.next.addEventListener("click", function(){ selectCard((cur + 1) % CARDS.length); });
+  el.tokens.addEventListener("click", function(e){
+    var t = e.target.closest ? e.target.closest(".tok") : null;
+    if(t) selectCard(parseInt(t.getAttribute("data-i"), 10));
+  });
+  el.check.addEventListener("click", doCheck);
+  el.reset.addEventListener("click", resetAll);
+  el.backCards.addEventListener("click", function(){
+    showPanel("cards");
+    el.cardview.focus();
+  });
+
+  el.cardview.addEventListener("dragstart", function(e){
+    e.dataTransfer.setData("text/plain", CARDS[cur].id);
+    e.dataTransfer.effectAllowed = "move";
+    el.cardview.classList.add("dragging");
+  });
+  el.cardview.addEventListener("dragend", function(){ el.cardview.classList.remove("dragging"); });
+  /* belt and braces: a drag that ends outside any target, or a dragend the
+     browser never delivers, must not leave the card stuck in its drag look */
+  document.addEventListener("drop", function(){ el.cardview.classList.remove("dragging"); });
+  document.addEventListener("dragend", function(){ el.cardview.classList.remove("dragging"); });
+
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(e.key === "1" || e.key === "2" || e.key === "3"){
+      e.preventDefault();
+      place(CARDS[cur].id, BINS[parseInt(e.key,10) - 1].id);
+      return;
+    }
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault(); selectCard((cur + 1) % CARDS.length); return;
+    }
+    if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      e.preventDefault(); selectCard((cur - 1 + CARDS.length) % CARDS.length); return;
+    }
+    if(e.key === "Escape" && !el.results.hidden){ showPanel("cards"); el.cardview.focus(); }
+  });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  buildBins();
+  resetAll();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot run force a state */
+  window.__ex = {
+    place:place, check:doCheck, select:selectCard,
+    state:function(){ return {placed:placed, marks:marks, cur:cur}; }
+  };
+})();
+</script>
+</body>
+</html>

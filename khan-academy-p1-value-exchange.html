@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sort it first, then watch a deal break</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Tints of --highlight are the only second
+     values used, and no state is signalled by colour alone: stable
+     and unstable differ by fill, border style, icon and label.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+    --tint:#EDF0FF;         /* tint of --highlight */
+    --edge:rgba(0,29,105,.24); /* --on-highlight at low alpha, dashed edges */
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-state:240ms;        /* a slot emptying or filling            */
+    --t-reveal:600ms;       /* the reason landing                    */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto matters. As a shrinkable flex item the stage
+     lays out at the viewport width between 600 and 899px and the
+     transform then scales it a second time, so the design is
+     double-shrunk and every drop target moves. The canvas must
+     hold 960 in layout and let the transform do all the fitting. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:22px 40px 20px;display:flex;flex-direction:column}
+  /* the frame is focused on entry so a screen reader lands in the new
+     content. It is not a control, so it must not paint a focus ring. */
+  .frame:focus,.frame:focus-visible{outline:none}
+  #f2{display:none}
+
+  .head{flex:0 0 auto;display:flex;align-items:baseline;gap:14px;margin-bottom:5px}
+  .progress{font-size:13px;font-weight:600;color:var(--body);letter-spacing:.02em}
+  .count{font-size:13px;font-weight:500;color:var(--on-highlight);letter-spacing:.02em}
+
+  h1{font-size:24px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:5px;flex:0 0 auto}
+  .sub{font-size:14px;line-height:1.45;max-width:98ch;flex:0 0 auto}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* the state word reaches a screen reader through the live region even
+     though the pill that shows it is decorative and aria-hidden */
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ================= FRAME 1 : the cold sort =================
+     The tray holds a fixed height so the bins do not creep upward as
+     cards leave it. A drop target that moves mid-drag is a bug. */
+  .tray{margin-top:11px;height:116px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:0 0 auto}
+  .card{
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:10px 11px;min-width:0;text-align:left;font-family:inherit;cursor:grab;
+    display:flex;flex-direction:column;gap:6px;
+    transition:background var(--t-fast) var(--ease-out),
+               border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  .card .ico{width:18px;height:18px}
+  .card .ico svg{width:18px;height:18px;display:block}
+  .card .fl{font-size:12.5px;line-height:1.35;color:var(--title);font-weight:500;overflow-wrap:break-word}
+  .card:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  .card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .card[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight)}
+  .card[aria-pressed="true"] .fl{color:var(--bg)}
+  .card[aria-pressed="true"] .ico svg{stroke:var(--bg)}
+  .trayempty{grid-column:1 / -1;font-size:12.5px;line-height:1.4;color:var(--body);padding:8px 0}
+
+  .bins{margin-top:11px;display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:0 0 auto}
+  .bin{
+    background:var(--highlight);border:2px solid var(--highlight);border-radius:12px;
+    padding:10px 12px 11px;min-width:0;
+    transition:border-color var(--t-fast) var(--ease-out);
+  }
+  .bin.armed{cursor:pointer}
+  .bin.armed:hover,.bin.over{border-color:var(--on-highlight)}
+  .bhead{display:flex;align-items:center;gap:8px}
+  .bhead .ico{flex:0 0 auto;width:18px;height:18px}
+  .bhead .ico svg{width:18px;height:18px;display:block}
+  .bhead .t{flex:1 1 auto;font-size:15px;font-weight:600;color:var(--title);line-height:1.2}
+  .place{
+    flex:0 0 auto;font-family:inherit;font-size:11.5px;font-weight:600;
+    color:var(--on-highlight);background:transparent;
+    border:2px solid var(--on-highlight);border-radius:7px;padding:5px 8px;cursor:pointer;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  .place:hover:not(:disabled){background:var(--on-highlight);color:var(--bg)}
+  .place:disabled{opacity:.3;cursor:not-allowed}
+  .place:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* fixed height, two columns. Four chips is the worst case and it
+     fits in two rows, so the layout never moves as cards land. */
+  .drop{
+    margin-top:8px;height:66px;overflow:hidden;border-radius:8px;
+    background:var(--tint);border:2px dashed var(--edge);
+    padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:5px;align-content:start;
+  }
+  .bin.over .drop{border-color:var(--on-highlight)}
+  .drop .empty{grid-column:1 / -1;font-size:11.5px;line-height:1.35;color:var(--body);padding:5px 4px}
+  .chip{
+    font-family:inherit;text-align:left;min-width:0;
+    background:var(--bg);border:2px solid var(--on-highlight);border-radius:6px;
+    padding:5px 7px;font-size:11.5px;font-weight:600;color:var(--title);cursor:pointer;
+    animation:settle 300ms var(--ease-over) both;
+    /* one line per chip. Wrapping would push the last chip past the
+       fixed drop height and clip it. */
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  @keyframes settle{from{opacity:0;transform:translateY(-7px) scale(.97)}to{opacity:1;transform:none}}
+
+  /* the one-line reflection, no scoring anywhere */
+  .refl{margin-top:10px;flex:0 0 auto;display:none}
+  .refl.on{display:block}
+  .refl label{display:block;font-size:14px;font-weight:600;color:var(--title);margin-bottom:6px}
+  .refl input{
+    width:100%;max-width:660px;font-family:inherit;font-size:14px;color:var(--title);
+    background:var(--bg);border:2px solid var(--on-highlight);border-radius:8px;padding:9px 11px;
+  }
+  .refl input:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .refl .note{font-size:12px;line-height:1.4;margin-top:5px}
+
+  /* ================= FRAME 2 : the state machine ================= */
+  .status{
+    margin-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  }
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:2px solid var(--on-highlight);border-radius:999px;padding:6px 13px;
+    transition:background var(--t-state) var(--ease-out),color var(--t-state) var(--ease-out);
+  }
+  .pill .ico{width:16px;height:16px}
+  .pill .ico svg{width:16px;height:16px;display:block}
+  /* stable: filled and solid. unstable: hollow and dashed. Fill,
+     border style, icon and word all change together. */
+  .pill.stable{background:var(--on-highlight);color:var(--bg);border-style:solid}
+  .pill.stable .ico svg{stroke:var(--bg)}
+  .pill.unstable{background:transparent;color:var(--on-highlight);border-style:dashed}
+  .pill.unstable .ico svg{stroke:var(--on-highlight)}
+  .pill.knock{animation:shake 150ms linear 1}
+  @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}100%{transform:translateX(0)}}
+  .statehint{font-size:12.5px;line-height:1.35}
+
+  /* One grid, three columns, two trade rows. The rows must share a
+     height or the arrow stops pointing at the slot it belongs to. */
+  .trade{
+    margin-top:10px;flex:0 0 auto;
+    display:grid;grid-template-columns:1fr 58px 1fr;
+    column-gap:10px;row-gap:8px;align-items:stretch;
+  }
+  .who{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight)}
+  .arrow{
+    min-width:0;display:flex;align-items:center;justify-content:center;
+    transition:opacity var(--t-state) var(--ease-out);
+  }
+  .arrow svg{width:34px;height:20px;display:block}
+  .arrow.cut{opacity:.28}
+
+  .slot{
+    background:var(--highlight);border:2px solid var(--highlight);border-radius:10px;
+    padding:9px 11px;min-width:0;text-align:left;width:100%;font-family:inherit;
+    display:block;
+    transition:background var(--t-state) var(--ease-out),
+               border-color var(--t-state) var(--ease-out);
+  }
+  /* an explicit line-height on both, or the button slots sit three
+     pixels off the div slots and the rows stop reading as rows */
+  .slot .k{font-size:11px;line-height:1.4;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);display:block}
+  .slot .v{
+    display:flex;align-items:center;gap:7px;margin-top:4px;
+    font-size:14.5px;font-weight:600;color:var(--title);line-height:1.25;
+  }
+  .slot .v .ico{flex:0 0 auto;width:17px;height:17px}
+  .slot .v .ico svg{width:17px;height:17px;display:block}
+  .slot .tap{font-size:11px;line-height:1.3;margin-top:4px;color:var(--body)}
+  button.slot{cursor:pointer}
+  button.slot:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.slot:hover{border-color:var(--on-highlight)}
+  /* an emptied slot: hollow, dashed, warning glyph, and the word empty */
+  button.slot[aria-pressed="true"]{background:var(--tint);border-style:dashed;border-color:var(--edge)}
+  button.slot[aria-pressed="true"] .v{color:var(--body)}
+
+  .reason{
+    margin-top:10px;flex:0 0 auto;min-height:44px;
+    font-size:14.5px;line-height:1.42;max-width:92ch;color:var(--body);
+  }
+  .reason b{color:var(--title);font-weight:600}
+  .reason.in{animation:land var(--t-reveal) var(--ease-over) both}
+  @keyframes land{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .caveat{
+    margin-top:8px;flex:0 0 auto;font-size:12px;line-height:1.4;
+    border-left:3px solid var(--on-highlight);padding-left:10px;max-width:96ch;
+  }
+
+  /* ---- controls ---- */
+  .bar{margin-top:auto;padding-top:8px;flex:0 0 auto;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 18px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12.5px;line-height:1.35;max-width:60ch}
+
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- mobile: portrait, restacked, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item, #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the bins off screen and clips the controls.
+       Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:22px 18px 30px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    /* the desktop fixed height exists to stop the slide reflowing.
+       On a stacked portrait layout the page scrolls, so it goes back
+       to content height and nothing is clipped. */
+    .tray{grid-template-columns:1fr;gap:9px;height:auto}
+    .card{gap:7px}
+    .card .ico,.card .ico svg{width:20px;height:20px}
+    .card .fl{font-size:15px;line-height:1.4}
+    .drop{height:auto;min-height:52px}
+    .bins{grid-template-columns:1fr;gap:12px}
+    .drop{grid-template-columns:1fr}
+    .chip{font-size:14px;padding:8px 10px;white-space:normal;overflow:visible}
+    .refl label{font-size:16px}
+    .refl input{font-size:16px}
+    .refl .note{font-size:14px}
+    /* one column, reordered into the two trades themselves: what the
+       brand gives lands in what the creator gets, and back again. The
+       party labels are redundant once each slot names its own side. */
+    .trade{grid-template-columns:1fr;row-gap:8px}
+    .who{display:none}
+    #bGives{order:1} #arrTop{order:2} #cGets{order:3}
+    #cGives{order:4} #arrBot{order:5} #bGets{order:6}
+    .arrow{padding:2px 0}
+    .arrow svg{transform:rotate(90deg)}
+    .arrow.rev svg{transform:rotate(-90deg)}
+    .slot .v{font-size:16px}
+    .slot .tap{font-size:13px}
+    .reason{font-size:16px;min-height:0}
+    .caveat{font-size:14px}
+    .hint{font-size:14px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .card:hover{transform:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ================= FRAME 1 : the cold sort ================= -->
+  <div class="frame fade" id="f1">
+    <div class="head">
+      <span class="progress">1 of 2</span>
+      <span class="count" id="count">0 of 4 cards placed</span>
+    </div>
+
+    <h1>Two of these Khan Academy gets. Two it gives. Sort them.</h1>
+    <p class="sub">
+      Four pieces of the College Board partnership, no framework yet.
+      <b>Nothing is scored and no answer is revealed on this pass.</b> Go on your own sense of what seems fair.
+    </p>
+
+    <div class="tray" id="tray" aria-label="Four pieces of the partnership"></div>
+
+    <div class="bins">
+      <div class="bin" id="binGives" data-bin="gives">
+        <div class="bhead">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M14 7l5 5-5 5"/></svg></span>
+          <span class="t">Khan Academy gives</span>
+          <button class="place" id="placeGives" disabled>Place here</button>
+        </div>
+        <div class="drop" id="dropGives"><p class="empty" id="emptyGives">Nothing here yet.</p></div>
+      </div>
+
+      <div class="bin" id="binGets" data-bin="gets">
+        <div class="bhead">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M10 7l-5 5 5 5"/></svg></span>
+          <span class="t">Khan Academy gets</span>
+          <button class="place" id="placeGets" disabled>Place here</button>
+        </div>
+        <div class="drop" id="dropGets"><p class="empty" id="emptyGets">Nothing here yet.</p></div>
+      </div>
+    </div>
+
+    <div class="refl" id="refl">
+      <label for="hard">Which card was hardest to place, and what made it hard?</label>
+      <input id="hard" type="text" maxlength="220" autocomplete="off"
+             placeholder="One sentence is plenty.">
+      <p class="note">Nobody is grading this. What you hesitated on is exactly what the next frame explains.</p>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="go" disabled>Continue</button>
+      <span class="hint" id="hint">Drag a card into a bin, or tap it and then tap a bin. Keyboard: Enter to pick up, arrows to choose the bin, Enter to place.</span>
+    </div>
+  </div>
+
+  <!-- ================= FRAME 2 : the state machine ================= -->
+  <div class="frame" id="f2">
+    <div class="head"><span class="progress">2 of 2</span></div>
+    <h1>Break the deal, then put it back together.</h1>
+    <p class="sub">A brand pays a creator and ships product. Empty either side's <b>gets</b> slot and watch what happens to the deal.</p>
+
+    <div class="status">
+      <span class="pill stable" id="pill" aria-hidden="true">
+        <span class="ico" id="pillIco"></span><span id="pillTxt">Stable</span>
+      </span>
+      <span class="statehint" id="statehint">Both sides are getting something. Tap a gets slot to empty it.</span>
+    </div>
+
+    <div class="trade">
+      <div class="who">Brand</div>
+      <div aria-hidden="true"></div>
+      <div class="who" id="whoC">Creator</div>
+
+      <div class="slot" id="bGives">
+        <span class="k">Brand gives</span>
+        <span class="v"><span class="ico" id="icoMoney"></span><span>Payment and product</span></span>
+      </div>
+      <div class="arrow" id="arrTop"><svg viewBox="0 0 34 20" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h27M24 5l5 5-5 5"/></svg></div>
+      <button class="slot" id="cGets" type="button" aria-pressed="false">
+        <span class="k">Creator gets</span>
+        <span class="v"><span class="ico" id="icoMoney2"></span><span id="cGetsV">Payment and product</span></span>
+        <span class="tap" id="cGetsTap">Tap to empty this slot</span>
+      </button>
+
+      <button class="slot" id="bGets" type="button" aria-pressed="false">
+        <span class="k">Brand gets</span>
+        <span class="v"><span class="ico" id="icoAud1"></span><span id="bGetsV">Audience and credibility</span></span>
+        <span class="tap" id="bGetsTap">Tap to empty this slot</span>
+      </button>
+      <div class="arrow rev" id="arrBot"><svg viewBox="0 0 34 20" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M32 10H5M10 5l-5 5 5 5"/></svg></div>
+      <div class="slot" id="cGives">
+        <span class="k">Creator gives</span>
+        <span class="v"><span class="ico" id="icoAud2"></span><span>Audience and credibility</span></span>
+      </div>
+    </div>
+
+    <p class="reason" id="reason" aria-live="polite"></p>
+
+    <p class="caveat">Where the analogy stops: most creator deals are one video and a flat fee. The partnerships in this program run for years, with contracts and engineering time behind them. The shape holds. The stakes and the timeline do not.</p>
+
+    <div class="bar">
+      <button class="nav ghost" id="back">Back to the sort</button>
+      <span class="hint" id="hint2">Four states, all four labelled. There is no combination that leaves you looking at an unexplained result.</span>
+    </div>
+  </div>
+
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the main stylesheet and lets it win on source order. An
+       override placed before the main sheet loses and the fallback silently
+       fails. Three things must happen here, and all three were broken:
+       the dead interactive shell has to be hidden, the flex-centred body
+       has to go back to block flow (otherwise this text is laid out as a
+       narrow column beside the 960px canvas and pushed off the right edge,
+       with the sideways scrolling the style guide bans), and links have to
+       be pinned to the palette so the browser default blue never shows up
+       as a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:700px;margin:0 auto;padding:28px 22px 44px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:24px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:18px 0 8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Two of these Khan Academy gets. Two it gives.</h1>
+    <p style="margin-bottom:12px">Four pieces of the College Board partnership. Sort them yourself, on paper if you like, with no framework and nothing to guide you:</p>
+    <ul style="margin:0 0 12px 22px">
+      <li>Free, official SAT practice built around a student's own test results</li>
+      <li>The engineering and content work of keeping that practice current every time the test changes</li>
+      <li>Access to thousands of official College Board questions</li>
+      <li>The label "official practice partner" on the exam most US college applicants sit</li>
+    </ul>
+    <p style="margin-bottom:12px">No answer is given here, on purpose. Which one was hardest to place, and what made it hard? That hesitation is the point.</p>
+    <h2>Why one-sided deals fall apart</h2>
+    <p style="margin-bottom:12px">A brand gives payment and product, and gets audience and credibility. A creator gives that audience and credibility, and gets payment and product. Every slot is filled, so the deal is <strong>stable</strong>: both sides would lose something real if it stopped.</p>
+    <p style="margin-bottom:12px">Empty the brand's gets slot and the deal is <strong>unstable</strong>: the brand is paying for nothing in return, and a deal like that does not get renewed.</p>
+    <p style="margin-bottom:12px">Empty the creator's gets slot instead and it is <strong>unstable</strong> the other way: the creator is handing over their audience and credibility and getting nothing back, so they walk the moment something better appears.</p>
+    <p>Empty both and there is no deal at all, just two parties giving things away. <strong>A deal holds because both sides would lose something if it stopped.</strong></p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Phosphor-manner outline icons, single weight, one size. */
+  var ICO = {
+    target:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></svg>',
+    wrench:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a3.8 3.8 0 0 0 5 5l-8.5 8.5a2.1 2.1 0 0 1-3-3z"/><path d="M14.5 6.5 18 3l3 3-3.5 3.5"/></svg>',
+    bank:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M6 9v8M12 9v8M18 9v8M3 20h18M12 3l8 5H4z"/></svg>',
+    seal:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="6"/><path d="M9.6 10l1.7 1.7 3.1-3.1"/><path d="M8.6 15.4 7.5 21l4.5-2.3L16.5 21l-1.1-5.6"/></svg>',
+    money:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="12" cy="12" r="2.4"/><path d="M6.5 12h.01M17.5 12h.01"/></svg>',
+    aud:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/></svg>',
+    warn:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>',
+    tick:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+    empty:'<svg viewBox="0 0 24 24" fill="none" stroke="#484646" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="13" rx="2" stroke-dasharray="3 3"/><path d="M8.5 12.5h7"/></svg>'
+  };
+
+  /* ------------------------------------------------------------
+     FRAME 1. Deliberately shallow and generic. The deep College
+     Board mapping belongs to a later interactive, so there is no
+     grading, no reveal and no analysis of any card here.
+     ------------------------------------------------------------ */
+  var CARDS = [
+    { id:"practice", ico:"target",
+      full:"Free, official SAT practice built around a student's own test results, not a generic drill set" },
+    { id:"upkeep", ico:"wrench",
+      full:"The engineering and content work of keeping that practice current every time the real test changes" },
+    { id:"questions", ico:"bank",
+      full:"Access to thousands of official College Board questions to build real practice on" },
+    { id:"label", ico:"seal",
+      full:"The label “official practice partner” on the exam most US college applicants sit" }
+  ];
+
+  var byId = {}; CARDS.forEach(function(c){ byId[c.id] = c; });
+  var placed = {};       /* id -> "gives" | "gets" */
+  var sel = null;
+
+  var f1=document.getElementById("f1"), f2=document.getElementById("f2"),
+      tray=document.getElementById("tray"),
+      count=document.getElementById("count"), hint=document.getElementById("hint"),
+      go=document.getElementById("go"), back=document.getElementById("back"),
+      refl=document.getElementById("refl");
+
+  var BIN = {
+    gives:{ el:document.getElementById("binGives"), drop:document.getElementById("dropGives"),
+            empty:document.getElementById("emptyGives"), btn:document.getElementById("placeGives"),
+            name:"Khan Academy gives" },
+    gets: { el:document.getElementById("binGets"), drop:document.getElementById("dropGets"),
+            empty:document.getElementById("emptyGets"), btn:document.getElementById("placeGets"),
+            name:"Khan Academy gets" }
+  };
+
+  function shortOf(c){
+    /* the chip needs a compact handle, and the full line stays in aria */
+    return { practice:"Free official SAT practice",
+             upkeep:"Keeping the practice current",
+             questions:"Official question bank",
+             label:"The official partner label" }[c.id];
+  }
+
+  function cardEl(c){
+    var b = document.createElement("div");
+    b.className = "card";
+    b.setAttribute("role","button");
+    b.setAttribute("tabindex","0");
+    b.setAttribute("draggable","true");
+    b.setAttribute("aria-pressed","false");
+    b.setAttribute("data-id", c.id);
+    b.setAttribute("aria-label", c.full + ". Press Enter to pick this up.");
+    b.innerHTML = '<span class="ico">'+ICO[c.ico]+'</span><span class="fl">'+c.full+'</span>';
+    wireCard(b, c);
+    return b;
+  }
+
+  function chipEl(c){
+    var b = document.createElement("button");
+    b.type="button"; b.className="chip"; b.setAttribute("data-id", c.id);
+    b.setAttribute("aria-label", c.full + ". Placed in " + BIN[placed[c.id]].name + ". Press Enter to take it back out.");
+    b.textContent = shortOf(c);
+    b.addEventListener("click", function(){ takeBack(c.id); });
+    return b;
+  }
+
+  function render(){
+    Array.prototype.slice.call(tray.querySelectorAll(".card,.trayempty")).forEach(function(n){ n.remove(); });
+    var loose = CARDS.filter(function(c){ return !placed[c.id]; });
+    loose.forEach(function(c){
+      var el = cardEl(c);
+      if (sel === c.id) el.setAttribute("aria-pressed","true");
+      tray.appendChild(el);
+    });
+    if (!loose.length){
+      var p = document.createElement("p");
+      p.className = "trayempty";
+      p.textContent = "All four placed. There is no answer key on this pass, so move any of them back if you want to.";
+      tray.appendChild(p);
+    }
+
+    ["gives","gets"].forEach(function(k){
+      var d = BIN[k].drop;
+      Array.prototype.slice.call(d.querySelectorAll(".chip")).forEach(function(n){ n.remove(); });
+      var inside = CARDS.filter(function(c){ return placed[c.id] === k; });
+      inside.forEach(function(c){ d.appendChild(chipEl(c)); });
+      BIN[k].empty.hidden = inside.length > 0;
+    });
+
+    var n = CARDS.length - loose.length;
+    count.textContent = n + " of 4 cards placed";
+    var all = n === CARDS.length;
+    refl.classList.toggle("on", all);
+    go.disabled = !all;
+
+    var armed = sel !== null;
+    BIN.gives.btn.disabled = !armed; BIN.gets.btn.disabled = !armed;
+    BIN.gives.el.classList.toggle("armed", armed);
+    BIN.gets.el.classList.toggle("armed", armed);
+  }
+
+  function defaultHint(){
+    var n = CARDS.filter(function(c){ return placed[c.id]; }).length;
+    if (n < CARDS.length) return "Drag a card into a bin, or tap it and then tap a bin. Keyboard: Enter to pick up, arrows to choose the bin, Enter to place.";
+    return "One line on what was hardest, then continue. Nothing here is scored.";
+  }
+
+  /* The card keydown handler calls preventDefault before moving focus to
+     a Place here button, and that call is load bearing. Without it the
+     keypress belonging to the same Enter would land on the button focus
+     just moved to, Chrome would treat it as an activation, and one
+     keystroke would both pick a card up and drop it in the left bin.
+     Verified with real Chrome key events: with the preventDefault in
+     place, one Enter picks up and stops. Do not remove it. */
+
+  function pick(id){
+    sel = (sel === id) ? null : id;
+    render();
+    if (sel){
+      hint.textContent = "Picked up. Left and Right arrows move between the two Place here buttons, " +
+                         "Enter places it, Escape puts it down.";
+      BIN.gives.btn.focus();
+    } else hint.textContent = defaultHint();
+  }
+
+  /* render() disables both Place here buttons once nothing is held, and
+     disabling the focused button drops focus to the document, so a
+     keyboard user loses their place completely. Put focus somewhere
+     deliberate, but only when it was actually lost, which leaves a mouse
+     or a drag placement alone. Once the tray is empty the next thing to
+     do is the reflection line, so focus goes there. */
+  function keepFocus(){
+    var a = document.activeElement;
+    if (a && a !== document.body && a !== document.documentElement && !a.disabled) return;
+    var nextCard = tray.querySelector(".card");
+    if (nextCard){ nextCard.focus(); return; }
+    document.getElementById("hard").focus();
+  }
+
+  function put(id, k){
+    placed[id] = k; sel = null;
+    render();
+    hint.textContent = defaultHint();
+    keepFocus();
+  }
+
+  function takeBack(id){
+    delete placed[id]; render();
+    hint.textContent = defaultHint();
+    var again = tray.querySelector('[data-id="'+id+'"]');
+    if (again) again.focus();
+  }
+
+  function wireCard(el, c){
+    el.addEventListener("click", function(){ pick(c.id); });
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); pick(c.id); return; }
+      var cards = Array.prototype.slice.call(tray.querySelectorAll(".card"));
+      var i = cards.indexOf(el), n = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") n = cards[(i+1)%cards.length];
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = cards[(i-1+cards.length)%cards.length];
+      if (n){ e.preventDefault(); n.focus(); }
+    });
+    el.addEventListener("dragstart", function(e){
+      sel = c.id;
+      try{ e.dataTransfer.setData("text/plain", c.id); }catch(err){}
+      e.dataTransfer.effectAllowed = "move";
+      render();
+    });
+    el.addEventListener("dragend", function(){
+      if (sel === c.id && !placed[c.id]){ sel = null; render(); hint.textContent = defaultHint(); }
+    });
+  }
+
+  ["gives","gets"].forEach(function(k){
+    var b = BIN[k];
+    b.el.addEventListener("click", function(ev){
+      if (ev.target.closest(".chip") || ev.target.closest(".place")) return;
+      if (sel) put(sel, k);
+    });
+    b.btn.addEventListener("click", function(ev){ ev.stopPropagation(); if (sel) put(sel, k); });
+    b.btn.addEventListener("keydown", function(ev){
+      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft"){
+        ev.preventDefault(); BIN[k === "gives" ? "gets" : "gives"].btn.focus();
+      }
+    });
+    b.el.addEventListener("dragover", function(ev){
+      if (!sel) return;
+      ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; b.el.classList.add("over");
+    });
+    b.el.addEventListener("dragleave", function(){ b.el.classList.remove("over"); });
+    b.el.addEventListener("drop", function(ev){
+      ev.preventDefault(); b.el.classList.remove("over");
+      var id=""; try{ id = ev.dataTransfer.getData("text/plain"); }catch(err){}
+      if (!id) id = sel;
+      if (id && byId[id]) put(id, k);
+    });
+  });
+
+  /* ------------------------------------------------------------
+     FRAME 2. A state machine, not an animation. Two booleans,
+     four states, every one of them defined in this table. There
+     is no reachable state without a label and a reason.
+     ------------------------------------------------------------ */
+  var STATES = {
+    "1|1":{ label:"Stable", ok:true,
+      hint:"Both sides are getting something. Tap a gets slot to empty it.",
+      reason:"<b>Both sides would lose something real if this stopped.</b> The brand loses reach it cannot easily rebuild. The creator loses income they were counting on. Neither one is doing the other a favour, and that mutual exposure is why a deal like this runs longer than one video." },
+
+    "0|1":{ label:"Unstable", ok:false,
+      hint:"The brand's gets slot is empty. Tap it again to restore it.",
+      reason:"<b>The brand is paying for nothing in return.</b> Money and product go out, no audience and no credibility come back. Nobody renews that at the end of the quarter, because there is nothing on the brand's side of the ledger to point at." },
+
+    "1|0":{ label:"Unstable", ok:false,
+      hint:"The creator's gets slot is empty. Tap it again to restore it.",
+      reason:"<b>The creator is handing over their audience and credibility and getting nothing back.</b> They will walk the moment something better appears, and their audience notices the mismatch first. This is the shape behind almost every sponsorship that looks fine on a slide and dies inside a year." },
+
+    "0|0":{ label:"Unstable", ok:false,
+      hint:"Both gets slots are empty. Tap either one to restore it.",
+      reason:"<b>Neither side is getting anything, so there is no deal here at all.</b> Two parties are giving things away and calling it a partnership. This is the state worth remembering: a deal is not the giving, it is the fact that both sides would lose something if it stopped." }
+  };
+
+  var st = { b:1, c:1 };   /* 1 = the gets slot is filled */
+
+  var bGets=document.getElementById("bGets"), cGets=document.getElementById("cGets"),
+      bGetsV=document.getElementById("bGetsV"), cGetsV=document.getElementById("cGetsV"),
+      bGetsTap=document.getElementById("bGetsTap"), cGetsTap=document.getElementById("cGetsTap"),
+      pill=document.getElementById("pill"), pillIco=document.getElementById("pillIco"),
+      pillTxt=document.getElementById("pillTxt"), statehint=document.getElementById("statehint"),
+      reason=document.getElementById("reason"),
+      arrTop=document.getElementById("arrTop"), arrBot=document.getElementById("arrBot");
+
+  document.getElementById("icoMoney").innerHTML = ICO.money;
+  document.getElementById("icoMoney2").innerHTML = ICO.money;
+  document.getElementById("icoAud1").innerHTML = ICO.aud;
+  document.getElementById("icoAud2").innerHTML = ICO.aud;
+
+  function key(){ return st.b + "|" + st.c; }
+
+  function paint(animate){
+    var s = STATES[key()];
+    if (!s) s = STATES["1|1"];          /* unreachable by construction, still handled */
+
+    /* the two toggle slots */
+    bGets.setAttribute("aria-pressed", st.b ? "false" : "true");
+    cGets.setAttribute("aria-pressed", st.c ? "false" : "true");
+    bGetsV.textContent = st.b ? "Audience and credibility" : "Empty";
+    cGetsV.textContent = st.c ? "Payment and product" : "Empty";
+    document.getElementById("icoAud1").innerHTML   = st.b ? ICO.aud   : ICO.empty;
+    document.getElementById("icoMoney2").innerHTML = st.c ? ICO.money : ICO.empty;
+    bGetsTap.textContent = st.b ? "Tap to empty this slot" : "Tap to put it back";
+    cGetsTap.textContent = st.c ? "Tap to empty this slot" : "Tap to put it back";
+    bGets.setAttribute("aria-label", "Brand gets: " + (st.b ? "audience and credibility. Activate to empty this slot." : "empty. Activate to restore it."));
+    cGets.setAttribute("aria-label", "Creator gets: " + (st.c ? "payment and product. Activate to empty this slot." : "empty. Activate to restore it."));
+
+    /* the arrows carry the same information as the slots */
+    arrBot.classList.toggle("cut", !st.b);   /* creator gives to brand */
+    arrTop.classList.toggle("cut", !st.c);   /* brand gives to creator */
+
+    /* the status pill: fill, border style, icon and word all move together */
+    pill.className = "pill " + (s.ok ? "stable" : "unstable");
+    pillIco.innerHTML = s.ok ? ICO.tick : ICO.warn;
+    pillTxt.textContent = s.label;
+    statehint.textContent = s.hint;
+    reason.innerHTML = '<span class="sr">Deal state: ' + s.label + '. </span>' + s.reason;
+
+    if (animate && !reduce){
+      pill.classList.remove("knock"); void pill.offsetWidth;
+      if (!s.ok) pill.classList.add("knock");
+      reason.classList.remove("in"); void reason.offsetWidth; reason.classList.add("in");
+    }
+  }
+
+  bGets.addEventListener("click", function(){ st.b = st.b ? 0 : 1; paint(true); });
+  cGets.addEventListener("click", function(){ st.c = st.c ? 0 : 1; paint(true); });
+
+  /* ---------- frames ---------- */
+  function forward(){
+    if (go.disabled) return;
+    f1.style.display="none";
+    f2.style.display="flex";
+    f2.classList.remove("fade"); void f2.offsetWidth; f2.classList.add("fade");
+    paint(false);
+    f2.setAttribute("tabindex","-1"); f2.focus();
+  }
+  function backward(){
+    f2.style.display="none";
+    f1.style.display="flex";
+    f1.classList.remove("fade"); void f1.offsetWidth; f1.classList.add("fade");
+    go.focus();
+  }
+  go.addEventListener("click", forward);
+  back.addEventListener("click", backward);
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape") return;
+    if (f2.style.display === "flex"){ backward(); return; }
+    if (sel){ var id = sel; sel = null; render(); hint.textContent = defaultHint();
+      var c = tray.querySelector('[data-id="'+id+'"]'); if (c) c.focus(); }
+  });
+
+  render();
+  hint.textContent = defaultHint();
+  paint(false);
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage=document.getElementById("stage");
+  function fit(){
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform=""; return; }
+    var s=Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+    stage.style.transform="scale("+s+")";
+  }
+  window.addEventListener("resize", fit); fit();
+})();
+</script>
+</body>
+</html>

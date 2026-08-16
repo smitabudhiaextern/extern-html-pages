@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name your direction</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:520ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* flex:0 0 auto is load-bearing. As a shrinkable flex item, #stage laid out
+     at the viewport width between 600 and 899px and then the JS transform
+     scaled it a second time, so the design was double-shrunk and every line
+     re-wrapped at a width it was never designed for. The canvas must always
+     hold 960 in layout and let the transform do all the fitting. */
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:26px 48px 22px;display:flex;flex-direction:column}
+  #f2,#f3{display:none}
+
+  /* ---- progress, visible from the first paint ---- */
+  .progress{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .ptext{font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--body);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:30px;height:4px;border-radius:2px;background:var(--highlight);
+          transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+
+  h1{font-size:26px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto}
+  .sub{font-size:15.5px;line-height:1.5;max-width:76ch;flex:0 0 auto;margin-top:6px}
+
+  /* ================= FRAME 1: the four-check screen ================= */
+  .fieldwrap{flex:0 0 auto;margin-top:12px}
+  label.fl{display:block;font-size:12.5px;font-weight:600;color:var(--title);margin-bottom:5px}
+  input.tf{
+    font-family:inherit;font-size:16px;color:var(--title);width:100%;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:8px;
+    padding:10px 13px;
+  }
+  input.tf::placeholder{color:var(--body);opacity:.75}
+  input.tf:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  .checks{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:11px}
+  button.row{
+    display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
+    font-family:inherit;cursor:pointer;background:transparent;
+    border:1.5px solid var(--highlight);border-radius:9px;
+    padding:9px 12px;margin-bottom:7px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  button.row:last-child{margin-bottom:0}
+  button.row:hover{border-color:var(--on-highlight)}
+  button.row:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.row[aria-pressed="true"]{background:var(--highlight);border-color:var(--on-highlight)}
+
+  .box{
+    flex:0 0 auto;width:22px;height:22px;border-radius:6px;margin-top:1px;
+    border:2px solid var(--on-highlight);background:var(--bg);
+    display:flex;align-items:center;justify-content:center;
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  button.row[aria-pressed="true"] .box{background:var(--on-highlight)}
+  .box svg{width:14px;height:14px;display:block}
+  /* the check lands: one stroke draw, tied to the state change, no loop */
+  .box svg path{
+    stroke:#FDF8F8;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;fill:none;
+    stroke-dasharray:22;stroke-dashoffset:22;
+  }
+  button.row[aria-pressed="true"] .box svg path{
+    stroke-dashoffset:0;transition:stroke-dashoffset 260ms var(--ease-over) 40ms;
+  }
+  .rtxt{min-width:0}
+  .rq{display:block;font-size:15px;font-weight:600;color:var(--title);line-height:1.35}
+  .rs{display:block;font-size:12.5px;line-height:1.45;margin-top:2px}
+  .rs b{color:var(--on-highlight);font-weight:600}
+
+  .honest{
+    flex:0 0 auto;margin-top:9px;font-size:12.5px;line-height:1.45;
+    display:flex;gap:8px;align-items:flex-start;
+  }
+  .honest .ico{flex:0 0 auto;width:15px;height:15px;margin-top:1px}
+  .honest .ico svg{width:15px;height:15px;display:block}
+  .honest b{color:var(--on-highlight)}
+  .count{font-weight:600;color:var(--on-highlight)}
+
+  /* ================= FRAME 2: pick a slot ================= */
+  .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:16px;flex:0 0 auto}
+  button.slot{
+    font-family:inherit;text-align:left;cursor:pointer;min-width:0;
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:13px 15px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  button.slot .day{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;
+                   text-transform:uppercase;color:var(--on-highlight)}
+  button.slot .time{display:block;font-size:21px;font-weight:600;color:var(--title);margin-top:3px;line-height:1.1}
+  button.slot .len{display:block;font-size:12px;color:var(--body);margin-top:3px}
+  button.slot:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  button.slot:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.slot[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight)}
+  button.slot[aria-pressed="true"] .day,
+  button.slot[aria-pressed="true"] .time,
+  button.slot[aria-pressed="true"] .len{color:var(--bg)}
+
+  .why{flex:0 0 auto;margin-top:14px;font-size:14px;line-height:1.5;max-width:78ch}
+  .why b{color:var(--on-highlight)}
+
+  /* ================= FRAME 3: the echo ================= */
+  .echo{
+    background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:9px;
+    padding:13px 16px;margin-top:14px;flex:0 0 auto;
+    opacity:0;transform:translateY(6px);
+  }
+  .echo.in{opacity:1;transform:none;transition:opacity 320ms var(--ease-io),transform 320ms var(--ease-io)}
+  .echo.d2.in{transition-delay:120ms}
+  .echo .lab{display:block;font-size:11.5px;font-weight:600;letter-spacing:.05em;
+             text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .echo .val{display:block;font-size:18px;line-height:1.4;font-weight:600;color:var(--title)}
+  .echo .val.plain{font-size:15.5px;font-weight:400;color:var(--title)}
+  .echo .meta{display:block;font-size:12.5px;line-height:1.45;margin-top:5px;color:var(--body)}
+
+  .revise{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:13px;font-size:14.5px;line-height:1.55;max-width:80ch}
+  .revise p{margin-bottom:7px}
+  .revise p:last-child{margin-bottom:0}
+  .revise strong{color:var(--title);font-weight:600}
+  .wes{
+    margin-top:10px;padding:10px 13px;border:1.5px solid var(--on-highlight);border-radius:9px;
+    font-size:14.5px;line-height:1.45;color:var(--title);
+  }
+  .wes .who{display:block;font-size:11.5px;font-weight:600;letter-spacing:.04em;
+            text-transform:uppercase;color:var(--on-highlight);margin-bottom:3px}
+
+  /* ---- controls ---- */
+  .bar{margin-top:auto;padding-top:11px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 19px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:13px;padding:8px 13px}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12.5px}
+
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- mobile: stacked portrait, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:20px 16px 26px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    .progress{flex-wrap:wrap;gap:7px}
+    .segs i{width:24px}
+    .checks{overflow:visible;max-height:none}
+    .rq{font-size:16px}
+    .rs{font-size:13px}
+    .slots{grid-template-columns:1fr;gap:9px}
+    button.slot{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:13px}
+    button.slot .time{font-size:19px;margin-top:0}
+    .revise{overflow:visible;max-height:none;font-size:16px}
+    .echo .val{font-size:17px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    button.row:hover,button.slot:hover{transform:none}
+    .echo{opacity:1;transform:none}
+    button.row[aria-pressed="true"] .box svg path{stroke-dashoffset:0}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ==================== FRAME 1: THE FOUR CHECKS ==================== -->
+  <div class="frame fade" id="f1">
+    <div class="progress">
+      <span class="ptext">1 of 3 · Run it past the week</span>
+      <span class="segs" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
+    </div>
+
+    <h1>Before you write it down, run it past four checks.</h1>
+    <p class="sub">
+      Every one of these is something you already have from this week. Nothing here is graded, nothing locks in,
+      and Wes never sees it. It is the same screen you would run at a real desk, on the back of an envelope,
+      before spending anyone's time on an idea.
+    </p>
+
+    <div class="fieldwrap">
+      <label class="fl" for="dir">The kind of partner you are leaning toward. A few words, nothing formal yet.</label>
+      <input class="tf" id="dir" type="text" autocomplete="off" spellcheck="true"
+             placeholder="For example: a partner who pays to keep something current, the AAMC shape">
+    </div>
+
+    <div class="checks" id="checks">
+      <button class="row" data-k="shape" aria-pressed="false">
+        <span class="box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span class="rtxt">
+          <span class="rq">Does it fit a shape Khan Academy has already used?</span>
+          <span class="rs">From <b>Spot the Shape</b>. Pay to keep something current, capability instead of cash, sponsor a whole course, or co-create with the partner's own IP.</span>
+        </span>
+      </button>
+
+      <button class="row" data-k="rails" aria-pressed="false">
+        <span class="box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span class="rtxt">
+          <span class="rq">Does it clear the rails?</span>
+          <span class="rs">From <b>Reverse-Engineer the Rails</b>. No competing assessment, not a district sale, not higher ed, not rebuilt inside somebody else's platform, and nobody ends up owning the asset but Khan Academy.</span>
+        </span>
+      </button>
+
+      <button class="row" data-k="size" aria-pressed="false">
+        <span class="box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span class="rtxt">
+          <span class="rq">Could it plausibly clear Wes's size bar?</span>
+          <span class="rs">His own rule of thumb, from the same task, not a Khan Academy threshold: he does not take anything under about $250K a year to Sarah. Plausibly is the word doing the work. You do not have a number yet, and you are not expected to.</span>
+        </span>
+      </button>
+
+      <button class="row" data-k="you" aria-pressed="false">
+        <span class="box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span class="rtxt">
+          <span class="rq">Would it actually hold your interest for three weeks?</span>
+          <span class="rs">The only check that is not about Khan Academy at all. You start living with this in Project 3. Three weeks is long enough for a bored choice to become obvious.</span>
+        </span>
+      </button>
+    </div>
+
+    <p class="honest">
+      <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg></span>
+      <span id="honest1">
+        <b>A check you cannot tick is the useful one.</b> It is not a fail. It is the sentence you should be writing next.
+      </span>
+    </p>
+
+    <div class="bar">
+      <button class="nav" id="go1">Continue</button>
+      <span class="hint" id="hint1">Tick what holds. Leave what does not.</span>
+    </div>
+  </div>
+
+  <!-- ==================== FRAME 2: PICK A SLOT ==================== -->
+  <div class="frame" id="f2">
+    <div class="progress">
+      <span class="ptext">2 of 3 · Pick your slot</span>
+      <span class="segs" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span>
+    </div>
+
+    <h1>When exactly are you starting Project 2?</h1>
+    <p class="sub">A day and a time, not "next week." Pick the one you would actually keep.</p>
+
+    <div class="slots" id="slots" role="group" aria-label="Pick a slot to start Project 2">
+      <button class="slot" data-s="Monday, 7:00 PM" aria-pressed="false">
+        <span class="day">Monday</span><span class="time">7:00 PM</span><span class="len">After the day is done</span>
+      </button>
+      <button class="slot" data-s="Tuesday, 8:00 AM" aria-pressed="false">
+        <span class="day">Tuesday</span><span class="time">8:00 AM</span><span class="len">Before anything else lands</span>
+      </button>
+      <button class="slot" data-s="Tuesday, 6:30 PM" aria-pressed="false">
+        <span class="day">Tuesday</span><span class="time">6:30 PM</span><span class="len">Straight after work</span>
+      </button>
+      <button class="slot" data-s="Wednesday, 7:30 AM" aria-pressed="false">
+        <span class="day">Wednesday</span><span class="time">7:30 AM</span><span class="len">Early, while it is quiet</span>
+      </button>
+      <button class="slot" data-s="Saturday, 10:00 AM" aria-pressed="false">
+        <span class="day">Saturday</span><span class="time">10:00 AM</span><span class="len">A clear morning</span>
+      </button>
+      <button class="slot" data-s="Sunday, 4:00 PM" aria-pressed="false">
+        <span class="day">Sunday</span><span class="time">4:00 PM</span><span class="len">Ahead of the week</span>
+      </button>
+    </div>
+
+    <p class="why">
+      <b>Why the specific time matters.</b> "Sometime next week" and "Tuesday, 8:00 AM" are not the same commitment,
+      and the gap between them is most of whether this gets opened at all. Naming the moment is what makes it
+      something you notice yourself skipping.
+    </p>
+
+    <div class="bar">
+      <button class="nav ghost small" id="back2">Back</button>
+      <button class="nav" id="go2" disabled>Lock it in</button>
+      <span class="hint" id="hint2">Pick a slot to continue.</span>
+    </div>
+  </div>
+
+  <!-- ==================== FRAME 3: THE ECHO ==================== -->
+  <div class="frame" id="f3">
+    <div class="progress">
+      <span class="ptext">3 of 3 · Locked in</span>
+      <span class="segs" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+    </div>
+
+    <h1>That is the week.</h1>
+
+    <div class="echo" id="e1">
+      <span class="lab">Your direction, in your words</span>
+      <span class="val plain" id="outDir"></span>
+      <span class="meta" id="outChecks"></span>
+    </div>
+
+    <div class="echo d2" id="e2">
+      <span class="lab">Project 2 starts</span>
+      <span class="val" id="outSlot"></span>
+      <span class="meta" id="outSlotMeta"></span>
+    </div>
+
+    <div class="revise" id="revise">
+      <p>
+        <strong>Week four you will open this again.</strong> Most people have changed their mind at least once by then,
+        and a few change it twice. That is the job working, not you failing. A direction you were willing to write down
+        is what makes it possible to notice you were wrong, which is more than an idea you kept vague can do.
+      </p>
+      <div class="wes">
+        <span class="who">Wes, Slack</span>
+        "Monday I'll show you what I told Kian. Bring your read."
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="back3">Change my answers</button>
+      <span class="hint">Both answers are saved here. Come back to them whenever.</span>
+    </div>
+  </div>
+
+</div>
+
+<noscript>
+  <div style="max-width:700px;padding:28px;font-size:16px;line-height:1.55;color:#484646">
+    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:10px">Before you write it down, run it past four checks.</h1>
+    <p style="margin-bottom:14px">Write down the kind of partner you are leaning toward, a few words, then run it past these four. Nothing here is graded and Wes never sees it.</p>
+    <ol style="margin:0 0 16px 20px">
+      <li style="margin-bottom:7px"><strong>Does it fit a shape Khan Academy has already used?</strong> From <em>Spot the Shape</em>: pay to keep something current, capability instead of cash, sponsor a whole course, or co-create with the partner's own IP.</li>
+      <li style="margin-bottom:7px"><strong>Does it clear the rails?</strong> From <em>Reverse-Engineer the Rails</em>: no competing assessment, not a district sale, not higher ed, not rebuilt inside somebody else's platform, and nobody ends up owning the asset but Khan Academy.</li>
+      <li style="margin-bottom:7px"><strong>Could it plausibly clear Wes's size bar?</strong> His own rule of thumb, not a Khan Academy threshold: nothing under about $250K a year goes to Sarah. "Plausibly" is the word doing the work.</li>
+      <li><strong>Would it actually hold your interest for three weeks?</strong> The only check that is not about Khan Academy at all.</li>
+    </ol>
+    <p style="margin-bottom:14px">A check you cannot tick is the useful one. It is not a fail, it is the sentence you should write next.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:6px">Then pick your slot</h2>
+    <p style="margin-bottom:8px">Name the day and the time you will start Project 2. A day and a time, not "next week." For example: Monday 7:00 PM, Tuesday 8:00 AM, Tuesday 6:30 PM, Wednesday 7:30 AM, Saturday 10:00 AM, or Sunday 4:00 PM. Write it somewhere you will see it.</p>
+    <p style="margin-bottom:14px">"Sometime next week" and "Tuesday, 8:00 AM" are not the same commitment, and the gap between them is most of whether this gets opened at all.</p>
+
+    <p><strong>Week four you will open this again.</strong> Most people have changed their mind at least once by then. That is the job working, not you failing.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- failure-tolerant store. The commitment and the direction are
+       meant to be findable again, so they are echoed back verbatim. ---------- */
+  var KEY = "ka-p1-direction-v1";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+
+  var state = load();
+  state.checks = state.checks || {};
+  if(typeof state.dir !== "string") state.dir = "";
+  if(typeof state.slot !== "string") state.slot = "";
+
+  var LABELS = {
+    shape:"fits a shape Khan Academy has already used",
+    rails:"clears the rails",
+    size:"could plausibly clear the size bar",
+    you:"would hold your interest for three weeks"
+  };
+
+  var dir = document.getElementById("dir"),
+      rows = Array.prototype.slice.call(document.querySelectorAll("button.row")),
+      honest1 = document.getElementById("honest1"),
+      hint1 = document.getElementById("hint1");
+
+  /* ---- frame 1 ---- */
+  dir.value = state.dir;
+  dir.addEventListener("input", function(){ state.dir = dir.value; save(state); });
+
+  function checkedKeys(){
+    return Object.keys(LABELS).filter(function(k){ return state.checks[k]; });
+  }
+
+  function updateHonest(){
+    var n = checkedKeys().length;
+    if(n === 4){
+      honest1.innerHTML = '<b>Four for four.</b> That is a direction worth three weeks, and it is still yours to change.';
+    }else if(n === 0){
+      honest1.innerHTML = '<b>A check you cannot tick is the useful one.</b> It is not a fail. It is the sentence you should be writing next.';
+    }else{
+      honest1.innerHTML = '<span class="count">' + n + ' of 4 hold.</span> The ones you left are the useful ones. They are not fails, they are what you go and find out next.';
+    }
+  }
+
+  rows.forEach(function(b, i){
+    var k = b.getAttribute("data-k");
+    if(state.checks[k]) b.setAttribute("aria-pressed","true");
+    b.addEventListener("click", function(){
+      var on = b.getAttribute("aria-pressed") === "true";
+      b.setAttribute("aria-pressed", on ? "false" : "true");
+      state.checks[k] = !on; save(state);
+      updateHonest();
+    });
+    b.addEventListener("keydown", function(e){
+      var n = null;
+      if(e.key === "ArrowDown") n = rows[(i+1) % rows.length];
+      if(e.key === "ArrowUp")   n = rows[(i-1+rows.length) % rows.length];
+      if(n){ e.preventDefault(); n.focus(); }
+    });
+  });
+  updateHonest();
+
+  /* ---- frame 2 ---- */
+  var slots = Array.prototype.slice.call(document.querySelectorAll("button.slot")),
+      go2 = document.getElementById("go2"),
+      hint2 = document.getElementById("hint2");
+
+  function selectSlot(btn){
+    slots.forEach(function(s){ s.setAttribute("aria-pressed", s === btn ? "true" : "false"); });
+    state.slot = btn.getAttribute("data-s"); save(state);
+    go2.disabled = false;
+    hint2.textContent = "";
+  }
+
+  slots.forEach(function(s, i){
+    if(state.slot && s.getAttribute("data-s") === state.slot){
+      s.setAttribute("aria-pressed","true"); go2.disabled = false;
+    }
+    s.addEventListener("click", function(){ selectSlot(s); });
+    s.addEventListener("keydown", function(e){
+      var n = null;
+      if(e.key === "ArrowRight" || e.key === "ArrowDown") n = slots[(i+1) % slots.length];
+      if(e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = slots[(i-1+slots.length) % slots.length];
+      if(n){ e.preventDefault(); n.focus(); }
+    });
+  });
+
+  /* ---- frame 3: echo both back, verbatim ---- */
+  var outDir = document.getElementById("outDir"),
+      outChecks = document.getElementById("outChecks"),
+      outSlot = document.getElementById("outSlot"),
+      outSlotMeta = document.getElementById("outSlotMeta"),
+      e1 = document.getElementById("e1"), e2 = document.getElementById("e2");
+
+  function drawEcho(){
+    var d = (state.dir || "").trim();
+    if(d){
+      /* verbatim, and textContent so nothing they typed is ever parsed */
+      outDir.textContent = "“" + d + "”";
+    }else{
+      outDir.textContent = "You left this blank. That is allowed, and it is worth two minutes before you close the tab: the next step asks for it in full sentences anyway.";
+    }
+
+    var on = checkedKeys(), off = Object.keys(LABELS).filter(function(k){ return !state.checks[k]; });
+    if(on.length === 4){
+      outChecks.textContent = "All four checks held.";
+    }else if(on.length === 0){
+      outChecks.textContent = "You ticked none of the four. Worth knowing which one is the sticking point before Project 3.";
+    }else{
+      outChecks.textContent = on.length + " of 4 checks held. Still open: " +
+        off.map(function(k){ return LABELS[k]; }).join("; ") + ".";
+    }
+
+    outSlot.textContent = state.slot || "No slot picked yet.";
+    outSlotMeta.textContent = state.slot
+      ? "You picked it, so you will know if you skip it. That is the whole point of naming a time."
+      : "Go back and pick one. A named time is what makes a skipped session visible.";
+
+    if(reduce){
+      e1.classList.add("in"); e2.classList.add("in");
+    }else{
+      e1.classList.remove("in"); e2.classList.remove("in");
+      void e1.offsetWidth;
+      requestAnimationFrame(function(){ e1.classList.add("in"); e2.classList.add("in"); });
+    }
+  }
+
+  /* ---- frame plumbing ---- */
+  var f1 = document.getElementById("f1"), f2 = document.getElementById("f2"), f3 = document.getElementById("f3");
+  var frames = [f1, f2, f3], current = f1;
+
+  function show(el){
+    frames.forEach(function(f){ f.style.display = (f === el) ? "flex" : "none"; });
+    el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+    el.setAttribute("tabindex","-1"); el.focus();
+    current = el;
+  }
+
+  document.getElementById("go1").addEventListener("click", function(){ show(f2); });
+  document.getElementById("back2").addEventListener("click", function(){ show(f1); dir.focus(); });
+  go2.addEventListener("click", function(){ if(!state.slot) return; drawEcho(); show(f3); });
+  document.getElementById("back3").addEventListener("click", function(){ show(f1); dir.focus(); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && current !== f1 && document.activeElement !== dir){ show(f1); }
+  });
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit); fit();
+})();
+</script>
+</body>
+</html>

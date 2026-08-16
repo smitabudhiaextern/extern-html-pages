@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which envelope can pay for this?</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Tints of --highlight are the only second
+     values used, and no state is signalled by colour alone.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+    --tint:#EDF0FF;         /* tint of --highlight, empty drop area   */
+    --edge:rgba(0,29,105,.24); /* --on-highlight at low alpha, dashed edges */
+
+    --t-fast:160ms;   /* UI feedback            */
+    --t-frame:300ms;  /* between-frame movement */
+    --t-reveal:620ms; /* value reveal           */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06); /* slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto matters. As a shrinkable flex item the stage
+     collapses to the viewport width between 600 and 899px, so the
+     canvas narrows AND the transform scales it again, which crushes
+     the columns. The canvas holds 960 in layout; the transform does
+     all the fitting. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:20px 40px 18px;display:flex;flex-direction:column}
+  /* the frame is focused on entry so a screen reader lands in the new
+     content. It is not a control, so it must not paint a focus ring. */
+  .frame:focus,.frame:focus-visible{outline:none}
+  #f2{display:none}
+
+  .head{flex:0 0 auto;display:flex;align-items:baseline;gap:14px;margin-bottom:5px}
+  .progress{font-size:13px;font-weight:600;color:var(--body);letter-spacing:.02em}
+  .count{font-size:13px;font-weight:500;color:var(--on-highlight);letter-spacing:.02em}
+
+  h1{font-size:23px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:5px;flex:0 0 auto}
+  .sub{font-size:14px;line-height:1.45;max-width:96ch;flex:0 0 auto}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- the two envelopes ---- */
+  .envs{margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:0 0 auto}
+  .env{
+    background:var(--highlight);border:2px solid var(--highlight);border-radius:12px;
+    padding:10px 13px 11px;min-width:0;cursor:default;
+    transition:border-color var(--t-fast) var(--ease-out),
+               background var(--t-fast) var(--ease-out);
+  }
+  .env.armed{cursor:pointer}
+  .env.armed:hover,.env.over{border-color:var(--on-highlight)}
+  .ehead{display:flex;align-items:center;gap:8px}
+  .ehead .ico{flex:0 0 auto;width:19px;height:19px}
+  .ehead .ico svg{width:19px;height:19px;display:block}
+  .ehead .t{flex:1 1 auto;min-width:0;font-size:15px;font-weight:600;color:var(--title);line-height:1.2}
+  .erule{font-size:11.5px;line-height:1.35;color:var(--body);margin-top:3px;padding-left:27px}
+  .place{
+    flex:0 0 auto;font-family:inherit;font-size:11.5px;font-weight:600;
+    color:var(--on-highlight);background:transparent;
+    border:2px solid var(--on-highlight);border-radius:7px;padding:5px 8px;cursor:pointer;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  .place:hover:not(:disabled){background:var(--on-highlight);color:var(--bg)}
+  .place:disabled{opacity:.3;cursor:not-allowed}
+  .place:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* fixed height, three columns. Five chips is the worst case and it
+     fits in two rows, so the layout never moves as costs land. */
+  .drop{
+    margin-top:8px;height:70px;border-radius:8px;overflow:hidden;
+    background:var(--tint);border:2px dashed var(--edge);
+    padding:6px;display:grid;grid-template-columns:repeat(3,1fr);
+    gap:5px;align-content:start;
+  }
+  .env.over .drop{border-color:var(--on-highlight)}
+  .drop .empty{
+    grid-column:1 / -1;font-size:11.5px;line-height:1.35;color:var(--body);
+    padding:6px 4px;
+  }
+
+  /* a chip is a placed cost, and it settles into the envelope */
+  .chip{
+    font-family:inherit;text-align:left;min-width:0;
+    background:var(--bg);border:2px solid var(--on-highlight);border-radius:6px;
+    padding:3px 4px;font-size:10.5px;font-weight:600;color:var(--title);
+    display:flex;align-items:center;gap:4px;cursor:pointer;line-height:1.3;
+    animation:settle 300ms var(--ease-over) both;
+  }
+  .chip .mk{flex:0 0 auto;width:12px;height:12px;display:none}
+  .chip .mk svg{width:12px;height:12px;display:block}
+  /* one line per chip. Wrapping here would push the last chip past the
+     fixed drop height and clip it, which is the bug this prevents. */
+  .chip .lb{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .chip.ok{border-style:solid}
+  .chip.ok .mk.ck{display:block}
+  .chip.bad{border-style:dashed}
+  .chip.bad .mk.qm{display:block}
+  .chip.bad{animation:shake 150ms linear 1}
+  @keyframes settle{from{opacity:0;transform:translateY(-7px) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}100%{transform:translateX(0)}}
+
+  /* ---- the tray of costs. Fixed height so removing a card does not
+          move the feedback line or the controls. ---- */
+  .tray{margin-top:8px;height:118px;display:grid;grid-template-columns:repeat(5,1fr);gap:9px;flex:0 0 auto}
+  .card{
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:8px 9px;min-width:0;text-align:left;font-family:inherit;cursor:grab;
+    display:flex;flex-direction:column;gap:4px;
+    transition:background var(--t-fast) var(--ease-out),
+               border-color var(--t-fast) var(--ease-out),
+               transform var(--t-fast) var(--ease-out);
+  }
+  .card .ico{width:17px;height:17px}
+  .card .ico svg{width:17px;height:17px;display:block}
+  .card .sl{font-size:11px;font-weight:700;color:var(--on-highlight);letter-spacing:.02em;line-height:1.2}
+  .card .fl{font-size:11.5px;line-height:1.32;color:var(--title);font-weight:500;overflow-wrap:break-word}
+  .card:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
+  .card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .card[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight)}
+  .card[aria-pressed="true"] .sl{color:var(--bg)}
+  .card[aria-pressed="true"] .fl{color:var(--bg)}
+  .card[aria-pressed="true"] .ico svg{stroke:var(--bg)}
+  .card.gone{display:none}
+  .trayempty{
+    grid-column:1 / -1;font-size:12.5px;line-height:1.4;color:var(--body);
+    padding:8px 0;
+  }
+
+  /* ---- feedback, always the same height so nothing jumps ---- */
+  .fb{
+    margin-top:12px;flex:0 0 auto;height:56px;overflow:hidden;
+    display:flex;align-items:flex-start;gap:8px;
+    font-size:13px;line-height:1.38;
+  }
+  .fb .ico{flex:0 0 auto;width:17px;height:17px;margin-top:1px}
+  .fb .ico svg{width:17px;height:17px;display:block}
+  .fb .tx{max-width:88ch}
+  .fb .tx b{color:var(--title);font-weight:600;display:block;margin-bottom:2px}
+
+  /* ---- controls ---- */
+  .bar{margin-top:auto;padding-top:8px;flex:0 0 auto;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 18px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12.5px;line-height:1.35;max-width:56ch}
+
+  /* ---- Frame 2: the payoff ---- */
+  /* the paddings and margins through this frame are tuned so the whole
+     payoff, including the closing line and the ask, clears 540 with the
+     cost name and its explanation on separate lines. Loosening any of
+     them clips the Back button, which has happened twice on this project. */
+  .pay{
+    margin-top:9px;background:var(--highlight);border-radius:12px;
+    padding:10px 13px;flex:0 0 auto;
+  }
+  .pay .ph{
+    font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:7px;
+  }
+  .prow{
+    display:flex;align-items:flex-start;gap:10px;
+    background:var(--bg);border-left:4px solid var(--on-highlight);border-radius:8px;
+    padding:8px 11px;margin-bottom:7px;
+    opacity:0;transform:translateY(10px) scale(.985);
+  }
+  .prow:last-child{margin-bottom:0}
+  /* the stagger is a transition delay, not a chained timer. A timer
+     that has not fired yet leaves the second cost invisible, which is
+     exactly the information this reveal exists to carry. */
+  .prow.in{opacity:1;transform:none;transition:opacity var(--t-reveal) var(--ease-over),transform var(--t-reveal) var(--ease-over)}
+  #pr2.in{transition-delay:130ms}
+  .prow .ico{flex:0 0 auto;width:20px;height:20px;margin-top:2px}
+  .prow .ico svg{width:20px;height:20px;display:block}
+  /* both of these must be block. As inline spans the cost name ran
+     straight into its explanation with no line break and no punctuation
+     between them, so the row read as one run-on sentence. The margin-top
+     below is inert on an inline box, which is what gave the bug away. */
+  .prow .t{display:block;font-size:14.5px;font-weight:600;color:var(--title);line-height:1.3}
+  .prow .w{display:block;font-size:13px;line-height:1.4;color:var(--body);margin-top:3px}
+  .close{margin-top:9px;font-size:14.5px;line-height:1.45;max-width:82ch;color:var(--body);opacity:0}
+  .close.in{opacity:1;transition:opacity 320ms var(--ease-io) 520ms}
+  .close strong{color:var(--title);font-weight:600}
+  .src{font-size:12px;line-height:1.4;margin-top:7px}
+  .ask{
+    margin-top:9px;font-size:13.5px;line-height:1.45;max-width:88ch;
+    border-left:3px solid var(--on-highlight);padding-left:11px;
+  }
+  .ask strong{color:var(--title);font-weight:600}
+
+  /* ---- frame transition ---- */
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- mobile: portrait, restacked, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item, #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the tray off screen and clips the controls.
+       Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:22px 18px 30px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    .envs{grid-template-columns:1fr;gap:12px}
+    .erule{font-size:13.5px;padding-left:0}
+    /* the desktop fixed heights exist to stop the slide reflowing.
+       On a stacked portrait layout the page scrolls, so they go back
+       to content height and nothing is clipped. */
+    .drop{grid-template-columns:1fr;height:auto;min-height:52px;overflow:visible}
+    .chip{font-size:14px;padding:8px 10px;line-height:1.35}
+    .chip .mk,.chip .mk svg{width:16px;height:16px}
+    .tray{grid-template-columns:1fr;gap:9px;height:auto}
+    .card{flex-direction:column;padding:13px;gap:6px}
+    .card .ico,.card .ico svg{width:20px;height:20px}
+    .card .sl{font-size:13px}
+    .card .fl{font-size:15px;line-height:1.4}
+    .fb{font-size:15px;height:auto;overflow:visible}
+    .hint{font-size:14px}
+    .prow .t{font-size:16px}
+    .prow .w{font-size:14.5px}
+    .close{font-size:16px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .card:hover{transform:none}
+    .prow{opacity:1;transform:none}
+    .close{opacity:1}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ================= FRAME 1 : the sort ================= -->
+  <div class="frame fade" id="f1">
+    <div class="head">
+      <span class="progress">1 of 2</span>
+      <span class="count" id="count">0 of 5 costs placed</span>
+    </div>
+
+    <h1>Which envelope can actually pay for this?</h1>
+    <p class="sub">
+      Same money in both envelopes, and only one of them has rules attached.
+      <b>If the grant is allowed to cover a cost, the grant covers it,</b> because the earned money already has other jobs waiting.
+    </p>
+
+    <!-- the two envelopes -->
+    <div class="envs">
+      <div class="env" id="envR" data-env="R">
+        <div class="ehead">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span>
+          <span class="t">Restricted grant, $5 million</span>
+          <button class="place" id="placeR" disabled>Place here</button>
+        </div>
+        <p class="erule">Spendable on one new AP Physics course and nothing else. Illustrative example, not a real Khan Academy grant.</p>
+        <div class="drop" id="dropR"><p class="empty" id="emptyR">Costs the grant is allowed to pay for go here.</p></div>
+      </div>
+
+      <div class="env" id="envU" data-env="U">
+        <div class="ehead">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 6.8-1.1"/></svg></span>
+          <span class="t">Earned money, unrestricted</span>
+          <button class="place" id="placeU" disabled>Place here</button>
+        </div>
+        <p class="erule">Money Khan Academy earned. Nobody told it what this has to be spent on, so it can pay for anything.</p>
+        <div class="drop" id="dropU"><p class="empty" id="emptyU">Costs no grant will cover go here.</p></div>
+      </div>
+    </div>
+
+    <!-- the five costs -->
+    <div class="tray" id="tray" aria-label="Five costs to sort">
+      <p class="trayempty" id="trayempty" hidden>All five placed. Check them when you are ready.</p>
+    </div>
+
+    <div class="fb" id="fb" aria-live="polite"></div>
+
+    <div class="bar">
+      <button class="nav" id="check" disabled>Check placements</button>
+      <button class="nav" id="go" disabled>Continue</button>
+      <span class="hint" id="hint">Drag a cost into an envelope, or tap it and then tap an envelope. Keyboard: Enter to pick up, arrows to choose the envelope, Enter to place.</span>
+    </div>
+  </div>
+
+  <!-- ================= FRAME 2 : the payoff ================= -->
+  <div class="frame" id="f2">
+    <div class="head"><span class="progress">2 of 2</span></div>
+    <h1>Two of those five had only one envelope.</h1>
+
+    <div class="pay">
+      <p class="ph">Only unrestricted money can pay for these</p>
+      <div class="prow" id="pr1">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg></span>
+        <span>
+          <span class="t">The security engineer who protects every student account</span>
+          <span class="w">The grant funds one physics course. Account security covers every subject on the platform, and the roof does not stop leaking because a grant is specific.</span>
+        </span>
+      </div>
+      <div class="prow" id="pr2">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/></svg></span>
+        <span>
+          <span class="t">The salaries of the strategic-partnerships team</span>
+          <span class="w">No donor writes a check for the team whose job is finding the next donor. This cost has to pay for itself out of what the team brings in.</span>
+        </span>
+      </div>
+    </div>
+
+    <p class="close" id="close">
+      The other three were the work the grant was written for: the videos, the fact-check, the Spanish version.
+      A restricted grant can do those and nothing else.
+      <strong>Unrestricted money is the only money that can pay for whatever breaks next, and that is why a fifth of the revenue gets a whole team built around it.</strong>
+    </p>
+
+    <p class="src">The $5 million physics grant in this exercise is a stand-in for illustration, not a real Khan Academy grant.</p>
+
+    <p class="ask"><strong>Carrying it forward:</strong> the ask underneath this wants those two costs named, and what having to cover them tells you about why this team exists.</p>
+
+    <div class="bar">
+      <button class="nav ghost" id="back">Back to the sort</button>
+    </div>
+  </div>
+
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the main stylesheet and lets it win on source order. An
+       override placed before the main sheet loses and the fallback silently
+       fails. Three things must happen here, and all three were broken:
+       the dead interactive shell has to be hidden, the flex-centred body
+       has to go back to block flow (otherwise this text is laid out as a
+       narrow column beside the 960px canvas and pushed off the right edge,
+       with the sideways scrolling the style guide bans), and links have to
+       be pinned to the palette so the browser default blue never shows up
+       as a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 44px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:24px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Which envelope can actually pay for this?</h1>
+    <p style="margin-bottom:12px">Two envelopes hold the same amount of money. One is a restricted grant of $5 million, for one new AP Physics course only, and this grant is a stand-in for illustration, not a real Khan Academy grant. The other is earned money, unrestricted, with nobody dictating what it pays for. Five real costs, and the rule is that if the grant is allowed to cover a cost, the grant covers it, because unrestricted money already has other jobs waiting.</p>
+    <p style="margin-bottom:6px"><strong>The restricted grant can pay for:</strong></p>
+    <ul style="margin:0 0 12px 22px">
+      <li>Animating and recording the new AP Physics videos the grant was written for</li>
+      <li>A subject-matter reviewer fact-checking those physics lessons before they publish</li>
+      <li>Translating the finished physics course into Spanish</li>
+    </ul>
+    <p style="margin-bottom:6px"><strong>Only the unrestricted, earned money can pay for:</strong></p>
+    <ul style="margin:0 0 12px 22px">
+      <li>The security engineer who protects every student account on the platform, physics course or not</li>
+      <li>The salaries of the strategic-partnerships team, the people whose whole job is finding the next deal</li>
+    </ul>
+    <p>Those last two are the lesson. A grant restricted to a physics course cannot pay for platform-wide security or for a team that has nothing to do with physics, no matter how badly either is needed. <strong>Unrestricted money is the only money that can pay for whatever breaks next, and that is why a fifth of the revenue gets a whole team built around it.</strong></p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Phosphor-manner outline icons, single weight, one size. */
+  var ICO = {
+    video:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 11l5-3v8l-5-3z"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/><path d="M8.3 11l2 2 3.4-3.4"/></svg>',
+    translate:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h9M8.5 6.5V8c0 3.4-1.9 6-4.5 7.2"/><path d="M6.2 11.6c1.3 2.3 3.4 3.5 5.3 4"/><path d="M13 20.5l3.7-9 3.6 9M14.6 17.6h4.4"/></svg>',
+    shield:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/></svg>',
+    tick:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+    quest:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 1 1 2.7 3.1v1.2M12.1 17.1h.01"/></svg>',
+    info:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.8h.01"/></svg>'
+  };
+
+  /* The five costs. `env` is the envelope that should cover it.
+     `q` is the distinguishing question returned on a wrong placement,
+     never a bare "incorrect". */
+  var ITEMS = [
+    { id:"videos", ico:"video", short:"Physics videos",
+      full:"Animating and recording the new AP Physics videos the grant was written for.",
+      env:"R",
+      q:"This is the exact work the $5 million was given for. Could the grant legally pay to animate its own course's videos? If it can, it should." },
+
+    { id:"review", ico:"check", short:"Fact-check",
+      full:"A reviewer fact-checking those physics lessons before they publish.",
+      env:"R",
+      q:"Fact-checking these lessons is part of publishing the course the grant paid for. What in the grant's stated purpose rules it out?" },
+
+    { id:"spanish", ico:"translate", short:"Spanish version",
+      full:"Translating the finished physics course into Spanish so more students can use it.",
+      env:"R",
+      q:"A Spanish version of the funded course is still that same course, reaching more students. What in the grant's purpose rules it out?" },
+
+    { id:"security", ico:"shield", short:"Security engineer",
+      full:"The security engineer protecting every student account on the platform, physics or not.",
+      env:"U",
+      q:"The grant pays for one AP Physics course. Does protecting every student account, in every subject on the platform, happen inside that one course?" },
+
+    { id:"team", ico:"users", short:"Partnerships team",
+      full:"Salaries for the partnerships team, whose whole job is finding the next deal.",
+      env:"U",
+      q:"The grant's purpose is one AP Physics course. Which part of that course does a partnerships manager's salary actually build?" }
+  ];
+
+  var byId = {};
+  ITEMS.forEach(function(it){ byId[it.id] = it; });
+
+  var place = {};   /* id -> "R" | "U" | undefined */
+  var mark  = {};   /* id -> "ok" | "bad" | undefined, set only on check */
+  var sel   = null; /* currently picked-up id */
+  var solved = false;
+
+  var f1=document.getElementById("f1"), f2=document.getElementById("f2"),
+      tray=document.getElementById("tray"), trayempty=document.getElementById("trayempty"),
+      dropR=document.getElementById("dropR"), dropU=document.getElementById("dropU"),
+      emptyR=document.getElementById("emptyR"), emptyU=document.getElementById("emptyU"),
+      envR=document.getElementById("envR"), envU=document.getElementById("envU"),
+      placeR=document.getElementById("placeR"), placeU=document.getElementById("placeU"),
+      check=document.getElementById("check"), go=document.getElementById("go"),
+      hint=document.getElementById("hint"), fb=document.getElementById("fb"),
+      count=document.getElementById("count"), back=document.getElementById("back");
+
+  var ENV = { R:{el:envR, drop:dropR, empty:emptyR, btn:placeR, name:"the restricted grant"},
+              U:{el:envU, drop:dropU, empty:emptyU, btn:placeU, name:"the unrestricted earned money"} };
+
+  /* ---------- rendering ---------- */
+
+  function cardEl(it){
+    var b = document.createElement("div");
+    b.className = "card";
+    b.setAttribute("role","button");
+    b.setAttribute("tabindex","0");
+    b.setAttribute("draggable","true");
+    b.setAttribute("aria-pressed","false");
+    b.setAttribute("data-id", it.id);
+    b.setAttribute("aria-label", it.full + ". Press Enter to pick this up.");
+    b.innerHTML = '<span class="ico">'+ICO[it.ico]+'</span>'+
+                  '<span class="sl">'+it.short+'</span>'+
+                  '<span class="fl">'+it.full+'</span>';
+    return b;
+  }
+
+  function chipEl(it){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (mark[it.id] ? " " + mark[it.id] : "");
+    b.setAttribute("data-id", it.id);
+    b.setAttribute("aria-label",
+      it.full + " Placed in " + ENV[place[it.id]].name + "." +
+      (mark[it.id]==="ok" ? " Marked correct." : mark[it.id]==="bad" ? " Needs another look." : "") +
+      " Press Enter to take it back out.");
+    b.innerHTML = '<span class="mk ck">'+ICO.tick+'</span>'+
+                  '<span class="mk qm">'+ICO.quest+'</span>'+
+                  '<span class="lb">'+it.short+'</span>';
+    b.addEventListener("click", function(){ takeBack(it.id); });
+    return b;
+  }
+
+  function render(){
+    /* tray */
+    Array.prototype.slice.call(tray.querySelectorAll(".card")).forEach(function(n){ n.remove(); });
+    var loose = ITEMS.filter(function(it){ return !place[it.id]; });
+    loose.forEach(function(it){
+      var el = cardEl(it);
+      if (sel === it.id) el.setAttribute("aria-pressed","true");
+      wireCard(el, it);
+      tray.appendChild(el);
+    });
+    trayempty.hidden = loose.length > 0;
+
+    /* envelopes */
+    ["R","U"].forEach(function(k){
+      var d = ENV[k].drop;
+      Array.prototype.slice.call(d.querySelectorAll(".chip")).forEach(function(n){ n.remove(); });
+      var inside = ITEMS.filter(function(it){ return place[it.id] === k; });
+      inside.forEach(function(it){ d.appendChild(chipEl(it)); });
+      ENV[k].empty.hidden = inside.length > 0;
+    });
+
+    var n = ITEMS.length - loose.length;
+    count.textContent = n + " of 5 costs placed";
+    check.disabled = (n < 5) || solved;
+    go.disabled = !solved;
+
+    var armed = sel !== null;
+    placeR.disabled = !armed; placeU.disabled = !armed;
+    envR.classList.toggle("armed", armed); envU.classList.toggle("armed", armed);
+  }
+
+  /* ---------- picking up and placing ---------- */
+
+  /* The card keydown handler calls preventDefault before moving focus to
+     a Place here button, and that call is load bearing. Without it the
+     keypress belonging to the same Enter would land on the button focus
+     just moved to, Chrome would treat it as an activation, and one
+     keystroke would both pick a cost up and drop it in the left envelope.
+     Verified with real Chrome key events: with the preventDefault in
+     place, one Enter picks up and stops. Do not remove it. */
+
+  function pick(id){
+    sel = (sel === id) ? null : id;
+    render();
+    if (sel){
+      hint.textContent = "Picked up: " + byId[sel].short +
+        ". Left and Right arrows move between the two Place here buttons, Enter places it, Escape puts it down.";
+      placeR.focus();
+    } else {
+      hint.textContent = defaultHint();
+    }
+  }
+
+  /* render() disables both Place here buttons once nothing is held, and
+     disabling the focused button drops focus to the document. A keyboard
+     user then loses their place entirely, and focus can land on a chip
+     where Enter silently takes the cost back out again. So put focus
+     somewhere deliberate, but only when it was actually lost, which
+     leaves a mouse or a drag placement alone. */
+  function keepFocus(){
+    var a = document.activeElement;
+    if (a && a !== document.body && a !== document.documentElement && !a.disabled) return;
+    var nextCard = tray.querySelector(".card");
+    if (nextCard){ nextCard.focus(); return; }
+    if (!check.disabled){ check.focus(); return; }
+    if (!go.disabled){ go.focus(); }
+  }
+
+  function put(id, k){
+    place[id] = k;
+    delete mark[id];
+    sel = null;
+    solved = false;
+    render();
+    setFb(null);
+    hint.textContent = defaultHint();
+    keepFocus();
+  }
+
+  function takeBack(id){
+    delete place[id];
+    delete mark[id];
+    solved = false;
+    render();
+    setFb(null);
+    hint.textContent = defaultHint();
+    var again = tray.querySelector('[data-id="'+id+'"]');
+    if (again) again.focus();
+  }
+
+  function defaultHint(){
+    var n = ITEMS.filter(function(it){ return place[it.id]; }).length;
+    if (n < 5) return "Drag a cost into an envelope, or tap it and then tap an envelope. Keyboard: Enter to pick up, arrows to choose the envelope, Enter to place.";
+    return "All five placed. Nothing is checked until you press Check placements.";
+  }
+
+  function wireCard(el, it){
+    el.addEventListener("click", function(){ pick(it.id); });
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar"){
+        e.preventDefault(); pick(it.id); return;
+      }
+      var cards = Array.prototype.slice.call(tray.querySelectorAll(".card"));
+      var i = cards.indexOf(el), n = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") n = cards[(i+1)%cards.length];
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = cards[(i-1+cards.length)%cards.length];
+      if (n){ e.preventDefault(); n.focus(); }
+    });
+    el.addEventListener("dragstart", function(e){
+      sel = it.id;
+      try{ e.dataTransfer.setData("text/plain", it.id); }catch(err){}
+      e.dataTransfer.effectAllowed = "move";
+      render();
+    });
+    el.addEventListener("dragend", function(){
+      if (sel === it.id && !place[it.id]){ sel = null; render(); hint.textContent = defaultHint(); }
+    });
+  }
+
+  ["R","U"].forEach(function(k){
+    var e = ENV[k];
+    e.el.addEventListener("click", function(ev){
+      if (ev.target.closest(".chip")) return;      /* chips own their own click */
+      if (ev.target.closest(".place")) return;     /* handled below */
+      if (sel) put(sel, k);
+    });
+    e.btn.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      if (sel) put(sel, k);
+    });
+    e.btn.addEventListener("keydown", function(ev){
+      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft"){
+        ev.preventDefault(); ENV[k === "R" ? "U" : "R"].btn.focus();
+      }
+    });
+    e.el.addEventListener("dragover", function(ev){
+      if (!sel) return;
+      ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
+      e.el.classList.add("over");
+    });
+    e.el.addEventListener("dragleave", function(){ e.el.classList.remove("over"); });
+    e.el.addEventListener("drop", function(ev){
+      ev.preventDefault(); e.el.classList.remove("over");
+      var id = "";
+      try{ id = ev.dataTransfer.getData("text/plain"); }catch(err){}
+      if (!id) id = sel;
+      if (id && byId[id]) put(id, k);
+    });
+  });
+
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape"){
+      if (f2.style.display === "flex"){ backward(); return; }
+      if (sel){ var id = sel; sel = null; render(); hint.textContent = defaultHint();
+        var c = tray.querySelector('[data-id="'+id+'"]'); if (c) c.focus(); }
+    }
+  });
+
+  /* ---------- the explicit check ---------- */
+
+  var IDLE = ["Nothing is checked yet.",
+              "Place all five, then press Check placements. Nothing is locked, so you can move a cost as many times as you want."];
+
+  function setFb(kind, lead, text){
+    if (!kind){ kind = "info"; lead = IDLE[0]; text = IDLE[1]; }
+    fb.innerHTML = '<span class="ico">'+
+      (kind==="ok" ? ICO.tick : kind==="bad" ? ICO.quest : ICO.info)+'</span>'+
+      '<span class="tx"><b></b><span></span></span>';
+    fb.querySelector("b").textContent = lead;
+    fb.querySelector(".tx span").textContent = text;
+  }
+
+  check.addEventListener("click", function(){
+    var wrong = ITEMS.filter(function(it){ return place[it.id] !== it.env; });
+    ITEMS.forEach(function(it){ mark[it.id] = (place[it.id] === it.env) ? "ok" : "bad"; });
+    solved = wrong.length === 0;
+    render();
+
+    if (solved){
+      setFb("ok", "All five sit where they can actually be paid from.",
+        "Three were the work the grant was written for. Two had only one envelope open to them, and those two are the lesson.");
+      hint.textContent = "";
+      go.focus();
+    } else {
+      var w = wrong[0];
+      setFb("bad",
+        wrong.length === 1 ? "One to reconsider. Start here:" : wrong.length + " to reconsider. Start here:",
+        w.short + ". " + w.q);
+      hint.textContent = "Move it, then check again. Nothing you place is locked.";
+      var chip = document.querySelector('.chip[data-id="'+w.id+'"]');
+      if (chip) chip.focus();
+    }
+  });
+
+  /* ---------- frames ---------- */
+
+  var pr1=document.getElementById("pr1"), pr2=document.getElementById("pr2"),
+      closer=document.getElementById("close");
+
+  function forward(){
+    if (!solved) return;
+    f1.style.display="none";
+    f2.style.display="flex";
+    f2.classList.remove("fade"); void f2.offsetWidth; f2.classList.add("fade");
+
+    pr1.classList.remove("in"); pr2.classList.remove("in"); closer.classList.remove("in");
+    void f2.offsetWidth;
+    /* the reveal is the teaching: the two costs no grant covers settle
+       in, one just after the other, then the line lands. Under
+       prefers-reduced-motion the transitions are off and this is a
+       plain state change with nothing lost. */
+    requestAnimationFrame(function(){
+      pr1.classList.add("in"); pr2.classList.add("in"); closer.classList.add("in");
+    });
+    f2.setAttribute("tabindex","-1"); f2.focus();
+  }
+
+  function backward(){
+    f2.style.display="none";
+    f1.style.display="flex";
+    f1.classList.remove("fade"); void f1.offsetWidth; f1.classList.add("fade");
+    go.focus();
+  }
+
+  go.addEventListener("click", forward);
+  back.addEventListener("click", backward);
+
+  render();
+  setFb(null);
+  hint.textContent = defaultHint();
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage=document.getElementById("stage");
+  function fit(){
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform=""; return; }
+    var s=Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+    stage.style.transform="scale("+s+")";
+  }
+  window.addEventListener("resize", fit); fit();
+})();
+</script>
+</body>
+</html>

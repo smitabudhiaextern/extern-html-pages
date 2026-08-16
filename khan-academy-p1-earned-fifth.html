@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reverse-engineer the earned fifth</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. --tint is a tint of --highlight, used only
+     where the chart needs a second value on the same axis.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;     /* cards, panels, the largest segment    */
+    --tint:#B9C2F2;          /* tint of --highlight, second value     */
+    --on-highlight:#001D69;  /* accents, icons, the thing THEY did    */
+    --bg:#FDF8F8;            /* canvas background, negative space    */
+    --body:#484646;          /* body copy, captions                  */
+    --title:#1C1B1B;         /* headings, primary text               */
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:650ms;        /* the one place to spend real craft */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);  /* slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto matters. As a shrinkable flex item the stage collapses
+     to viewport width between 600 and 899px, so the canvas narrows AND
+     the transform scales it again, which double-shrinks the design and
+     re-wraps text at a width it was never drawn for. The canvas holds
+     960 in layout and the transform does all the fitting. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:26px 52px 20px;display:flex;flex-direction:column}
+  /* the frame takes programmatic focus so a screen reader lands on the new
+     content. It is not an operable control, so it gets no ring. Every real
+     control keeps one. */
+  .frame:focus{outline:none}
+  #f2,#f3{display:none}
+
+  /* ---- head ---- */
+  .progress{font-size:13px;font-weight:500;color:var(--body);letter-spacing:.02em;margin-bottom:7px;flex:0 0 auto}
+  .pips{display:flex;gap:5px;margin-bottom:10px;flex:0 0 auto}
+  .pips i{display:block;width:34px;height:4px;border-radius:2px;background:var(--highlight);border:1px solid var(--highlight)}
+  .pips i.done{background:var(--on-highlight);border-color:var(--on-highlight)}
+
+  h1{font-size:27px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:7px;flex:0 0 auto}
+  .sub{font-size:16px;line-height:1.45;max-width:92ch;flex:0 0 auto}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- shared stacked bar ---- */
+  .raillab{display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+    font-size:12.5px;font-weight:600;color:var(--on-highlight);margin-bottom:4px;flex:0 0 auto}
+  .raillab em{font-style:normal;font-weight:500;color:var(--body)}
+  .rail{position:relative;border-radius:7px;border:1px solid var(--on-highlight);
+    overflow:hidden;background:var(--bg);flex:0 0 auto}
+  .rail.big{height:40px}
+  .rail.thin{height:17px}
+  .sg{position:absolute;top:0;bottom:0;left:0;width:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;
+    font-variant-numeric:tabular-nums}
+  .sg.dev{background:var(--highlight);color:var(--title)}
+  .sg.mnt{background:var(--tint);color:var(--title);box-shadow:inset 1px 0 0 var(--on-highlight)}
+  .sg.spk{background:var(--on-highlight);color:var(--bg);box-shadow:inset 1px 0 0 var(--on-highlight)}
+  .rail.thin .sg{font-size:11px}
+  /* a segment too narrow to hold its label clips the text mid-glyph,
+     which reads as a rendering fault. The cards carry every figure. */
+  .sg.narrow span{display:none}
+  .anim .sg{transition:left var(--t-reveal) var(--ease-over),width var(--t-reveal) var(--ease-over)}
+  .live .sg{transition:left 120ms var(--ease-out),width 120ms var(--ease-out)}
+
+  /* ---- FRAME 1: rank and split ---- */
+  .list{margin-top:12px;flex:0 0 auto}
+  .row{
+    display:flex;align-items:center;gap:12px;
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:8px 12px;margin-bottom:8px;min-width:0;
+  }
+  .row.picked{border-color:var(--on-highlight)}
+  .row.dragging{position:relative;z-index:5;border-color:var(--on-highlight)}
+  .grab{
+    flex:0 0 auto;display:flex;align-items:center;gap:9px;
+    background:transparent;border:none;font-family:inherit;cursor:grab;
+    padding:6px 4px;border-radius:6px;text-align:left;color:var(--title);
+    touch-action:none;
+  }
+  .grab:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .rank{
+    flex:0 0 auto;width:26px;height:26px;border-radius:6px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  .grab .ico{flex:0 0 auto;width:17px;height:17px}
+  .grab .ico svg{width:17px;height:17px;display:block}
+  .nm{font-size:15px;font-weight:600;line-height:1.25;width:158px;flex:0 0 auto}
+  .sl{flex:1 1 auto;min-width:0;display:flex;align-items:center}
+  .fig{flex:0 0 auto;width:86px;text-align:right}
+  .fig .p{display:block;font-size:19px;font-weight:600;color:var(--title);line-height:1.1;
+    font-variant-numeric:tabular-nums}
+  .fig .d{display:block;font-size:11.5px;line-height:1.3;color:var(--body);
+    font-variant-numeric:tabular-nums}
+
+  input[type=range].sh{
+    -webkit-appearance:none;appearance:none;width:100%;height:26px;
+    background:transparent;margin:0;cursor:ew-resize;
+  }
+  input[type=range].sh::-webkit-slider-runnable-track{
+    height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--on-highlight)}
+  input[type=range].sh::-webkit-slider-thumb{
+    -webkit-appearance:none;width:18px;height:18px;border-radius:9px;border:none;
+    background:var(--on-highlight);margin-top:-6px;cursor:grab}
+  input[type=range].sh::-moz-range-track{
+    height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--on-highlight)}
+  input[type=range].sh::-moz-range-thumb{
+    width:18px;height:18px;border-radius:9px;border:none;background:var(--on-highlight)}
+  input[type=range].sh:focus{outline:none}
+  input[type=range].sh:focus-visible::-webkit-slider-thumb,
+  input[type=range].sh.foc::-webkit-slider-thumb{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--on-highlight)}
+  input[type=range].sh:focus-visible::-moz-range-thumb,
+  input[type=range].sh.foc::-moz-range-thumb{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--on-highlight)}
+
+  /* ---- FRAME 2: the reveal ---- */
+  .rankline{font-size:13.5px;line-height:1.4;margin-top:2px;flex:0 0 auto}
+  .rankline b{color:var(--on-highlight);font-weight:600}
+  .rails{margin-top:10px;flex:0 0 auto}
+  .tickrail{position:relative;height:20px;flex:0 0 auto;opacity:0}
+  .tick{position:absolute;right:0;top:0;width:2px;height:7px;background:var(--on-highlight)}
+  .ticklab{position:absolute;right:0;top:8px;font-size:11.5px;font-weight:600;
+    color:var(--on-highlight);white-space:nowrap}
+  .tickrail.show{opacity:1;transition:opacity 300ms var(--ease-io)}
+
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:10px;flex:0 0 auto}
+  .cd{background:var(--highlight);border:2px solid transparent;border-radius:9px;padding:9px 11px;min-width:0}
+  .cd.flag{border-color:var(--on-highlight)}
+  .cdh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .cdh .n{font-size:13px;font-weight:600;color:var(--title);line-height:1.25}
+  /* the pale swatch is the same value as the card it sits on, so without a
+     background-coloured ring around it its fill cannot be read at all and the
+     three swatches stop identifying their segments */
+  .cdh .sw{flex:0 0 auto;width:10px;height:10px;border-radius:3px;border:1px solid var(--on-highlight);
+    box-shadow:0 0 0 2px var(--bg)}
+  .cd.one .cdh .sw{background:var(--highlight)}
+  .cd.two .cdh .sw{background:var(--tint)}
+  .cd.three .cdh .sw{background:var(--on-highlight)}
+  .cd .amt{font-size:23px;font-weight:600;color:var(--on-highlight);line-height:1.15;margin-top:4px;
+    font-variant-numeric:tabular-nums}
+  .cd .pct{font-size:12px;font-weight:600;color:var(--body);margin-top:1px}
+  .cd .ln{font-size:11.5px;line-height:1.35;color:var(--body);margin-top:5px;opacity:0}
+  .cards.show .ln{opacity:1;transition:opacity 300ms var(--ease-io)}
+  .cd .amt strong{font-weight:600}
+
+  .note{font-size:13.5px;line-height:1.42;margin-top:9px;flex:0 0 auto;opacity:0}
+  .note.show{opacity:1;transition:opacity 300ms var(--ease-io)}
+  .note strong{color:var(--title);font-weight:600}
+  .src{font-size:12px;line-height:1.4;margin-top:7px;flex:0 0 auto}
+  .src a{color:var(--on-highlight);font-weight:600}
+  .src a:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- FRAME 3: the checks ---- */
+  .kick{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:6px;flex:0 0 auto}
+  .q{font-size:21px;line-height:1.25;font-weight:600;color:var(--title);margin-bottom:9px;
+    max-width:88ch;flex:0 0 auto}
+  .opts{display:flex;flex-direction:column;gap:7px;flex:0 0 auto}
+  .op{
+    display:block;width:100%;text-align:left;font-family:inherit;
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:9px 12px;cursor:pointer;color:var(--title);
+    transition:border-color var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
+  }
+  .op:hover{transform:translateY(-1px);border-color:var(--on-highlight)}
+  .op:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .op .t{display:flex;align-items:flex-start;gap:9px;font-size:15px;font-weight:500;line-height:1.3}
+  .op .box{flex:0 0 auto;width:17px;height:17px;border-radius:4px;border:2px solid var(--on-highlight);
+    margin-top:1px;display:flex;align-items:center;justify-content:center}
+  .op.single .box{border-radius:50%}
+  .op .box svg{width:12px;height:12px;display:block;opacity:0}
+  .op[aria-pressed="true"] .box,.op[aria-checked="true"] .box{background:var(--on-highlight)}
+  .op[aria-pressed="true"] .box svg,.op[aria-checked="true"] .box svg{opacity:1}
+  .op[aria-pressed="true"],.op[aria-checked="true"]{border-color:var(--on-highlight)}
+  .op .why{display:none;font-size:12.5px;line-height:1.4;color:var(--body);
+    margin-top:6px;padding-left:26px}
+  .op.done .why{display:block}
+  .op .vd{display:inline-flex;align-items:center;gap:4px;font-weight:600;font-size:11.5px;
+    color:var(--on-highlight);border:1px solid var(--on-highlight);border-radius:4px;
+    padding:1px 6px;margin-right:5px;white-space:nowrap;vertical-align:1px}
+  .op .vd svg{width:12px;height:12px;display:block;flex:0 0 auto}
+  .opts.done .op{cursor:default}
+  .opts.done .op:hover{transform:none;border-color:transparent}
+  .opts.done .op[aria-pressed="true"],.opts.done .op[aria-checked="true"]{border-color:var(--on-highlight)}
+  .close{font-size:13px;line-height:1.45;margin-top:9px;flex:0 0 auto;display:none}
+  .close.show{display:block}
+  .close strong{color:var(--title);font-weight:600}
+
+  /* ---- controls ---- */
+  .bar{margin-top:auto;padding-top:9px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 17px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);
+    display:inline-flex;align-items:center;gap:8px;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.nav svg{width:15px;height:15px;display:block}
+  .hint{font-size:12.5px;line-height:1.35;color:var(--body)}
+
+  .fade{animation:fin var(--t-frame) var(--ease-io) both}
+  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- under 600px: stacked portrait, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item, #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes content
+       off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:22px 18px 28px;min-height:100vh}
+    h1{font-size:23px}
+    .sub{font-size:16px}
+    .row{flex-wrap:wrap;gap:8px;padding:10px 12px}
+    .nm{width:auto;flex:1 1 auto;font-size:16px}
+    .sl{flex:1 1 100%;order:3}
+    .fig{order:2;width:auto;min-width:74px}
+    /* the pointer label is a single nowrap line about 300px wide. On a narrow
+       phone it ran the full width of the viewport and straight out through the
+       gutter, so let it wrap and sit under the tick instead of holding one
+       line. The tick stays where it is, at the end of the rail. */
+    .tickrail{height:auto}
+    .ticklab{position:static;display:block;white-space:normal;text-align:right;
+      padding-top:9px;line-height:1.35}
+    .cards{grid-template-columns:1fr;gap:9px}
+    .cd .ln{font-size:13px}
+    .note,.rankline{font-size:14px}
+    .q{font-size:19px}
+    .op .t{font-size:15px}
+    .op .why{font-size:13px}
+    .bar{margin-top:24px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .op:hover{transform:none}
+    .cards .ln,.note,.tickrail{opacity:1}
+  }
+
+  /* ---- static fallback, shown only when scripting is off ---- */
+  #fallback{display:none;max-width:680px;padding:26px 22px 40px;margin:0 auto}
+  #fallback h1{font-size:24px;line-height:1.25;margin-bottom:10px}
+  #fallback h2{font-size:17px;line-height:1.3;color:var(--title);margin:18px 0 7px}
+  #fallback p{font-size:16px;line-height:1.55;margin-bottom:11px}
+  #fallback table{border-collapse:collapse;width:100%;margin:4px 0 12px;font-size:15px}
+  #fallback th,#fallback td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--tint)}
+  #fallback th{color:var(--title);font-weight:600}
+  #fallback ol{margin:0 0 8px 20px;font-size:15px;line-height:1.5}
+  #fallback ol li{margin-bottom:9px}
+  #fallback .fs{font-size:13px;line-height:1.45}
+  #fallback .fs a{color:var(--on-highlight);font-weight:600}
+  #fallback .an{background:var(--highlight);border-radius:8px;padding:11px 13px;
+    font-size:14.5px;line-height:1.45;margin-bottom:10px}
+</style>
+
+<!-- Scripting off: hide the interactive, show the plain version. This block
+     has to come AFTER the stylesheet above. Placed before it, the later
+     #fallback{display:none} rule wins on source order and the fallback
+     never appears. -->
+<noscript><style>
+  /* body must drop out of flex here too. A centred flex item taller than
+     the viewport overflows past the top edge, and that overflow cannot be
+     scrolled back to. */
+  body{display:block;align-items:initial;justify-content:initial;height:auto}
+  #stage{display:none}
+  #fallback{display:block}
+</style></noscript>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ============ FRAME 1: rank, then split ============ -->
+  <div class="frame fade" id="f1">
+    <div class="progress">1 of 3</div>
+    <div class="pips" aria-hidden="true"><i class="done"></i><i></i><i></i></div>
+
+    <h1>Three real line items. Rank them, then guess the split.</h1>
+    <p class="sub">These are the only three things Khan Academy charged anyone for in the fiscal year ending June 2025. There is no fourth. Together they come to <b>$22.2 million</b>. Drag by the handle to put them in order, biggest first, then set roughly how the money divides.</p>
+
+    <div class="rails" style="margin-top:14px">
+      <div class="raillab"><span>Your split, in the order you ranked them</span><em id="sumlab">100% of $22.2M</em></div>
+      <div class="rail big live" id="prev">
+        <div class="sg" id="pv0"><span></span></div>
+        <div class="sg" id="pv1"><span></span></div>
+        <div class="sg" id="pv2"><span></span></div>
+      </div>
+    </div>
+
+    <div class="list" id="list" role="group" aria-label="Rank the three fee categories and set each share"></div>
+
+    <div class="bar">
+      <button class="nav" id="lock">Lock it in</button>
+      <button class="nav ghost" id="fwd1" style="display:none">See the filed numbers
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <span class="hint" id="hint1">Drag by the handle, or focus a row and use the up and down arrow keys. Tap one row then another to swap them.</span>
+    </div>
+  </div>
+
+  <!-- ============ FRAME 2: the reveal ============ -->
+  <div class="frame" id="f2">
+    <div class="progress">2 of 3</div>
+    <div class="pips" aria-hidden="true"><i class="done"></i><i class="done"></i><i></i></div>
+
+    <h1>Ninety-six percent of it is one line.</h1>
+    <p class="rankline" id="rankline"></p>
+
+    <div class="rails">
+      <!-- the guess is redrawn in the filing's order, not the order they ranked
+           it in, so the two rails line up category by category. Say so on the
+           label, or the rearrangement reads as the chart glitching. -->
+      <div class="raillab"><span>Your guess, in the filing's order</span></div>
+      <div class="rail thin" id="railYou">
+        <div class="sg dev" id="y0"><span></span></div>
+        <div class="sg mnt" id="y1"><span></span></div>
+        <div class="sg spk" id="y2"><span></span></div>
+      </div>
+
+      <div class="raillab" style="margin-top:11px"><span>As filed, fiscal year ending June 2025</span><em>Total $22,164,801</em></div>
+      <div class="rail big" id="railReal">
+        <div class="sg dev" id="r0"><span></span></div>
+        <div class="sg mnt" id="r1"><span></span></div>
+        <div class="sg spk" id="r2"><span></span></div>
+      </div>
+      <div class="tickrail" id="tickrail">
+        <span class="tick"></span>
+        <span class="ticklab">Speaking fees is here: $409, too small a slice to draw</span>
+      </div>
+    </div>
+
+    <div class="cards" id="cards">
+      <div class="cd one">
+        <div class="cdh"><span class="n">Development fees</span><span class="sw"></span></div>
+        <div class="amt" id="a0">$0</div>
+        <div class="pct">96.0% of the total</div>
+        <div class="ln">Somebody commissioned the work: a course, a content library, an integration.</div>
+      </div>
+      <div class="cd two">
+        <div class="cdh"><span class="n">Maintenance fees</span><span class="sw"></span></div>
+        <div class="amt" id="a1">$0</div>
+        <div class="pct">4.0% of the total</div>
+        <div class="ln">Keeping something that was already built running.</div>
+      </div>
+      <div class="cd three flag">
+        <div class="cdh"><span class="n">Speaking fees</span><span class="sw"></span></div>
+        <div class="amt" id="a2">$0</div>
+        <div class="pct">0.0% of the total</div>
+        <div class="ln">Not $409 thousand. Four hundred and nine dollars, filed the same way as the other two.</div>
+      </div>
+    </div>
+
+    <p class="note" id="note2">A development fee is not a subscription, and not a license sold in perpetuity. <strong>A partner commissioned the work, the way a client commissions an agency.</strong> That is the shape behind 96% of every dollar Khan Academy earns.</p>
+
+    <p class="src">Form 990, fiscal year ending June 2025, Part VIII, Line 2, EIN 26-1544963. <a href="https://projects.propublica.org/nonprofits/full_text/202640439349300549/IRS990" target="_blank" rel="noopener">Read the full filing</a>.</p>
+
+    <div class="bar">
+      <button class="nav ghost" id="back2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        Back to your guess
+      </button>
+      <button class="nav" id="fwd2">Three quick checks
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ FRAME 3: the checks ============ -->
+  <div class="frame" id="f3">
+    <div class="progress" id="prog3">3 of 3</div>
+    <div class="pips" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i></div>
+
+    <div class="kick" id="kick">Check 1 of 3</div>
+    <p class="q" id="qtext"></p>
+    <div class="opts" id="opts"></div>
+    <p class="close" id="close"><strong>Nothing here was scored.</strong> Two questions are waiting for you underneath this embed.</p>
+
+    <div class="bar">
+      <button class="nav ghost" id="back3">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        Back
+      </button>
+      <button class="nav" id="check3" style="display:none">Check my answer</button>
+      <button class="nav" id="next3">Next check
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <span class="hint" id="hint3">Pick one to see what every option means.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ NO-SCRIPT FALLBACK: teaches the same thing ============ -->
+<div id="fallback">
+  <h1>Reverse-engineer the earned fifth</h1>
+  <p>Khan Academy charged someone $22,164,801 in the fiscal year ending June 2025. Three line items, and no fourth. Before you read on, rank them biggest to smallest and guess roughly how the money divides: <strong>development fees</strong>, <strong>maintenance fees</strong>, <strong>speaking fees</strong>.</p>
+
+  <h2>What was actually filed</h2>
+  <table>
+    <thead><tr><th scope="col">Category</th><th scope="col">Amount, FYE June 2025</th><th scope="col">Share of $22,164,801</th></tr></thead>
+    <tbody>
+      <tr><td>Development fees</td><td>$21,280,214</td><td>96.0%</td></tr>
+      <tr><td>Maintenance fees</td><td>$884,178</td><td>4.0%</td></tr>
+      <tr><td>Speaking fees</td><td>$409</td><td>0.0%</td></tr>
+    </tbody>
+  </table>
+  <p>Ninety-six percent of everything Khan Academy earns is one line item. And one of the three lines, filed the same way as the other two, is four hundred and nine dollars. A development fee is not a subscription and not a license sold in perpetuity. A partner commissioned the work, the way a client commissions an agency.</p>
+  <p class="fs">Form 990, fiscal year ending June 2025, Part VIII, Line 2, EIN 26-1544963. <a href="https://projects.propublica.org/nonprofits/full_text/202640439349300549/IRS990">Read the full filing</a>.</p>
+
+  <h2>Three quick checks, with the answers</h2>
+  <ol>
+    <li>A donor gives Khan Academy $5 million to build a new physics course. Can that money also cover a security engineer's salary?
+      <div class="an">No. That $5 million is restricted to the physics course it funded. Spending it on anything else breaks the terms of the gift, even though it is Khan Academy's money either way. This is exactly why earned money is different: it arrives with no strings on it.</div></li>
+    <li>Which is worth more to the partnerships team: $1 million once, or $200,000 a year for five years?
+      <div class="an">The five-year commitment. Same total dollars, different value. It behaves like a contract that renews: predictable, budgetable, and a signal the partner intends to stick around. A one-time payment might be the whole relationship, and then it is gone.</div></li>
+    <li>Which of these does Khan Academy actually charge someone for? A student watching a math video, a school signing up for an Enterprise district license, a teacher opening Khanmigo at no cost to them, a parent paying $4 a month for a Khanmigo account.
+      <div class="an">The district license and the parent's Khanmigo subscription are both charged. The video and the teacher's Khanmigo access are both free to the person using them, and paid for by someone else entirely.</div></li>
+  </ol>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* As filed, FYE June 2025, Form 990 Part VIII Line 2. Total $22,164,801. */
+  var CAT = {
+    dev:{name:"Development fees", amt:21280214, pct:96.0, cls:"dev"},
+    mnt:{name:"Maintenance fees", amt:884178,   pct:4.0,  cls:"mnt"},
+    spk:{name:"Speaking fees",    amt:409,      pct:0.0,  cls:"spk"}
+  };
+  var FILED = ["dev","mnt","spk"];          /* real order, biggest first */
+  var TOTAL_M = 22.2;                        /* $22.2 million, for the estimate */
+
+  /* deliberately not the filed order, and not alphabetical either */
+  var order  = ["mnt","spk","dev"];
+  var shares = {mnt:34, spk:33, dev:33};
+
+  var f1=document.getElementById("f1"), f2=document.getElementById("f2"), f3=document.getElementById("f3"),
+      list=document.getElementById("list"),
+      pv=[document.getElementById("pv0"),document.getElementById("pv1"),document.getElementById("pv2")],
+      lock=document.getElementById("lock"), fwd1=document.getElementById("fwd1"),
+      hint1=document.getElementById("hint1"),
+      back2=document.getElementById("back2"), fwd2=document.getElementById("fwd2"),
+      back3=document.getElementById("back3"), next3=document.getElementById("next3"),
+      check3=document.getElementById("check3"), hint3=document.getElementById("hint3"),
+      rankline=document.getElementById("rankline"),
+      tickrail=document.getElementById("tickrail"),
+      cards=document.getElementById("cards"), note2=document.getElementById("note2"),
+      railReal=document.getElementById("railReal"),
+      Y=[document.getElementById("y0"),document.getElementById("y1"),document.getElementById("y2")],
+      R=[document.getElementById("r0"),document.getElementById("r1"),document.getElementById("r2")],
+      A=[document.getElementById("a0"),document.getElementById("a1"),document.getElementById("a2")];
+
+  var rows = {}, picked = null, locked = false, timers = [];
+  function later(fn,ms){ timers.push(setTimeout(fn,ms)); }
+  function clearLater(){ timers.forEach(clearTimeout); timers=[]; }
+  function money(n){ return "$" + n.toLocaleString("en-US"); }
+
+  /* --------------- FRAME 1: rows --------------- */
+  var GRIP = '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01"/></svg></span>';
+
+  function buildRows(){
+    FILED.forEach(function(k){
+      var r = document.createElement("div");
+      r.className = "row";
+      r.setAttribute("data-k", k);
+      r.innerHTML =
+        '<button class="grab" type="button">' +
+          '<span class="rank"></span>' + GRIP +
+        '</button>' +
+        '<span class="nm">' + CAT[k].name + '</span>' +
+        '<span class="sl"><input class="sh" type="range" min="0" max="100" step="1"></span>' +
+        '<span class="fig"><span class="p"></span><span class="d"></span></span>';
+      rows[k] = r;
+
+      var grab = r.querySelector(".grab"), sh = r.querySelector("input");
+      /* A real tap is handled in dragEnd, not here. Pointer capture is taken on
+         the row, so the browser dispatches the click to the row rather than to
+         this button, and this listener never runs on a tap. What does reach it
+         is a keyboard activation, which carries detail 0. */
+      grab.addEventListener("click", function(e){
+        if (locked) return;
+        if (e.detail !== 0) return;
+        if (Date.now() - lastPtrTap < 400) return;
+        tapSelect(k);
+      });
+      grab.addEventListener("keydown", function(e){ if(!locked) rowKey(e,k); });
+      grab.addEventListener("pointerdown", function(e){ if(!locked) dragStart(e,k); });
+      sh.addEventListener("input", function(){ if(!locked){ setShare(k, parseInt(sh.value,10)); render(); } });
+      sh.addEventListener("focus", function(){ sh.classList.add("foc"); });
+      sh.addEventListener("blur",  function(){ sh.classList.remove("foc"); });
+    });
+    render();
+  }
+
+  function setShare(k, v){
+    v = Math.min(Math.max(v,0),100);
+    var o = FILED.filter(function(x){ return x !== k; });
+    var rem = 100 - v, sum = shares[o[0]] + shares[o[1]];
+    if (sum <= 0){
+      shares[o[0]] = Math.round(rem/2);
+      shares[o[1]] = rem - shares[o[0]];
+    } else {
+      var a = Math.round(rem * shares[o[0]] / sum);
+      shares[o[0]] = a;
+      shares[o[1]] = rem - a;
+    }
+    shares[k] = v;
+  }
+
+  /* one label under 26px clips its own text mid-glyph, so it is dropped
+     and the figure column carries the number instead */
+  function fitLabel(seg, px, text){
+    var s = seg.querySelector("span");
+    s.textContent = text;
+    if (px < 26) seg.classList.add("narrow"); else seg.classList.remove("narrow");
+  }
+
+  function render(){
+    /* rows in ranked order, badges renumbered */
+    order.forEach(function(k,i){
+      var r = rows[k];
+      if (list.children[i] !== r) list.appendChild(r);
+      r.querySelector(".rank").textContent = (i+1);
+      r.querySelector(".grab").setAttribute("aria-label",
+        "Position " + (i+1) + " of 3, " + CAT[k].name + ". Press Enter to pick up, then Enter on another row to swap. Or use the up and down arrow keys.");
+      var sh = r.querySelector("input");
+      if (parseInt(sh.value,10) !== shares[k]) sh.value = shares[k];
+      sh.setAttribute("aria-label", CAT[k].name + ", share of the 22.2 million dollar total, in percent");
+      sh.setAttribute("aria-valuetext", shares[k] + " percent, about " + (TOTAL_M*shares[k]/100).toFixed(1) + " million dollars");
+      r.querySelector(".fig .p").textContent = shares[k] + "%";
+      r.querySelector(".fig .d").textContent = "$" + (TOTAL_M*shares[k]/100).toFixed(1) + "M";
+      r.classList.toggle("picked", picked === k);
+    });
+    /* the preview bar, in their ranked order */
+    var w = document.getElementById("prev").clientWidth, run = 0;
+    order.forEach(function(k,i){
+      var px = w * shares[k]/100;
+      pv[i].className = "sg " + CAT[k].cls;
+      pv[i].style.left = run + "px";
+      pv[i].style.width = px + "px";
+      fitLabel(pv[i], px, shares[k] + "%");
+      run += px;
+    });
+  }
+
+  /* ---- reorder: tap, keyboard, and drag all end up here ---- */
+  function move(k, to){
+    var from = order.indexOf(k);
+    to = Math.min(Math.max(to,0),2);
+    if (to === from) return false;
+    order.splice(from,1); order.splice(to,0,k);
+    return true;
+  }
+  function swap(a,b){
+    var i=order.indexOf(a), j=order.indexOf(b);
+    order[i]=b; order[j]=a;
+  }
+  function tapSelect(k){
+    if (picked === null){ picked = k; hint1.textContent = "Picked up " + CAT[k].name + ". Now choose the row to swap it with."; }
+    else if (picked === k){ picked = null; hint1.textContent = "Put it back. Nothing moved."; }
+    else { swap(picked, k); picked = null; hint1.textContent = "Swapped."; }
+    render();
+    var f = rows[k].querySelector(".grab"); if (f) f.focus();
+  }
+  function rowKey(e,k){
+    if (e.key === "ArrowUp" || e.key === "ArrowDown"){
+      e.preventDefault();
+      if (move(k, order.indexOf(k) + (e.key === "ArrowDown" ? 1 : -1))){
+        render();
+        rows[k].querySelector(".grab").focus();
+        hint1.textContent = CAT[k].name + " is now number " + (order.indexOf(k)+1) + ".";
+      }
+    } else if (e.key === "Escape" && picked !== null){
+      e.preventDefault(); picked = null; render(); hint1.textContent = "Put it back. Nothing moved.";
+    }
+  }
+
+  /* pointer drag. The row follows the finger, and the others snap to their
+     new slot as the crossing point is passed. */
+  var drag = null, lastPtrTap = 0;
+  function dragStart(e,k){
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    var r = rows[k];
+    drag = {k:k, id:e.pointerId, y:e.clientY, top:r.offsetTop, moved:false};
+    try{ r.setPointerCapture(e.pointerId); }catch(err){}
+    /* The listeners go on the document, not on the row. render() reorders by
+       re-inserting the row in its parent, and the browser treats that as a
+       release of pointer capture, so a pointerup bound to the row never
+       arrives once the drag has crossed a slot. That left the row stranded
+       mid-air with its drag styling still on and the new order unconfirmed. */
+    document.addEventListener("pointermove", dragMove);
+    document.addEventListener("pointerup", dragEnd);
+    document.addEventListener("pointercancel", dragEnd);
+  }
+  function dragMove(e){
+    if (!drag || e.pointerId !== drag.id) return;
+    var r = rows[drag.k], dy = e.clientY - drag.y;
+    if (!drag.moved && Math.abs(dy) < 5) return;
+    if (!drag.moved){ drag.moved = true; r.classList.add("dragging"); }
+    e.preventDefault();
+    r.style.transform = "translateY(" + dy + "px)";
+    var h = r.offsetHeight + 8;
+    var target = order.indexOf(drag.k) + Math.round(dy / h);
+    if (move(drag.k, target)){
+      render();
+      /* the node moved slots, so rebase the offset it is dragging from, and
+         take the capture back: re-inserting the node dropped it */
+      drag.top = r.offsetTop; drag.y = e.clientY;
+      r.style.transform = "translateY(0px)";
+      try{ r.setPointerCapture(drag.id); }catch(err){}
+    }
+  }
+  function dragEnd(e){
+    if (!drag) return;
+    var r = rows[drag.k], k = drag.k, wasMoved = drag.moved;
+    r.style.transform = ""; r.classList.remove("dragging");
+    document.removeEventListener("pointermove", dragMove);
+    document.removeEventListener("pointerup", dragEnd);
+    document.removeEventListener("pointercancel", dragEnd);
+    try{ r.releasePointerCapture(drag.id); }catch(err){}
+    drag = null;
+    if (wasMoved){ hint1.textContent = "Order set. " + CAT[order[0]].name + " is number 1."; render(); }
+    else if (e && e.type === "pointerup" && !locked){
+      /* A press that never moved is a tap, and this is the only place it can be
+         caught. Pointer capture sits on the row, so the click the browser then
+         dispatches goes to the row, not to the handle button inside it. Without
+         this branch the tap route promised in the hint does nothing at all,
+         which on a phone leaves reordering with no working input. */
+      lastPtrTap = Date.now();
+      tapSelect(k);
+    }
+  }
+
+  /* --------------- FRAME 2: the reveal --------------- */
+  function pxFor(w, pct){ return w * pct/100; }
+
+  function drawRail(segs, w, keys, vals, labels){
+    var run = 0;
+    keys.forEach(function(k,i){
+      var px = pxFor(w, vals[i]);
+      segs[i].className = "sg " + CAT[k].cls;
+      segs[i].style.left = run + "px";
+      segs[i].style.width = px + "px";
+      fitLabel(segs[i], px, labels[i]);
+      run += px;
+    });
+  }
+
+  function guessRail(){
+    var w = document.getElementById("railYou").clientWidth;
+    drawRail(Y, w, FILED, FILED.map(function(k){ return shares[k]; }),
+             FILED.map(function(k){ return shares[k] + "%"; }));
+  }
+  function realRailAtGuess(){
+    var w = railReal.clientWidth;
+    /* Shape only, no figures. This rail is labelled "as filed", and for the beat
+       before the animation it is still holding the student's own split. Printing
+       their percentages under that label states a number the filing does not
+       say. The guess rail directly above it already carries those figures. */
+    drawRail(R, w, FILED, FILED.map(function(k){ return shares[k]; }), ["","",""]);
+  }
+  function realRailFiled(){
+    var w = railReal.clientWidth;
+    drawRail(R, w, FILED, FILED.map(function(k){ return CAT[k].pct; }),
+             ["96.0%","4.0%",""]);
+  }
+
+  function countMoney(el, target, ms){
+    if (reduce){ el.textContent = money(target); return; }
+    var start = performance.now();
+    function step(now){
+      /* Clamp to [0,1]. An out-of-range delta (a clock adjustment, or a
+         headless virtual-time budget) otherwise drives the cubic ease far
+         negative and the counter renders a nonsense negative figure. */
+      var p = Math.min(Math.max((now-start)/ms, 0), 1);
+      var eased = 1 - Math.pow(1-p, 3);
+      el.textContent = money(Math.max(Math.round(target*eased), 0));
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = money(target);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function ordinalLine(){
+    var mine = order.map(function(k,i){ return (i+1) + " " + CAT[k].name.replace(" fees",""); }).join(", ");
+    var real = FILED.map(function(k,i){ return (i+1) + " " + CAT[k].name.replace(" fees",""); }).join(", ");
+    var same = order.join() === FILED.join();
+    return "<b>You ranked:</b> " + mine + ". <b>Filed:</b> " + real + ". " +
+           (same ? "Your order was right. The sizes are the surprise."
+                 : "The order is one thing. The sizes are the surprise.");
+  }
+
+  function toFrame2(){
+    clearLater();
+    locked = true;
+    lock.textContent = "Locked"; lock.disabled = true;
+    fwd1.style.display = "inline-flex";
+    hint1.textContent = "Locked in.";
+    list.querySelectorAll("input").forEach(function(i){ i.disabled = true; });
+    list.querySelectorAll(".grab").forEach(function(b){ b.disabled = true; b.style.cursor = "default"; });
+
+    rankline.innerHTML = ordinalLine();
+    show(f2);
+
+    cards.classList.remove("show"); note2.classList.remove("show"); tickrail.classList.remove("show");
+    railReal.classList.remove("anim");
+    A[0].textContent = "$0"; A[1].textContent = "$0"; A[2].textContent = "$0";
+    guessRail();
+
+    if (reduce){
+      /* No motion at all: one cross-fade, everything already final. The
+         guess rail above stays, so the comparison survives with zero motion. */
+      realRailFiled();
+      A[0].textContent = money(CAT.dev.amt);
+      A[1].textContent = money(CAT.mnt.amt);
+      A[2].textContent = money(CAT.spk.amt);
+      cards.classList.add("show"); note2.classList.add("show"); tickrail.classList.add("show");
+      return;
+    }
+
+    /* 1. the filed rail opens as an exact copy of their guess */
+    realRailAtGuess();
+
+    later(function(){
+      /* 2. the one motion worth real craft: their split becomes the filed one,
+         and the three counters run side by side. One races through eight
+         digits. One stops at 409. That contrast is the lesson. */
+      railReal.classList.add("anim");
+      realRailFiled();
+      countMoney(A[0], CAT.dev.amt, 650);
+      countMoney(A[1], CAT.mnt.amt, 650);
+      countMoney(A[2], CAT.spk.amt, 650);
+    }, 560);
+
+    later(function(){
+      /* If requestAnimationFrame is throttled, which happens in a
+         backgrounded tab, the counters would stall short of the real
+         figure. Write them outright so the number always arrives. */
+      A[0].textContent = money(CAT.dev.amt);
+      A[1].textContent = money(CAT.mnt.amt);
+      A[2].textContent = money(CAT.spk.amt);
+      cards.classList.add("show");
+      note2.classList.add("show");
+      tickrail.classList.add("show");
+    }, 1260);
+  }
+
+  /* --------------- FRAME 3: the checks --------------- */
+  var CHECKS = [
+    {
+      q:"A donor gives Khan Academy $5 million to build a new physics course. Can that money also cover a security engineer's salary?",
+      multi:false,
+      opts:[
+        {t:"Yes. Once it is in the bank it is Khan Academy's money.", ok:false,
+         why:"It is their money, and it is still restricted to the physics course it funded. Spending it on the engineer would break the terms of the gift."},
+        {t:"No. It is restricted to the course it funded.", ok:true,
+         why:"Restricted means restricted, even though the cash sits in Khan Academy's account. This is exactly why earned money is different: it arrives with no strings on it."},
+        {t:"Yes, if the course comes in under budget.", ok:false,
+         why:"Leftover restricted money does not quietly become general money. A change of use has to be agreed with the donor first, and that call is not Khan Academy's alone."}
+      ]
+    },
+    {
+      q:"Which is worth more to the partnerships team: $1 million once, or $200,000 a year for five years?",
+      multi:false,
+      opts:[
+        {t:"$1 million once.", ok:false,
+         why:"Same total dollars, and a one-time payment might be the whole relationship. Once it is spent there is nothing to renew and nothing to forecast."},
+        {t:"$200,000 a year for five years.", ok:true,
+         why:"It behaves like a contract that renews: predictable, budgetable, and a signal that the partner intends to stick around."},
+        {t:"Identical. The totals match.", ok:false,
+         why:"The arithmetic is identical. The value is not. Only one of the two tells you what next year looks like."}
+      ]
+    },
+    {
+      q:"Which of these does Khan Academy actually charge someone for? Select all that apply.",
+      multi:true,
+      opts:[
+        {t:"A student watching a math video", ok:false, lab:"Free to that person",
+         why:"Free to the student. Somebody else paid for it, which is the whole shape of the model."},
+        {t:"A school signing up for an Enterprise district license", ok:true, lab:"Charged",
+         why:"Charged. The pricing page lists Enterprise Starter at $10 per student per year for up to 1,000 self-rostered licenses, retrieved 12 August 2026."},
+        {t:"A teacher opening Khanmigo at no cost to them", ok:false, lab:"Free to that person",
+         why:"Free to the teacher. Somebody funded that access, and it was not the teacher."},
+        {t:"A parent paying $4 a month for a Khanmigo account", ok:true, lab:"Charged",
+         why:"Charged. The parent is the one paying, so this is earned money and not a gift."}
+      ]
+    }
+  ];
+
+  var CHECK_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4 10-10"/></svg>';
+  var TICK_ON  = '<svg viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4 10-10"/></svg>';
+  var CROSS_ICO= '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+  var ci = 0, chosen = [], answered = false;
+  var kick=document.getElementById("kick"), qtext=document.getElementById("qtext"),
+      opts=document.getElementById("opts"), closer=document.getElementById("close"),
+      prog3=document.getElementById("prog3");
+
+  function drawCheck(){
+    var c = CHECKS[ci];
+    answered = false; chosen = [];
+    kick.textContent = "Check " + (ci+1) + " of 3";
+    prog3.textContent = "3 of 3, check " + (ci+1) + " of 3";
+    qtext.textContent = c.q;
+    opts.className = "opts";
+    opts.innerHTML = "";
+    closer.classList.remove("show");
+    check3.style.display = c.multi ? "inline-flex" : "none";
+    check3.disabled = true;
+    next3.style.display = (ci < 2) ? "inline-flex" : "none";
+    hint3.textContent = c.multi ? "Select every one that applies, then check."
+                                : "Pick one to see what every option means.";
+
+    c.opts.forEach(function(o,i){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "op" + (c.multi ? "" : " single");
+      if (c.multi) b.setAttribute("aria-checked","false"); else b.setAttribute("aria-pressed","false");
+      b.innerHTML = '<span class="t"><span class="box">' + TICK_ON + '</span><span>' + o.t + '</span></span>' +
+                    '<span class="why"><span class="vd"></span> ' + o.why + '</span>';
+      b.addEventListener("click", function(){ pick(i); });
+      b.addEventListener("keydown", function(e){
+        var n = null, all = Array.prototype.slice.call(opts.querySelectorAll(".op"));
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") n = all[(i+1) % all.length];
+        if (e.key === "ArrowUp"   || e.key === "ArrowLeft")  n = all[(i-1+all.length) % all.length];
+        if (n){ e.preventDefault(); n.focus(); }
+      });
+      opts.appendChild(b);
+    });
+  }
+
+  function pick(i){
+    var c = CHECKS[ci], all = Array.prototype.slice.call(opts.querySelectorAll(".op"));
+    if (c.multi){
+      if (answered) return;
+      var at = chosen.indexOf(i);
+      if (at >= 0) chosen.splice(at,1); else chosen.push(i);
+      all.forEach(function(b,j){ b.setAttribute("aria-checked", chosen.indexOf(j) >= 0 ? "true":"false"); });
+      check3.disabled = chosen.length === 0;
+      return;
+    }
+    chosen = [i];
+    all.forEach(function(b,j){ b.setAttribute("aria-pressed", j === i ? "true":"false"); });
+    revealCheck();
+  }
+
+  function revealCheck(){
+    var c = CHECKS[ci], all = Array.prototype.slice.call(opts.querySelectorAll(".op"));
+    answered = true;
+    opts.classList.add("done");
+    check3.disabled = true;
+    check3.style.display = "none";
+    all.forEach(function(b,j){
+      var o = c.opts[j];
+      /* verdict never rests on colour alone: icon plus word, every time */
+      var label = c.multi ? o.lab : (o.ok ? "Right" : "Not this one");
+      b.querySelector(".vd").innerHTML = (o.ok ? CHECK_ICO : CROSS_ICO) + "<span>" + label + "</span>";
+      b.classList.add("done");
+    });
+    hint3.textContent = c.multi
+      ? "The district license and the parent's subscription are the two that are charged."
+      : "Every option has its explanation. Nothing here is scored.";
+    /* on the last check the closing line supersedes the hint, rather than
+       stacking on top of it and pushing the controls off the canvas */
+    if (ci === 2){ closer.classList.add("show"); hint3.textContent = ""; }
+  }
+
+  check3.addEventListener("click", function(){ if (!answered) revealCheck(); });
+
+  next3.addEventListener("click", function(){
+    if (ci < 2){ ci++; drawCheck(); qtext.focus(); }
+  });
+  back3.addEventListener("click", function(){
+    if (ci > 0){ ci--; drawCheck(); }
+    else show(f2);
+  });
+
+  /* --------------- frame plumbing --------------- */
+  var current = f1;
+  function show(el){
+    [f1,f2,f3].forEach(function(x){ x.style.display = "none"; });
+    el.style.display = "flex";
+    el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+    el.setAttribute("tabindex","-1"); el.focus();
+    current = el;
+    if (el === f2){ guessRail(); }
+  }
+
+  lock.addEventListener("click", toFrame2);
+  fwd1.addEventListener("click", toFrame2);
+  back2.addEventListener("click", function(){ clearLater(); show(f1); render(); fwd1.focus(); });
+  fwd2.addEventListener("click", function(){ clearLater(); ci = 0; drawCheck(); show(f3); });
+
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT") return;                       /* the sliders own the arrows */
+    if (t && t.classList && t.classList.contains("grab")) return;  /* rows own them too */
+    if (e.key === "Escape"){
+      if (current === f3){ e.preventDefault(); back3.click(); }
+      else if (current === f2){ e.preventDefault(); back2.click(); }
+      return;
+    }
+    /* the option list owns left and right as well as up and down: it moves
+       focus between the options with them. Without this the same press both
+       moved focus and skipped a whole check. */
+    if (t && t.classList && t.classList.contains("op")) return;
+    if (e.key === "ArrowRight"){
+      if (current === f1){ e.preventDefault(); toFrame2(); }
+      else if (current === f2){ e.preventDefault(); fwd2.click(); }
+      else if (current === f3 && ci < 2){ e.preventDefault(); next3.click(); }
+    }
+    if (e.key === "ArrowLeft"){
+      if (current === f2){ e.preventDefault(); back2.click(); }
+      else if (current === f3){ e.preventDefault(); back3.click(); }
+    }
+  });
+
+  /* swipe, the third way forward */
+  var tx=0, ty=0, tracking=false;
+  document.addEventListener("touchstart", function(e){
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || (t.classList && t.classList.contains("grab")))){ tracking=false; return; }
+    tracking = true; tx = e.changedTouches[0].clientX; ty = e.changedTouches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if (!tracking) return; tracking = false;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 45) return;
+    if (dx < 0){
+      if (current === f1) toFrame2();
+      else if (current === f2) fwd2.click();
+      else if (current === f3 && ci < 2) next3.click();
+    } else {
+      if (current === f2) back2.click();
+      else if (current === f3) back3.click();
+    }
+  }, {passive:true});
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; }
+    else {
+      var s = Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+      stage.style.transform = "scale(" + s + ")";
+    }
+    render();
+    if (current === f2){
+      guessRail();
+      if (railReal.classList.contains("anim") || reduce) realRailFiled(); else realRailAtGuess();
+    }
+  }
+  window.addEventListener("resize", fit);
+
+  buildRows();
+  drawCheck();
+  fit();
+})();
+</script>
+</body>
+</html>
