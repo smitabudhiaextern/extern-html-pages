@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run three candidates through the rails and the bar</title>
+<style>
+  /* ---------------------------------------------------------------
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba of #001D69, so
+     the file never introduces a new hue. State is never carried by
+     colour alone: every coloured state also has a glyph or a label.
+     --------------------------------------------------------------- */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
+    --on-highlight:#001D69; /* accents, the thing THEY did           */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    --line:rgba(0,29,105,.24);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.12);
+    --scrim:rgba(0,29,105,.32);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between-frame movement   */
+    --t-reveal:420ms;  /* a value resolving        */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px, and the JS
+     transform then scales it again, double-shrinking the design. The
+     canvas must always hold 960 in layout. Verified with
+     getComputedStyle(stage).width, which reads 960px unscaled. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:22px 44px 18px;display:flex;flex-direction:column}
+
+  /* ---- header ---- */
+  .top{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .pips{display:flex;gap:4px}
+  .pip{width:16px;height:6px;border-radius:3px;background:var(--tint2)}
+  .pip.on{background:var(--on-highlight)}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);margin:7px 0 4px;flex:0 0 auto}
+  .sub{font-size:17px;line-height:1.45;max-width:60ch;flex:0 0 auto;margin-top:2px}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- boards ---- */
+  .board{margin-top:11px;flex:1 1 auto;display:grid;gap:16px;min-height:0;min-width:0}
+  .board.cand{grid-template-columns:512px 1fr}
+  .board.rev{grid-template-columns:1fr 268px}
+  .board.two{grid-template-columns:1fr 1fr}
+  .board.one{grid-template-columns:1fr}
+
+  .panel{
+    background:var(--highlight);border-radius:12px;padding:13px 15px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  /* a panel that takes focus on a state change pins its ring to the
+     palette rather than using the browser default */
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* filter two is drawn differently from filter one on purpose: one is
+     the team's policy, the other is one manager's note pinned beside it.
+     Fill, border style and sub-label all carry the difference, so it
+     never rests on colour. */
+  .panel.note{background:var(--bg);border:2px dashed var(--on-highlight)}
+
+  .plab{font-size:15px;font-weight:600;color:var(--title);line-height:1.25;flex:0 0 auto}
+  .psub{font-size:13px;font-weight:600;color:var(--on-highlight);margin-top:2px;line-height:1.3;flex:0 0 auto}
+  .quo{font-size:26px;line-height:.8;color:var(--on-highlight);font-weight:700}
+  .plabrow{display:flex;align-items:baseline;gap:7px;flex:0 0 auto}
+  .tag{
+    font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:1px 5px;flex:0 0 auto;
+  }
+
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:8px}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .pbody{font-size:17px;line-height:1.5;max-width:60ch}
+  .pbody b{color:var(--title);font-weight:600}
+  .pbody p{margin-bottom:9px}
+  .pbody p:last-child{margin-bottom:0}
+  .rails{list-style:none;font-size:17px;line-height:1.4}
+  .rails li{position:relative;padding-left:20px;margin-bottom:7px}
+  .rails li::before{
+    content:"";position:absolute;left:0;top:8px;width:10px;height:3px;
+    border-radius:2px;background:var(--on-highlight);
+  }
+  .pcap{font-size:13px;line-height:1.4;margin-top:9px;flex:0 0 auto}
+  .pcap b{color:var(--title);font-weight:600}
+  .more{font-size:13px;font-weight:600;color:var(--on-highlight);margin-top:6px;flex:0 0 auto}
+
+  /* ---- the four verdicts ---- */
+  .vwrap{display:flex;flex-direction:column;min-height:0}
+  .vlab{font-size:15px;font-weight:600;color:var(--title);margin-bottom:8px;flex:0 0 auto}
+  .choices{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+  button.ch{
+    display:flex;align-items:flex-start;gap:9px;text-align:left;width:100%;
+    font-family:inherit;font-size:17px;line-height:1.3;font-weight:600;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:10px 12px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.ch .dot{
+    flex:0 0 auto;width:16px;height:16px;border-radius:50%;margin-top:3px;
+    border:2px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;
+  }
+  button.ch[aria-pressed="true"] .dot::after{
+    content:"";width:8px;height:8px;border-radius:50%;background:var(--on-highlight);
+  }
+  button.ch:hover:not(:disabled){border-color:var(--on-highlight)}
+  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ch[aria-pressed="true"]{border-color:var(--on-highlight)}
+  button.ch:disabled{cursor:default}
+  button.ch:disabled[aria-pressed="false"]{opacity:.4}
+
+  /* ---- the reveal ---- */
+  .lead{font-size:17px;line-height:1.4;font-weight:600;color:var(--title);margin-bottom:9px}
+  .vcard{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;
+    display:flex;flex-direction:column;gap:9px;min-height:0;overflow-y:auto;
+  }
+  .vrow{display:flex;flex-direction:column;gap:3px}
+  .vk{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em}
+  .vv{font-size:15px;font-weight:600;color:var(--title);line-height:1.25;display:flex;align-items:flex-start;gap:6px}
+  .g{
+    flex:0 0 auto;width:17px;height:17px;border-radius:50%;font-size:11px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;margin-top:1px;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+  }
+  .g.fill{background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight)}
+  .vnote{font-size:13px;line-height:1.4;border-top:1.5px solid var(--line);padding-top:8px}
+  .vnote b{color:var(--title);font-weight:600}
+  .reveal.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ---- screen 10, the two facts ---- */
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:0 0 auto}
+  button.opt{
+    display:flex;align-items:flex-start;gap:9px;text-align:left;
+    font-family:inherit;font-size:17px;line-height:1.3;font-weight:500;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:10px;
+    padding:10px 12px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.opt .box{
+    flex:0 0 auto;width:16px;height:16px;border-radius:4px;margin-top:3px;
+    border:2px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;color:var(--bg);
+  }
+  button.opt[aria-pressed="true"] .box{background:var(--on-highlight)}
+  button.opt[aria-pressed="true"] .box::after{content:"\2713"}
+  button.opt[aria-pressed="true"]{border-color:var(--on-highlight)}
+  button.opt:hover:not(:disabled){border-color:var(--on-highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.opt:disabled{cursor:default}
+  button.opt:disabled[aria-pressed="false"]{opacity:.45}
+  .shake{animation:shake 150ms linear 1}
+  @keyframes shake{0%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}100%{transform:none}}
+
+  .fbl{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+  .fbl .wide{grid-column:1 / -1;max-width:64ch}
+  .fb{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px}
+  .fb.yes{border-color:var(--on-highlight)}
+  .fb.no{border-style:dashed;border-color:var(--on-highlight)}
+  .fbh{font-size:15px;font-weight:600;color:var(--title);display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;line-height:1.25}
+  .fbt{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--on-highlight)}
+  .fbb{font-size:17px;line-height:1.45}
+  .fbb b{color:var(--title);font-weight:600}
+
+  /* ---- screen 11, the receipt ---- */
+  .rec{display:flex;flex-direction:column;gap:0;flex:0 0 auto}
+  .rrow{display:grid;grid-template-columns:1fr 190px 190px 26px;gap:10px;align-items:center;
+        padding:7px 2px;border-bottom:1.5px solid var(--line)}
+  .rrow.head{border-bottom:2px solid var(--on-highlight);padding-bottom:5px}
+  .rrow.head span{font-size:13px;font-weight:700;color:var(--on-highlight);letter-spacing:.03em;text-transform:uppercase}
+  .rc{font-size:15px;line-height:1.25;color:var(--title);font-weight:600}
+  .rm{font-size:15px;line-height:1.25}
+  .rm.same{font-weight:600;color:var(--title)}
+
+  /* ---- the filters overlay ---- */
+  #overlay{position:absolute;inset:0;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px}
+  .ovcard{
+    background:var(--bg);border:2px solid var(--on-highlight);border-radius:14px;
+    padding:16px 18px 14px;width:100%;max-width:860px;max-height:100%;
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .ovtop{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-bottom:10px}
+  .ovtop h2{font-size:20px;line-height:1.2;font-weight:600;color:var(--title)}
+  .ovbody{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:0;overflow-y:auto}
+
+  /* ---- controls ---- */
+  .bar{margin-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:13px;padding:7px 12px}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .push{margin-left:auto}
+  .hint{font-size:13px;line-height:1.4;max-width:56ch}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:11px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: restack, do not shrink a slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the
+       board off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:20px 16px 34px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    .board,.board.cand,.board.rev,.board.two,.board.one{grid-template-columns:1fr;gap:14px;flex:0 0 auto;align-items:start}
+    .scroll{overflow:visible}
+    .vcard{overflow:visible}
+    .pbody,.rails,.fbb{font-size:16px}
+    .more{display:none}
+    .opts{grid-template-columns:1fr}
+    .fbl{grid-template-columns:1fr}
+    button.ch,button.opt{font-size:16px;padding:13px 13px}
+    .rrow{grid-template-columns:1fr 26px;row-gap:3px}
+    .rrow.head{display:none}
+    .rc{font-size:16px}
+    .rm{font-size:15px}
+    .rm::before{content:attr(data-k) ": ";color:#001D69;font-weight:600}
+    .ovbody{grid-template-columns:1fr}
+    #overlay{position:fixed;padding:12px}
+    .bar{margin-top:16px}
+    button.nav{font-size:16px;padding:13px 18px}
+    button.nav.small{font-size:14px;padding:10px 14px}
+    .hint{font-size:14px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ==================== SCREEN 1: THE TWO FILTERS ==================== -->
+  <div class="frame" id="f1">
+    <div class="top">
+      <span class="progress" id="p1">1 of 6 &middot; The two filters</span>
+      <span class="pips" id="pips1" aria-hidden="true"></span>
+    </div>
+
+    <h1>Two filters, and only one of them is Khan Academy's.</h1>
+
+    <div class="board two">
+      <section class="panel" aria-labelledby="l-rails">
+        <div class="plab" id="l-rails">Filter one, the rails</div>
+        <div class="psub">The team's. From the document you just read.</div>
+        <div class="scroll" tabindex="0" role="group" aria-label="The rails, scrollable">
+          <ul class="rails">
+            <li>No competing college-admissions assessment.</li>
+            <li>Not a district sale. Selling into a named school is the sales team's job.</li>
+            <li>Not rebuilt inside somebody else's platform.</li>
+            <li>Nobody else ends up owning the asset.</li>
+          </ul>
+          <p class="pcap"><b>One relay marker.</b> The platform entry is not published anywhere. It comes from what Sarah told the team.</p>
+        </div>
+      </section>
+
+      <section class="panel note" aria-labelledby="l-bar">
+        <div class="plabrow">
+          <span class="quo" aria-hidden="true">&ldquo;</span>
+          <div>
+            <div class="plab" id="l-bar">Filter two, the size bar</div>
+            <div class="psub">Wes's. Only Wes's.</div>
+          </div>
+        </div>
+        <div class="scroll" tabindex="0" role="group" aria-label="Wes's size bar, scrollable">
+          <div class="pbody">
+            <p><b>Wes's rule of thumb.</b> He does not take anything under about $250,000 a year to Sarah. Not greed, arithmetic: a deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000, so saying yes to the small one costs you the big one you could have chased instead.</p>
+            <p>This number is Wes's, and only Wes's. Khan Academy has never published a deal size it will or will not consider. It is one manager's read on what is worth his own time.</p>
+          </div>
+        </div>
+        <div class="more" id="more1" hidden>More below. Scroll inside this panel.</div>
+      </section>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="start" type="button">Start with candidate 1</button>
+      <span class="hint">Four judgments, three candidates. You commit to a verdict, then you get the reasoning. <span id="resume"></span></span>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN 2: A CANDIDATE ==================== -->
+  <div class="frame" id="f2" hidden>
+    <div class="top">
+      <span class="progress" id="p2">2 of 6 &middot; Candidate 1 of 3</span>
+      <span class="pips" id="pips2" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="qh">Does a rail or the bar kill this one?</h1>
+
+    <div class="board cand">
+      <section class="panel" aria-labelledby="qlab">
+        <div class="plabrow">
+          <span class="plab" id="qlab">Candidate 1, as it came in</span>
+          <span class="tag" id="qtag" hidden>Update</span>
+        </div>
+        <div class="scroll" id="qscroll" tabindex="0" role="group" aria-label="The pitch, scrollable">
+          <div class="pbody" id="qpitch"></div>
+          <p class="pcap" id="qcap"></p>
+        </div>
+        <div class="more" id="more2" hidden>More below. Scroll inside this card.</div>
+      </section>
+
+      <div class="vwrap">
+        <div class="vlab" id="vlab">Your verdict</div>
+        <div class="choices" id="choices" role="group" aria-labelledby="vlab"></div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="qback" type="button">Back</button>
+      <button class="nav ghost small" id="qfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav small" id="qnext" type="button" hidden>See the verdict again</button>
+      <span class="hint" id="qhint">Pick one. You get the reasoning either way, including why the other three do not fit.</span>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN 3: THE REVEAL ====================
+       The reasoning gets its own screen. Sharing one frame with the
+       pitch and four buttons left the longest feedback in the exercise
+       below a scroll, which is where the teaching was. -->
+  <div class="frame" id="f3" hidden>
+    <div class="top">
+      <span class="progress" id="p3">2 of 6 &middot; Candidate 1, the verdict</span>
+      <span class="pips" id="pips3" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="rh"></h1>
+
+    <div class="board rev">
+      <section class="panel reveal" id="rpanel" aria-labelledby="rh" tabindex="-1">
+        <div class="scroll" id="rscroll" tabindex="0" role="group" aria-label="The reasoning, scrollable">
+          <div class="pbody" id="rbody"></div>
+        </div>
+        <div class="more" id="more3" hidden>More below. Scroll inside this panel.</div>
+      </section>
+
+      <aside class="vcard" aria-label="Your call and the call">
+        <div class="vrow">
+          <span class="vk">Your call</span>
+          <span class="vv" id="rmine"></span>
+        </div>
+        <div class="vrow">
+          <span class="vk">The call</span>
+          <span class="vv" id="rtrue"></span>
+        </div>
+        <p class="vnote" id="rnote"></p>
+      </aside>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="rchange" type="button">Change my call</button>
+      <button class="nav ghost small" id="rfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav" id="rnext" type="button">Next</button>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN 10: THE TWO FACTS ==================== -->
+  <div class="frame" id="f4" hidden>
+    <div class="top">
+      <span class="progress" id="p4">5 of 6 &middot; Candidate 3, the two facts</span>
+      <span class="pips" id="pips4" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="fh">So what would you go and get?</h1>
+    <p class="sub" id="fsub">Pick the two that would actually change your answer. Two of these four would not.</p>
+
+    <div class="board one" id="fboard">
+      <div class="opts" id="opts"></div>
+      <section class="panel" id="fpanel" hidden aria-label="Which facts move this">
+        <div class="scroll" id="fscroll" tabindex="0" role="group" aria-label="Feedback on all four, scrollable">
+          <div class="fbl" id="fbl"></div>
+        </div>
+        <div class="more" id="more4" hidden>More below. Scroll inside this panel.</div>
+      </section>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="fback" type="button">Back</button>
+      <button class="nav ghost small" id="fredo" type="button" hidden>Change my two</button>
+      <button class="nav" id="fcheck" type="button" disabled>Check my two</button>
+      <button class="nav" id="fnext" type="button" hidden>Last screen</button>
+      <span class="hint" id="fhint">Two picks, then check. Nothing is graded until you do.</span>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN 11: THE CLOSE ==================== -->
+  <div class="frame" id="f5" hidden>
+    <div class="top">
+      <span class="progress" id="p5">6 of 6 &middot; What you take with you</span>
+      <span class="pips" id="pips5" aria-hidden="true"></span>
+    </div>
+
+    <h1>Four calls, and what they were.</h1>
+
+    <div class="board one">
+      <section class="panel" aria-label="Your four calls">
+        <div class="scroll" id="cscroll" tabindex="0" role="group" aria-label="Your four calls, scrollable">
+          <div class="rec" id="rec"></div>
+          <div class="pbody" id="cclose" style="margin-top:11px"></div>
+        </div>
+        <div class="more" id="more5" hidden>More below. Scroll inside this panel.</div>
+      </section>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="cback" type="button">Back to candidate 3</button>
+      <button class="nav ghost small" id="cfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav ghost small" id="creset" type="button">Run them again</button>
+      <span class="hint push"><b>That is the end of this one.</b> Nothing further to click.</span>
+    </div>
+  </div>
+
+  <!-- ==================== THE FILTERS OVERLAY ==================== -->
+  <div id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ovh">
+    <div class="ovcard">
+      <div class="ovtop">
+        <h2 id="ovh">The two filters</h2>
+        <button class="nav ghost small push" id="ovclose" type="button">Close <span class="key" aria-hidden="true">Esc</span></button>
+      </div>
+      <div class="ovbody">
+        <section class="panel" aria-labelledby="ol-rails">
+          <div class="plab" id="ol-rails">Filter one, the rails</div>
+          <div class="psub">The team's. From the document you just read.</div>
+          <ul class="rails" style="margin-top:8px">
+            <li>No competing college-admissions assessment.</li>
+            <li>Not a district sale. Selling into a named school is the sales team's job.</li>
+            <li>Not rebuilt inside somebody else's platform.</li>
+            <li>Nobody else ends up owning the asset.</li>
+          </ul>
+        </section>
+        <section class="panel note" aria-labelledby="ol-bar">
+          <div class="plabrow">
+            <span class="quo" aria-hidden="true">&ldquo;</span>
+            <div>
+              <div class="plab" id="ol-bar">Filter two, the size bar</div>
+              <div class="psub">Wes's. Only Wes's.</div>
+            </div>
+          </div>
+          <div class="pbody" style="margin-top:8px">
+            <p>He does not take anything under about $250,000 a year to Sarah. A deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000.</p>
+            <p>Wes's number, and only Wes's. Khan Academy has never published a deal size it will or will not consider.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Three things must happen, and all three
+       have been shipped broken in this program before: the dead canvas
+       has to be hidden so nobody is offered buttons that cannot work, the
+       flex-centred body has to go back to block flow (otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed
+       off the centred overflow, which cannot be scrolled back to), and
+       links have to be pinned to the palette so the browser default blue
+       never appears as a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:14px 0 5px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul,.nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf blockquote{margin:0 0 11px 0;padding:9px 12px;background:#DCE1FF;border-radius:9px}
+    .nsf .bar2{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+  </style>
+  <div class="nsf">
+    <h1>Run three candidates through the rails and the bar</h1>
+    <p>The interactive version asks you to commit to a verdict on each candidate and then explains why the other three verdicts do not fit. With scripts blocked, here is the same content as a document: the two filters, the four judgments with their verdicts and the one sentence that settles each, and the two facts that resolve the hard one.</p>
+
+    <h2>The two filters, and only one of them is Khan Academy's</h2>
+
+    <h3>Filter one, the rails. The team's.</h3>
+    <ul>
+      <li>No competing college-admissions assessment.</li>
+      <li>Not a district sale. Selling into a named school is the sales team's job.</li>
+      <li>Not rebuilt inside somebody else's platform.</li>
+      <li>Nobody else ends up owning the asset.</li>
+    </ul>
+    <p><strong>One relay marker.</strong> The platform entry is not published anywhere. It comes from what Sarah told the team, not from a public source.</p>
+
+    <h3>Filter two, the size bar. Wes's, and only Wes's.</h3>
+    <div class="bar2">
+      <p><strong>Wes's rule of thumb.</strong> He does not take anything under about $250,000 a year to Sarah. Not greed, arithmetic: a deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000, so saying yes to the small one costs you the big one you could have chased instead.</p>
+      <p style="margin-bottom:0"><strong>This number is Wes's, and only Wes's.</strong> Khan Academy has never published a deal size it will or will not consider, and this is not one. It is one manager's read on what is worth his own time, not an organisational threshold and not a procurement floor.</p>
+    </div>
+
+    <h2>The four judgments</h2>
+
+    <h3>Candidate 1, the rival admissions test. Killed by a rail.</h3>
+    <blockquote>Big one. A test-prep company got in touch. They want us to co-build a free, official practice tool for a rival college-admissions test. Same shape as the SAT Suite work: free to students, official, built together. They have budget and they want to move this quarter.</blockquote>
+    <p><strong>Killed by a rail.</strong> Khan Academy's own help centre calls it the official partner of College Board, and the free digital SAT practice course is built with College Board's own questions. A matching free-practice deal for a rival college-admissions test is not available at any price. The discriminating sentence: <strong>the money is irrelevant, and that irrelevance is what makes this a rail rather than a preference.</strong> A preference bends to a good enough offer. A rail does not have a price.</p>
+    <p>Note on the pitch: no public source says which way money moves in the College Board partnership. Read "same shape" as shape only.</p>
+
+    <h3>Candidate 2 at $80,000. Killed by the size bar.</h3>
+    <blockquote>A regional literacy nonprofit runs after-school reading programs across about forty sites. They want 200 of our videos professionally dubbed into Spanish and Haitian Creole, plus printable family guides, published as a co-branded collection on Khan Academy so families can find it in one place. They are offering $80,000 a year, renewable.</blockquote>
+    <p><strong>Killed by the size bar, which is Wes's bar and not Khan Academy's.</strong> Walk the rails first, because that is the cheaper check, and none of them fires. No competing assessment. Not a district sale, because no named school is buying anything. It ships on Khan Academy rather than inside somebody else's platform. Nobody walks off owning the asset. The discriminating sentence: <strong>the reason to say no is not that the offer is bad, it is that saying yes to this one costs you the bigger one you could have chased instead.</strong></p>
+
+    <h3>Candidate 2 at $300,000, three weeks later. Survives.</h3>
+    <blockquote>Update on the literacy nonprofit. Same 200 videos, same two languages, same family guides. A foundation has come in behind them, so the offer is now $300,000 a year on a five-year commitment. Nothing else about it has changed.</blockquote>
+    <p><strong>It survives.</strong> Nothing about the deal changed except the number, and the number is the whole thing. The five-year term makes it better still, because the same nine to eighteen months of setup now buys five years of return instead of one, which is the arithmetic the bar is made of. The discriminating sentence: <strong>"survives" is not approval and not a yes, it means the idea has earned a real conversation with the person who decides.</strong> This is also the cleanest evidence you will get that the bar is a size rule and not a quality judgment, because the deal you liked three weeks ago is the deal you are recommending now.</p>
+
+    <h3>Candidate 3, the state deal. A genuine judgment call, no clean answer.</h3>
+    <blockquote>A state department of education wants to pay $400,000 a year for statewide Khanmigo access. They would fund it centrally out of a state literacy and AI line, and districts would opt in as they are ready. The person who emailed is a deputy commissioner and she wants to start in the next school year.</blockquote>
+    <p><strong>A genuine judgment call.</strong> It clears the bar comfortably at $400,000, and no rail names it outright. Then the district-sales entry gets in the way: district selling belongs to the sales team, and a statewide deal where districts opt in one at a time sits directly on top of districts that team may already be working. Is this a partnership, or the sales pipeline with a state logo on the invoice? The discriminating sentence: <strong>both readings are defensible from what is in the note, which is exactly what makes this a judgment call rather than a puzzle with a hidden answer.</strong></p>
+
+    <h2>Candidate 3, the two facts that would settle it</h2>
+    <p>Of these four, two would change the answer and two would not.</p>
+    <ol>
+      <li><strong>Which of that state's districts are already in the sales team's pipeline, and at what stage. This one moves it.</strong> If sales is already deep with a dozen districts in that state, the state deal sits on top of their pipeline and the district-sales rail is live. If sales has nothing there, the state is opening a door rather than standing in one. Same pitch, opposite answer, one fact.</li>
+      <li><strong>Who at the state has authority to sign, and whether the budget is the state's or the districts'. This one moves it, and it is the one people forget.</strong> A deputy commissioner sending an email is not the same as procurement authority or a board vote. And if the money turns out to be the districts' rather than the state's, then the state is not buying anything, it is introducing you to three hundred buyers, which is the sales team's job with extra steps.</li>
+      <li><strong>Whether any other state has done a deal shaped like this one. This one does not move it.</strong> Precedent tells you the shape exists somewhere. It tells you nothing about whether this particular deal is your team's or the sales team's, which is the only thing unresolved. Useful when you are writing the pitch. Useless when you are making the call.</li>
+      <li><strong>Whether $400,000 is a fair price for statewide access. This one does not move it.</strong> It already clears the bar, so price cannot change the verdict. Price is what you negotiate once you know whose deal it is. Asking it now feels productive and reorders nothing.</li>
+    </ol>
+    <p>Two facts, and neither one is in the note. Most real candidates look like this. So the habit worth building is not resolving them on the spot. It is telling the difference between the fact that changes your answer and the fact that is merely interesting, and then going and getting the first kind.</p>
+
+    <h2>What you take with you</h2>
+    <p>One rail, one deal that died on Wes's bar, the same deal surviving at a bigger number, and one that no filter settles. That distribution is roughly what a real intake week looks like. Hold on to both lists. Project 3 hands them straight back to you, with your own candidates on the table instead of someone else's.</p>
+
+    <h2>Sources for the checkable claims</h2>
+    <ul>
+      <li>Khan Academy help centre, "Helping your students prepare for the Digital SAT on Khan Academy", updated 11 August 2026: <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821-Helping-your-students-prepare-for-the-Digital-SAT-on-Khan-Academy">support.khanacademy.org</a></li>
+      <li>College Board on the practice course being developed in partnership with College Board: <a href="https://satsuite.collegeboard.org/practice/khan-academy">satsuite.collegeboard.org/practice/khan-academy</a></li>
+      <li>College Board Newsroom, 2 June 2015, the launch: <a href="https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg">newsroom.collegeboard.org</a></li>
+      <li>Khan Academy Districts on College Board's site: <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts">satsuite.collegeboard.org/k12-educators/khan-academy-districts</a></li>
+    </ul>
+    <p>Neither organisation has published which direction any money moves in the College Board partnership, or whether any does at all. Nothing in this exercise tells you.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+  /* =================================================================
+     The four verdict options. Order is fixed and is also the 1 to 4
+     key order on a candidate screen.
+     ================================================================= */
+  var VERDICTS = [
+    {id:"rail",  label:"Killed by a rail",                        short:"Killed by a rail",     lower:"killed by a rail"},
+    {id:"size",  label:"Killed by the size bar",                  short:"Killed by Wes's bar",  lower:"killed by Wes's bar"},
+    {id:"live",  label:"Survives",                                short:"Survives",             lower:"it survives"},
+    {id:"judge", label:"Genuine judgment call, no clean answer",   short:"Genuine judgment call",lower:"a genuine judgment call"}
+  ];
+  var VD = {};
+  VERDICTS.forEach(function(v){ VD[v.id] = v; });
+
+  var GLYPH = {ok:"✓", miss:"?"};
+
+  /* =================================================================
+     Four judgments across three candidates. Candidate 2 is judged
+     twice, at $80,000 and then at $300,000 three weeks later, because
+     the build spec requires that one candidate survives and reusing
+     the same deal at a different number is what proves the bar is a
+     size rule rather than a quality judgment.
+
+     Every one of the four verdict options on every judgment has its
+     own feedback. Sixteen states, all written, none shared. A student
+     who picks wrongly is told why that option does not fit before
+     being told what the call is.
+     ================================================================= */
+  var J = [
+    {
+      id:"c1", step:2,
+      qlab:"Candidate 1 of 3", rlab:"Candidate 1, the verdict",
+      h:"Does a rail or the bar kill this one?",
+      plab:"Candidate 1, as it came in", tag:"",
+      pitch:"<p>Big one. A test-prep company got in touch. They want us to co-build a free, official practice tool for a rival college-admissions test. Same shape as the SAT Suite work: free to students, official, built together. They have budget and they want to move this quarter. The reach is enormous and it is the kind of thing that gets written up.</p>",
+      cap:"<b>Note on the pitch.</b> No public source says which way money moves in the College Board partnership. Read \"same shape\" as shape only.",
+      note:"<b>Candidate 1.</b> A rival college-admissions test, free and official, and they have budget.",
+      recname:"Candidate 1, the rival admissions test",
+      right:"rail",
+      next:"Next: candidate 2",
+      fb:{
+        rail:{
+          lead:"Killed by a rail. It is the first entry in the document.",
+          body:"<p>Khan Academy's own help centre calls it the official partner of College Board, and the free digital SAT practice course is built with College Board's own questions. A matching free-practice deal for a rival college-admissions test is not available at any price.</p>" +
+               "<p><b>Notice what did not matter:</b> they have budget. The size of the cheque is irrelevant here, and that irrelevance is what makes this a rail rather than a preference. A preference bends to a good enough offer. A rail does not have a price.</p>" +
+               "<p>Notice also how little you had to know. One line in the document settled the whole thing. That is why the rails are the first check you run and not the last.</p>"
+        },
+        size:{
+          lead:"You reached for the second filter, and this one never gets that far.",
+          body:"<p>The bar answers one question: is this deal big enough to be worth nine to eighteen months of a small team? That question only makes sense for deals that are available. This one is not available, so its size is not a fact about it.</p>" +
+               "<p>Run the filters in order. The rails are the cheaper check, they are four lines long, and when one of them fires you are done. <b>The verdict here is a rail,</b> the competing-assessment entry.</p>"
+        },
+        live:{
+          lead:"You weighed the money, which is the right instinct almost everywhere else and the wrong one here.",
+          body:"<p>On most candidates the budget is the fact that decides it. That is what makes this one instructive. Khan Academy is College Board's official partner and the SAT practice course is built with them. A competing college-admissions test is closed, and it stays closed whether the offer is $80,000 or $8 million.</p>" +
+               "<p>That is the whole definition of a rail: <b>a no that a better offer cannot move.</b> Being able to say it on the same day is the point.</p>"
+        },
+        judge:{
+          lead:"A judgment call is a candidate where a fact you do not have could flip the answer. Name the fact here.",
+          body:"<p>There isn't one. You know the partner, the ask, the shape and the money, and none of it changes the outcome, because the competing-assessment entry closes this one outright. Learning more would not help you.</p>" +
+               "<p>That absence is the test. <b>If you can name the missing fact, you have a judgment call. If you cannot, you have a rail and you are hesitating.</b></p>"
+        }
+      }
+    },
+    {
+      id:"c2a", step:3,
+      qlab:"Candidate 2 of 3", rlab:"Candidate 2, the verdict",
+      h:"Does a rail or the bar kill this one?",
+      plab:"Candidate 2, as it came in", tag:"",
+      pitch:"<p>A regional literacy nonprofit runs after-school reading programs across about forty sites. They want 200 of our videos professionally dubbed into Spanish and Haitian Creole, plus printable family guides, published as a co-branded collection on Khan Academy so families can find it in one place. They are offering $80,000 a year, renewable. Their director taught for eleven years and she is genuinely great. This is exactly the mission.</p>",
+      cap:"",
+      note:"<b>Candidate 2.</b> Dubbing, family guides and a co-branded collection, at $80,000 a year, renewable.",
+      recname:"Candidate 2 at $80,000",
+      right:"size",
+      next:"Next: three weeks later",
+      fb:{
+        size:{
+          lead:"Killed by the size bar. Wes's bar, not Khan Academy's.",
+          body:"<p>Go looking for a rail first, because that is the cheaper check, and you will not find one. No competing assessment, not a district sale, it ships on Khan Academy rather than inside somebody else's platform, and nobody walks off owning the asset.</p>" +
+               "<p>It is $80,000. Under Wes's own rule of thumb it does not go to Sarah, because dubbing 200 videos into two languages and building family guides eats the same nine to eighteen months of the same small team as a deal worth five times more.</p>" +
+               "<p>That is the uncomfortable part of the job. <b>The reason to say no is not that the offer is bad.</b> It is that saying yes to this one costs you the bigger one you could have chased instead.</p>"
+        },
+        rail:{
+          lead:"Name the rail.",
+          body:"<p>Walk them. Not a competing assessment. Not a district sale, because no named school is buying anything. Not rebuilt inside somebody else's platform, because this ships on Khan Academy. Nobody ends up owning the asset. None of them fires.</p>" +
+               "<p>This is the most common way \"rail\" gets misused: to mean \"I do not think we should do this.\" A rail is a specific closed door with a specific reason behind it, and you should be able to point at the entry. When you cannot, <b>the honest answer is that the deal clears the rails and dies somewhere else.</b> It dies on the bar, at $80,000.</p>"
+        },
+        live:{
+          lead:"You are right that it clears the rails, and that is the harder half.",
+          body:"<p>Where it stops is the second filter. \"Survives\" means it goes to Sarah. At $80,000 it does not, because Wes does not take anything under about $250,000 a year to her, and this is his call to make about his own time.</p>" +
+               "<p>Worth being precise about what you were and were not asked. <b>You were not asked whether this is a good thing to do in the world.</b> It probably is. You were asked whether either filter kills it, and the second one does.</p>"
+        },
+        judge:{
+          lead:"Nothing is missing here, so this is a hard call rather than an open one.",
+          body:"<p>You know the size, $80,000. You know the term, renewable annually. You know the work, 200 videos into two languages plus guides. You know the partner. There is no fact you could go and get that would change the answer.</p>" +
+               "<p><b>Uncomfortable and underdetermined are different things.</b> This one is uncomfortable, because a good partner gets a no. That is not the same as unresolvable. It is killed by the bar.</p>"
+        }
+      }
+    },
+    {
+      id:"c2b", step:4,
+      qlab:"Candidate 2, three weeks later", rlab:"Candidate 2 again, the verdict",
+      h:"Same deal, new number. Run it again.",
+      plab:"Candidate 2, three weeks later", tag:"Update",
+      pitch:"<p>Update on the literacy nonprofit. Same 200 videos, same two languages, same family guides. A foundation has come in behind them, so the offer is now $300,000 a year on a five-year commitment. Nothing else about it has changed.</p>",
+      cap:"<b>What changed:</b> the number and the term. Nothing else, which is why this one is worth judging twice.",
+      note:"<b>Candidate 2 again.</b> Identical work, now $300,000 a year on a five-year commitment.",
+      recname:"Candidate 2 at $300,000",
+      right:"live",
+      next:"Next: candidate 3",
+      fb:{
+        live:{
+          lead:"It survives. This is the one you take to Sarah.",
+          body:"<p>Nothing about the deal changed except the number, and the number is the whole thing. $300,000 a year clears Wes's bar. The five-year term makes it better still, because the same nine to eighteen months of setup now buys five years of return instead of one, which is the arithmetic the bar is made of.</p>" +
+               "<p>Be clear what \"survives\" means. <b>Not approved. Not a yes.</b> It means the idea has earned a real conversation with the person who decides, which is the only thing you were ever being asked to judge.</p>" +
+               "<p>This is also the cleanest evidence you will get that the bar is a size rule and not a quality judgment. The deal you liked three weeks ago is the deal you are recommending now.</p>"
+        },
+        rail:{
+          lead:"Look at what you just said twice.",
+          body:"<p>If you called this a rail now and the bar last time, you have given two different reasons for the same deal, and one of them was not a reason. Nothing changed except the number, and <b>rails do not have prices.</b> A rail that fires at $300,000 fires at $80,000 too.</p>" +
+               "<p>That is worth keeping. When a verdict moves because the money moved, the filter that decided it was the bar. This one now clears the bar and it survives.</p>"
+        },
+        size:{
+          lead:"Check the number against the bar.",
+          body:"<p>Wes's rule of thumb is about $250,000 a year. This is $300,000 a year, and the bar is an annual test because the thing it is rationing is a year of a small team's attention.</p>" +
+               "<p>The five-year term pushes the same way, not against it. The setup cost is paid once and the return arrives five times. <b>If anything this is the strongest version of the deal you have seen.</b> It survives.</p>"
+        },
+        judge:{
+          lead:"You have every fact this decision needs.",
+          body:"<p>The size, the term, the work, the partner, and a three-week history with them. A judgment call is a candidate where something you cannot see could flip the answer. Nothing here is out of view.</p>" +
+               "<p>If the hesitation is that $300,000 does not feel like enough certainty to say yes, that is the right instinct pointed at the wrong verdict. <b>\"Survives\" is not a yes.</b> It means this goes to Sarah and she decides.</p>"
+        }
+      }
+    },
+    {
+      id:"c3", step:5,
+      qlab:"Candidate 3 of 3", rlab:"Candidate 3, the verdict",
+      h:"Does a rail or the bar kill this one?",
+      plab:"Candidate 3, as it came in", tag:"",
+      pitch:"<p>A state department of education wants to pay $400,000 a year for statewide Khanmigo access. They would fund it centrally out of a state literacy and AI line, and districts would opt in as they are ready. The person who emailed is a deputy commissioner and she wants to start in the next school year. It is four hundred thousand dollars and it is one contract instead of three hundred.</p>",
+      cap:"",
+      note:"<b>Candidate 3.</b> $400,000 a year from a state, funded centrally, with districts opting in one at a time.",
+      recname:"Candidate 3, the state deal",
+      right:"judge",
+      next:"What would you go and get?",
+      fb:{
+        judge:{
+          lead:"Genuine judgment call. No clean answer, and that is the answer.",
+          body:"<p>It clears the bar comfortably at $400,000. No competing assessment, and nobody walks off owning the asset. On that reading it is a yes.</p>" +
+               "<p>Then the district-sales entry gets in the way. District selling belongs to the sales team, and a statewide deal where districts opt in one at a time sits directly on top of districts that team may already be working. Is this a partnership, or the sales pipeline with a state logo on the invoice? <b>Both readings are defensible from what is in the note,</b> which is exactly what makes this a judgment call and not a puzzle with a hidden answer.</p>" +
+               "<p>Holding your nerve on that is the hard part. There is a real pull toward one of the tidy three so it feels finished. Resisting it is the skill.</p>"
+        },
+        rail:{
+          lead:"You found the real tension, which most people miss. Then you resolved it faster than the facts allow.",
+          body:"<p>The district-sales entry is about selling Khan Academy Districts into a specific, named school. This is a state funding central access for districts that have not been named yet, on a budget line that is the state's rather than any district's. Whether that collides with the rail or sits above it depends on a fact that is not in the note.</p>" +
+               "<p>Escalating a live tension into a rail is how a team says no to something it should have asked two questions about first, and <b>a no you cannot defend costs you more than a slow yes.</b></p>"
+        },
+        size:{
+          lead:"The arithmetic first: $400,000 is above about $250,000, so the bar does not fire.",
+          body:"<p>Then the more useful correction. <b>The bar is a floor, not a target.</b> Clearing it does not make a deal good and it does not make it yours. It buys the deal a real conversation and nothing else.</p>" +
+               "<p>Watch for the reflex you just used. This candidate is the most complicated one you have seen, and the bar is the tidiest tool on the desk. Complexity is not size. What settles this one sits in the rails, not in the money.</p>"
+        },
+        live:{
+          lead:"“Survives” is a claim that you checked the rails and they are clear. One of them is not.",
+          body:"<p>Say this survives and you are taking Sarah a deal that might be the sales team's pipeline with a state logo on the invoice, and you will find that out in the room, in front of her. The district-sales entry puts selling into named schools with the sales team, and a state where districts opt in one at a time is uncomfortably close to that.</p>" +
+               "<p>You do not have enough to call it a rail either. That is the point. <b>The next move is not to decide it.</b></p>"
+        }
+      }
+    }
+  ];
+
+  /* =================================================================
+     Screen 10. Every student reaches this screen, whatever they
+     answered on candidate 3, so the second half of the ask is taught
+     rather than handed to whoever guessed right.
+     ================================================================= */
+  var FACTS = [
+    {
+      id:"a", moves:true,
+      label:"Which of that state's districts are already in the sales team's pipeline, and at what stage",
+      lead:"Yes. This is the fact the whole verdict turns on.",
+      body:"If sales is already deep with a dozen districts in that state, the state deal is sitting on top of their pipeline and the district-sales entry is live. If sales has nothing there, the state is opening a door rather than standing in one. Same pitch, opposite answer, one fact."
+    },
+    {
+      id:"b", moves:true,
+      label:"Who at the state has authority to sign, and whether the budget is the state's or the districts'",
+      lead:"Yes, and it is the one people forget.",
+      body:"A deputy commissioner sending an email is not the same as procurement authority or a board vote. And if the money turns out to be the districts' rather than the state's, then the state is not buying anything, it is introducing you to three hundred buyers, which is the sales team's job with extra steps."
+    },
+    {
+      id:"c", moves:false,
+      label:"Whether any other state has done a deal shaped like this one",
+      lead:"Interesting, and it does not move this.",
+      body:"Precedent tells you the shape exists somewhere. It tells you nothing about whether this particular deal is your team's or the sales team's, which is the only thing unresolved. Useful when you are writing the pitch. Useless when you are making the call."
+    },
+    {
+      id:"d", moves:false,
+      label:"Whether $400,000 is a fair price for statewide access",
+      lead:"It already clears the bar, so this cannot change the verdict.",
+      body:"Price is what you negotiate once you know whose deal it is. Asking it now feels productive and reorders nothing. Watch for that: the question you know how to answer is not always the question that is blocking you."
+    }
+  ];
+
+  var FACTS_CLOSE = "<p>Two facts, and neither one is in the note. Most real candidates look like this. So the habit worth building is not resolving them on the spot. It is telling the difference between the fact that changes your answer and the fact that is merely interesting, and then going and getting the first kind.</p>";
+
+  var CLOSE_COPY =
+    "<p>One rail, one deal that died on Wes's bar, the same deal surviving at a bigger number, and one that no filter settles. That distribution is roughly what a real intake week looks like.</p>" +
+    "<p>Hold on to both lists. Project 3 hands them straight back to you, with your own candidates on the table instead of someone else's.</p>";
+
+  var TOTAL_STEPS = 6;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["p1","p2","p3","p4","p5","pips1","pips2","pips3","pips4","pips5",
+   "f1","f2","f3","f4","f5","overlay","ovclose","live",
+   "start","resume","more1","more2","more3","more4","more5",
+   "qh","qlab","qtag","qscroll","qpitch","qcap","choices","vlab","qback","qfilters","qnext","qhint",
+   "rh","rpanel","rscroll","rbody","rmine","rtrue","rnote","rchange","rfilters","rnext",
+   "fh","fsub","opts","fpanel","fscroll","fbl","fback","fredo","fcheck","fnext","fhint","fboard",
+   "rec","cclose","cscroll","cback","cfilters","creset"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* ---------------------------------------------------------------
+     A small, failure-tolerant store, so "do the first candidate and
+     move on" is a true statement rather than a promise the build
+     breaks. Every read and write is wrapped: a browser with storage
+     disabled must lose the record, not the interactive.
+     --------------------------------------------------------------- */
+  var KEY = "ka-p1-candidates-v1";
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; }
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){}
+  }
+  var store = load();
+  store.v = store.v || {};              /* judgment id -> verdict id  */
+  store.facts = store.facts || null;    /* array of two fact ids      */
+
+  var qi = 0;                           /* which judgment is on screen */
+  var picks = [];                       /* live selection on screen 10 */
+  var lastFocus = null;                 /* who opened the overlay      */
+
+  function announce(m){ el.live.textContent = m; }
+
+  function pips(node, lit){
+    var out = "";
+    for(var i=1;i<=TOTAL_STEPS;i++){
+      out += '<span class="pip' + (i <= lit ? " on" : "") + '"></span>';
+    }
+    node.innerHTML = out;
+  }
+
+  /* Every scrolling region says so, rather than letting a sentence end at
+     the panel edge with no affordance. Measured synchronously: reading
+     scrollHeight forces layout, and an earlier version deferred this to
+     requestAnimationFrame, which never fired under headless rendering, so
+     the flag stayed hidden on a panel with 525px below the fold.
+     The flag is hidden before the read so its own height is never counted
+     as part of the content it is reporting on. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+  function flagSoon(scroller, flagEl){ flag(scroller, flagEl); }
+
+  var FRAMES = ["f1","f2","f3","f4","f5"];
+  function show(which){
+    FRAMES.forEach(function(f){ el[f].hidden = (f !== which); });
+  }
+
+  /* ---------------- screen 1 ---------------- */
+
+  function firstUnanswered(){
+    for(var i=0;i<J.length;i++){ if(!store.v[J[i].id]) return i; }
+    return -1;
+  }
+
+  function drawStart(){
+    el.p1.textContent = "1 of " + TOTAL_STEPS + " · The two filters";
+    pips(el.pips1, 1);
+    var n = 0;
+    J.forEach(function(j){ if(store.v[j.id]) n++; });
+    var nx = firstUnanswered();
+    if(n === 0){
+      el.start.textContent = "Start with candidate 1";
+      el.resume.textContent = "";
+    } else if(nx === -1){
+      el.start.textContent = "Back to candidate 1";
+      el.resume.innerHTML = "<b>You have judged all four already.</b> Your calls are saved on this device.";
+    } else {
+      el.start.textContent = "Pick up at " + J[nx].qlab.toLowerCase();
+      el.resume.innerHTML = "<b>You judged " + n + " of 4 last time.</b> Those calls are saved on this device.";
+    }
+    var s1 = el.f1.querySelectorAll(".scroll");
+    flagSoon(s1[1], el.more1);
+  }
+
+  /* ---------------- a candidate screen ---------------- */
+
+  function buildChoices(){
+    var out = "";
+    VERDICTS.forEach(function(v, i){
+      out += '<button class="ch" type="button" data-v="' + v.id + '" aria-pressed="false">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span>' + v.label + '</span></button>';
+    });
+    el.choices.innerHTML = out;
+    Array.prototype.slice.call(el.choices.querySelectorAll("button.ch")).forEach(function(b){
+      b.addEventListener("click", function(){
+        if(b.disabled) return;
+        commit(b.getAttribute("data-v"));
+      });
+    });
+  }
+
+  function choiceButtons(){
+    return Array.prototype.slice.call(el.choices.querySelectorAll("button.ch"));
+  }
+
+  function drawCand(){
+    var j = J[qi], done = store.v[j.id];
+    el.p2.textContent = j.step + " of " + TOTAL_STEPS + " · " + j.qlab;
+    pips(el.pips2, j.step);
+    el.qh.textContent = j.h;
+    el.qlab.textContent = j.plab;
+    el.qtag.hidden = !j.tag;
+    if(j.tag) el.qtag.textContent = j.tag;
+    el.qpitch.innerHTML = j.pitch;
+    el.qcap.innerHTML = j.cap;
+    el.qcap.hidden = !j.cap;
+    el.qscroll.scrollTop = 0;
+
+    choiceButtons().forEach(function(b){
+      var mine = b.getAttribute("data-v") === done;
+      b.setAttribute("aria-pressed", mine ? "true" : "false");
+      b.disabled = !!done;
+    });
+
+    el.qnext.hidden = !done;
+    if(done) el.qnext.textContent = "See the verdict again";
+    el.qhint.innerHTML = done
+      ? "You already called this one <b>" + VD[done].short.toLowerCase() + "</b>. Reopen the verdict, or step back."
+      : "Pick one. You get the reasoning either way, including why the other three do not fit. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work.";
+
+    flagSoon(el.qscroll, el.more2);
+  }
+
+  function commit(vid){
+    var j = J[qi];
+    store.v[j.id] = vid;
+    save();
+    choiceButtons().forEach(function(b){
+      var mine = b.getAttribute("data-v") === vid;
+      b.setAttribute("aria-pressed", mine ? "true" : "false");
+      b.disabled = true;
+    });
+    show("f3");
+    drawReveal();
+    /* the button that was activated is now inside a hidden frame, so focus
+       moves deliberately to the panel that replaced it rather than falling
+       back to <body> and losing the keyboard student's place */
+    el.rpanel.focus();
+    announce("You said " + VD[vid].label + ". The verdict screen is open.");
+  }
+
+  /* ---------------- the reveal ---------------- */
+
+  function drawReveal(){
+    var j = J[qi], mine = store.v[j.id], ok = (mine === j.right);
+    var st = j.fb[mine];
+
+    el.p3.textContent = j.step + " of " + TOTAL_STEPS + " · " + j.rlab;
+    pips(el.pips3, j.step);
+    el.rh.textContent = (ok ? "You had it. " : "Not this one. ") + "The call: " + VD[j.right].lower + ".";
+
+    el.rbody.innerHTML = '<p class="lead">' + st.lead + "</p>" + st.body;
+    el.rscroll.scrollTop = 0;
+
+    el.rmine.innerHTML = '<span class="g' + (ok ? " fill" : "") + '" aria-hidden="true">' +
+                         (ok ? GLYPH.ok : GLYPH.miss) + "</span>" + VD[mine].short;
+    el.rmine.setAttribute("aria-label", "Your call: " + VD[mine].short + (ok ? ", a match" : ", not the call"));
+    el.rtrue.innerHTML = '<span class="g fill" aria-hidden="true">' + GLYPH.ok + "</span>" + VD[j.right].short;
+    el.rnote.innerHTML = j.note;
+
+    el.rnext.textContent = j.next;
+
+    if(reduce){
+      el.rpanel.classList.add("on");
+    } else {
+      el.rpanel.classList.remove("on");
+      void el.rpanel.offsetWidth;
+      el.rpanel.classList.add("on");
+    }
+    flagSoon(el.rscroll, el.more3);
+  }
+
+  /* ---------------- screen 10, the two facts ---------------- */
+
+  function buildOpts(){
+    var out = "";
+    FACTS.forEach(function(f, i){
+      out += '<button class="opt" type="button" data-f="' + f.id + '" aria-pressed="false">' +
+             '<span class="box" aria-hidden="true"></span>' +
+             '<span>' + f.label + '</span></button>';
+    });
+    el.opts.innerHTML = out;
+    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+      b.addEventListener("click", function(){ toggleFact(b); });
+    });
+  }
+
+  function toggleFact(b){
+    if(b.disabled) return;
+    var id = b.getAttribute("data-f"), at = picks.indexOf(id);
+    if(at > -1){
+      picks.splice(at, 1);
+      b.setAttribute("aria-pressed", "false");
+    } else if(picks.length >= 2){
+      el.fhint.innerHTML = "<b>Two only.</b> Unpick one before you add another.";
+      if(!reduce){
+        b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake");
+      }
+      announce("Two picks only. Unpick one first.");
+      return;
+    } else {
+      picks.push(id);
+      b.setAttribute("aria-pressed", "true");
+    }
+    el.fcheck.disabled = picks.length !== 2;
+    if(picks.length !== 2){
+      el.fhint.innerHTML = "Two picks, then check. Nothing is graded until you do.";
+    } else {
+      el.fhint.innerHTML = "Two picked. <b>Check my two</b> when you are ready.";
+    }
+    announce(picks.length + " of 2 picked.");
+  }
+
+  function drawFacts(){
+    var j = J[3], mine = store.v[j.id];
+    el.p4.textContent = "5 of " + TOTAL_STEPS + " · Candidate 3, the two facts";
+    pips(el.pips4, 5);
+    var got = (mine === j.right);
+    el.fh.textContent = got
+      ? "You called it. So what would you go and get?"
+      : "So what would you go and get?";
+    el.fsub.innerHTML = got
+      ? "Pick the two that would actually change your answer. Two of these four would not."
+      : "You called candidate 3 something else, and this is still the part that moves it. Pick the two facts that would actually change the answer. Two of these four would not.";
+
+    if(store.facts && store.facts.length === 2){
+      picks = store.facts.slice();
+      Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+        b.setAttribute("aria-pressed", picks.indexOf(b.getAttribute("data-f")) > -1 ? "true" : "false");
+      });
+      showFactResult();
+    } else {
+      picks = [];
+      Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+        b.setAttribute("aria-pressed", "false"); b.disabled = false;
+      });
+      openFactPicking();
+    }
+  }
+
+  /* symmetric with "Change my call" on a verdict: a checked answer can be
+     reopened without wiping the whole exercise */
+  function openFactPicking(){
+    el.opts.hidden = false;
+    el.fpanel.hidden = true;
+    el.fcheck.hidden = false;
+    el.fcheck.disabled = picks.length !== 2;
+    el.fnext.hidden = true;
+    el.fredo.hidden = true;
+    el.fhint.innerHTML = "Two picks, then check. Nothing is graded until you do.";
+  }
+
+  function checkFacts(){
+    if(picks.length !== 2) return;
+    store.facts = picks.slice();
+    save();
+    showFactResult();
+    el.fpanel.setAttribute("tabindex", "-1");
+    el.fpanel.focus();
+  }
+
+  function showFactResult(){
+    var right = 0, out = "";
+    FACTS.forEach(function(f){
+      var chosen = picks.indexOf(f.id) > -1;
+      if(f.moves && chosen) right++;
+      var g = (f.moves === chosen) ? GLYPH.ok : GLYPH.miss;
+      var tag = f.moves ? "Moves the verdict" : "Does not move it";
+      var you = chosen ? "You picked this. " : "You left this out. ";
+      out += '<div class="fb ' + (f.moves ? "yes" : "no") + '">' +
+               '<div class="fbh"><span class="g' + (f.moves === chosen ? " fill" : "") + '" aria-hidden="true">' + g + "</span>" +
+                 "<span>" + f.label + '</span></div>' +
+               '<div class="fbt">' + tag + "</div>" +
+               '<div class="fbb"><b>' + f.lead + "</b> " + you + f.body + "</div>" +
+             "</div>";
+    });
+    out += '<div class="fbb wide" style="margin-top:2px">' + FACTS_CLOSE + "</div>";
+    el.fbl.innerHTML = out;
+
+    el.opts.hidden = true;
+    el.fpanel.hidden = false;
+    el.fscroll.scrollTop = 0;
+    el.fcheck.hidden = true;
+    el.fnext.hidden = false;
+    el.fredo.hidden = false;
+    el.fhint.innerHTML = right === 2
+      ? "<b>Both of the two that matter.</b> Read why the other two do not."
+      : "You found " + right + " of the two that matter. All four are explained below.";
+    announce("Checked. " + right + " of the two decision-changing facts found.");
+    flagSoon(el.fscroll, el.more4);
+  }
+
+  /* ---------------- screen 11, the close ---------------- */
+
+  function drawClose(){
+    el.p5.textContent = TOTAL_STEPS + " of " + TOTAL_STEPS + " · What you take with you";
+    pips(el.pips5, TOTAL_STEPS);
+
+    var out = '<div class="rrow head" aria-hidden="true"><span>Candidate</span><span>Your call</span><span>The call</span><span></span></div>';
+    J.forEach(function(j){
+      var mine = store.v[j.id], ok = mine === j.right;
+      out += '<div class="rrow">' +
+               '<span class="rc">' + j.recname + "</span>" +
+               '<span class="rm' + (ok ? " same" : "") + '" data-k="Your call">' + (mine ? VD[mine].short : "Not answered") + "</span>" +
+               '<span class="rm same" data-k="The call">' + VD[j.right].short + "</span>" +
+               '<span class="g' + (ok ? " fill" : "") + '" role="img" aria-label="' +
+                 (ok ? "match" : "not a match") + '">' + (ok ? GLYPH.ok : GLYPH.miss) + "</span>" +
+             "</div>";
+    });
+    el.rec.innerHTML = out;
+    el.cclose.innerHTML = CLOSE_COPY;
+    el.cscroll.scrollTop = 0;
+    flagSoon(el.cscroll, el.more5);
+  }
+
+  /* ---------------- the filters overlay ---------------- */
+
+  function openOverlay(opener){
+    lastFocus = opener || document.activeElement;
+    el.overlay.hidden = false;
+    el.ovclose.focus();
+    announce("The two filters are open. Escape closes.");
+  }
+  function closeOverlay(){
+    if(el.overlay.hidden) return;
+    el.overlay.hidden = true;
+    if(lastFocus && lastFocus.focus) lastFocus.focus();
+    lastFocus = null;
+  }
+  /* a modal that leaks Tab into the frame behind it is a keyboard trap in
+     reverse, so focus cycles inside the card while it is open */
+  el.overlay.addEventListener("keydown", function(e){
+    if(e.key !== "Tab") return;
+    var f = el.overlay.querySelectorAll("button, [tabindex='0']");
+    if(!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  });
+
+  /* ---------------- navigation ---------------- */
+
+  function goCand(i){
+    qi = Math.max(0, Math.min(J.length - 1, i));
+    /* show before draw. A hidden frame measures zero, so the overflow flag
+       has to be computed on a frame that is actually laid out. */
+    show("f2");
+    drawCand();
+    if(store.v[J[qi].id]) el.qnext.focus();
+    else el.qscroll.focus();
+  }
+  function goReveal(i){
+    qi = Math.max(0, Math.min(J.length - 1, i));
+    if(!store.v[J[qi].id]){ goCand(qi); return; }
+    show("f3");
+    drawReveal();
+    el.rpanel.focus();
+  }
+  function goFacts(){
+    show("f4");
+    drawFacts();
+    var first = el.opts.querySelector("button.opt");
+    if(!el.fpanel.hidden){ el.fpanel.setAttribute("tabindex","-1"); el.fpanel.focus(); }
+    else if(first) first.focus();
+  }
+  function goClose(){
+    show("f5");
+    drawClose();
+    el.cscroll.focus();
+  }
+  function goStart(){
+    show("f1");
+    drawStart();
+    el.start.focus();
+  }
+
+  el.start.addEventListener("click", function(){
+    var nx = firstUnanswered();
+    goCand(nx === -1 ? 0 : nx);
+  });
+
+  el.qback.addEventListener("click", function(){
+    if(qi === 0){ goStart(); } else { goReveal(qi - 1); }
+  });
+  el.qnext.addEventListener("click", function(){ goReveal(qi); });
+
+  el.rchange.addEventListener("click", function(){
+    var j = J[qi], had = store.v[j.id];
+    delete store.v[j.id];
+    save();
+    show("f2");
+    drawCand();
+    /* land on the option they had chosen, not at the top of the frame */
+    var b = el.choices.querySelector('button.ch[data-v="' + had + '"]');
+    if(b){ b.setAttribute("aria-pressed","true"); b.focus(); } else { el.qscroll.focus(); }
+    el.qhint.innerHTML = "Your call is open again. Pick one to commit it.";
+    announce("Your call is open again.");
+  });
+
+  el.rnext.addEventListener("click", function(){
+    if(qi < J.length - 1){ goCand(qi + 1); }
+    else { goFacts(); }
+  });
+
+  el.fback.addEventListener("click", function(){ goReveal(J.length - 1); });
+  el.fredo.addEventListener("click", function(){
+    store.facts = null; picks = []; save();
+    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+      b.setAttribute("aria-pressed", "false"); b.disabled = false;
+    });
+    openFactPicking();
+    var first = el.opts.querySelector("button.opt");
+    if(first) first.focus();
+    announce("Your two picks are open again.");
+  });
+  el.fcheck.addEventListener("click", checkFacts);
+  el.fnext.addEventListener("click", goClose);
+
+  el.cback.addEventListener("click", goFacts);
+  el.creset.addEventListener("click", function(){
+    store.v = {}; store.facts = null; picks = []; save();
+    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+      b.setAttribute("aria-pressed","false"); b.disabled = false;
+    });
+    openFactPicking();
+    goStart();
+    announce("Cleared. Four judgments to make again.");
+  });
+
+  el.qfilters.addEventListener("click", function(){ openOverlay(el.qfilters); });
+  el.rfilters.addEventListener("click", function(){ openOverlay(el.rfilters); });
+  el.cfilters.addEventListener("click", function(){ openOverlay(el.cfilters); });
+  el.ovclose.addEventListener("click", closeOverlay);
+
+  /* Plain Tab and Enter operate every control in this file. The two keys
+     below are additions, not a protocol: nothing is reachable only by
+     keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(e.key === "Escape"){
+      if(!el.overlay.hidden){ e.preventDefault(); closeOverlay(); }
+      return;
+    }
+    if(!el.overlay.hidden){
+      if(e.key === "f" || e.key === "F"){ e.preventDefault(); closeOverlay(); }
+      return;
+    }
+    if(e.key === "f" || e.key === "F"){
+      if(el.f1.hidden){ e.preventDefault(); openOverlay(document.activeElement); }
+      return;
+    }
+    if(!el.f2.hidden && e.key >= "1" && e.key <= "4"){
+      var b = choiceButtons()[parseInt(e.key, 10) - 1];
+      if(b && !b.disabled){ e.preventDefault(); commit(b.getAttribute("data-v")); }
+    }
+  });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.qscroll, el.more2);
+    flag(el.rscroll, el.more3);
+    flag(el.fscroll, el.more4);
+    flag(el.cscroll, el.more5);
+  });
+
+  buildChoices();
+  buildOpts();
+  show("f1");
+  drawStart();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or assertion run force
+     a state without hand-driving the UI */
+  window.__ex = {
+    go:goCand, reveal:goReveal, facts:goFacts, close:goClose, start:goStart,
+    commit:function(i, v){ qi = i; drawCand(); show("f2"); commit(v); },
+    pick:function(id){ toggleFact(el.opts.querySelector('button.opt[data-f="' + id + '"]')); },
+    check:checkFacts,
+    state:function(){ return {qi:qi, v:store.v, facts:store.facts, picks:picks}; }
+  };
+})();
+</script>
+</body>
+</html>

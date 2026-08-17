@@ -5,20 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reverse-engineer the rails</title>
 <style>
-  /* ---------------------------------------------------------------
+  /* ===============================================================
      Extern design system. These five values are the entire palette.
-     Do not add a sixth.
-     --------------------------------------------------------------- */
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever signalled by colour alone: every
+     coloured state also carries a glyph or a label.
+     =============================================================== */
   :root{
-    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
-    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
-    --bg:#FDF8F8;           /* canvas background, negative space     */
-    --body:#484646;         /* body copy, captions                   */
-    --title:#1C1B1B;        /* headings, primary text                */
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
 
-    --t-fast:160ms;    /* UI feedback            */
-    --t-frame:300ms;   /* between-frame movement */
-    --t-reveal:520ms;  /* a verdict resolving    */
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between-slide movement   */
+    --t-reveal:560ms;  /* the reveal resolving     */
     --ease-out:cubic-bezier(.2,.7,.3,1);
     --ease-over:cubic-bezier(.2,.9,.25,1.06);
     --ease-io:cubic-bezier(.4,0,.2,1);
@@ -26,6 +32,7 @@
 
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
+  [hidden]{display:none!important}
   body{
     background:var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -34,122 +41,176 @@
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---- 960x540 canvas, scaled down only, never up ---- */
-  /* flex:0 0 auto is load-bearing. As a shrinkable flex item, #stage laid out
-     at the viewport width between 600 and 899px and then the JS transform
-     scaled it a second time, so the design was double-shrunk and every line
-     re-wrapped at a width it was never designed for. The canvas must always
-     hold 960 in layout and let the transform do all the fitting. */
-  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
-  .frame{position:absolute;inset:0;padding:22px 44px 20px;display:flex;flex-direction:column}
-  /* the frame takes programmatic focus so a screen reader announces the new
-     content. It is not a control, so it must not draw a focus ring of its own.
-     Every actual control keeps its own visible ring. */
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     laid out at the viewport width between 600 and 899px and the JS
+     transform then scaled it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  /* the frame takes programmatic focus so a screen reader announces a new
+     slide. It is not a control, so it draws no ring of its own. Every real
+     control keeps its own visible ring. */
+  .frame{position:absolute;inset:0;padding:20px 44px 16px;display:flex;flex-direction:column}
   .frame:focus{outline:none}
-  #f2,#f3,#f4{display:none}
 
-  /* ---- progress, visible from the first paint ---- */
-  .progress{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:9px}
-  .ptext{font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--body);white-space:nowrap}
+  /* ---- header: progress, visible from first paint ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
   .segs{display:flex;gap:4px}
   .segs i{
-    display:block;width:26px;height:4px;border-radius:2px;background:var(--highlight);
+    display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
     transition:background var(--t-fast) var(--ease-out);
   }
   .segs i.on{background:var(--on-highlight)}
-
-  h1{font-size:24px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto}
-  .sub{font-size:16px;line-height:1.5;max-width:92ch;flex:0 0 auto;margin-top:5px}
-  /* the credit line belongs to the document itself, so it lives inside the
-     scroll region. Keeping it out here cost the reader 48px of document. */
-  .credit{font-size:12px;line-height:1.45;padding-bottom:9px;margin-bottom:3px;
-          border-bottom:1px solid var(--highlight)}
-
-  /* ================= FRAME 1: the annotated document =============== */
-  .tally{
-    flex:0 0 auto;display:flex;align-items:center;gap:8px;margin:8px 0 7px;
-    font-size:12px;font-weight:600;color:var(--on-highlight);
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{
+    margin-left:auto;flex:0 0 auto;background:var(--highlight);border-radius:20px;
+    padding:3px 10px;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap;
   }
-  .tally .chip{
-    background:var(--highlight);border-radius:20px;padding:4px 11px;
-    display:inline-flex;align-items:center;gap:6px;
-  }
-  .tally .chip svg{width:13px;height:13px;display:block}
-  .tally .note{font-weight:400;color:var(--body)}
 
-  /* position:relative makes #doc the offsetParent for its entries, so
-     entry.offsetTop is measured against the document, not against #stage.
-     Without it the scroll-reveal threshold was out by the height of
-     everything above the scroll region. */
-  #doc{
-    position:relative;
-    flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
-    border:1.5px solid var(--highlight);border-radius:10px;
-    padding:14px 18px 16px;background:var(--bg);
+  h1{font-size:22px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  h1 .tag{
+    display:inline-block;vertical-align:2px;margin-left:8px;
+    font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--on-highlight);color:var(--bg);border-radius:4px;padding:3px 7px;
   }
-  #doc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
 
-  .entry{padding:11px 0;border-bottom:1px solid var(--highlight)}
-  .entry:first-child{padding-top:2px}
-  .entry:last-of-type{border-bottom:0}
-  .ehead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:4px}
-  .enum{
-    font-size:11px;font-weight:600;color:var(--on-highlight);
-    background:var(--highlight);border-radius:5px;padding:2px 6px;flex:0 0 auto;
-  }
-  .etitle{font-size:15px;font-weight:600;color:var(--title)}
-  .etext{font-size:15px;line-height:1.55}
-  .esrc{font-size:12px;line-height:1.5;margin-top:5px;color:var(--body)}
-  .esrc a{color:var(--on-highlight)}
+  /* ---- the board. Two columns on a deal slide, one on the others ---- */
+  .board{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 380px;gap:18px}
+  .board.one{grid-template-columns:1fr}
 
-  /* the pre-marked rails: the worked examples */
-  .tag{
-    flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;
-    font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-    color:var(--bg);background:var(--on-highlight);border-radius:5px;padding:3px 8px;
-  }
-  .tag svg{width:11px;height:11px;display:block}
-  .entry.railed{
-    background:var(--highlight);border-radius:8px;
-    padding:11px 13px;margin:6px 0;border-bottom:0;
-  }
-  /* highlight fades in as the entry is scrolled to, once, never looping */
-  .entry.railed{opacity:.55;transition:opacity 380ms var(--ease-io)}
-  .entry.railed.seen{opacity:1}
+  .coll{min-width:0;min-height:0;display:flex;flex-direction:column}
+  .colr{min-width:0;min-height:0;display:flex;flex-direction:column}
 
-  /* the three the student has to call */
-  .ask{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .ask .q{font-size:12.5px;font-weight:600;color:var(--title)}
-  button.mk{
-    font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
-    padding:6px 11px;border-radius:7px;
-    border:1.5px solid var(--on-highlight);background:transparent;color:var(--on-highlight);
-    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
-  }
-  button.mk:hover{background:var(--highlight)}
-  button.mk:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
-  button.mk[aria-pressed="true"]{background:var(--on-highlight);color:var(--bg)}
-  .entry.done .ask{display:none}
-  .verdict{
-    display:none;margin-top:8px;background:var(--highlight);
-    border-left:4px solid var(--on-highlight);border-radius:7px;padding:9px 12px;
-    font-size:13px;line-height:1.5;color:var(--title);
-  }
-  /* inside a highlighted entry the verdict needs to sit on the canvas colour,
-     or two --highlight panels stack and the block boundary disappears */
-  .entry.railed .verdict{background:var(--bg)}
-  .verdict.on{display:block;animation:vin var(--t-reveal) var(--ease-over) both}
-  .verdict .lead{font-weight:600;color:var(--on-highlight);display:block;margin-bottom:3px}
-  @keyframes vin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  /* ---- the fixed field furniture. Same three labels, same order, every
+         deal slide. Labels run in, so a field costs no extra line. ---- */
+  .fields{flex:0 0 auto}
+  .fld{font-size:14px;line-height:1.5;margin-bottom:7px}
+  .fld:last-child{margin-bottom:0}
+  .fld b.lab{color:var(--title);font-weight:600}
+  .fld q{quotes:"\201C" "\201D"}
 
-  .closer{margin-top:12px;padding-top:11px;border-top:1.5px solid var(--highlight)}
-  .closer h2{font-size:14px;font-weight:600;color:var(--title);margin-bottom:5px}
-  .closer p{font-size:13.5px;line-height:1.55;margin-bottom:6px}
-  .closer a{color:var(--on-highlight)}
+  /* ---- evidence card. "Where this comes from" is the same card with a
+         different label and a different icon. It is NOT a warning state.
+         There is nothing wrong with an unpublished fact. ---- */
+  .ev{
+    margin-top:auto;flex:0 0 auto;background:var(--highlight);border-radius:10px;
+    padding:9px 12px;font-size:11.5px;line-height:1.42;color:var(--body);
+  }
+  .ev .evh{
+    display:flex;align-items:center;gap:6px;margin-bottom:4px;
+    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);
+  }
+  .ev .evh svg{width:14px;height:14px;flex:0 0 auto;display:block}
+  .ev a{color:var(--on-highlight)}
+  .ev .no{color:var(--on-highlight);font-weight:600}
 
-  /* ---- glossary. Terms are buttons, so hover, tap and keyboard all work.
-          The definition lands in one reserved slot, so nothing reflows and
-          nothing gets clipped by the scroll container. ---- */
+  /* ---- the question, which stays visible through the reveal ---- */
+  .q{
+    flex:0 0 auto;font-size:14.5px;line-height:1.35;font-weight:600;color:var(--title);
+    margin-bottom:9px;
+  }
+
+  /* ---- options. Real buttons, Tab and Enter, no custom key protocol ---- */
+  .opts{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+  button.opt{
+    font-family:inherit;font-size:12px;line-height:1.4;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:9px;
+    padding:7px 10px;cursor:pointer;display:flex;gap:7px;align-items:flex-start;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  button.opt .g{
+    flex:0 0 auto;width:15px;height:15px;border-radius:50%;margin-top:1px;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  button.opt:hover:not(:disabled){background:var(--highlight);border-color:var(--on-highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  /* ruled out: glyph plus a struck label plus the border going dashed.
+     Three signals, none of them colour on its own. */
+  button.opt.out{background:transparent;border-style:dashed;border-color:var(--line);opacity:.9}
+  button.opt.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.opt.out .g{border-style:dashed}
+  button.opt.picked{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  button.opt.picked .g{border-color:var(--bg);color:var(--bg)}
+
+  /* fixed height, reserved from first paint. A min-height box grew on the
+     first wrong answer and pushed the options the reader was mid way
+     through down the panel. Nothing here reflows, ever. */
+  .note{
+    flex:0 0 auto;height:52px;overflow-y:auto;margin-top:9px;
+    font-size:11.5px;line-height:1.4;color:var(--body);
+  }
+  /* the worked slide's note is one sentence, not a discrimination note, so
+     it gets the shorter reserved slot and hands 16px back to the reveal */
+  .note.short{height:36px}
+  .note b{color:var(--title);font-weight:600}
+  .note .nm{color:var(--on-highlight);font-weight:600}
+
+  /* ---- the reveal. Two parts, and the second one is the payload. ---- */
+  .reveal{
+    flex:1 1 auto;min-height:0;overflow-y:auto;
+    background:var(--highlight);border-radius:11px;padding:11px 13px;
+    display:flex;flex-direction:column;gap:9px;
+  }
+  .reveal:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .reveal.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .rb{min-width:0}
+  .rl{
+    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:3px;display:flex;align-items:center;gap:6px;
+  }
+  .rl svg{width:14px;height:14px;flex:0 0 auto;display:block}
+  .rt{font-size:12.5px;line-height:1.46;color:var(--body)}
+  .rt b{color:var(--title);font-weight:600}
+  .rt a{color:var(--on-highlight)}
+  .rb.pay .rt{color:var(--title)}
+  .rlead{font-size:11.5px;font-weight:600;color:var(--on-highlight);flex:0 0 auto}
+
+  /* ---- the orientation slide and the list slide ---- */
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:9px;max-width:66ch}
+  .intro p{font-size:15px;line-height:1.55}
+  .intro p b{color:var(--title);font-weight:600}
+  .credit{
+    margin-top:auto;flex:0 0 auto;font-size:11.5px;line-height:1.45;
+    border-top:1.5px solid var(--highlight);padding-top:8px;
+  }
+
+  .listwrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+  .lintro{flex:0 0 auto;font-size:13px;line-height:1.45;margin-bottom:8px}
+  .rules{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+  .row{
+    display:grid;grid-template-columns:84px 196px 1fr;gap:12px;align-items:center;
+    background:var(--highlight);border-radius:8px;padding:5px 10px;
+  }
+  .row .nm{font-size:12.5px;font-weight:600;color:var(--title);line-height:1.28}
+  .row .st{font-size:11px;font-weight:600;color:var(--on-highlight);line-height:1.28}
+  .row .rr{font-size:12.5px;line-height:1.36;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+  .row.open{background:var(--tint)}
+  button.jump{
+    font-family:inherit;font-size:11.5px;font-weight:600;color:var(--on-highlight);
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:6px;
+    padding:4px 9px;cursor:pointer;
+  }
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .sizebar{
+    flex:0 0 auto;margin-top:8px;font-size:11.5px;line-height:1.42;
+    border-top:1.5px solid var(--highlight);padding-top:7px;
+  }
+  .sizebar b{color:var(--title);font-weight:600}
+
+  /* ---- glossary. Terms are real buttons, so hover, tap, and keyboard all
+         reach them. The definition lands in the bar, which is already
+         reserved space, so no slot anywhere grows on a hover. ---- */
   button.gl{
     font:inherit;color:var(--on-highlight);font-weight:600;cursor:help;
     background:none;border:0;padding:0 1px;
@@ -159,536 +220,183 @@
   button.gl:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
   button.gl[aria-expanded="true"]{background:var(--on-highlight);color:var(--bg);border-bottom-color:var(--bg)}
 
-  /* Fixed height, not min-height. A two-line definition landing in a
-     min-height box grew the slot, which shrank the flex document above it,
-     which pushed the term the reader had just clicked out of view. The slot
-     scrolls in the worst case, so no definition is ever truncated. */
-  #gloss{
-    flex:0 0 auto;height:58px;overflow-y:auto;margin-top:9px;
-    border-radius:8px;padding:8px 12px;background:var(--highlight);
-    font-size:13px;line-height:1.45;color:var(--title);
-    display:flex;align-items:center;gap:9px;
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row.
+         This is the rule that keeps a Continue button on the canvas. ---- */
+  .bar{
+    margin-top:10px;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;
+    min-height:44px;
   }
-  #gloss.idle{background:transparent;color:var(--body);padding-left:0}
-  #gloss .term{font-weight:600;color:var(--on-highlight)}
-  #gloss .def{min-width:0}
-  #gloss .ico{flex:0 0 auto;width:16px;height:16px}
-  #gloss .ico svg{width:16px;height:16px;display:block}
-
-  /* ================= FRAME 2: the sort =============== */
-  .sortwrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-top:12px}
-  .quote{
-    background:var(--highlight);border-radius:10px;padding:18px 20px;
-    font-size:20px;line-height:1.4;font-weight:600;color:var(--title);flex:0 0 auto;
-  }
-  .quote .who{display:block;font-size:12px;font-weight:500;color:var(--body);margin-top:7px}
-  .bins{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;flex:0 0 auto}
-  button.bin{
-    font-family:inherit;text-align:left;cursor:pointer;
-    background:transparent;border:2px dashed var(--on-highlight);border-radius:10px;
-    padding:12px 15px;color:var(--title);
-    transition:background var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
-  }
-  button.bin .bt{display:block;font-size:16px;font-weight:600;color:var(--on-highlight)}
-  button.bin .bd{display:block;font-size:12.5px;line-height:1.4;margin-top:3px}
-  button.bin:hover{background:var(--highlight);transform:translateY(-2px)}
-  button.bin:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  button.bin[aria-pressed="true"]{background:var(--on-highlight);border-style:solid}
-  button.bin[aria-pressed="true"] .bt,button.bin[aria-pressed="true"] .bd{color:var(--bg)}
-  button.bin:disabled{cursor:default;transform:none}
-
-  .expl{
-    margin-top:12px;flex:1 1 auto;min-height:0;overflow-y:auto;
-    background:var(--highlight);border-left:4px solid var(--on-highlight);
-    border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.5;color:var(--title);
-    opacity:0;transform:translateY(5px);
-  }
-  .expl.on{opacity:1;transform:none;transition:opacity 300ms var(--ease-io),transform 300ms var(--ease-io)}
-  .expl .lead{font-weight:600;color:var(--on-highlight);display:block;margin-bottom:4px}
-  .expl p{margin-bottom:6px}
-  .expl p:last-child{margin-bottom:0}
-
-  /* ================= FRAME 3: the candidates =============== */
-  .pitch{
-    margin-top:11px;background:var(--highlight);border-radius:10px;padding:14px 17px;flex:0 0 auto;
-  }
-  .pitch .plab{
-    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--on-highlight);margin-bottom:5px;
-  }
-  .pitch .pbody{font-size:15.5px;line-height:1.48;color:var(--title)}
-  .filters{
-    display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:11px;flex:0 0 auto;
-  }
-  .filt{min-width:0}
-  .flab{
-    display:flex;align-items:center;gap:6px;
-    font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-    color:var(--on-highlight);margin-bottom:5px;
-  }
-  .flab .ico{flex:0 0 auto;width:14px;height:14px}
-  .flab .ico svg{width:14px;height:14px;display:block}
-  .rlist{list-style:none;font-size:12.5px;line-height:1.4}
-  .rlist li{position:relative;padding-left:13px;margin-bottom:2px}
-  .rlist li:before{
-    content:"";position:absolute;left:0;top:7px;
-    width:5px;height:5px;border-radius:50%;background:var(--on-highlight);
-  }
-  .rtext{font-size:12.5px;line-height:1.45}
-  .rtext b{color:var(--on-highlight)}
-  .good{
-    flex:0 0 auto;margin-top:13px;font-size:12.5px;line-height:1.5;max-width:104ch;
-    padding-left:11px;border-left:3px solid var(--highlight);
-  }
-  .good b{color:var(--on-highlight)}
-  .choices{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:10px;flex:0 0 auto}
-  button.ch{
-    font-family:inherit;font-size:13px;font-weight:600;line-height:1.3;text-align:left;
-    cursor:pointer;padding:11px 12px;border-radius:9px;min-width:0;
-    border:1.5px solid var(--on-highlight);background:transparent;color:var(--on-highlight);
-    transition:background var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
-  }
-  button.ch:hover{background:var(--highlight);transform:translateY(-2px)}
-  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  button.ch[aria-pressed="true"]{background:var(--on-highlight);color:var(--bg)}
-  button.ch:disabled{cursor:default;transform:none}
-  button.ch[aria-pressed="true"]:disabled{opacity:1}
-  button.ch:disabled:not([aria-pressed="true"]){opacity:.4}
-
-  /* ================= FRAME 4: the verdict =================
-     The verdict gets the whole canvas. Sharing a frame with the pitch, the
-     rule-of-thumb reference and four buttons left the third candidate's
-     reasoning, which is the actual teaching of this task, below a scroll. */
-  .recall{
-    flex:0 0 auto;margin-top:8px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
-    font-size:12.5px;line-height:1.5;
-  }
-  .recall .said{
-    flex:0 0 auto;background:var(--highlight);color:var(--on-highlight);
-    border-radius:20px;padding:3px 11px;font-weight:600;
-  }
-  .recall .txt{min-width:0;font-style:italic}
-  .vpanel{
-    margin-top:11px;flex:1 1 auto;min-height:0;overflow-y:auto;
-    background:var(--highlight);border-left:4px solid var(--on-highlight);
-    border-radius:9px;padding:13px 16px;font-size:15px;line-height:1.55;color:var(--title);
-    opacity:0;transform:translateY(5px);
-  }
-  .vpanel.on{opacity:1;transform:none;transition:opacity 320ms var(--ease-io),transform 320ms var(--ease-io)}
-  .vpanel p{margin-bottom:8px}
-  .vpanel p:last-child{margin-bottom:0}
-  .vpanel strong{font-weight:600}
-  .vpanel .hold{color:var(--on-highlight);font-weight:600}
-
-  /* ---- controls ---- */
-  .bar{margin-top:auto;padding-top:11px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   button.nav{
-    font-family:inherit;font-size:15px;font-weight:600;padding:10px 19px;border-radius:8px;
-    cursor:pointer;border:2px solid var(--on-highlight);
-    background:var(--on-highlight);color:var(--bg);
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:10px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
     transition:opacity var(--t-fast) var(--ease-out);
   }
   button.nav.ghost{background:transparent;color:var(--on-highlight)}
-  button.nav.small{font-size:13px;padding:8px 13px}
-  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
   button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  .hint{font-size:12.5px}
-  .spacer{margin-left:auto}
+  #hint{
+    flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;
+    font-size:11.5px;line-height:1.38;color:var(--body);
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  #hint .term{font-weight:600;color:var(--on-highlight)}
+  #hint b{color:var(--title);font-weight:600}
+  #hint.live{
+    background:var(--highlight);border-radius:8px;padding:5px 10px;color:var(--title);
+  }
 
-  .fade{animation:fin var(--t-frame) var(--ease-io) both}
-  @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-  /* ---- mobile: stacked portrait, restacked, not a shrunken slide ---- */
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
   @media (max-width:599px){
-    /* Drop flex on the body. As a flex item, #stage inherits min-width:auto
-       and refuses to shrink below its content width, which pushes content
-       off-screen. Block layout removes that floor. */
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushed the board
+       off screen. Block layout removes that floor. */
     body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
-    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
-           height:auto!important;transform:none!important}
-    .frame{position:relative;inset:auto;padding:20px 16px 26px;min-height:100vh}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
     h1{font-size:22px}
-    .sub{font-size:16px}
-    .progress{flex-wrap:wrap;gap:7px}
-    .segs i{width:20px}
-    /* The document keeps its own scroll region so the page never grows
-       unbounded, but it gets a taller window on a phone. */
-    #doc{max-height:52vh;min-height:240px;flex:0 0 auto}
-    /* the type spec's mobile body floor is 16px and it says never below.
-       Reference density is a desktop affordance, not a phone one. */
-    .etext{font-size:16px}
-    .credit{font-size:13px}
-    .closer p{font-size:16px}
-    .verdict{font-size:16px}
-    .ask .q{font-size:16px}
-    button.mk{font-size:14px;padding:8px 12px}
-    #gloss{min-height:60px;align-items:flex-start;flex-direction:column;gap:3px}
-    .quote{font-size:17px;padding:14px 15px}
-    .bins{grid-template-columns:1fr;gap:9px}
-    .expl{overflow:visible;max-height:none;font-size:16px}
-    .pitch .pbody{font-size:16px}
-    .filters{grid-template-columns:1fr;gap:11px;margin-top:12px}
-    .good{font-size:16px;margin-top:12px}
-    .rlist,.rtext{font-size:16px}
-    .choices{grid-template-columns:1fr;gap:8px}
-    button.ch{font-size:14px;padding:12px 13px}
-    .vpanel{overflow:visible;max-height:none;font-size:16px}
-    .recall{font-size:13px}
-    .bar{padding-top:14px}
-    .spacer{margin-left:0}
+    h1 .tag{font-size:11px}
+    .board{grid-template-columns:1fr;gap:18px;align-items:start}
+    .fld{font-size:16px;line-height:1.5}
+    .ev{margin-top:14px;font-size:14px;padding:12px 14px}
+    .ev .evh{font-size:12.5px}
+    .q{font-size:17px}
+    button.opt{font-size:15px;padding:11px 13px}
+    button.opt .g{width:18px;height:18px;font-size:11px}
+    .note{height:auto;overflow:visible;font-size:14px;margin-top:12px}
+    .reveal{flex:0 0 auto;overflow:visible;padding:14px 15px}
+    .rl{font-size:12.5px}
+    .rt{font-size:15px;line-height:1.5}
+    .rlead{font-size:14px}
+    .intro p{font-size:16px}
+    .credit{font-size:13.5px}
+    .lintro{font-size:15px}
+    .rules{overflow:visible}
+    .row{grid-template-columns:1fr;gap:4px;padding:11px 13px}
+    .row .nm{font-size:15px}
+    .row .st{font-size:12.5px}
+    .row .rr{font-size:15px}
+    button.jump{font-size:13px;padding:6px 11px}
+    .sizebar{font-size:13.5px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:13.5px;flex:1 1 100%;margin-top:4px}
   }
 
   @media (prefers-reduced-motion:reduce){
     *{animation:none!important;transition:none!important}
-    button.bin:hover,button.ch:hover{transform:none}
-    .expl{opacity:1;transform:none}
-    .entry.railed{opacity:1}
   }
 </style>
 </head>
 <body>
+
 <div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Reverse-engineer the rails">
 
-  <!-- ==================== FRAME 1: THE DOCUMENT ==================== -->
-  <div class="frame fade" id="f1">
-    <div class="progress">
-      <span class="ptext" id="pt1">1 of 5 · The document</span>
-      <span class="segs" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i></span>
+    <div class="top">
+      <span class="prog" id="prog">1 of 8</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip">0 of 5 called</span>
     </div>
 
-    <h1>What we've already tried.</h1>
+    <h1 id="h1"></h1>
 
-    <div class="tally">
-      <span class="chip">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M5 4v16"/><path d="M5 5h13l-2.5 4L18 13H5"/></svg>
-        <span id="tallyTxt">3 flagged for you, 3 left for you to call</span>
-      </span>
-      <span class="note">The flagged ones are worked examples. The other three are the exercise.</span>
-    </div>
+    <div class="board" id="board">
 
-    <!-- scrollable, re-readable. Later substeps send students back here. -->
-    <div id="doc" tabindex="0" role="region" aria-label="Document: what we have already tried. Scrollable.">
-
-      <p class="credit">
-        Compiled by Wes Okafor, Strategic Partnerships Manager. Built from what Sarah Thaler, Ed.D., Senior
-        Strategic Partnerships Manager, has told the team about deals that did not make it. Read it with one
-        question in your head: where does this say no?
-      </p>
-
-      <!-- ---- 1. pre-marked rail ---- -->
-      <div class="entry railed" data-seen>
-        <div class="ehead">
-          <span class="enum">1</span>
-          <span class="etitle">A competing assessment</span>
-          <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/></svg>Rail</span>
-        </div>
-        <p class="etext">
-          Khan Academy is the official practice partner for the College Board's SAT Suite, a relationship
-          that launched in 2015 and was announced at the time using the word "exclusively." The team does not build a matching
-          free-practice partnership with a rival college-admissions test. If anything this one has got firmer, not
-          softer: as of April 2026, districts running the full SAT Suite can get Khan Academy Districts for $10 per student.
-        </p>
-        <p class="esrc">
-          <a href="https://blog.khanacademy.org/official-sat-practice-now-available-for-free" target="_blank" rel="noopener">Khan Academy blog</a> ·
-          <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts" target="_blank" rel="noopener">College Board</a> ·
-          <a href="https://blog.khanacademy.org/get-more-from-the-sat-suite-khan-academy-districts-for-10-per-student/" target="_blank" rel="noopener">Khan Academy blog, April 2026</a>
-        </p>
+      <div class="coll" id="coll">
+        <div class="fields" id="fields"></div>
+        <div class="ev" id="ev"></div>
       </div>
 
-      <!-- ---- 2. pre-marked rail ---- -->
-      <div class="entry railed">
-        <div class="ehead">
-          <span class="enum">2</span>
-          <span class="etitle">District sales</span>
-          <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/></svg>Rail</span>
+      <div class="colr" id="colr">
+        <p class="q" id="q"></p>
+        <div id="ask">
+          <div class="opts" id="opts" role="group" aria-label="Pick one"></div>
+          <div class="note" id="note" role="status" aria-live="polite"></div>
         </div>
-        <p class="etext">
-          Selling Khan Academy Districts into a specific, named school is the sales team's job. If a "partnership"
-          idea is really just "convince this district to buy," it is not a partnership, and it is not your team's
-          call to make.
-        </p>
+        <div class="reveal" id="reveal" hidden tabindex="-1" role="group" aria-label="The reveal"></div>
       </div>
 
-      <!-- ---- 3. pre-marked rail ---- -->
-      <div class="entry railed">
-        <div class="ehead">
-          <span class="enum">3</span>
-          <span class="etitle">Higher education</span>
-          <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/></svg>Rail</span>
-        </div>
-        <p class="etext">
-          Khan Academy tried to move into higher ed and ran into
-          <button class="gl" data-g="rostering" aria-expanded="false">rostering</button>
-          and other technical problems that made it impractical. The team is staying in K-12. There is no public
-          writeup of this one. It is relayed the same way as the entries below, from what Sarah has told the team.
-        </p>
-      </div>
-
-      <!-- ---- 4. student calls it: rail ---- -->
-      <div class="entry" id="e4">
-        <div class="ehead">
-          <span class="enum">4</span>
-          <span class="etitle">The learning-management integration</span>
-        </div>
-        <p class="etext">
-          Khan Academy once built its Khanmigo teacher tools directly inside a major
-          <button class="gl" data-g="lms" aria-expanded="false">LMS</button>
-          that most of its district base already used. Adoption of the platform itself was high. Adoption of the
-          tools inside it was not, and the integration was
-          <button class="gl" data-g="sunset" aria-expanded="false">sunset</button>.
-          Khan Academy has never named the platform or published usage numbers, and neither does this document.
-        </p>
-        <div class="ask" role="group" aria-label="Does entry 4 belong on the rails list?">
-          <span class="q">Belongs on the rails list?</span>
-          <button class="mk" data-e="4" data-v="yes" aria-pressed="false">Yes, it is a rail</button>
-          <button class="mk" data-e="4" data-v="no" aria-pressed="false">No, it is not</button>
-        </div>
-        <div class="verdict" id="v4" role="status"></div>
-      </div>
-
-      <!-- ---- 5. student calls it: NOT a rail ---- -->
-      <div class="entry" id="e5">
-        <div class="ehead">
-          <span class="enum">5</span>
-          <span class="etitle">The assessment-data partnership</span>
-        </div>
-        <p class="etext">
-          An <button class="gl" data-g="assessment" aria-expanded="false">assessment partner</button>
-          used to sell Khan Academy's assessment-linked learning paths on Khan Academy's behalf. That
-          relationship did not disappear so much as change hands. The underlying data connection is still live, and
-          the resulting product, Learning Paths Informed by MAP Growth, is now a paid feature that Khan Academy's own
-          sales team sells inside a Districts partnership.
-        </p>
-        <p class="esrc">
-          <a href="https://blog.khanacademy.org/learning-paths-informed-by-map-growth" target="_blank" rel="noopener">Khan Academy blog</a>
-        </p>
-        <div class="ask" role="group" aria-label="Does entry 5 belong on the rails list?">
-          <span class="q">Belongs on the rails list?</span>
-          <button class="mk" data-e="5" data-v="yes" aria-pressed="false">Yes, it is a rail</button>
-          <button class="mk" data-e="5" data-v="no" aria-pressed="false">No, it is not</button>
-        </div>
-        <div class="verdict" id="v5" role="status"></div>
-      </div>
-
-      <!-- ---- 6. student calls it: rail ---- -->
-      <div class="entry" id="e6">
-        <div class="ehead">
-          <span class="enum">6</span>
-          <span class="etitle">Praxis</span>
-        </div>
-        <p class="etext">
-          Khan Academy and ETS built Official Praxis Core Prep together starting in 2018, and it eventually served
-          more than 2.3 million aspiring teachers. On February 27, 2024, ETS signed a new Praxis-prep partnership
-          with Study.com instead, and Khan Academy removed Official Praxis Core Prep on April 30, 2024.
-        </p>
-        <p class="esrc">
-          <a href="https://www.prnewswire.com/news-releases/ets-and-studycom-partner-to-break-down-barriers-in-national-educator-pipeline-302072022.html" target="_blank" rel="noopener">PR Newswire</a> ·
-          <a href="https://support.khanacademy.org/hc/en-us/articles/24504357581197-Praxis-Core-Prep-2024-Changes-Frequently-Asked-Questions" target="_blank" rel="noopener">Khan Academy Help Center</a>
-        </p>
-        <div class="ask" role="group" aria-label="Does entry 6 belong on the rails list?">
-          <span class="q">Belongs on the rails list?</span>
-          <button class="mk" data-e="6" data-v="yes" aria-pressed="false">Yes, it is a rail</button>
-          <button class="mk" data-e="6" data-v="no" aria-pressed="false">No, it is not</button>
-        </div>
-        <div class="verdict" id="v6" role="status"></div>
-      </div>
-
-      <div class="closer">
-        <h2>And the shapes that do work, confirmed</h2>
-        <p>
-          Nothing new here. These are the four shapes from <strong>Spot the Shape</strong>, with the names attached.
-          Some partners pay Khan Academy directly to keep a course current: AAMC has done this for years to keep its
-          MCAT collection running, an arrangement renewed more than once and still listed as active, with no published
-          end date, on AAMC's own materials.
-        </p>
-        <p>
-          Microsoft gives donated cloud infrastructure instead of cash, which is what made Khanmigo for Teachers free
-          for US K-12 educators. Google funds specific product work, most recently the Gemini-powered Writing Coach,
-          live for grades 7 through 12 with a grades 5 to 6 beta in the US, plus a Reading Coach for grades 5 through
-          12 announced for later in 2026.
-        </p>
-        <p class="esrc">
-          <a href="https://cloud.email.aamc.org/mcat-khan-academy" target="_blank" rel="noopener">AAMC</a> ·
-          <a href="https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/" target="_blank" rel="noopener">Microsoft Source, May 21, 2024</a> ·
-          <a href="https://blog.google/products-and-platforms/products/education/khan-academy-partnership/" target="_blank" rel="noopener">Google, January 21, 2026</a>
-        </p>
-      </div>
-
-    </div><!-- /#doc -->
-
-    <!-- one reserved slot for glossary definitions, so nothing reflows -->
-    <div id="gloss" class="idle" role="status" aria-live="polite">
-      <span class="def" id="glossDef">Four words are underlined in the document. Hover one, or tap it, for a plain-language definition. They stay available the whole time.</span>
     </div>
 
     <div class="bar">
-      <button class="nav" id="go1">Continue</button>
-      <span class="hint" id="hint1">Call all three unflagged entries first, or continue and come back.</span>
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
     </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
   </div>
-
-  <!-- ==================== FRAME 2: THE SORT ==================== -->
-  <div class="frame" id="f2">
-    <div class="progress">
-      <span class="ptext" id="pt2">2 of 5 · Rail or preference</span>
-      <span class="segs" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span>
-    </div>
-
-    <h1>Which of these is a rail, and which is a preference?</h1>
-    <p class="sub">Both are true statements about the team. Only one holds no matter how good the pitch is.</p>
-
-    <div class="sortwrap">
-      <div class="quote" id="cardText" role="group" aria-label="Card to sort">
-        <span id="cardBody"></span>
-        <span class="who" id="cardWho"></span>
-      </div>
-
-      <div class="bins" id="bins">
-        <button class="bin" data-b="rail" aria-pressed="false">
-          <span class="bt">Rail</span>
-          <span class="bd">Holds regardless. A better pitch does not move it.</span>
-        </button>
-        <button class="bin" data-b="pref" aria-pressed="false">
-          <span class="bt">Preference</span>
-          <span class="bd">Real, but a strong enough pitch can move it.</span>
-        </button>
-      </div>
-
-      <div class="expl" id="expl2" role="status"></div>
-    </div>
-
-    <div class="bar">
-      <button class="nav ghost small" id="reopen2">Reopen the document</button>
-      <button class="nav" id="go2" disabled>Next</button>
-      <span class="hint" id="hint2">Place the card in a bin.</span>
-    </div>
-  </div>
-
-  <!-- ==================== FRAME 3: THE CANDIDATES ==================== -->
-  <div class="frame" id="f3">
-    <div class="progress">
-      <span class="ptext" id="pt3">3 of 5 · Candidate 1 of 3</span>
-      <span class="segs" id="segs3" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>
-    </div>
-
-    <h1 id="h3">Does the rails list or the size bar kill this?</h1>
-
-    <div class="pitch">
-      <div class="plab" id="plab">Candidate 1, as pitched</div>
-      <div class="pbody" id="pbody"></div>
-    </div>
-
-    <!-- the two filters, kept on screen so the candidate can be run against
-         them without leaving the frame -->
-    <div class="filters">
-      <div class="filt">
-        <div class="flab">
-          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/></svg></span>
-          Filter one, the rails
-        </div>
-        <ul class="rlist">
-          <li>No competing college-admissions assessment</li>
-          <li>Not a district sale</li>
-          <li>Not higher ed</li>
-          <li>Not rebuilt inside somebody else's platform</li>
-          <li>Nobody else ends up owning the asset</li>
-        </ul>
-      </div>
-      <div class="filt">
-        <div class="flab">
-          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.8" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 19V9M12 19V5M17 19v-7"/></svg></span>
-          Filter two, the size bar
-        </div>
-        <p class="rtext">
-          <b>Wes's rule of thumb:</b> he does not take anything under about $250K a year to Sarah, because a deal
-          eats the same nine to eighteen months of one small team either way. His own heuristic for what is worth
-          his time. Not a Khan Academy threshold, not a procurement floor, and not a number Khan Academy has ever
-          published.
-        </p>
-      </div>
-    </div>
-
-    <div class="choices" id="choices" role="group" aria-label="Your verdict on this candidate">
-      <button class="ch" data-c="rail" aria-pressed="false">Killed by a rail</button>
-      <button class="ch" data-c="size" aria-pressed="false">Killed by the size bar</button>
-      <button class="ch" data-c="live" aria-pressed="false">Survives</button>
-      <button class="ch" data-c="judge" aria-pressed="false">Genuine judgment call, no clean answer</button>
-    </div>
-
-    <p class="good">
-      <b>What a good answer sounds like, before you pick.</b> Strong: "dead, we are the official practice partner
-      for the SAT Suite, so a competing assessment is out no matter how good the pitch is." That names the
-      specific rail. Weak: "probably would not work." That is a guess wearing an answer's clothes.
-    </p>
-
-    <div class="bar">
-      <button class="nav ghost small" id="reopen3">Reopen the document</button>
-      <button class="nav ghost small" id="back3">Back</button>
-      <span class="hint" id="hint3">Pick a verdict. You get the reasoning either way.</span>
-    </div>
-  </div>
-
-  <!-- ==================== FRAME 4: THE VERDICT ==================== -->
-  <div class="frame" id="f4">
-    <div class="progress">
-      <span class="ptext" id="pt4">3 of 5 · Candidate 1 of 3</span>
-      <span class="segs" id="segs4" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>
-    </div>
-
-    <h1 id="h4"></h1>
-
-    <div class="recall">
-      <span class="said" id="vsaid"></span>
-      <span class="txt" id="vrecall"></span>
-    </div>
-
-    <div class="vpanel" id="vpanel" role="status"></div>
-
-    <div class="bar">
-      <button class="nav ghost small" id="reopen4">Reopen the document</button>
-      <button class="nav ghost small" id="back4">Back to the candidate</button>
-      <button class="nav" id="go4">Next candidate</button>
-    </div>
-  </div>
-
 </div>
 
 <noscript>
-  <div style="max-width:720px;padding:28px;font-size:16px;line-height:1.55;color:#484646">
-    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:10px">What we've already tried.</h1>
-    <p style="margin-bottom:14px;font-size:13px">Compiled by Wes Okafor, Strategic Partnerships Manager. Built from what Sarah Thaler, Ed.D., Senior Strategic Partnerships Manager, has told the team about deals that did not make it.</p>
+  <!-- This style block has to sit INSIDE noscript so it lands after the main
+       sheet and wins on source order. Three things must happen: the dead
+       canvas is hidden, the flex centred body goes back to block flow so this
+       text is not laid out as a narrow strip beside a 960px canvas, and links
+       are pinned to the palette so the browser default blue never appears as
+       a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .src{font-size:14px}
+    .nsf .rule{background:#DCE1FF;border-radius:9px;padding:10px 13px;margin:0 0 14px}
+    .nsf .rule strong{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Six things this team has already tried</h1>
+    <p>Six entries. Some ran for years, one of them is still running, and most of them close something off. Each one is followed by the rule it gives you, which is the part you carry into Project 3. Compiled by Wes Okafor, Strategic Partnerships Manager, from what Sarah Thaler, Ed.D., Senior Strategic Partnerships Manager, has told the team.</p>
 
-    <h2 style="font-size:16px;color:#1C1B1B;margin-bottom:6px">Four words, defined first</h2>
-    <ul style="margin:0 0 16px 20px">
-      <li style="margin-bottom:5px"><strong>LMS.</strong> Learning management system. The software a school runs its classes through: assignments posted, work handed in, grades held. Teachers sit inside it all day.</li>
-      <li style="margin-bottom:5px"><strong>Rostering.</strong> Getting the list of who is in which class out of the school's systems and into another piece of software, correctly, and keeping it correct as it changes. It sounds trivial. It is one of the most common places education software breaks.</li>
-      <li style="margin-bottom:5px"><strong>Sunset.</strong> To switch a product off on purpose. Not a crash, a decision: stop maintaining it, take it down.</li>
-      <li><strong>Assessment partner.</strong> A company whose product is a test. Khan Academy practice content can plug into one of those tests, so a student's score points them at what to practise next.</li>
-    </ul>
+    <h2>1. A competing assessment</h2>
+    <p><strong>Who they are.</strong> College Board is the non-profit that owns the SAT, which almost every US college applicant sits. <strong>What the partnership was.</strong> Announced in 2014 and launched in 2015, Official SAT Practice put College Board&rsquo;s own test material on Khan Academy, free. The 2015 announcement described the practice as available &ldquo;exclusively on Khan Academy&rdquo;. <strong>What happened to it.</strong> Nothing. This is the one entry still running, and that is exactly why it closes a door.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> Being someone&rsquo;s official practice partner spends the slot. Before you pitch, ask what a live partnership has already promised. A deal can be dead because of a deal that is alive.</p>
+    <p class="src">Khan Academy Help Center, &ldquo;Helping your students prepare for the Digital SAT on Khan Academy&rdquo;, updated 11 August 2026: &ldquo;Khan Academy is still the official partner of College Board and is here to provide you with redesigned tools to prepare students for success on the digital SAT.&rdquo; <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821">Help Center</a> &middot; <a href="https://blog.khanacademy.org/official-sat-practice-now-available-for-free/">Khan Academy blog, 2 June 2015</a> &middot; <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts">College Board, Khan Academy Districts</a>. Which way money moves in this relationship is not published by either side, and it is not what makes this a rail.</p>
 
-    <h2 style="font-size:16px;color:#1C1B1B;margin-bottom:6px">The rails, all six entries with the answers</h2>
-    <ol style="margin:0 0 16px 20px">
-      <li style="margin-bottom:7px"><strong>A competing assessment. Rail.</strong> Khan Academy is the official practice partner for the College Board's SAT Suite, launched 2015 and announced at the time using the word "exclusively." No matching free-practice deal with a rival college-admissions test.</li>
-      <li style="margin-bottom:7px"><strong>District sales. Rail.</strong> Selling Khan Academy Districts into one named school is the sales team's job, not a partnership.</li>
-      <li style="margin-bottom:7px"><strong>Higher education. Rail.</strong> Tried it, hit rostering and other technical problems. The team stays in K-12.</li>
-      <li style="margin-bottom:7px"><strong>The learning-management integration. Rail.</strong> Khanmigo teacher tools were built inside a major LMS most districts already used. Platform adoption was high, tool adoption was not, and the integration was sunset. High adoption of somebody else's platform does not carry over to your tools inside it.</li>
-      <li style="margin-bottom:7px"><strong>The assessment-data partnership. Not a rail.</strong> A partner used to sell Khan Academy's assessment-linked learning paths on its behalf. The relationship changed hands rather than ending. The data connection is live and Learning Paths Informed by MAP Growth is now a paid feature Khan Academy's own sales team sells. Often described as "absorbed." Sold is more accurate.</li>
-      <li><strong>Praxis. Rail.</strong> Built with ETS from 2018, served more than 2.3 million aspiring teachers, and on February 27, 2024 ETS signed a new Praxis-prep partnership with Study.com instead. Khan Academy removed the product on April 30, 2024. If a partner can eventually own the asset itself, some of them will.</li>
-    </ol>
+    <h2>2. Selling to a named district</h2>
+    <p><strong>Who they are.</strong> Nobody. There is no partner on this one, and nothing was tried and abandoned. It is a line between two teams. <strong>What the partnership was.</strong> There was never one. Khan Academy Districts is a product, and the sales team sells it. <strong>What happened to it.</strong> Nothing happened to it. The ideas that hit this line rarely look like sales. They look like one big regional deal with a lot of schools inside it.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> If the partner would mostly just be buying the product, you are holding a sale, not a partnership. Size does not change that. Forty schools is still a sale.</p>
+    <p class="src">Evidence: none to link. This is an internal division of labour, not an announcement.</p>
 
-    <h2 style="font-size:16px;color:#1C1B1B;margin-bottom:6px">Rail or preference</h2>
-    <p style="margin-bottom:7px">"We're staying in K-12. Higher ed isn't happening." That is a <strong>rail</strong>. It holds no matter how good the pitch is.</p>
-    <p style="margin-bottom:16px">"We'd rather sponsor a whole course than a single video, but we've done both." That is a <strong>preference</strong>. The tell is "we've done both." A strong enough pitch moves it.</p>
+    <h2>3. Higher education</h2>
+    <p><strong>Who they are.</strong> No single partner. This was a market the team looked at rather than a deal it signed: colleges and universities instead of the K-12 schools Khan Academy already served. <strong>What the partnership was.</strong> An attempt to get Khan Academy working inside higher-education institutions the way it works inside a school district. <strong>What happened to it.</strong> Rostering and other technical integration problems made it impractical, and the team stopped looking for higher-education partnership deals.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> This team is not shopping for higher-education partnership deals, so a candidate whose users are undergraduates is not one to bring. Read the scope exactly: it is about which partnership candidates this team wants, not about anything else Khan Academy is doing. Khan Academy does have higher-education work. On 14 April 2026 it announced the <a href="https://blog.khanacademy.org/introducing-the-khan-ted-institute-a-new-approach-to-higher-education/">Khan TED Institute</a> with TED and ETS, &ldquo;a new approach to higher education designed for a changing world&rdquo;, still in development, with a price point and a waitlist. Both are true at once. If you go looking you will find that post, and you found it here first.</p>
+    <p class="src">Where this comes from: Sarah told the team. There is no announcement and no press release about the higher-education attempt or about what this team looks for, so there is no link under either. That is normal. Most of what a partnerships team knows is not published, and part of the job is being straight about which is which. The announcement is public: <a href="https://blog.khanacademy.org/introducing-the-khan-ted-institute-a-new-approach-to-higher-education/">Khan Academy blog, 14 April 2026</a>.</p>
 
-    <h2 style="font-size:16px;color:#1C1B1B;margin-bottom:6px">Wes's rule of thumb</h2>
-    <p style="margin-bottom:16px">He does not take anything under about $250K a year to Sarah, because a deal eats the same nine to eighteen months of one small team either way. His own heuristic for what is worth his time, not a Khan Academy threshold and not a number Khan Academy has ever published.</p>
+    <h2>4. The learning-management integration</h2>
+    <p><strong>Who they are.</strong> A major learning management system: the software a school runs its classes through. Khan Academy has never named which one, and neither will this page. Most of the districts Khan Academy already worked with were inside it every day. <strong>What the partnership was.</strong> Khanmigo teacher tools, Khan Academy&rsquo;s own AI tools for teachers, built directly inside that platform so a teacher never had to leave it. <strong>What happened to it.</strong> Adoption of the platform stayed high. Adoption of Khan Academy&rsquo;s tools inside it did not, and the integration was switched off.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> Khan Academy does not rebuild its own tools inside someone else&rsquo;s platform. When a pitch offers reach, ask what the partner&rsquo;s users would have to start doing differently. Distribution is not usage, and a partner can only hand you the first one.</p>
+    <p class="src">Where this comes from: Sarah told the team. Neither side ever published a shutdown, and what is public still shows the integration announced and promoted. So this one is relayed, not published, and the honest version says so.</p>
 
-    <h2 style="font-size:16px;color:#1C1B1B;margin-bottom:6px">Three candidates, with the verdicts</h2>
-    <ol style="margin:0 0 0 20px">
-      <li style="margin-bottom:7px">A test-prep company wants Khan Academy to co-build a free official practice tool for a rival college-admissions test, and will pay for it. <strong>Killed by a rail.</strong> Entry 1. The money is irrelevant, which is what makes it a rail.</li>
-      <li style="margin-bottom:7px">A regional literacy nonprofit wants to license 200 Khan Academy videos for its after-school programme, $80,000 a year, renewable. <strong>Killed by the size bar.</strong> No rail touches it and it is genuinely useful work. It is $80K, and it costs the same nine to eighteen months as a deal worth five times that.</li>
-      <li>A state department of education wants to pay $400,000 a year for statewide Khanmigo access. <strong>Genuine judgment call, no clean answer.</strong> It clears the size bar comfortably and no rail names it. But entry 2 puts district selling with the sales team, and a statewide deal sits right on top of districts the sales team may already be working. To decide it you would need to know which of that state's districts are already in the sales pipeline, and who at the state actually has authority to sign. Most real candidates look like this one.</li>
-    </ol>
+    <h2>5. Praxis</h2>
+    <p><strong>Who they are.</strong> ETS is the testing company behind the Praxis exams, the tests most US states require before they will license a new teacher. <strong>What the partnership was.</strong> Announced in June 2018 and live from 2019, Official Praxis Core Prep was built by the two together: ETS&rsquo;s test, Khan Academy&rsquo;s practice. It reached more than 2.3 million aspiring teachers. <strong>What happened to it.</strong> On 27 February 2024, ETS announced a new Praxis prep partnership with Study.com. Khan Academy removed Official Praxis Core Prep on 30 April 2024.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> If a partner could eventually own the asset without us, assume some of them will. Ask it before you build, not after: what is still ours in five years if this partner walks?</p>
+    <p class="src"><a href="https://www.prnewswire.com/news-releases/khan-academy-and-ets-partner-to-create-free-test-prep-for-aspiring-teachers-300669711.html">ETS and Khan Academy joint release, 21 June 2018</a>, which also says &ldquo;The program will be available in spring 2019&rdquo; &middot; <a href="https://www.prnewswire.com/news-releases/ets-and-studycom-partner-to-break-down-barriers-in-national-educator-pipeline-302072022.html">ETS release, 27 February 2024</a> &middot; <a href="https://support.khanacademy.org/hc/en-us/articles/24504357581197-Praxis-Core-Prep-2024-Changes-Frequently-Asked-Questions">Khan Academy Help Center, created 27 February 2024</a>, on the 2.3 million figure and on the removal.</p>
+
+    <h2>6. The assessment-data partnership</h2>
+    <p><strong>Who they are.</strong> NWEA makes MAP Growth, a test tens of thousands of US schools give a few times a year to see where each student actually is. It is an assessment partner: its product is a test, and a score from that test can point a student at what to practise next. <strong>What the partnership was.</strong> NWEA&rsquo;s scores flowed into Khan Academy, Khan Academy turned them into personalised maths paths, and NWEA sold the result to schools. <strong>What happened to it.</strong> The selling changed hands. The product is now Learning Paths informed by MAP Growth, a paid add-on that Khan Academy sells itself inside a Districts partnership.</p>
+    <p class="rule"><strong>The rule this gives you.</strong> This one is not a rail. Five of the six entries close something off and this one does not, so filing it as a rail would cost you a live shape you could copy. Before you call anything off the table, ask which part of it actually stopped. If the answer is the channel, it is still alive.</p>
+    <p class="src">Khan Academy blog, published 12 April 2024, updated 20 March 2025: &ldquo;Khan Academy now offers school districts the opportunity to purchase an add-on to the Khan Academy Districts Partnership called &lsquo;Learning Paths informed by MAP Growth.&rsquo;&rdquo; and &ldquo;MAP Accelerator has changed in name to Learning Paths, and the program is now available to purchase through Khan Academy directly rather than through NWEA&rdquo;. <a href="https://blog.khanacademy.org/learning-paths-informed-by-map-growth/">Khan Academy blog</a>. That NWEA used to do the selling comes from Sarah&rsquo;s briefing, not from a public post. It is often described as absorbed; sold is more accurate.</p>
+
+    <h2>One more, and it is not on the list</h2>
+    <p>Wes has his own rule of thumb about size. It is his heuristic, not a Khan Academy threshold, and his message in the substep carries it in full.</p>
   </div>
 </noscript>
 
@@ -696,406 +404,469 @@
 (function(){
   "use strict";
 
+  /* ===============================================================
+     Icons. Phosphor style, line weight only, one stroke width, 14px
+     everywhere, colour always #001D69 by inheritance.
+     =============================================================== */
+  var I = {
+    doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>',
+    say:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H8.5L4 22.5V17A8 8 0 0 1 12 4a8 8 0 0 1 8 8z"/><path d="M9 10h6M9 14h4"/></svg>',
+    look:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.2"/><path d="M15.6 15.6 21 21"/></svg>',
+    flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5"/><path d="M5.5 3.5h12l-2.4 4.6 2.4 4.6h-12"/></svg>'
+  };
+
+  /* ===============================================================
+     THE REASON POOL. Six real reasons, one per entry, plus Wes's size
+     heuristic. Every wrong option on every slide is drawn from this
+     pool, so a student cannot answer by vibe. They have to tell the
+     rails apart from each other.
+     =============================================================== */
+  var R = {
+    competing:   "We are already the official practice partner for the SAT Suite, so the same free-practice offer to a rival admissions test is not ours to make.",
+    sale:        "The partner would mostly just be buying the product. That is a sale, and Districts sales is the sales team's work.",
+    rostering:   "Rostering and other technical integration problems made it impractical.",
+    adoption:    "The people already inside that platform did not pick up the tools we put in it.",
+    ownership:   "The partner could eventually own the asset without us, and this one took it.",
+    changedhands:"Nothing closed. Only who does the selling changed.",
+    size:        "Too small to be worth 9 to 18 months of the same small team."
+  };
+
+  var G = {
+    lms:{t:"LMS", d:"Learning management system. The software a school runs its classes through: assignments posted, work handed in, grades held. Teachers sit inside it all day."},
+    rostering:{t:"Rostering", d:"Getting the list of who is in which class out of a school's systems into other software, and keeping it right as it changes. It is where school software breaks most often."},
+    sunset:{t:"Sunset", d:"To switch a product off on purpose. Not a crash, a decision: stop maintaining it and take it down."},
+    assessment:{t:"Assessment partner", d:"A company whose product is a test. Practice content can plug into that test, so a student's score points them at what to practise next."}
+  };
+  function gl(key,label){
+    return '<button class="gl" type="button" data-g="'+key+'" aria-expanded="false">'+label+'</button>';
+  }
+
+  var HINT_DEFAULT = 'Tab moves, Enter picks. Nothing is scored. You can <b>Continue</b> without answering and come back.';
+
+  /* ===============================================================
+     THE EIGHT SLIDES.
+     Deal slides carry the same three field labels in the same order,
+     every time, so the student reads position rather than re-reading
+     structure. ev.lab is "Evidence" on four of them and "Where this
+     comes from" on the two with no public source. That second label is
+     not a warning state. There is nothing wrong with an unpublished fact.
+     =============================================================== */
+  var S = [
+
+  /* ---------- 1. orientation ---------- */
+  {
+    id:"intro", kind:"intro", label:"Before you start",
+    title:"Six things this team has already tried",
+    body:[
+      "Some of these ran for years. One of them is still running. Most of them close something off, and knowing which is what makes a good idea possible: you stop spending a week on something that died in 2024.",
+      "Each one gets a slide. You read who the partner was, what the deal was, and what happened to it. Then you say why it could not happen, and you get the rule it leaves you with. <b>The rule is the part you keep.</b> A reason explains one dead deal. A rule kills the next twenty that look like it.",
+      "<b>Every wrong option you will see is the real reason a different entry on this list died.</b> So guessing by feel does not work here. You have to tell them apart. The first one is worked for you."
+    ],
+    credit:"Compiled by Wes Okafor, Strategic Partnerships Manager, from what Sarah Thaler, Ed.D., Senior Strategic Partnerships Manager, has told the team about deals that did not make it."
+  },
+
+  /* ---------- 2. College Board. WORKED EXAMPLE ---------- */
+  {
+    id:"competing", kind:"worked", label:"A competing assessment",
+    title:"A competing assessment", tag:"Worked for you",
+    fields:[
+      ["Who they are.","College Board is the non-profit that owns the SAT, which almost every US college applicant sits."],
+      ["What the partnership was.","Announced in 2014 and launched in 2015, Official SAT Practice put College Board's own test material on Khan Academy, free. The 2015 announcement described the practice as available “exclusively on Khan Academy”."],
+      ["What happened to it.","Nothing. This is the one entry on the list that is still running, and that is exactly why it closes a door."]
+    ],
+    ev:{lab:"Evidence", ico:"doc", html:'Khan Academy Help Center, updated 11 August 2026: “Khan Academy is still the official partner of College Board.” <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821" target="_blank" rel="noopener">Help Center</a> · <a href="https://blog.khanacademy.org/official-sat-practice-now-available-for-free/" target="_blank" rel="noopener">Khan Academy blog, 2 June 2015</a> · <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts" target="_blank" rel="noopener">College Board</a>. Which way money moves here is not published by either side, and it is not what makes this a rail.'},
+    q:"So what is the deal that cannot happen?",
+    answer:"competing",
+    lead:"This is what a good answer looks like.",
+    why:"Nothing died. Khan Academy's own help centre, updated August 2026, still calls it the official partner of College Board. What cannot happen is the mirror of this deal: the same arrangement for a rival college-admissions test.",
+    rule:"Being someone's official practice partner spends the slot. Before you pitch, ask what a live partnership has already promised. A deal can be dead because of a deal that is alive.",
+    after:"On the next five, you pick. Every wrong option is the real reason a different entry here died."
+  },
+
+  /* ---------- 3. district sales ---------- */
+  {
+    id:"district", kind:"ask", label:"Selling to a named district",
+    title:"Selling to a named district",
+    fields:[
+      ["Who they are.","Nobody. There is no partner on this one, and nothing was tried and abandoned. It is a line between two teams."],
+      ["What the partnership was.","There was never one. Khan Academy Districts is a product, and the sales team sells it."],
+      ["What happened to it.","Nothing happened to it. The ideas that hit this line rarely look like sales. They look like one big regional deal with a lot of schools inside it."]
+    ],
+    ev:{lab:"Evidence", ico:"doc", html:'<span class="no">None to link.</span> This is an internal division of labour, not an announcement.'},
+    q:"An idea lands that would put 40 schools in one county onto Khan Academy Districts. Why is it not ours?",
+    answer:"sale",
+    opts:["competing","sale","size","rostering"],
+    wrong:{
+      competing:"That is the College Board rail, and it is about a rival <span class=\"nm\">college-admissions test</span>. Nobody in this idea is offering a test.",
+      size:"That is Wes's own rule of thumb about size, not something on this list. Forty schools is not small. It is still a sale.",
+      rostering:"Rostering is what stopped the <span class=\"nm\">higher-education</span> attempt. Districts are K-12 and already rostered."
+    },
+    why:"Nothing died, because there was never a deal here to kill. The idea just belongs to another team, and taking it would mean doing their job with your calendar.",
+    rule:"Ask first what the partner actually brings that we cannot buy or sell ourselves. If the honest answer is “they would pay us for the product,” you are holding a sale. Size does not change that. Forty schools is still a sale."
+  },
+
+  /* ---------- 4. higher education ---------- */
+  {
+    id:"highered", kind:"ask", label:"Higher education",
+    title:"Higher education",
+    fields:[
+      ["Who they are.","No single partner. This was a market the team looked at rather than a deal it signed: colleges and universities instead of the K-12 schools Khan Academy already served."],
+      ["What the partnership was.","An attempt to get Khan Academy working inside higher-education institutions the way it works inside a school district."],
+      ["What happened to it.","It ran into "+gl("rostering","rostering")+" and other technical integration problems that made it impractical, and the team stopped looking for higher-education partnership deals."]
+    ],
+    ev:{lab:"Where this comes from", ico:"say", html:'<span class="no">Sarah told the team.</span> There is no announcement and no press release about the attempt, or about what this team looks for, so there is no link under either. That is normal. Most of what a partnerships team knows is not published, and part of the job is being straight about which is which.'},
+    q:"Why could this one not happen?",
+    answer:"rostering",
+    opts:["adoption","rostering","sale","changedhands"],
+    wrong:{
+      adoption:"Adoption is what killed the tools built inside another company's platform, two slides ahead. Higher education never got far enough to be used or not used.",
+      sale:"That is the Districts line, one slide back, and it is about who sells a product we already have. There was no product here to sell.",
+      changedhands:"Nothing here changed hands, because nothing here ever ran. Hold that reason though. One entry on this list is going to need it."
+    },
+    why:"Rostering is where school software breaks most often. Here it broke hard enough, alongside other integration problems, that the work stopped being worth doing.",
+    rule:"This team is not shopping for higher-education partnership deals, so a candidate whose users are undergraduates is not one to bring. Read the scope exactly: it is about which candidates this team wants, not about anything else Khan Academy is doing. Khan Academy does have higher-education work. On 14 April 2026 it announced the <a href=\"https://blog.khanacademy.org/introducing-the-khan-ted-institute-a-new-approach-to-higher-education/\" target=\"_blank\" rel=\"noopener\">Khan TED Institute</a> with TED and ETS, “a new approach to higher education designed for a changing world,” still in development. Both are true at once. You just found the announcement before anyone can spring it on you."
+  },
+
+  /* ---------- 5. the LMS integration ---------- */
+  {
+    id:"lms", kind:"ask", label:"The learning-management integration",
+    title:"The learning-management integration",
+    fields:[
+      ["Who they are.","A major "+gl("lms","LMS")+": the software a school runs its classes through. Khan Academy has never named which one, and neither will this page. Most of the districts Khan Academy already worked with were inside it every day."],
+      ["What the partnership was.","Khanmigo teacher tools, Khan Academy's own AI tools for teachers, built directly inside that platform so a teacher never had to leave it."],
+      ["What happened to it.","Adoption of the platform stayed high. Adoption of Khan Academy's tools inside it did not, and the integration was "+gl("sunset","sunset")+"."]
+    ],
+    ev:{lab:"Where this comes from", ico:"say", html:'<span class="no">Sarah told the team.</span> Neither side ever published a shutdown, and what is public still shows the integration announced and promoted. So this one is relayed, not published, and the honest version says so on the slide.'},
+    q:"Why could this one not happen?",
+    answer:"adoption",
+    opts:["rostering","ownership","adoption","size"],
+    wrong:{
+      rostering:"Rostering is the <span class=\"nm\">higher-education</span> entry, one slide back. This integration worked. That is what makes it interesting.",
+      ownership:"That is <span class=\"nm\">Praxis</span>, the next slide, where the partner took the next version elsewhere. Nobody took these tools. Khan Academy switched them off.",
+      size:"That is Wes's own rule of thumb about size, and it is not this. The platform was large, and so were the districts inside it."
+    },
+    why:"Not a technical failure. The integration worked. The trap was the reasoning that got there: adoption of the platform was high, so adoption of our tools inside it looked like a safe bet. It was not.",
+    rule:"Khan Academy does not rebuild its own tools inside someone else's platform. When a pitch offers reach, ask what the partner's users would have to start doing differently. Distribution is not usage, and a partner can only hand you the first one."
+  },
+
+  /* ---------- 6. Praxis ---------- */
+  {
+    id:"praxis", kind:"ask", label:"Praxis",
+    title:"Praxis",
+    fields:[
+      ["Who they are.","ETS is the testing company behind the Praxis exams, the tests most US states require before they will license a new teacher."],
+      ["What the partnership was.","Announced in June 2018 and live from 2019, Official Praxis Core Prep was built by the two together: ETS's test, Khan Academy's practice. It reached more than 2.3 million aspiring teachers."],
+      ["What happened to it.","On 27 February 2024, ETS announced a new Praxis prep partnership with Study.com. Khan Academy removed Official Praxis Core Prep on 30 April 2024."]
+    ],
+    ev:{lab:"Evidence", ico:"doc", html:'<a href="https://www.prnewswire.com/news-releases/khan-academy-and-ets-partner-to-create-free-test-prep-for-aspiring-teachers-300669711.html" target="_blank" rel="noopener">ETS and Khan Academy, 21 June 2018</a>, which also says the program “will be available in spring 2019” · <a href="https://www.prnewswire.com/news-releases/ets-and-studycom-partner-to-break-down-barriers-in-national-educator-pipeline-302072022.html" target="_blank" rel="noopener">ETS release, 27 February 2024</a> · <a href="https://support.khanacademy.org/hc/en-us/articles/24504357581197-Praxis-Core-Prep-2024-Changes-Frequently-Asked-Questions" target="_blank" rel="noopener">Khan Academy Help Center</a>, created 27 February 2024, for the 2.3 million figure and the removal date.'},
+    q:"Why can we not do this one again?",
+    answer:"ownership",
+    opts:["adoption","competing","ownership","rostering"],
+    wrong:{
+      adoption:"Adoption is the learning-management entry, one slide back. Praxis prep was used: more than 2.3 million aspiring teachers.",
+      competing:"That is the College Board rail, and it is scoped to a rival <span class=\"nm\">college-admissions</span> test. The Praxis exams license teachers, they do not admit students.",
+      rostering:"Rostering stopped the higher-education attempt. Nothing technical broke here. Read the two 2024 dates again, February and April."
+    },
+    why:"Khan Academy co-built the product, carried it for five years, and then the partner took the next version of it somewhere else. Nobody did anything wrong. ETS ended up wanting to own the thing, and the exam was always theirs to own.",
+    rule:"If a partner could eventually own the asset without us, assume some of them will. Ask it before you build, not after: what is still ours in five years if this partner walks? A deal that looks generous today and leaves us nothing to keep is the same deal."
+  },
+
+  /* ---------- 7. the assessment-data partnership. Not a rail ---------- */
+  {
+    id:"mapdata", kind:"ask", label:"The assessment-data partnership",
+    title:"The assessment-data partnership",
+    fields:[
+      ["Who they are.","NWEA makes MAP Growth, a test tens of thousands of US schools give a few times a year to see where each student actually is. It is an "+gl("assessment","assessment partner")+"."],
+      ["What the partnership was.","Announced in 2019. NWEA's scores flowed into Khan Academy, Khan Academy turned them into personalised maths paths, and NWEA sold the result to schools."],
+      ["What happened to it.","The selling changed hands. The product is now Learning Paths informed by MAP Growth, a paid add-on that Khan Academy sells itself inside a Districts partnership."]
+    ],
+    ev:{lab:"Evidence", ico:"doc", html:'Khan Academy blog, published 12 April 2024, updated 20 March 2025: the program “is now available to purchase through Khan Academy directly rather than through NWEA.” <a href="https://blog.khanacademy.org/learning-paths-informed-by-map-growth/" target="_blank" rel="noopener">Khan Academy blog</a>. That NWEA used to do the selling for us comes from Sarah’s briefing, not from a public post.'},
+    q:"Why could this one not happen?",
+    answer:"changedhands",
+    opts:["ownership","changedhands","adoption","competing"],
+    wrong:{
+      ownership:"That is <span class=\"nm\">Praxis</span>, one slide back, where the partner took the next version elsewhere. Here the product is still Khan Academy's to sell.",
+      adoption:"Adoption is the learning-management entry. Nothing here was switched off for lack of use. Read what happened to it again.",
+      competing:"That is the College Board rail. MAP Growth is not a college-admissions test, and this entry is not closed at all."
+    },
+    why:"It could. This is the entry that only looks dead because it has a past tense in it. The data connection is live, the product is still on the price list, and the only thing that changed is who does the selling. It gets called “absorbed”; sold is more accurate, and the difference matters the day you have to explain it.",
+    rule:"Five of these six close something off. This one does not, and filing it as a rail would cost you a live shape you could copy. Before you call anything off the table, ask which part of it actually stopped. If the answer is the channel, it is still alive."
+  },
+
+  /* ---------- 8. the list ---------- */
+  {
+    id:"list", kind:"list", label:"The list",
+    title:"The six, and the rule each one gives you",
+    intro:"Five rails and one entry that only looks like one. This screen stays here: Project 3 sends you back to it with your own candidates on the table instead of someone else's.",
+    rows:[
+      {id:"competing", nm:"A competing assessment", r:"Being someone's official practice partner spends the slot. Check what a live deal has already promised."},
+      {id:"district", nm:"Selling to a named district", r:"If the partner would mostly just be buying the product, it is a sale, not a partnership."},
+      {id:"highered", nm:"Higher education", r:"This team is not shopping for higher-education partnership deals, whatever else Khan Academy is doing."},
+      {id:"lms", nm:"The learning-management integration", r:"We do not rebuild our tools inside someone else's platform. Distribution is not usage."},
+      {id:"praxis", nm:"Praxis", r:"If a partner could eventually own the asset without us, assume some of them will."},
+      {id:"mapdata", nm:"The assessment-data partnership", r:"Not a rail. Ask which part actually stopped. If it is the channel, it is still alive."}
+    ],
+    size:"<b>One more, and it is not on this list.</b> Wes has his own rule of thumb about the size of deal he will take to Sarah. His heuristic, not a Khan Academy threshold. His message in the substep carries it in full."
+  }
+  ];
+
+  var ASKS = ["district","highered","lms","praxis","mapdata"];
+
+  /* ===============================================================
+     state. Keyed by slug, never by slide position, so a reorder can
+     never restore an answer onto the wrong entry. v2 because v1 was
+     keyed by entry number.
+     =============================================================== */
+  var KEY = "ka-p1-rails-v2";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+  st.calls = st.calls || {};   /* slug -> "right" | "shown"        */
+  st.out   = st.out   || {};   /* slug -> array of ruled out ids   */
+
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var i = 0;                    /* current slide index */
+  var el = {};
+  ["frame","prog","segs","chip","h1","board","back","next","hint","live"]
+    .forEach(function(k){ el[k] = document.getElementById(k); });
 
-  /* ---------- small, failure-tolerant store, so the document is a
-       re-readable reference across sittings, not a read-once page ---------- */
-  var KEY = "ka-p1-rails-v1";
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; }
+  function say(m){ el.live.textContent = m; }
+  function called(){
+    var n = 0;
+    ASKS.forEach(function(s){ if(st.calls[s]) n++; });
+    return n;
   }
-  function save(o){
-    try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){}
-  }
-  var state = load();
-  state.marks = state.marks || {};
 
-  /* ================= GLOSSARY ================= */
-  var GLOSS = {
-    lms:{
-      t:"LMS",
-      d:"Learning management system. The software a school runs its classes through: assignments posted, work handed in, grades held. Teachers sit inside it all day."
-    },
-    rostering:{
-      t:"Rostering",
-      d:"Getting the list of who is in which class out of the school's systems into another piece of software, and keeping it right as it changes. It sounds trivial. It is where school software breaks most often."
-    },
-    sunset:{
-      t:"Sunset",
-      d:"To switch a product off on purpose. Not a crash, a decision: stop maintaining it, take it down."
-    },
-    assessment:{
-      t:"Assessment partner",
-      d:"A company whose product is a test. Khan Academy practice content can plug into one of those tests, so a student's score points them at what to practise next."
-    }
-  };
-
-  var IDLE = "Four words are underlined in the document. Hover one, or tap it, for a plain-language definition. They stay available the whole time.";
-  var gloss = document.getElementById("gloss"),
-      glossDef = document.getElementById("glossDef"),
-      pinned = null;
-
-  function showGloss(key){
-    var g = GLOSS[key];
-    if(!g) return;
-    gloss.classList.remove("idle");
-    glossDef.innerHTML = '<span class="term">' + g.t + '.</span> ' + g.d;
+  /* ---------------- glossary ---------------- */
+  var pinned = null;
+  function showG(k){
+    var g = G[k]; if(!g) return;
+    el.hint.classList.add("live");
+    el.hint.innerHTML = '<span><span class="term">'+g.t+'.</span> '+g.d+'</span>';
   }
-  function clearGloss(){
-    gloss.classList.add("idle");
-    glossDef.textContent = IDLE;
+  function clearG(){
+    el.hint.classList.remove("live");
+    el.hint.innerHTML = '<span>'+HINT_DEFAULT+'</span>';
   }
-  /* one shared slot keeps the definition inside the canvas on every
-     viewport, which a floating tooltip inside a scroll container does not */
-  function wireGloss(){
-    var terms = Array.prototype.slice.call(document.querySelectorAll("button.gl"));
-    terms.forEach(function(b){
+  function unpin(){ if(pinned){ pinned.setAttribute("aria-expanded","false"); pinned = null; } }
+  function wireG(){
+    Array.prototype.slice.call(el.board.querySelectorAll("button.gl")).forEach(function(b){
       var k = b.getAttribute("data-g");
-      b.addEventListener("mouseenter", function(){ if(!pinned) showGloss(k); });
-      b.addEventListener("mouseleave", function(){ if(!pinned) clearGloss(); });
-      b.addEventListener("focus", function(){ if(!pinned) showGloss(k); });
-      b.addEventListener("blur", function(){ if(!pinned) clearGloss(); });
+      b.addEventListener("mouseenter", function(){ if(!pinned) showG(k); });
+      b.addEventListener("mouseleave", function(){ if(!pinned) clearG(); });
+      b.addEventListener("focus", function(){ if(!pinned) showG(k); });
+      b.addEventListener("blur", function(){ if(!pinned) clearG(); });
       b.addEventListener("click", function(){
-        if(pinned === b){ unpin(); return; }
-        unpin(); pinned = b; b.setAttribute("aria-expanded","true"); showGloss(k);
+        if(pinned === b){ unpin(); clearG(); return; }
+        unpin(); pinned = b; b.setAttribute("aria-expanded","true"); showG(k);
       });
-      b.addEventListener("keydown", function(e){
-        if(e.key === "Escape"){ unpin(); clearGloss(); }
-      });
-    });
-    function unpin(){
-      if(pinned){ pinned.setAttribute("aria-expanded","false"); pinned = null; }
-    }
-    document.addEventListener("keydown", function(e){
-      if(e.key === "Escape" && pinned){ unpin(); clearGloss(); }
     });
   }
-  wireGloss();
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && pinned){ unpin(); clearG(); }
+  });
 
-  /* ================= FRAME 1: mark the unflagged entries ================= */
-  var MARKS = {
-    "4":{
-      right:"yes",
-      lead:"Rail. You called it.",
-      body:"Building Khan Academy's own tools inside somebody else's platform has been tried and switched off. The trap is the reasoning that led there: adoption of the <em>platform</em> was high, so adoption of the tools inside it looked like a safe bet. It was not. Teachers being in a tool all day does not mean they will pick up a new thing you put in it."
-    },
-    "5":{
-      right:"no",
-      lead:"Not a rail, and this is the one most people get wrong.",
-      body:"Nothing here is closed. The data connection is still live, the product is still selling, and Khan Academy's own sales team sells it. It changed hands, it did not end. Worth one correction while you are here: this entry gets described as \"absorbed.\" Sold is more accurate, and the difference matters if you ever have to explain it."
-    },
-    "6":{
-      right:"yes",
-      lead:"Rail, and it is the one with teeth.",
-      body:"Khan Academy co-built the product, carried it for six years, and then the partner took the next version of it somewhere else. The rail Wes draws from it: if a partner can eventually own the asset itself, some of them will. That is a question you ask before you build, not after."
+  /* ---------------- header ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var out = "";
+    for(var k=0;k<S.length;k++){
+      out += '<i class="' + (k === i ? "here" : (k < i ? "on" : "")) + '"></i>';
     }
-  };
-  var WRONG = {
-    "4":"Not quite, and it is a fair mistake. Read the last line again: the integration was sunset. This one belongs on the list.",
-    "5":"Have another look. The data connection is still live and the product is still being sold. Nothing here is off the table.",
-    "6":"Look at the dates. ETS signed with somebody else and the product came down on April 30, 2024. This one belongs on the list."
-  };
+    el.segs.innerHTML = out;
+    el.chip.textContent = called() + " of 5 called";
+    el.back.disabled = (i === 0);
+    el.next.disabled = (i === S.length - 1);
+    el.next.textContent = (i === S.length - 1) ? "You are at the end" : "Continue";
+  }
 
-  var tallyTxt = document.getElementById("tallyTxt"),
-      hint1 = document.getElementById("hint1"),
-      calledCount = 0;
+  /* ---------------- the fixed field furniture ---------------- */
+  function fieldsHTML(s){
+    return s.fields.map(function(f){
+      return '<p class="fld"><b class="lab">'+f[0]+'</b> '+f[1]+'</p>';
+    }).join("");
+  }
+  function evHTML(s){
+    return '<div class="ev"><div class="evh">'+I[s.ev.ico]+'<span>'+s.ev.lab+'</span></div>'+s.ev.html+'</div>';
+  }
+  function revealHTML(s, lead){
+    return '<p class="rlead">'+lead+'</p>' +
+      '<div class="rb"><div class="rl">'+I.look+'<span>Why it died here</span></div><div class="rt">'+s.why+'</div></div>' +
+      '<div class="rb pay"><div class="rl">'+I.flag+'<span>The rule this gives you</span></div><div class="rt">'+s.rule+'</div></div>';
+  }
 
-  function renderMark(id, choice){
-    var m = MARKS[id], e = document.getElementById("e" + id), v = document.getElementById("v" + id);
-    var ok = (choice === m.right);
-    var html = '<span class="lead">' + (ok ? m.lead : "Reconsider that one.") + '</span>';
-    html += ok ? m.body : (WRONG[id] + " " + m.body);
-    v.innerHTML = html;
-    v.classList.add("on");
-    if(ok){
-      e.classList.add("done");
-      if(m.right === "yes"){
-        var head = e.querySelector(".ehead");
-        if(!head.querySelector(".tag")){
-          var t = document.createElement("span");
-          t.className = "tag";
-          t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#FDF8F8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/></svg>Rail';
-          head.appendChild(t);
-        }
-        e.classList.add("railed","seen");
+  /* ---------------- render one slide ---------------- */
+  function render(focusReveal){
+    var s = S[i];
+    el.h1.innerHTML = s.title + (s.tag ? ' <span class="tag">'+s.tag+'</span>' : "");
+    el.board.className = "board" + (s.kind === "intro" || s.kind === "list" ? " one" : "");
+    unpin(); clearG();
+
+    if(s.kind === "intro"){
+      el.board.innerHTML =
+        '<div class="coll"><div class="intro">' +
+          s.body.map(function(p){ return '<p>'+p+'</p>'; }).join("") +
+          '<p class="credit">'+s.credit+'</p>' +
+        '</div></div>';
+    }
+    else if(s.kind === "list"){
+      el.board.innerHTML =
+        '<div class="coll"><div class="listwrap">' +
+          '<p class="lintro">'+s.intro+'</p>' +
+          '<div class="rules">' + s.rows.map(function(r){
+            var mark, open = false;
+            if(r.id === "competing"){ mark = "Worked for you"; }
+            else if(st.calls[r.id] === "right"){ mark = "✓ You called it"; }
+            else if(st.calls[r.id] === "shown"){ mark = "✓ You worked it out"; }
+            else { mark = "○ Not called yet"; open = true; }
+            return '<div class="row'+(open?" open":"")+'">' +
+              '<span class="st">'+mark+'</span>' +
+              '<span class="nm">'+r.nm+'</span>' +
+              (open
+                ? '<span><button class="jump" type="button" data-j="'+r.id+'">Make the call to see this rule</button></span>'
+                : '<span class="rr">'+r.r+'</span>') +
+            '</div>';
+          }).join("") + '</div>' +
+          '<p class="sizebar">'+s.size+'</p>' +
+        '</div></div>';
+      Array.prototype.slice.call(el.board.querySelectorAll("button.jump")).forEach(function(b){
+        b.addEventListener("click", function(){
+          var t = b.getAttribute("data-j");
+          for(var k=0;k<S.length;k++){ if(S[k].id === t){ i = k; render(false); el.frame.focus(); return; } }
+        });
+      });
+    }
+    else if(s.kind === "worked"){
+      el.board.innerHTML =
+        '<div class="coll"><div class="fields">'+fieldsHTML(s)+'</div>'+evHTML(s)+'</div>' +
+        '<div class="colr">' +
+          '<p class="q">'+s.q+'</p>' +
+          '<div class="opts"><button class="opt picked" type="button" disabled aria-disabled="true">' +
+            '<span class="g" aria-hidden="true">✓</span><span class="txt">'+R[s.answer]+'</span></button></div>' +
+          '<div class="reveal">'+revealHTML(s, s.lead)+'</div>' +
+          '<div class="note short">'+s.after+'</div>' +
+        '</div>';
+    }
+    else {
+      /* an ask slide. The reveal replaces the options in place, in the
+         same column, so nothing grows below it and the bar cannot move. */
+      var done = !!st.calls[s.id];
+      var outIds = st.out[s.id] || [];
+      el.board.innerHTML =
+        '<div class="coll"><div class="fields">'+fieldsHTML(s)+'</div>'+evHTML(s)+'</div>' +
+        '<div class="colr">' +
+          '<p class="q">'+s.q+'</p>' +
+          '<div id="ask"' + (done ? ' hidden' : '') + '>' +
+            '<div class="opts" id="opts" role="group" aria-label="Pick one">' +
+              s.opts.map(function(id,n){
+                var isOut = outIds.indexOf(id) > -1;
+                return '<button class="opt'+(isOut?" out":"")+'" type="button" data-r="'+id+'"' +
+                  (isOut ? ' disabled aria-disabled="true"' : '') + '>' +
+                  '<span class="g" aria-hidden="true">'+(isOut ? "✕" : "ABCD".charAt(n))+'</span>' +
+                  '<span class="txt">'+R[id]+'</span></button>';
+              }).join("") +
+            '</div>' +
+            '<div class="note" id="note" role="status" aria-live="polite">' +
+              (outIds.length ? s.wrong[outIds[outIds.length-1]]
+                             : 'Pick one. Every wrong option is the real reason a different entry on this list died.') +
+            '</div>' +
+          '</div>' +
+          '<div class="reveal"' + (done ? '' : ' hidden') + ' tabindex="-1" role="group" aria-label="The reveal">' +
+            (done ? revealHTML(s, st.calls[s.id] === "right" ? "You called it." : "Here it is.") : "") +
+          '</div>' +
+        '</div>';
+      wireOpts(s);
+      if(focusReveal){
+        var rv = el.board.querySelector(".reveal");
+        if(rv){ if(!reduce) rv.classList.add("in"); rv.focus(); }
       }
     }
+
+    wireG();
+    header();
+    if(!focusReveal) say("Slide " + (i+1) + " of " + S.length + ". " + s.label + ".");
   }
 
-  function updateTally(){
-    var n = Object.keys(state.marks).filter(function(k){
-      return state.marks[k] === MARKS[k].right;
-    }).length;
-    calledCount = n;
-    tallyTxt.textContent = "3 flagged for you, " + (3 - n) + " left for you to call";
-    if(n === 3){
-      tallyTxt.textContent = "3 flagged for you, all 3 called";
-      hint1.textContent = "Five rails, one entry that only looks like one. Hold on to this list.";
-    }
-  }
-
-  Array.prototype.slice.call(document.querySelectorAll("button.mk")).forEach(function(b){
-    b.addEventListener("click", function(){
-      var id = b.getAttribute("data-e"), val = b.getAttribute("data-v");
-      var group = b.parentNode.querySelectorAll("button.mk");
-      Array.prototype.slice.call(group).forEach(function(o){
-        o.setAttribute("aria-pressed", o === b ? "true" : "false");
-      });
-      state.marks[id] = val; save(state);
-      renderMark(id, val);
-      updateTally();
-    });
-  });
-
-  /* restore any previous sitting */
-  Object.keys(state.marks).forEach(function(id){
-    if(!MARKS[id]) return;
-    var val = state.marks[id];
-    var btn = document.querySelector('button.mk[data-e="' + id + '"][data-v="' + val + '"]');
-    if(btn) btn.setAttribute("aria-pressed","true");
-    renderMark(id, val);
-  });
-  updateTally();
-
-  /* the pre-marked highlights fade in as the reader reaches them.
-     One reveal per entry, no loop, nothing moves while reading. */
-  var doc = document.getElementById("doc");
-  function revealSeen(){
-    var top = doc.scrollTop, bottom = top + doc.clientHeight;
-    Array.prototype.slice.call(doc.querySelectorAll(".entry.railed")).forEach(function(e){
-      if(e.classList.contains("seen")) return;
-      if(e.offsetTop < bottom - 24) e.classList.add("seen");
-    });
-  }
-  doc.addEventListener("scroll", revealSeen, {passive:true});
-  if(reduce){
-    Array.prototype.slice.call(doc.querySelectorAll(".entry.railed")).forEach(function(e){ e.classList.add("seen"); });
-  }else{
-    requestAnimationFrame(revealSeen);
-  }
-
-  /* ================= FRAME 2: the sort ================= */
-  var CARDS = [
-    {
-      body:"“We're staying in K-12. Higher ed isn't happening.”",
-      who:"From the document you just read, entry 3.",
-      right:"rail",
-      lead:"That is a rail.",
-      html:"<p>It holds no matter how good the pitch is. Khan Academy tried higher ed, hit rostering and other technical problems, and stopped. A better-argued pitch does not reopen it, because the reason it closed was never the quality of the pitch.</p><p><strong>The test:</strong> could a strong enough offer move this? If no, it is a rail. Say no fast and get on with something else.</p>"
-    },
-    {
-      body:"“We'd rather sponsor a whole course than a single video, but we've done both.”",
-      who:"How Wes describes the team's habit.",
-      right:"pref",
-      lead:"That is a preference.",
-      html:"<p>The tell is four words at the end: <strong>but we've done both</strong>. A rail has no exceptions in it. This one has an exception written into the sentence, so a strong enough pitch can move it.</p><p>Preferences are still real and worth knowing. Pitch against one and you are starting uphill. The difference is that uphill is walkable, and a rail is not.</p>"
-    }
-  ];
-  var ci = 0,
-      cardBody = document.getElementById("cardBody"),
-      cardWho = document.getElementById("cardWho"),
-      bins = Array.prototype.slice.call(document.querySelectorAll("button.bin")),
-      expl2 = document.getElementById("expl2"),
-      go2 = document.getElementById("go2"),
-      hint2 = document.getElementById("hint2"),
-      pt2 = document.getElementById("pt2");
-
-  function drawCard(){
-    var c = CARDS[ci];
-    cardBody.textContent = c.body;
-    cardWho.textContent = c.who;
-    bins.forEach(function(b){ b.setAttribute("aria-pressed","false"); b.disabled = false; });
-    expl2.classList.remove("on"); expl2.innerHTML = "";
-    go2.disabled = true;
-    hint2.textContent = "Place the card in a bin. You get the reasoning either way.";
-    pt2.textContent = "2 of 5 · Rail or preference, card " + (ci + 1) + " of 2";
-    go2.textContent = (ci === 0) ? "Next card" : "Continue";
-  }
-
-  bins.forEach(function(b, i){
-    b.addEventListener("click", function(){
+  /* ---------------- committing an answer ---------------- */
+  function wireOpts(s){
+    Array.prototype.slice.call(el.board.querySelectorAll("button.opt")).forEach(function(b){
       if(b.disabled) return;
-      var c = CARDS[ci], choice = b.getAttribute("data-b"), ok = (choice === c.right);
-      bins.forEach(function(o){
-        o.setAttribute("aria-pressed", o === b ? "true" : "false");
-        o.disabled = true;
+      b.addEventListener("click", function(){
+        var id = b.getAttribute("data-r");
+        if(id === s.answer){ commit(s, "right"); return; }
+
+        /* wrong. Rule the option out, and say which entry that reason
+           actually belongs to. A nudge that only says no teaches nothing. */
+        var outIds = st.out[s.id] || [];
+        if(outIds.indexOf(id) === -1) outIds.push(id);
+        st.out[s.id] = outIds; save(st);
+
+        b.classList.add("out");
+        b.disabled = true; b.setAttribute("aria-disabled","true");
+        b.querySelector(".g").textContent = "✕";
+
+        var note = el.board.querySelector("#note");
+        note.innerHTML = s.wrong[id];
+
+        if(outIds.length >= 2){ commit(s, "shown"); return; }
+
+        /* focus was on the button we just removed from the tab order.
+           Move it somewhere deliberate: the first option still live. */
+        var live = el.board.querySelector("button.opt:not(:disabled)");
+        if(live) live.focus();
+        say("Ruled out. " + note.textContent);
       });
-      expl2.innerHTML = '<span class="lead">' + (ok ? "Yes. " : "Not this one. ") + c.lead + '</span>' + c.html;
-      expl2.classList.remove("on"); void expl2.offsetWidth; expl2.classList.add("on");
-      go2.disabled = false;
-      hint2.textContent = "";
-    });
-    b.addEventListener("keydown", function(e){
-      var n = null;
-      if(e.key === "ArrowRight" || e.key === "ArrowDown") n = bins[(i+1) % bins.length];
-      if(e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = bins[(i-1+bins.length) % bins.length];
-      if(n){ e.preventDefault(); n.focus(); }
-    });
-  });
-
-  /* ================= FRAME 3: the candidates ================= */
-  var LABEL = {
-    rail:"Killed by a rail",
-    size:"Killed by the size bar",
-    live:"Survives",
-    judge:"Genuine judgment call"
-  };
-
-  var CANDS = [
-    {
-      pitch:"A test-prep company wants us to co-build a free, official practice tool for a rival college-admissions test, structured just like the SAT Suite partnership. They are willing to pay for it.",
-      right:"rail",
-      lead:"Killed by a rail. Entry 1.",
-      html:"<p>Khan Academy is the official practice partner for the College Board's SAT Suite, a relationship announced at the time using the word \"exclusively.\" A matching free-practice deal for a rival college-admissions test is out.</p>" +
-           "<p><strong>Notice what did not matter:</strong> they are willing to pay. The size of the cheque is irrelevant here, and that irrelevance is exactly what makes this a rail rather than a preference.</p>" +
-           "<p>This is a same-day no, and a fast, well-reasoned no is a good day's work. Notice how little you had to know to reach it. One line in the document settled the whole thing, which is why reading the rails first is the cheapest check you have.</p>"
-    },
-    {
-      pitch:"A regional literacy nonprofit wants to license 200 Khan Academy videos for its own after-school program. They are offering $80,000 a year, renewable annually.",
-      right:"size",
-      lead:"Killed by the size bar.",
-      html:"<p>Go looking for a rail first, because that is the cheaper check, and you will not find one. K-12, no competing assessment, not a district sale, nobody ends up owning the asset. This is genuinely useful work with a partner who would be easy to like.</p>" +
-           "<p>It is $80,000. Under Wes's own rule of thumb it does not go to Sarah, because it eats the same nine to eighteen months of the same small team as a deal worth five times more.</p>" +
-           "<p>That is the uncomfortable part of the job. <strong>The reason to say no is not that the offer is bad.</strong> It is that saying yes to this one costs you the bigger one you could have chased instead.</p>"
-    },
-    {
-      pitch:"A state department of education wants to pay $400,000 a year for statewide Khanmigo access, across every district in the state.",
-      right:"judge",
-      lead:"Genuine judgment call. No clean answer, and that is the answer.",
-      html:"<p>It clears the size bar comfortably at $400,000, and no rail names it. K-12, no competing assessment, nobody walks off with the asset. So far it looks like a yes.</p>" +
-           "<p>Then entry 2 gets in the way. District selling belongs to the sales team, and a statewide deal sits directly on top of districts that team may already be working. Is this a partnership, or the sales pipeline with a bigger logo on it? Both readings are defensible, which is what makes it a judgment call and not a puzzle with a hidden answer.</p>" +
-           "<p><strong>What you would need to know to decide it:</strong> which of that state's districts are already in the sales pipeline and at what stage, and who at the state actually has the authority to sign. Neither is in the pitch.</p>" +
-           "<p>Most real candidates look like this one. So the habit worth building is not resolving it on the spot, it is knowing which two facts to go and get.</p>"
-    }
-  ];
-  var qi = 0,
-      pbody = document.getElementById("pbody"),
-      plab = document.getElementById("plab"),
-      choices = Array.prototype.slice.call(document.querySelectorAll("button.ch")),
-      hint3 = document.getElementById("hint3"),
-      pt3 = document.getElementById("pt3"),
-      segs3 = document.getElementById("segs3"),
-      h3 = document.getElementById("h3"),
-      pt4 = document.getElementById("pt4"),
-      segs4 = document.getElementById("segs4"),
-      h4 = document.getElementById("h4"),
-      vsaid = document.getElementById("vsaid"),
-      vrecall = document.getElementById("vrecall"),
-      vpanel = document.getElementById("vpanel"),
-      go4 = document.getElementById("go4");
-
-  function litSegs(el, lit){
-    Array.prototype.slice.call(el.children).forEach(function(s, i){
-      if(i < lit) s.classList.add("on"); else s.classList.remove("on");
     });
   }
 
-  function drawCand(){
-    var c = CANDS[qi];
-    plab.textContent = "Candidate " + (qi + 1) + ", as pitched";
-    pbody.textContent = c.pitch;
-    choices.forEach(function(b){ b.setAttribute("aria-pressed","false"); b.disabled = false; });
-    hint3.textContent = "Pick a verdict. You get the reasoning either way.";
-    pt3.textContent = (3 + qi) + " of 5 · Candidate " + (qi + 1) + " of 3";
-    h3.textContent = "Does the rails list or the size bar kill this?";
-    litSegs(segs3, 3 + qi);
+  function commit(s, how){
+    if(!st.calls[s.id]) st.calls[s.id] = how;
+    save(st);
+    var ask = el.board.querySelector("#ask");
+    var rv  = el.board.querySelector(".reveal");
+    rv.innerHTML = revealHTML(s, how === "right" ? "You called it." : "Here it is.");
+    ask.hidden = true;
+    rv.hidden = false;
+    if(!reduce){ rv.classList.remove("in"); void rv.offsetWidth; rv.classList.add("in"); }
+    rv.focus();                 /* the activated button is gone, so land here */
+    header();
+    say((how === "right" ? "Correct. " : "") + "Why it died here, and the rule this gives you.");
   }
 
-  /* the verdict gets its own frame, so the reasoning is never below a scroll */
-  function drawVerdict(choice){
-    var c = CANDS[qi], ok = (choice === c.right);
-    h4.textContent = c.lead;
-    vsaid.textContent = ok ? "You had it" : "You said: " + LABEL[choice];
-    vrecall.textContent = c.pitch;
-    var extra = "";
-    if(ok && c.right === "judge"){
-      extra = "<p><strong>Holding your nerve on that is the hard part.</strong> There is a pull toward picking one of the tidy three so it feels finished.</p>";
-    }
-    var close = (qi === CANDS.length - 1)
-      ? '<p><span class="hold">Hold on to both lists.</span> Project 3 hands them straight back to you, with your own candidates on the table instead of someone else\'s.</p>'
-      : "";
-    vpanel.innerHTML = extra + c.html + close;
-    vpanel.scrollTop = 0;
-    pt4.textContent = (3 + qi) + " of 5 · Candidate " + (qi + 1) + " of 3";
-    litSegs(segs4, 3 + qi);
-    go4.textContent = (qi < CANDS.length - 1) ? "Next candidate" : "Finish";
-    if(reduce){
-      vpanel.classList.add("on");
-    }else{
-      vpanel.classList.remove("on"); void vpanel.offsetWidth;
-      requestAnimationFrame(function(){ vpanel.classList.add("on"); });
-    }
+  /* ---------------- navigation. Plain buttons, Tab and Enter ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(false); el.frame.focus();
   }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
 
-  choices.forEach(function(b, i){
-    b.addEventListener("click", function(){
-      if(b.disabled) return;
-      var choice = b.getAttribute("data-c");
-      choices.forEach(function(o){
-        o.setAttribute("aria-pressed", o === b ? "true" : "false");
-      });
-      drawVerdict(choice);
-      show(f4);
-    });
-    b.addEventListener("keydown", function(e){
-      var n = null;
-      if(e.key === "ArrowRight" || e.key === "ArrowDown") n = choices[(i+1) % choices.length];
-      if(e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = choices[(i-1+choices.length) % choices.length];
-      if(n){ e.preventDefault(); n.focus(); }
-    });
-  });
-
-  /* ================= frame plumbing ================= */
-  var f1 = document.getElementById("f1"), f2 = document.getElementById("f2"),
-      f3 = document.getElementById("f3"), f4 = document.getElementById("f4");
-  var frames = [f1, f2, f3, f4], current = f1;
-
-  function show(el){
-    frames.forEach(function(f){ f.style.display = (f === el) ? "flex" : "none"; });
-    el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
-    el.setAttribute("tabindex","-1"); el.focus();
-    current = el;
-  }
-
-  document.getElementById("go1").addEventListener("click", function(){
-    show(f2); drawCard();
-  });
-
-  go2.addEventListener("click", function(){
-    if(ci === 0){ ci = 1; drawCard(); return; }
-    show(f3); qi = 0; drawCand();
-  });
-
-  go4.addEventListener("click", function(){
-    if(qi < CANDS.length - 1){ qi++; drawCand(); show(f3); return; }
-    /* last candidate: nothing dead-ends, so send them back to the document */
-    show(f1);
-    hint1.textContent = "This document stays here. Project 3 sends you back to it.";
-  });
-
-  document.getElementById("back3").addEventListener("click", function(){
-    if(qi > 0){ qi--; drawCand(); return; }
-    show(f2); ci = 1; drawCard();
-  });
-
-  document.getElementById("back4").addEventListener("click", function(){ show(f3); });
-
-  document.getElementById("reopen2").addEventListener("click", function(){ show(f1); });
-  document.getElementById("reopen3").addEventListener("click", function(){ show(f1); });
-  document.getElementById("reopen4").addEventListener("click", function(){ show(f1); });
-
-  document.addEventListener("keydown", function(e){
-    if(e.key === "Escape" && current !== f1 && !pinned){ show(f1); }
-  });
-
-  /* ---- scale the fixed canvas down to fit, never up ---- */
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
   var stage = document.getElementById("stage");
   function fit(){
     if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
     var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
     stage.style.transform = "scale(" + s + ")";
   }
-  window.addEventListener("resize", fit); fit();
+  window.addEventListener("resize", fit);
+
+  clearG();
+  render(false);
+  fit();
+
+  /* exposed for render QA only: lets a headless run force a state */
+  window.__ex = {
+    goto:function(n){ i = n; render(false); },
+    pick:function(id){
+      var b = el.board.querySelector('button.opt[data-r="'+id+'"]:not(:disabled)');
+      if(b) b.click(); return !!b;
+    },
+    slides:S.length,
+    reset:function(){ st = {calls:{},out:{}}; save(st); },
+    state:function(){ return {i:i, calls:st.calls, out:st.out}; }
+  };
 })();
 </script>
 </body>

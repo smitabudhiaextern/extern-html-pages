@@ -66,24 +66,47 @@
 
   /* ================= FRAME 1 : the cold sort =================
      The tray holds a fixed height so the bins do not creep upward as
-     cards leave it. A drop target that moves mid-drag is a bug. */
-  .tray{margin-top:11px;height:116px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:0 0 auto}
+     cards leave it. A drop target that moves mid-drag is a bug.
+
+     Each card carries its own Gives and Gets buttons. That is the
+     primary route and the only one the hint line teaches: one tap
+     places a card, with no selection state to hold in your head and
+     no second target to find. Drag still works for anyone who reaches
+     for it, but nothing depends on it, and neither does the keyboard,
+     which is now plain Tab and Enter over ordinary buttons instead of
+     a custom arrow protocol a student had to read a hint to discover. */
+  .tray{margin-top:11px;height:150px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:0 0 auto}
+  /* Once the last card is placed the tray holds one line of text, and
+     the reflection panel opens below the bins. Holding the full card
+     height here costs about 120px and pushes Continue off the bottom of
+     the 540px canvas. Collapsing is safe only because the tray is empty:
+     there is no card left to drag, so no drop target can move mid-drag,
+     which is the reason the height was pinned in the first place. */
+  .tray.empty{height:auto}
   .card{
     background:var(--highlight);border:2px solid transparent;border-radius:10px;
-    padding:10px 11px;min-width:0;text-align:left;font-family:inherit;cursor:grab;
-    display:flex;flex-direction:column;gap:6px;
-    transition:background var(--t-fast) var(--ease-out),
-               border-color var(--t-fast) var(--ease-out),
+    padding:9px 10px;min-width:0;text-align:left;font-family:inherit;
+    display:flex;flex-direction:column;gap:5px;
+    transition:border-color var(--t-fast) var(--ease-out),
                transform var(--t-fast) var(--ease-out);
   }
-  .card .ico{width:18px;height:18px}
-  .card .ico svg{width:18px;height:18px;display:block}
-  .card .fl{font-size:12.5px;line-height:1.35;color:var(--title);font-weight:500;overflow-wrap:break-word}
-  .card:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
-  .card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  .card[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight)}
-  .card[aria-pressed="true"] .fl{color:var(--bg)}
-  .card[aria-pressed="true"] .ico svg{stroke:var(--bg)}
+  .card .ico{width:17px;height:17px;flex:0 0 auto}
+  .card .ico svg{width:17px;height:17px;display:block}
+  .card .fl{font-size:12px;line-height:1.3;color:var(--title);font-weight:500;overflow-wrap:break-word}
+  .card:hover{border-color:var(--on-highlight)}
+  .card.dragging{transform:translateY(-2px);border-color:var(--on-highlight)}
+  /* the two choices sit on the card, pinned to its bottom edge so the
+     four cards present one straight row of buttons however long their
+     text runs */
+  .picks{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:0 0 auto}
+  .pick{
+    font-family:inherit;font-size:11.5px;font-weight:600;line-height:1;
+    color:var(--on-highlight);background:var(--bg);
+    border:2px solid var(--on-highlight);border-radius:7px;padding:6px 4px;cursor:pointer;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  .pick:hover{background:var(--on-highlight);color:var(--bg)}
+  .pick:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
   .trayempty{grid-column:1 / -1;font-size:12.5px;line-height:1.4;color:var(--body);padding:8px 0}
 
   .bins{margin-top:11px;display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:0 0 auto}
@@ -92,21 +115,11 @@
     padding:10px 12px 11px;min-width:0;
     transition:border-color var(--t-fast) var(--ease-out);
   }
-  .bin.armed{cursor:pointer}
-  .bin.armed:hover,.bin.over{border-color:var(--on-highlight)}
+  .bin.over{border-color:var(--on-highlight)}
   .bhead{display:flex;align-items:center;gap:8px}
   .bhead .ico{flex:0 0 auto;width:18px;height:18px}
   .bhead .ico svg{width:18px;height:18px;display:block}
   .bhead .t{flex:1 1 auto;font-size:15px;font-weight:600;color:var(--title);line-height:1.2}
-  .place{
-    flex:0 0 auto;font-family:inherit;font-size:11.5px;font-weight:600;
-    color:var(--on-highlight);background:transparent;
-    border:2px solid var(--on-highlight);border-radius:7px;padding:5px 8px;cursor:pointer;
-    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
-  }
-  .place:hover:not(:disabled){background:var(--on-highlight);color:var(--bg)}
-  .place:disabled{opacity:.3;cursor:not-allowed}
-  .place:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
 
   /* fixed height, two columns. Four chips is the worst case and it
      fits in two rows, so the layout never moves as cards land. */
@@ -303,7 +316,6 @@
         <div class="bhead">
           <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M14 7l5 5-5 5"/></svg></span>
           <span class="t">Khan Academy gives</span>
-          <button class="place" id="placeGives" disabled>Place here</button>
         </div>
         <div class="drop" id="dropGives"><p class="empty" id="emptyGives">Nothing here yet.</p></div>
       </div>
@@ -312,7 +324,6 @@
         <div class="bhead">
           <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M10 7l-5 5 5 5"/></svg></span>
           <span class="t">Khan Academy gets</span>
-          <button class="place" id="placeGets" disabled>Place here</button>
         </div>
         <div class="drop" id="dropGets"><p class="empty" id="emptyGets">Nothing here yet.</p></div>
       </div>
@@ -327,7 +338,7 @@
 
     <div class="bar">
       <button class="nav" id="go" disabled>Continue</button>
-      <span class="hint" id="hint">Drag a card into a bin, or tap it and then tap a bin. Keyboard: Enter to pick up, arrows to choose the bin, Enter to place.</span>
+      <span class="hint" id="hint">Tap Gives or Gets on each card. To move one back out, tap it inside its bin.</span>
     </div>
   </div>
 
@@ -412,10 +423,10 @@
     <h1>Two of these Khan Academy gets. Two it gives.</h1>
     <p style="margin-bottom:12px">Four pieces of the College Board partnership. Sort them yourself, on paper if you like, with no framework and nothing to guide you:</p>
     <ul style="margin:0 0 12px 22px">
-      <li>Free, official SAT practice built around a student's own test results</li>
+      <li>Free SAT practice that any student can use, with no payment and no school account needed</li>
       <li>The engineering and content work of keeping that practice current every time the test changes</li>
       <li>Access to thousands of official College Board questions</li>
-      <li>The label "official practice partner" on the exam most US college applicants sit</li>
+      <li>Being named College Board's official partner for SAT practice</li>
     </ul>
     <p style="margin-bottom:12px">No answer is given here, on purpose. Which one was hardest to place, and what made it hard? That hesitation is the point.</p>
     <h2>Why one-sided deals fall apart</h2>
@@ -452,13 +463,13 @@
      ------------------------------------------------------------ */
   var CARDS = [
     { id:"practice", ico:"target",
-      full:"Free, official SAT practice built around a student's own test results, not a generic drill set" },
+      full:"Free SAT practice that any student can use, with no payment and no school account needed" },
     { id:"upkeep", ico:"wrench",
       full:"The engineering and content work of keeping that practice current every time the real test changes" },
     { id:"questions", ico:"bank",
       full:"Access to thousands of official College Board questions to build real practice on" },
     { id:"label", ico:"seal",
-      full:"The label “official practice partner” on the exam most US college applicants sit" }
+      full:"Being named College Board's official partner for SAT practice" }
   ];
 
   var byId = {}; CARDS.forEach(function(c){ byId[c.id] = c; });
@@ -473,31 +484,43 @@
 
   var BIN = {
     gives:{ el:document.getElementById("binGives"), drop:document.getElementById("dropGives"),
-            empty:document.getElementById("emptyGives"), btn:document.getElementById("placeGives"),
+            empty:document.getElementById("emptyGives"),
             name:"Khan Academy gives" },
     gets: { el:document.getElementById("binGets"), drop:document.getElementById("dropGets"),
-            empty:document.getElementById("emptyGets"), btn:document.getElementById("placeGets"),
+            empty:document.getElementById("emptyGets"),
             name:"Khan Academy gets" }
   };
 
   function shortOf(c){
     /* the chip needs a compact handle, and the full line stays in aria */
-    return { practice:"Free official SAT practice",
+    return { practice:"Free SAT practice",
              upkeep:"Keeping the practice current",
              questions:"Official question bank",
-             label:"The official partner label" }[c.id];
+             label:"Named official partner" }[c.id];
   }
 
+  /* The card is a plain container, not a button. Its two choices are
+     real buttons, so a nested-interactive violation cannot happen and
+     a screen reader announces two unambiguous actions per card rather
+     than one card with a hidden protocol attached to it. */
   function cardEl(c){
     var b = document.createElement("div");
     b.className = "card";
-    b.setAttribute("role","button");
-    b.setAttribute("tabindex","0");
     b.setAttribute("draggable","true");
-    b.setAttribute("aria-pressed","false");
     b.setAttribute("data-id", c.id);
-    b.setAttribute("aria-label", c.full + ". Press Enter to pick this up.");
-    b.innerHTML = '<span class="ico">'+ICO[c.ico]+'</span><span class="fl">'+c.full+'</span>';
+    b.innerHTML =
+      '<span class="ico">'+ICO[c.ico]+'</span>' +
+      '<span class="fl">'+c.full+'</span>' +
+      '<span class="picks"></span>';
+    var picks = b.querySelector(".picks");
+    ["gives","gets"].forEach(function(k){
+      var p = document.createElement("button");
+      p.type = "button"; p.className = "pick"; p.setAttribute("data-bin", k);
+      p.textContent = (k === "gives") ? "Gives" : "Gets";
+      p.setAttribute("aria-label", c.full + ". Place in Khan Academy " + k + ".");
+      p.addEventListener("click", function(){ put(c.id, k); });
+      picks.appendChild(p);
+    });
     wireCard(b, c);
     return b;
   }
@@ -514,11 +537,8 @@
   function render(){
     Array.prototype.slice.call(tray.querySelectorAll(".card,.trayempty")).forEach(function(n){ n.remove(); });
     var loose = CARDS.filter(function(c){ return !placed[c.id]; });
-    loose.forEach(function(c){
-      var el = cardEl(c);
-      if (sel === c.id) el.setAttribute("aria-pressed","true");
-      tray.appendChild(el);
-    });
+    loose.forEach(function(c){ tray.appendChild(cardEl(c)); });
+    tray.classList.toggle("empty", !loose.length);
     if (!loose.length){
       var p = document.createElement("p");
       p.className = "trayempty";
@@ -539,48 +559,24 @@
     var all = n === CARDS.length;
     refl.classList.toggle("on", all);
     go.disabled = !all;
-
-    var armed = sel !== null;
-    BIN.gives.btn.disabled = !armed; BIN.gets.btn.disabled = !armed;
-    BIN.gives.el.classList.toggle("armed", armed);
-    BIN.gets.el.classList.toggle("armed", armed);
   }
 
   function defaultHint(){
     var n = CARDS.filter(function(c){ return placed[c.id]; }).length;
-    if (n < CARDS.length) return "Drag a card into a bin, or tap it and then tap a bin. Keyboard: Enter to pick up, arrows to choose the bin, Enter to place.";
+    if (n < CARDS.length) return "Tap Gives or Gets on each card. To move one back out, tap it inside its bin.";
     return "One line on what was hardest, then continue. Nothing here is scored.";
   }
 
-  /* The card keydown handler calls preventDefault before moving focus to
-     a Place here button, and that call is load bearing. Without it the
-     keypress belonging to the same Enter would land on the button focus
-     just moved to, Chrome would treat it as an activation, and one
-     keystroke would both pick a card up and drop it in the left bin.
-     Verified with real Chrome key events: with the preventDefault in
-     place, one Enter picks up and stops. Do not remove it. */
-
-  function pick(id){
-    sel = (sel === id) ? null : id;
-    render();
-    if (sel){
-      hint.textContent = "Picked up. Left and Right arrows move between the two Place here buttons, " +
-                         "Enter places it, Escape puts it down.";
-      BIN.gives.btn.focus();
-    } else hint.textContent = defaultHint();
-  }
-
-  /* render() disables both Place here buttons once nothing is held, and
-     disabling the focused button drops focus to the document, so a
-     keyboard user loses their place completely. Put focus somewhere
-     deliberate, but only when it was actually lost, which leaves a mouse
-     or a drag placement alone. Once the tray is empty the next thing to
-     do is the reflection line, so focus goes there. */
+  /* Placing a card destroys the button that was just activated, which
+     drops focus to the document and strands a keyboard user. Put focus
+     somewhere deliberate: the first choice on the next remaining card,
+     or the reflection line once the tray is empty. Only act when focus
+     was actually lost, so a mouse or a drag placement is left alone. */
   function keepFocus(){
     var a = document.activeElement;
     if (a && a !== document.body && a !== document.documentElement && !a.disabled) return;
-    var nextCard = tray.querySelector(".card");
-    if (nextCard){ nextCard.focus(); return; }
+    var nextPick = tray.querySelector(".card .pick");
+    if (nextPick){ nextPick.focus(); return; }
     document.getElementById("hard").focus();
   }
 
@@ -594,43 +590,27 @@
   function takeBack(id){
     delete placed[id]; render();
     hint.textContent = defaultHint();
-    var again = tray.querySelector('[data-id="'+id+'"]');
+    var again = tray.querySelector('[data-id="'+id+'"] .pick');
     if (again) again.focus();
   }
 
+  /* Drag is a secondary route now. Nothing teaches it and nothing
+     depends on it, but it stays wired for anyone who reaches for it. */
   function wireCard(el, c){
-    el.addEventListener("click", function(){ pick(c.id); });
-    el.addEventListener("keydown", function(e){
-      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); pick(c.id); return; }
-      var cards = Array.prototype.slice.call(tray.querySelectorAll(".card"));
-      var i = cards.indexOf(el), n = null;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") n = cards[(i+1)%cards.length];
-      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   n = cards[(i-1+cards.length)%cards.length];
-      if (n){ e.preventDefault(); n.focus(); }
-    });
     el.addEventListener("dragstart", function(e){
       sel = c.id;
+      el.classList.add("dragging");
       try{ e.dataTransfer.setData("text/plain", c.id); }catch(err){}
       e.dataTransfer.effectAllowed = "move";
-      render();
     });
     el.addEventListener("dragend", function(){
-      if (sel === c.id && !placed[c.id]){ sel = null; render(); hint.textContent = defaultHint(); }
+      el.classList.remove("dragging");
+      if (sel === c.id && !placed[c.id]) sel = null;
     });
   }
 
   ["gives","gets"].forEach(function(k){
     var b = BIN[k];
-    b.el.addEventListener("click", function(ev){
-      if (ev.target.closest(".chip") || ev.target.closest(".place")) return;
-      if (sel) put(sel, k);
-    });
-    b.btn.addEventListener("click", function(ev){ ev.stopPropagation(); if (sel) put(sel, k); });
-    b.btn.addEventListener("keydown", function(ev){
-      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft"){
-        ev.preventDefault(); BIN[k === "gives" ? "gets" : "gives"].btn.focus();
-      }
-    });
     b.el.addEventListener("dragover", function(ev){
       if (!sel) return;
       ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; b.el.classList.add("over");
