@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The portfolio: six deals, one organization</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. The only other values are low alpha versions
+     of #001D69 used for empty progress pips, and no state is ever
+     signalled by colour alone: every state also carries a glyph, a
+     label, a count, or a line style.
+
+     Nothing here is fetched. No stylesheet, script, font or image
+     leaves the file, so the embed makes zero external requests.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* panels, the hub box, the open partner */
+    --on-highlight:#001D69; /* arrows, icons, borders, controls      */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    /* empty progress pips only. Never carries meaning on its own:
+       the pip row sits beside the words "Opened 3 of 6", which is
+       the authoritative signal, and the pips are aria-hidden. */
+    --pip:rgba(0,29,105,.30);
+
+    /* motion, straight from the craft spec's timing table. Only two
+       durations are used in this build, because only two things move:
+       UI feedback, and an arrow drawing itself. The 300ms draw is set
+       in the script, in literal values, for the reason commented there. */
+    --t-fast:160ms;    /* UI feedback: hover, press, focus  */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===== 960x540 canvas, scaled down only, never up =====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the
+     canvas lays out at the viewport width between 600 and 899px and
+     the JS transform then scales it a second time, double shrinking
+     the design. The canvas must always hold 960 in layout. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:14px 32px 12px;display:flex;flex-direction:column}
+
+  /* ---------- row 1: the frame heading and the deal type ---------- */
+  .hrow{flex:0 0 auto;height:34px;display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);white-space:nowrap}
+  h1:focus,h1:focus-visible{outline:none}
+  .chips{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .tchip{
+    flex:0 0 auto;font-size:13px;font-weight:600;letter-spacing:.02em;
+    padding:3px 10px;border-radius:6px;white-space:nowrap;
+    background:var(--on-highlight);color:var(--bg);
+  }
+  /* the open type. Same ink, hollow and dashed, so "we did not settle
+     this" is a shape difference and not a colour difference. */
+  .tchip.open{background:transparent;color:var(--on-highlight);border:1.5px dashed var(--on-highlight);padding:2px 9px}
+  .tnote{font-size:13px;line-height:1.35;color:var(--body);min-width:0;overflow:hidden;white-space:nowrap}
+
+  /* ---------- row 2: the hub and the six spokes ----------
+     The SVG is drawn 1:1 in real canvas pixels, so every label is the
+     size it says it is. This height must stay equal to G.h in the
+     script, or the whole diagram scales and every label lands smaller
+     than its stated size. Change one and you must change the other. */
+  .dia{flex:0 0 auto;position:relative;height:142px;margin-bottom:8px}
+  #svg{position:absolute;inset:0;display:block;width:896px;height:142px;pointer-events:none;font-family:inherit}
+  .hubline{display:none}
+
+  .hub{fill:var(--highlight)}
+  .hubT{font-size:16px;font-weight:600;fill:var(--on-highlight)}
+  /* 13px, the caption tier floor in the type scale, not 12. Measured at
+     138.7px against 154px of hub width, so it fits on one line. */
+  .hubC{font-size:13px;fill:var(--body)}
+
+  /* a partnership that exists but is not the one on screen: dotted, no
+     arrowhead. Full strength ink, so contrast is never the signal. */
+  .spoke{fill:none;stroke:var(--on-highlight);stroke-width:1.5;stroke-dasharray:2 5;stroke-linecap:round}
+  /* the selected deal: solid, with a head that says which way */
+  .shaft{fill:none;stroke:var(--on-highlight);stroke-width:2.5;stroke-linecap:butt}
+  .ahead{fill:var(--on-highlight)}
+  .bdisc{fill:var(--bg);stroke:var(--on-highlight);stroke-width:1.5}
+  .bico{fill:none;stroke:var(--on-highlight);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+  /* the only animation in the build: an arrow drawing itself along its
+     own path, which is the one thing a static picture cannot say. The
+     head and the payload glyph land after the line arrives. */
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .aenter .ahead,.aenter .bg{animation:fadein 260ms var(--ease-out) 150ms both}
+
+  /* the six partner nodes. HTML buttons, not SVG shapes, so focus
+     rings, tap targets and text sizing all behave. They are written
+     once at build time and never rebuilt, which is what keeps focus
+     from being destroyed under the student. */
+  #nodes{position:absolute;inset:0;pointer-events:none}
+  button.pnode{
+    position:absolute;pointer-events:auto;
+    font-family:inherit;font-size:15px;font-weight:600;line-height:1.15;
+    color:var(--title);background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:9px;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:0 7px;cursor:pointer;text-align:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  button.pnode:hover{background:var(--highlight)}
+  button.pnode:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.pnode .nm{white-space:nowrap}
+  button.pnode .tick{flex:0 0 auto;width:15px;height:15px;display:none}
+  button.pnode .tick svg{width:15px;height:15px;display:block}
+  /* opened: a tick appears. The mark is a glyph, never a colour. */
+  button.pnode.seen{border-width:2px}
+  button.pnode.seen .tick{display:block}
+  /* the one on screen: filled, plus a bar down its leading edge, plus
+     its name is the frame heading above. Three signals, no colour. */
+  button.pnode[aria-current="true"]{
+    background:var(--highlight);border-width:2px;
+    box-shadow:inset 4px 0 0 var(--on-highlight);
+  }
+
+  /* ---------- row 3: what crossed, in words ----------
+     This is the diagram's equivalent text, and it is not sr-only: the
+     SVG is aria-hidden at every width and hidden outright under 600px,
+     so these two lines are the only description of the arrows a screen
+     reader or a phone gets. They carry direction in words. */
+  .strip{flex:0 0 auto;height:46px;overflow:hidden;margin-bottom:8px}
+  .sline{font-size:15px;line-height:1.45;color:var(--body)}
+  .sline b{color:var(--on-highlight);font-weight:600}
+  .sinstr{font-size:15px;line-height:1.45;color:var(--body)}
+
+  /* ---------- row 4: the three beats ----------
+     Fixed height. The longest partner must not push the controls off
+     the canvas and the shortest must not leave the panel half empty. */
+  .panel{
+    flex:0 0 auto;height:220px;background:var(--highlight);border-radius:12px;
+    padding:12px 16px;overflow:hidden;
+  }
+  /* Fixed widths, not fractions. The third column is the motive slot and
+     it is sized for the copy that is now in it. 278px, and the height
+     budget was MEASURED in a browser, not calculated. Headless Chrome,
+     17 August 2026, all six partners, in the first-open states and again
+     in the all-seen states, at 960 and at 320:
+
+       one line of .ctx at 17px/1.45   24.64px
+       the .clab label block            23.00px  (label plus its 3px margin)
+       the source line                  17.55px  (plus its own 4px margin)
+
+     Six lines of motive is 147.84px, so a full entry uses 188.39px of the
+     196px this grid allows. 7.61px clear, which is the tightest state in
+     the build, and both the College Board and Walmart entries sit there.
+     A SEVENTH line costs 24.64px and overflows by about 17px, and because
+     .col is overflow:hidden it would clip with no ellipsis and take the
+     source link with it, which is exactly what happened to the previous,
+     longer strings.
+
+     In characters, since that is what an editor actually counts: the six
+     live entries run 142 to 189 rendered characters, and each one tips to
+     a seventh line somewhere between 180 and 205 characters depending only
+     on where its words happen to break. So 180 rendered characters is the
+     only count that is safe for every partner, and a character count is a
+     guide, never the check. Render it and look.
+
+     Every entry must also carry a clickable source, and that source label
+     must fit on ONE line at 13px in 278px. All six currently do. A source
+     that wraps to two lines costs another 17.55px and blows the budget on
+     its own. Do not redistribute this width. */
+  .cols{display:grid;grid-template-columns:206px 336px 278px;column-gap:22px;height:196px}
+  .col{min-width:0;overflow:hidden}
+  .clab{
+    font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:3px;
+  }
+  .ctx{font-size:17px;line-height:1.45;color:var(--body)}
+  .ctx b{color:var(--title);font-weight:600}
+  .csrc{font-size:13px;line-height:1.35;margin-top:4px;color:var(--body)}
+  .csrc a{color:var(--on-highlight)}
+  .intro{font-size:17px;line-height:1.5;color:var(--body);max-width:62ch}
+  .intro b{color:var(--title);font-weight:600}
+
+  /* ---------- row 5: controls, coverage, the reserved link out ---------- */
+  .bar{flex:0 0 auto;height:40px;margin-top:auto;padding-top:8px;display:flex;align-items:center;gap:11px}
+  button.nav,a.vid{
+    flex:0 0 auto;font-family:inherit;font-size:15px;font-weight:600;line-height:1.2;
+    padding:9px 15px;border-radius:8px;cursor:pointer;text-decoration:none;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost,a.vid{background:transparent;color:var(--on-highlight)}
+  button.nav.ghost:hover,a.vid:hover{background:var(--on-highlight);color:var(--bg)}
+  button.nav:focus-visible,a.vid:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .prog{flex:0 0 auto;font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .pips{flex:0 0 auto;display:flex;gap:4px}
+  .pip{width:17px;height:6px;border-radius:3px;background:var(--pip)}
+  .pip.on{background:var(--on-highlight)}
+  .pip.here{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--on-highlight)}
+  .hint{font-size:13px;line-height:1.35;color:var(--body);min-width:0}
+  .hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ===== under 600px: portrait, restacked, not a shrunken slide =====
+     The hub and spoke cannot survive a 320px column, so it is dropped
+     and the six partners relay out as a vertical list. Every arrow is
+     still described, in the strip above, in words. */
+  @media (max-width:599px){
+    /* Block layout on the body. As a flex item, #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the right hand nodes off screen and creates the
+       horizontal scroll this rule exists to prevent. */
+    html,body{height:auto;overflow:visible}
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important;position:static}
+    .frame{position:relative;inset:auto;padding:18px 16px 28px;min-height:100vh}
+
+    .hrow{height:auto;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+    h1{font-size:22px;white-space:normal}
+    .tnote{white-space:normal;overflow:visible;flex:1 0 100%}
+
+    #svg{display:none}
+    .dia{height:auto;margin-bottom:0}
+    .hubline{
+      display:block;font-size:14px;font-weight:600;color:var(--on-highlight);
+      letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px;
+    }
+    #nodes{position:static;inset:auto;pointer-events:auto;display:flex;flex-direction:column;gap:8px}
+    button.pnode{
+      position:static!important;left:auto!important;top:auto!important;
+      width:100%!important;height:auto!important;
+      justify-content:flex-start;padding:13px 14px;font-size:16px;
+    }
+
+    .strip{height:auto;margin:14px 0 0}
+    .sline,.sinstr{font-size:16px}
+    .sline+.sline{margin-top:6px}
+
+    .panel{height:auto;margin-top:14px;padding:14px}
+    .cols{display:block;height:auto}
+    .col+.col{margin-top:14px}
+    .ctx,.intro{font-size:16px}
+    .csrc{font-size:14px}
+
+    .bar{height:auto;margin-top:18px;padding-top:0;flex-wrap:wrap;gap:9px}
+    button.nav,a.vid{font-size:16px;padding:12px 16px}
+    .hint{font-size:14px;flex:1 0 100%}
+  }
+
+  /* Every transition and animation collapses to an instant state
+     change. Nothing in this build has a base opacity below 1 or a base
+     transform, and the script skips the dash setup entirely when this
+     is on, so every arrow renders fully drawn with its head and its
+     payload glyph painted. There is no half faded residue to clean up. */
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame">
+
+    <div class="hrow">
+      <h1 id="h1">Six deals, one organization</h1>
+      <span class="chips" id="chips"></span>
+      <span class="tnote" id="tnote"></span>
+    </div>
+
+    <p class="hubline">Khan Academy sits at the middle of all six</p>
+
+    <div class="dia" id="dia">
+      <!-- The diagram. aria-hidden at every width: the two lines in the
+           strip below carry the same information in words, including
+           the direction of every arrow, which is the lesson here. -->
+      <svg id="svg" viewBox="0 0 896 142" width="896" height="142"
+           preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"></svg>
+      <!-- The six partner buttons are written here once, at build time,
+           and are never rebuilt. Only classes and aria attributes move
+           after that, so a focused node is never replaced underneath a
+           keyboard user. -->
+      <div id="nodes" role="group" aria-label="Khan Academy's six partners. Open one to see what crossed."></div>
+    </div>
+
+    <div class="strip" id="strip">
+      <p class="sinstr" id="sinstr">Open a partner. The diagram draws what crossed between the two organizations, and which way it went.</p>
+      <p class="sline" id="sIn" hidden><b>Into Khan Academy:</b> <span id="sInTxt"></span></p>
+      <p class="sline" id="sOut" hidden><b id="sOutLead">Out to the partner:</b> <span id="sOutTxt"></span></p>
+    </div>
+
+    <div class="panel">
+      <p class="intro" id="intro"><b>Six partners, four shapes of deal, all running at the same time.</b> That is the thing worth seeing here. Open each partner and read what actually crossed between the two organizations, and in which direction.</p>
+
+      <div class="cols" id="cols" hidden>
+        <div class="col">
+          <p class="clab">Who they are</p>
+          <p class="ctx" id="whoTxt"></p>
+        </div>
+
+        <div class="col">
+          <p class="clab">What the deal was</p>
+          <p class="ctx" id="dealTxt"></p>
+          <p class="csrc">Source: <a id="srcA" href="#" target="_blank" rel="noopener"></a><span id="srcTail"></span></p>
+        </div>
+
+        <!-- ==================================================================
+             WHY THEY SAID YES. FILLED 17 August 2026, in the markup and in
+             the data. This build now states WHO each partner is, WHAT
+             crossed, and WHY each side agreed, and all three columns carry a
+             source a student can open. The slot is no longer reserved and no
+             longer empty: read MOTIVE in the script below for the six live
+             strings.
+
+             The rule that got them in, because it is the load bearing part.
+             Every entry is either a verbatim quote from a NAMED person at the
+             partner, or an explicit statement that the partner never publicly
+             said. AAMC and Microsoft are the second kind. That is a finding,
+             not a gap: do not soften it, do not expand it, and do not swap it
+             for a plausible-sounding reason. An obvious sounding motive is
+             the exact failure mode this program has already hit. Walmart
+             sponsoring a financial literacy course has an obvious sounding
+             reason and it turned out to be wrong: the quote comes from
+             Walmart's benefits organisation, not its marketing one. Pixar
+             teaching the maths behind animation has an obvious sounding
+             reason too, and the real one was teachers asking, not recruiting.
+             Both cards say so in as many words. A hedged guess is still an
+             unsourced claim, so it still does not go in.
+
+             The three elements below stay in the DOM for the whole life of
+             the page and are only filled and unhidden, so nothing is rebuilt
+             underneath a keyboard user. The column is 278px, set by the .cols
+             grid in the stylesheet, and one filled entry uses 188.39px of the
+             196px available: six rendered lines of motive plus a one line
+             source. Read the measured budget on .cols before you lengthen
+             anything. Do not narrow the column either.
+
+             Rules for anything that goes in here: one to three sentences,
+             plain, no em dash, no en dash, no double hyphen, at or under 180
+             rendered characters, and it must carry a source a student can
+             open. If it cannot carry a source it does not go in.
+
+             PARITY: all six motives and both of their anchors are carried
+             verbatim in the noscript fallback further down this file. Edit
+             one and you edit both, in the same commit, or a student whose
+             embed fails gets taught less than one whose embed loads.
+
+             Note for whoever works on khan-academy-p1-what-each-side-gave.html
+             next: that file's motive slots are still reserved and still
+             empty, so the two files now differ. Its slots take one sentence
+             each, not these strings verbatim.
+             ================================================================== -->
+        <div class="col" id="colWhy" hidden>
+          <p class="clab" id="whyLab" hidden>Why they said yes</p>
+          <p class="ctx" id="whyTxt" hidden></p>
+          <p class="csrc" id="whySrc" hidden></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" type="button" id="prev">Previous partner</button>
+      <button class="nav" type="button" id="next">Next partner</button>
+      <span class="prog" id="prog">Opened 0 of 6</span>
+      <span class="pips" id="pips" aria-hidden="true"></span>
+      <!-- ==================================================================
+           THE VIDEO LINK OUT. Built, wired, and FILLED for one partner.
+           VIDEO.px carries the label "Watch, 5 min" and a real URL on Khan
+           Academy's own channel, verified 17 August 2026. The other five
+           entries are still empty on purpose and this anchor stays hidden on
+           their cards, because a control that goes nowhere is a dead end and
+           the brief forbids dead ends. Filling another partner means filling
+           label and url together or not at all, and never inventing a URL.
+
+           No YouTube iframe anywhere in this file, deliberately. The style
+           guide requires these builds fully self contained with no external
+           requests, and an iframe inside a Notion embed frequently fails to
+           load, which would leave a dead grey rectangle on the slide. So a
+           card that should carry a video gets a link out instead.
+
+           The anchor is a single persistent element, so filling it rebuilds
+           nothing and never destroys focus.
+
+           KEEP THE LABEL SHORT, and this is a measured constraint. The
+           anchor shares an 896px bar with two nav buttons, the count and the
+           pips, and .hint takes whatever is left. At 12 characters, measured
+           in headless Chrome on 17 August 2026: the button renders 127.36px
+           wide, .hint keeps 221.09px, .hint wraps to three lines instead of
+           two, and the deepest thing on the Pixar card paints at 538.33px,
+           inside the 540px canvas by 1.67px. That is the tightest vertical
+           clearance anywhere in the build, and the Pixar card is the only
+           card that has it, because it is the only card with this anchor
+           showing. A 40 character label previously grew the button to 326px,
+           crushed .hint to 23px wide and 228px tall, and pushed content 86px
+           below the canvas. So measure the bar before lengthening a label.
+
+           Do not invent a URL to make this visible. Every URL in this file
+           was verified against the fact base in 08-reviews/.
+           ================================================================== -->
+      <a class="vid" id="vid" href="#" target="_blank" rel="noopener" hidden></a>
+      <span class="hint" id="hint">Six partners. Open any one of them.</span>
+    </div>
+
+  </div>
+</div>
+
+<p class="sr" id="say" role="status" aria-live="polite"></p>
+
+<noscript>
+  <!-- This style block has to sit INSIDE the noscript element so it lands
+       after the main sheet and wins on source order. An override placed
+       before the main sheet loses and the fallback silently fails. Three
+       things must happen: the dead canvas is hidden, the flex centred body
+       goes back to block flow with scrolling restored, otherwise this text
+       is laid out beside a 960px canvas and pushed off the right edge, and
+       links are pinned to the palette so the browser default blue never
+       turns up as a sixth colour.
+
+       This fallback teaches the same thing with JS off, and it must keep
+       teaching the same thing: all six partners, who they are, what the
+       deal was, its source, what crossed in each direction, why they said
+       yes with its own separate source, and the Pixar video link out. That
+       is full parity with the interactive, which is what the craft spec's
+       fallback rule requires. If you add a beat to the interactive, add it
+       here in the same commit. The motive text and both anchors are copied
+       verbatim from MOTIVE in the script, and the Pixar video line is
+       copied from VIDEO.px, so a diff between the two should show only
+       markup, never wording. Two of the six motives say the partner never
+       publicly said why. That is a finding, not a gap. Do not soften it
+       and do not fill it with a plausible-sounding reason. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto;overflow:visible}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:720px;margin:0 auto;padding:28px 22px 44px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px;white-space:normal}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:10px}
+    .nsf .ty{font-size:15px;color:#001D69;font-weight:600;margin-bottom:6px}
+    .nsf ul{margin:0 0 10px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .src{font-size:14px}
+  </style>
+  <div class="nsf">
+    <h1>Six deals, one organization</h1>
+    <p>Khan Academy sits at the middle of all six of these arrangements, and they are not the same shape as each other. The interactive version of this page puts Khan Academy in the centre with the six partners around it, and draws arrows showing what crossed between the two organizations and in which direction. Here are all six as text: who the partner is, what the deal was, the source, and what crossed each way.</p>
+    <p>Four shapes appear. <strong>Licensing</strong>, where a partner opens content or funds a build. <strong>In-kind</strong>, where a partner hands over something it already owns instead of money. <strong>Sponsorship</strong>, where a partner funds a course and its name goes on it. <strong>Co-creation</strong>, where a partner puts its own people and its own work into the thing itself. One of the six sits in two of those boxes at once.</p>
+
+    <h2>1. The College Board</h2>
+    <p class="ty">Licensing</p>
+    <p><strong>Who they are.</strong> They own and run the SAT, the college admissions test most American universities have accepted for decades.</p>
+    <p><strong>What the deal was.</strong> The College Board opened real SAT question content so Khan Academy could build free official practice. Announced March 2014, launched June 2015. You walked this one end to end one module ago, so this entry is the short version.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> real SAT question content, opened so practice could be built from the actual test.</li>
+      <li><strong>Out to the College Board:</strong> free official SAT practice, built and published by Khan Academy.</li>
+    </ul>
+    <p class="src">Source: <a href="https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg">College Board launch release, 2 June 2015</a>.</p>
+    <p><strong>Why they said yes.</strong> Sal Khan named it on announcement day: &ldquo;For too long, there&rsquo;s been a well-known imbalance between students who could afford test-prep courses and those who couldn&rsquo;t.&rdquo;</p>
+    <p class="src">Source: <a href="https://newsroom.collegeboard.org/college-board-announces-bold-plans-expand-access-opportunity-redesign-sat" target="_blank" rel="noopener">College Board newsroom, 4 March 2014</a>.</p>
+
+    <h2>2. AAMC</h2>
+    <p class="ty">Licensing</p>
+    <p><strong>Who they are.</strong> They run the MCAT, the test you sit to get into medical school in the US.</p>
+    <p><strong>What the deal was.</strong> The MCAT collection &ldquo;was created by Khan Academy with support and funding from the AAMC and the Robert Wood Johnson Foundation.&rdquo; That wording is creation scoped. It covers building the collection and says nothing about what came after.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> support and funding for building the MCAT collection.</li>
+      <li><strong>Out to the AAMC:</strong> the MCAT collection, as created.</li>
+    </ul>
+    <p class="src">Source: <a href="https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources">AAMC, free planning and study resources</a>.</p>
+    <p><strong>Why they said yes.</strong> The AAMC has not publicly said why. Its own page states the bare fact and stops there. That happens more often than you would think, and noticing it is the job.</p>
+    <p class="src">Source: <a href="https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources" target="_blank" rel="noopener">AAMC, free study resources</a>.</p>
+
+    <h2>3. Microsoft</h2>
+    <p class="ty">In-kind</p>
+    <p><strong>Who they are.</strong> Windows and Office. Azure is their cloud business, the servers other companies rent instead of buying their own.</p>
+    <p><strong>What the deal was.</strong> Microsoft donated access to Azure AI-optimized infrastructure rather than giving cash, announced May 2024. What crossed was capability Microsoft already owned, which is what makes this one in-kind.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> access to Azure AI-optimized infrastructure, a thing Microsoft already owned.</li>
+      <li><strong>Out to Microsoft:</strong> Khanmigo for Teachers, free to all K-12 educators in the US.</li>
+    </ul>
+    <p class="src">Source: <a href="https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/">Microsoft Source, 21 May 2024</a>.</p>
+    <p><strong>Why they said yes.</strong> Microsoft has not publicly said why it donated the compute. Its own feature article about the partnership quotes no Microsoft employee at all.</p>
+    <p class="src">Source: <a href="https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/" target="_blank" rel="noopener">Microsoft Source, 21 May 2024</a>.</p>
+
+    <h2>4. Walmart</h2>
+    <p class="ty">Sponsorship</p>
+    <p><strong>Who they are.</strong> The largest retailer in the United States.</p>
+    <p><strong>What the deal was.</strong> Walmart was founding sponsor of Khan Academy&rsquo;s Financial Literacy course, launched July 2023. Khan Academy&rsquo;s own announcement names Walmart as founding sponsor, with additional support from Intuit and Capital One.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> funding as founding sponsor of the Financial Literacy course.</li>
+      <li><strong>Out to Walmart:</strong> the founding sponsor credit, on Khan Academy&rsquo;s own announcement.</li>
+    </ul>
+    <p class="src">Source: <a href="https://blog.khanacademy.org/introducing-our-new-course-on-financial-literacy/">Khan Academy blog, 18 July 2023</a>.</p>
+    <p><strong>Why they said yes.</strong> Not brand goodwill. Kim Lupo, Senior Vice President, Global Total Rewards, wrote that financial stress can bring &ldquo;heart disease, depression and more.&rdquo; Note the job: benefits, not marketing.</p>
+    <p class="src">Source: <a href="https://corporate.walmart.com/news/2023/07/18/walmart-teams-up-with-khan-academy-to-offer-a-free-financial-literacy-course-for-associates-customers-and-communities" target="_blank" rel="noopener">Walmart newsroom, 18 July 2023</a>.</p>
+
+    <h2>5. Pixar and Disney</h2>
+    <p class="ty">Co-creation and sponsorship. Both readings are correct.</p>
+    <p><strong>Who they are.</strong> Pixar made Toy Story, Finding Nemo and Inside Out, and is owned by Disney.</p>
+    <p><strong>What the deal was.</strong> Pixar&rsquo;s own animators worked on Pixar in a Box, a course teaching the math and science behind animation. Pixar&rsquo;s page says the two &ldquo;collaborated to create, develop, and promote&rdquo; it. The Disney sponsor credit comes from Khan Academy&rsquo;s own course page, not from the Pixar page linked here.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> Pixar&rsquo;s own animators, and the craft they brought with them.</li>
+      <li><strong>Out to Pixar and Disney:</strong> the course itself, plus the Disney sponsor credit on Khan Academy&rsquo;s page.</li>
+    </ul>
+    <p>This one deal genuinely sits in two boxes. Its own people built part of the thing, which is co-creation, and the course carries a sponsor credit, which is sponsorship. Neither reading is the wrong answer. When that happens it means the deal is doing two jobs, not that you have read it wrong.</p>
+    <p class="src">Source: <a href="https://www.pixar.com/pixar-in-a-box">Pixar, Pixar in a Box</a>.</p>
+    <p><strong>Why they said yes.</strong> Not a talent pipeline. Pixar University director Elyse Klaidman said at the unveiling that teachers at every grade level had been asking for animation-based curricula.</p>
+    <p class="src">Source: <a href="https://www.cartoonbrew.com/pixar/learn-how-pixar-makes-its-films-with-the-free-pixar-in-a-box-program-118359.html" target="_blank" rel="noopener">Cartoon Brew, 27 August 2015</a>.</p>
+    <p class="src">Video: <a href="https://www.youtube.com/watch?v=3Iu1Z0h1i1Y" target="_blank" rel="noopener">Watch, 5 min</a>.</p>
+
+    <h2>6. Google</h2>
+    <p class="ty">Not settled by the source we can link</p>
+    <p><strong>Who they are.</strong> Search and YouTube. Gemini is their AI.</p>
+    <p><strong>What the deal was.</strong> Google supplies the Gemini models behind Khan Academy&rsquo;s coaching tools. Writing Coach is live for grades 7 through 12, with a grades 5 to 6 beta in the US, and a Reading Coach was announced for later in 2026. The announcement names the models and the products and says nothing about money in either direction, so this one is left untyped here rather than typed on a guess.</p>
+    <ul>
+      <li><strong>Into Khan Academy:</strong> access to the Gemini models behind the coaching tools.</li>
+      <li><strong>Out to Google:</strong> Writing Coach and the announced Reading Coach, both powered by Gemini.</li>
+    </ul>
+    <p class="src">Source: <a href="https://blog.google/products-and-platforms/products/education/khan-academy-partnership/">Google blog, 21 January 2026</a>.</p>
+    <p><strong>Why they said yes.</strong> Not charity. Ben Gomes, Chief Technologist, Learning and Sustainability, called Khan Academy &ldquo;the perfect partner to put our most capable learning models to work.&rdquo;</p>
+    <p class="src">Source: <a href="https://blog.google/products-and-platforms/products/education/khan-academy-partnership/" target="_blank" rel="noopener">Google blog, 21 January 2026</a>.</p>
+
+    <h2>What the six add up to</h2>
+    <p>Khan Academy is running licensing, in-kind, sponsorship and co-creation arrangements at the same time, with one deal sitting in two boxes at once. The four names are useful and they are not tidy. When a deal lands in two of them, it means the deal is doing two things.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ===============================================================
+     PLACEHOLDER ICONS. Simple geometric outline SVG, single weight,
+     outline style, one size per slot, colour #001D69, written inline
+     so nothing is fetched.
+
+     Per the style guide these are PLACEHOLDERS ONLY and are not the
+     shipped version. Swap them by hand for Phosphor Icons (regular or
+     light, one weight throughout, never mixed) before this goes out.
+     Fallback library is Material Symbols. Keep the sizes and the
+     colour exactly as they are when you swap.
+
+     Each payload glyph names WHAT crossed, which is how licensing and
+     in-kind read differently on screen rather than only in words: a
+     document or a banknote arriving is not the same picture as a rack
+     of servers arriving.
+     =============================================================== */
+  var GLYPH = {
+    /* placeholder for: file-text. Content and rights. */
+    doc:   '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4"/>',
+    /* placeholder for: money. Funding. */
+    money: '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="12" cy="12" r="2.6"/>',
+    /* placeholder for: hard-drives. Infrastructure a partner already owned. */
+    server:'<rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+    /* placeholder for: users. A partner's own people. */
+    people:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/>',
+    /* placeholder for: bookmark-simple. A name and a credit. */
+    credit:'<path d="M7 3.5h10v17l-5-3.4-5 3.4z"/>',
+    /* placeholder for: monitor. A built product. */
+    screen:'<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>',
+    /* placeholder for: sparkle. Model access. Three crossing strokes,
+       because a cpu outline turns to mush at 16px. */
+    model: '<path d="M12 4.2v15.6M5.2 8.1l13.6 7.8M18.8 8.1l-13.6 7.8"/>',
+    /* placeholder for: check. Opened. */
+    check: '<path d="M4 12.5l5 5L20 6.5"/>'
+  };
+
+  /* ===============================================================
+     THE SIX PARTNERS.
+
+     Every fact, verb, date and URL here traces to
+     08-reviews/p1-rails-fact-verification-2026-08-17.md and
+     08-reviews/correction-verification-khan-academy.md. Read them
+     before changing a single word. Three phrasings are banned outright
+     by the build note in
+     06-content/project-01/step-02/substep-1.2.1-training-name-the-four-kinds-of-deal.md
+     and none of them appears anywhere in this file:
+
+       1. "funds and maintains" for AAMC. The source verb is creation
+          scoped and past tense.
+       2. "no published end date" and a bare "until 2026" for AAMC.
+          Both are wrong today, in opposite directions.
+       3. "Azure credits" for Microsoft. The verified wording is
+          donated access to Azure AI-optimized infrastructure.
+
+     NWEA, Instructure and Canvas, and ETS Praxis are deliberately
+     absent. Those are partnerships Khan Academy tried and abandoned,
+     and they are the whole subject of the module that follows this
+     one. Putting them here would spend that module's material.
+     =============================================================== */
+  var DATA = [
+    {
+      key:"cb", node:"College Board", name:"The College Board",
+      types:[{ t:"Licensing" }], note:"",
+      who:"They own and run the SAT, the college admissions test most American universities have accepted for decades.",
+      deal:"The College Board opened real SAT question content so Khan Academy could build free official practice. Announced March 2014, launched June 2015. You walked this one end to end one module ago, so this card is the short version.",
+      src:{ t:"College Board launch release, 2 June 2015",
+            u:"https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg" },
+      arrows:[ { dir:"in", g:"doc" }, { dir:"out", g:"screen" } ],
+      inTxt:"real SAT question content, opened so practice could be built from the actual test.",
+      outLead:"Out to the College Board:",
+      outTxt:"free official SAT practice, built and published by Khan Academy."
+    },
+    {
+      key:"aamc", node:"AAMC", name:"AAMC",
+      types:[{ t:"Licensing" }], note:"",
+      who:"They run the MCAT, the test you sit to get into medical school in the US.",
+      deal:"The MCAT collection &ldquo;was created by Khan Academy with support and funding from the AAMC and the Robert Wood Johnson Foundation.&rdquo; That wording is creation scoped. It covers building the collection and says nothing about what came after.",
+      src:{ t:"AAMC, free planning and study resources",
+            u:"https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources" },
+      arrows:[ { dir:"in", g:"money" }, { dir:"out", g:"screen" } ],
+      inTxt:"support and funding for building the MCAT collection.",
+      outLead:"Out to the AAMC:",
+      outTxt:"the MCAT collection, as created."
+    },
+    {
+      key:"ms", node:"Microsoft", name:"Microsoft",
+      types:[{ t:"In-kind" }], note:"",
+      who:"Windows and Office. Azure is their cloud business, the servers other companies rent instead of buying their own.",
+      deal:"Microsoft donated access to Azure AI-optimized infrastructure rather than giving cash, announced May 2024. What crossed was capability Microsoft already owned, which is what makes this one in-kind.",
+      src:{ t:"Microsoft Source, 21 May 2024",
+            u:"https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/" },
+      arrows:[ { dir:"in", g:"server" }, { dir:"out", g:"screen" } ],
+      inTxt:"access to Azure AI-optimized infrastructure, a thing Microsoft already owned.",
+      outLead:"Out to Microsoft:",
+      outTxt:"Khanmigo for Teachers, free to all K-12 educators in the US."
+    },
+    {
+      key:"wm", node:"Walmart", name:"Walmart",
+      types:[{ t:"Sponsorship" }], note:"",
+      who:"The largest retailer in the United States.",
+      deal:"Walmart was founding sponsor of Khan Academy&rsquo;s Financial Literacy course, launched July 2023. Khan Academy&rsquo;s own announcement names Walmart as founding sponsor, with additional support from Intuit and Capital One.",
+      src:{ t:"Khan Academy blog, 18 July 2023",
+            u:"https://blog.khanacademy.org/introducing-our-new-course-on-financial-literacy/" },
+      arrows:[ { dir:"in", g:"money" }, { dir:"out", g:"credit" } ],
+      inTxt:"funding as founding sponsor of the Financial Literacy course.",
+      outLead:"Out to Walmart:",
+      outTxt:"the founding sponsor credit, on Khan Academy&rsquo;s own announcement."
+    },
+    {
+      /* This deal legitimately sits in TWO of the four boxes. Both chips
+         are presented as correct, and neither is marked wrong anywhere
+         in this file. Marking either one wrong is a unique solvability
+         failure under HANDOVER-2026-08-12 section 5.
+
+         Attribution, carefully: the verified verbatim source names
+         PIXAR as the collaborator. The Disney sponsor credit is program
+         canon, carried on Khan Academy's own course page, and it is NOT
+         on the Pixar page linked here. The card says so in as many
+         words rather than letting one source carry both claims. */
+      key:"px", node:"Pixar and Disney", name:"Pixar and Disney",
+      types:[{ t:"Co-creation" }, { t:"Sponsorship" }], note:"Both readings are correct.",
+      who:"Pixar made Toy Story, Finding Nemo and Inside Out, and is owned by Disney.",
+      deal:"Pixar&rsquo;s own animators worked on Pixar in a Box, a course teaching the math and science behind animation. Pixar&rsquo;s page says the two &ldquo;collaborated to create, develop, and promote&rdquo; it. The Disney sponsor credit comes from Khan Academy&rsquo;s own page.",
+      src:{ t:"Pixar, Pixar in a Box", u:"https://www.pixar.com/pixar-in-a-box" },
+      arrows:[ { dir:"in", g:"people" }, { dir:"out", g:"screen" }, { dir:"out", g:"credit" } ],
+      inTxt:"Pixar&rsquo;s own animators, and the craft they brought with them.",
+      outLead:"Out to Pixar and Disney:",
+      outTxt:"the course itself, plus the Disney sponsor credit on Khan Academy&rsquo;s page."
+    },
+    {
+      /* Google is deliberately NOT typed into one of the four boxes.
+         The linked announcement contains no mention of funding, money,
+         payment, a grant, a donation, or a figure, in either direction:
+         verified line by line in
+         08-reviews/p1-rails-fact-verification-2026-08-17.md, which
+         concludes "drop 'funds' from student-facing text". The verbs
+         that source supports are supplies, partners with, builds with.
+         So the deal is described in those verbs and the type is left
+         open, visibly and with the reason on screen. Do not close it
+         without a source a student can open. */
+      key:"gg", node:"Google", name:"Google",
+      types:[{ t:"Not settled by the source", open:true }],
+      note:"The announcement names no money in either direction.",
+      who:"Search and YouTube. Gemini is their AI.",
+      deal:"Google supplies the Gemini models behind Khan Academy&rsquo;s coaching tools. Writing Coach is live for grades 7 through 12, with a grades 5 to 6 beta in the US, and a Reading Coach was announced for later in 2026.",
+      src:{ t:"Google blog, 21 January 2026",
+            u:"https://blog.google/products-and-platforms/products/education/khan-academy-partnership/" },
+      arrows:[ { dir:"in", g:"model" }, { dir:"out", g:"screen" } ],
+      inTxt:"access to the Gemini models behind the coaching tools.",
+      outLead:"Out to Google:",
+      outTxt:"Writing Coach and the announced Reading Coach, both powered by Gemini."
+    }
+  ];
+
+  /* ===============================================================
+     THE MOTIVE LINES, one per partner, keyed by partner. FILLED and
+     approved for student facing copy, 17 August 2026. All six are live;
+     none of them is a placeholder and none of them should be emptied.
+
+     Every entry is either a verbatim quote from a NAMED person at the
+     partner, or an explicit statement that the partner never publicly
+     said. Microsoft and AAMC are the second kind, and that is a
+     finding, not a gap: do not replace them with a plausible-sounding
+     reason. Provenance for all six is in the research note in the
+     substep. See the long comment on the third panel column in the
+     markup above for the full rule.
+
+     Both fields are required. A t with no src does not ship, because
+     the whole point of the column is that a student can go and check.
+
+     BUDGET, measured in a browser and not calculated: six rendered
+     lines plus a one line source link, which is 188.39px of the 196px
+     the .cols grid allows in a 278px column. In characters, 180
+     rendered characters is safe for every partner; above that whether
+     it fits depends on where the words break. Walmart is the longest
+     live entry at 189 rendered characters and it clears the box by
+     7.61px, so Walmart is the one that breaks first. Re-measure in a
+     real browser after any edit here. The previous, longer strings
+     clipped in all six states with no ellipsis and hid every source
+     link, so this is a known failure mode for this element.
+
+     PARITY: these six strings and their anchors are duplicated verbatim
+     in the noscript fallback. Edit here, mirror there, same commit.
+     =============================================================== */
+  var MOTIVE = {
+    cb:  { t:"Sal Khan named it on announcement day: &ldquo;For too long, there&rsquo;s been a well-known imbalance between students who could afford test-prep courses and those who couldn&rsquo;t.&rdquo;",
+           src:"<a href=\"https://newsroom.collegeboard.org/college-board-announces-bold-plans-expand-access-opportunity-redesign-sat\" target=\"_blank\" rel=\"noopener\">College Board newsroom, 4 March 2014</a>" },
+    aamc:{ t:"The AAMC has not publicly said why. Its own page states the bare fact and stops there. That happens more often than you would think, and noticing it is the job.",
+           src:"<a href=\"https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources\" target=\"_blank\" rel=\"noopener\">AAMC, free study resources</a>" },
+    ms:  { t:"Microsoft has not publicly said why it donated the compute. Its own feature article about the partnership quotes no Microsoft employee at all.",
+           src:"<a href=\"https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/\" target=\"_blank\" rel=\"noopener\">Microsoft Source, 21 May 2024</a>" },
+    wm:  { t:"Not brand goodwill. Kim Lupo, Senior Vice President, Global Total Rewards, wrote that financial stress can bring &ldquo;heart disease, depression and more.&rdquo; Note the job: benefits, not marketing.",
+           src:"<a href=\"https://corporate.walmart.com/news/2023/07/18/walmart-teams-up-with-khan-academy-to-offer-a-free-financial-literacy-course-for-associates-customers-and-communities\" target=\"_blank\" rel=\"noopener\">Walmart newsroom, 18 July 2023</a>" },
+    px:  { t:"Not a talent pipeline. Pixar University director Elyse Klaidman said at the unveiling that teachers at every grade level had been asking for animation-based curricula.",
+           src:"<a href=\"https://www.cartoonbrew.com/pixar/learn-how-pixar-makes-its-films-with-the-free-pixar-in-a-box-program-118359.html\" target=\"_blank\" rel=\"noopener\">Cartoon Brew, 27 August 2015</a>" },
+    gg:  { t:"Not charity. Ben Gomes, Chief Technologist, Learning and Sustainability, called Khan Academy &ldquo;the perfect partner to put our most capable learning models to work.&rdquo;",
+           src:"<a href=\"https://blog.google/products-and-platforms/products/education/khan-academy-partnership/\" target=\"_blank\" rel=\"noopener\">Google blog, 21 January 2026</a>" }
+  };
+
+  /* ===============================================================
+     The video link out, one per partner. px is FILLED; the other five
+     are still empty, and both fields empty means no affordance is shown
+     for that partner. Fill label and url together or not at all. Keep
+     the label short, the bar is measured. Never invent a URL. See the
+     long comment on the anchor in the markup above.
+     =============================================================== */
+  var VIDEO = {
+    cb:  { label:"", url:"" },
+    aamc:{ label:"", url:"" },
+    ms:  { label:"", url:"" },
+    wm:  { label:"", url:"" },
+    /* Verified 17 August 2026: Khan Academy's own channel, 320 seconds, uploaded 27 Aug 2015. */
+    px:  { label:"Watch, 5 min", url:"https://www.youtube.com/watch?v=3Iu1Z0h1i1Y" },
+    gg:  { label:"", url:"" }
+  };
+
+  /* ===============================================================
+     GEOMETRY. Real canvas pixels, 1:1 inside the fixed 960 canvas, so
+     every label is the size it says it is. G.h must equal the .dia
+     height in the stylesheet.
+
+     Six spokes off one hub. Three partners left, three right, which is
+     what a 16:9 frame can actually hold: a ring of six around a centre
+     box leaves about 10px of spoke on the horizontal axis, far too
+     short to carry a payload glyph. This arrangement gives every spoke
+     a 207px run.
+     =============================================================== */
+  var G   = { w:896, h:142 };
+  var HUB = { x:363, y:44, w:170, h:54 };
+  /* 160 wide, not 140: the longest label is "Pixar and Disney" and it has
+     to sit on one line beside the opened tick. Both columns still leave a
+     199px spoke run, and the two columns stay symmetric about x=448. */
+  var NW = 160, NH = 40;
+  var POS = [
+    { x:4,   y:0   }, { x:4,   y:51  }, { x:4,   y:102 },   /* left column  */
+    { x:732, y:0   }, { x:732, y:51  }, { x:732, y:102 }    /* right column */
+  ];
+
+  /* perpendicular offsets and glyph positions along the spoke, by how
+     many arrows the deal has. Positions are measured from the partner
+     end, so glyphs stay in the outer half of the run and never pile up
+     where six spokes converge on the hub. */
+  var OFF = { 1:[0], 2:[-9,9], 3:[-13,0,13] };
+  var AT  = { 1:[0.5], 2:[0.38,0.58], 3:[0.32,0.5,0.68] };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {};
+  ["h1","chips","tnote","svg","nodes","strip","sinstr","sIn","sInTxt","sOut","sOutLead","sOutTxt",
+   "intro","cols","whoTxt","dealTxt","srcA","srcTail","colWhy","whyLab","whyTxt","whySrc",
+   "prev","next","prog","pips","vid","hint","say"].forEach(function(k){ el[k] = $(k); });
+
+  /* ---------- state ----------
+     sel    which partner is on screen, -1 before the first open
+     seen   which partners have been opened, by index              */
+  var sel = -1, seen = [];
+  var NODEB = [];
+
+  function center(r){ return { x:r.x + r.w/2, y:r.y + r.h/2 }; }
+
+  /* where the ray from the centre of r toward (tx,ty) leaves r */
+  function edge(r, tx, ty){
+    var c = center(r), dx = tx - c.x, dy = ty - c.y;
+    var sx = dx === 0 ? Infinity : (r.w/2) / Math.abs(dx);
+    var sy = dy === 0 ? Infinity : (r.h/2) / Math.abs(dy);
+    var s = Math.min(sx, sy);
+    return { x:c.x + dx * s, y:c.y + dy * s };
+  }
+
+  function r1(n){ return Math.round(n * 10) / 10; }
+
+  /* the spoke for partner i: partner edge to hub edge, 7px clear of both */
+  function spoke(i){
+    var nr = { x:POS[i].x, y:POS[i].y, w:NW, h:NH };
+    var nc = center(nr), hc = center(HUB);
+    var pn = edge(nr, hc.x, hc.y), ph = edge(HUB, nc.x, nc.y);
+    var ux = hc.x - nc.x, uy = hc.y - nc.y;
+    var L = Math.sqrt(ux*ux + uy*uy); ux /= L; uy /= L;
+    var gap = 7;
+    return {
+      a:{ x:pn.x + ux*gap, y:pn.y + uy*gap },   /* partner end */
+      b:{ x:ph.x - ux*gap, y:ph.y - uy*gap },   /* hub end     */
+      ux:ux, uy:uy, px:-uy, py:ux
+    };
+  }
+
+  function headPoly(tx, ty, ux, uy){
+    var bx = tx - ux*10, by = ty - uy*10, px = -uy, py = ux;
+    return '<polygon class="ahead" points="' +
+      r1(tx) + ',' + r1(ty) + ' ' +
+      r1(bx + px*5.5) + ',' + r1(by + py*5.5) + ' ' +
+      r1(bx - px*5.5) + ',' + r1(by - py*5.5) + '"/>';
+  }
+
+  /* a payload glyph in a disc, sitting on its own shaft. The disc is
+     background filled so the shaft does not read through it. */
+  function badge(cx, cy, g){
+    return '<g class="bg">' +
+      '<circle class="bdisc" cx="' + r1(cx) + '" cy="' + r1(cy) + '" r="13"/>' +
+      '<g class="bico" transform="translate(' + r1(cx - 8) + ',' + r1(cy - 8) + ') scale(0.6667)">' +
+      GLYPH[g] + '</g></g>';
+  }
+
+  function drawDiagram(animate){
+    var s = '', i;
+
+    /* every partnership that is not the one on screen: dotted, no head.
+       The portfolio stays visible at all times, because the insight is
+       that all six of these run at once. */
+    for(i = 0; i < DATA.length; i++){
+      if(i === sel) continue;
+      var k = spoke(i);
+      s += '<path class="spoke" d="M' + r1(k.a.x) + ' ' + r1(k.a.y) + 'L' + r1(k.b.x) + ' ' + r1(k.b.y) + '"/>';
+    }
+
+    s += '<rect class="hub" x="' + HUB.x + '" y="' + HUB.y + '" width="' + HUB.w + '" height="' + HUB.h + '" rx="12"/>' +
+         '<text class="hubT" x="448" y="70" text-anchor="middle">Khan Academy</text>' +
+         '<text class="hubC" x="448" y="88" text-anchor="middle">all six run through here</text>';
+
+    if(sel >= 0){
+      var p = DATA[sel], sp = spoke(sel), n = p.arrows.length;
+      var offs = OFF[n], ats = AT[n];
+      var len = Math.sqrt(Math.pow(sp.b.x - sp.a.x, 2) + Math.pow(sp.b.y - sp.a.y, 2));
+
+      s += '<g class="' + (animate && !reduce ? "aenter" : "") + '">';
+      for(i = 0; i < n; i++){
+        var o = offs[i];
+        var ax = sp.a.x + sp.px*o, ay = sp.a.y + sp.py*o;   /* partner end */
+        var bx = sp.b.x + sp.px*o, by = sp.b.y + sp.py*o;   /* hub end     */
+        var inward = p.arrows[i].dir === "in";
+        /* tip is wherever the arrow points; the shaft stops at the base
+           of the head so the outline of the head stays clean */
+        var tipx = inward ? bx : ax, tipy = inward ? by : ay;
+        var frx  = inward ? ax : bx, fry  = inward ? ay : by;
+        var ux = inward ?  sp.ux : -sp.ux, uy = inward ?  sp.uy : -sp.uy;
+        var ex = tipx - ux*10, ey = tipy - uy*10;
+
+        s += '<path class="shaft" data-draw="1" d="M' + r1(frx) + ' ' + r1(fry) + 'L' + r1(ex) + ' ' + r1(ey) + '"/>';
+        s += headPoly(tipx, tipy, ux, uy);
+        s += badge(sp.a.x + sp.ux*(len*ats[i]) + sp.px*o,
+                   sp.a.y + sp.uy*(len*ats[i]) + sp.py*o,
+                   p.arrows[i].g);
+      }
+      s += '</g>';
+    }
+
+    el.svg.innerHTML = s;
+
+    /* Each arrow draws itself along its own path, 300ms, ease out. That
+       is the only thing this motion says: this is what crossed, and
+       this is the direction it went. With reduced motion on, the dash
+       setup is skipped entirely and every arrow is painted whole. */
+    if(animate && !reduce){
+      var shafts = el.svg.querySelectorAll('.shaft[data-draw="1"]');
+      for(var j = 0; j < shafts.length; j++){
+        (function(sh){
+          var L = 0;
+          try{ L = sh.getTotalLength(); }catch(e){ L = 0; }
+          if(!L) return;
+          /* Set the start value, flush it with a forced reflow, then set
+             the end value. Deliberately NOT requestAnimationFrame: with
+             rAF, the offset stays at full length until the callback runs,
+             and anywhere rAF is throttled or never fires the arrow sits
+             invisible. Done this way the committed value is always 0, so
+             the worst case is an arrow that appears without animating
+             rather than an arrow that never appears. */
+          sh.style.transition = "none";
+          sh.style.strokeDasharray = L + " " + L;
+          sh.style.strokeDashoffset = L;
+          void sh.getBoundingClientRect();
+          sh.style.transition = "stroke-dashoffset 300ms cubic-bezier(.2,.7,.3,1)";
+          sh.style.strokeDashoffset = "0";
+        })(shafts[j]);
+      }
+    }
+  }
+
+  /* ---------- the six nodes, written once ---------- */
+
+  function buildNodes(){
+    var frag = document.createDocumentFragment();
+    DATA.forEach(function(p, i){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "pnode";
+      b.setAttribute("data-i", i);
+      b.style.left = POS[i].x + "px";
+      b.style.top  = POS[i].y + "px";
+      b.style.width  = NW + "px";
+      b.style.height = NH + "px";
+      b.innerHTML = '<span class="tick" aria-hidden="true">' + svgIcon("check", 2.2) + '</span>' +
+                    '<span class="nm">' + p.node + '</span>';
+      b.addEventListener("click", function(){ open(i, "keep"); });
+      b.addEventListener("keydown", function(e){
+        var t = null;
+        if(e.key === "ArrowRight" || e.key === "ArrowDown") t = (i + 1) % DATA.length;
+        if(e.key === "ArrowLeft"  || e.key === "ArrowUp")   t = (i - 1 + DATA.length) % DATA.length;
+        if(t === null) return;
+        e.preventDefault();
+        open(t, "node");                 /* focus follows to the node opened */
+      });
+      NODEB.push(b);
+      frag.appendChild(b);
+    });
+    el.nodes.appendChild(frag);
+
+    var pips = "";
+    for(var i = 0; i < DATA.length; i++) pips += '<span class="pip"></span>';
+    el.pips.innerHTML = pips;
+  }
+
+  function svgIcon(g, w){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="' + w +
+           '" stroke-linecap="round" stroke-linejoin="round">' + GLYPH[g] + '</svg>';
+  }
+
+  function paintNodes(){
+    NODEB.forEach(function(b, i){
+      var p = DATA[i], on = seen.indexOf(i) !== -1, here = (i === sel);
+      b.classList.toggle("seen", on);
+      if(here) b.setAttribute("aria-current", "true");
+      else b.removeAttribute("aria-current");
+      b.setAttribute("aria-label",
+        p.name + ". " + (here ? "Showing now." : on ? "Opened." : "Not opened yet."));
+    });
+
+    var kids = el.pips.children;
+    for(var i = 0; i < DATA.length; i++){
+      kids[i].className = "pip" +
+        (seen.indexOf(i) !== -1 ? " on" : "") +
+        (i === sel ? " here" : "");
+    }
+    el.prog.textContent = "Opened " + seen.length + " of " + DATA.length;
+  }
+
+  /* ---------- the panel and the strip ---------- */
+
+  function paintPanel(){
+    var p = DATA[sel];
+
+    el.h1.textContent = p.name;
+
+    var c = "";
+    p.types.forEach(function(t){
+      c += '<span class="tchip' + (t.open ? " open" : "") + '">' + t.t + '</span>';
+    });
+    el.chips.innerHTML = c;              /* holds no focusable element */
+    el.tnote.textContent = p.note || "";
+
+    el.sinstr.hidden = true;
+    el.sIn.hidden = false;
+    el.sOut.hidden = false;
+    el.sInTxt.innerHTML = p.inTxt;
+    el.sOutLead.textContent = p.outLead;
+    el.sOutTxt.innerHTML = p.outTxt;
+
+    el.intro.hidden = true;
+    el.cols.hidden = false;
+    el.whoTxt.innerHTML = p.who;
+    el.dealTxt.innerHTML = p.deal;
+    /* the source anchor is one persistent element for the whole life of
+       the page. Only its text and href change, so it is never replaced
+       while it might hold focus. */
+    el.srcA.textContent = p.src.t;
+    el.srcA.setAttribute("href", p.src.u);
+    el.srcTail.textContent = ".";
+
+    /* the reserved motive slot, off unless a sourced sentence exists */
+    var m = MOTIVE[p.key] || { t:"", src:"" };
+    var hasM = !!(m.t && m.t.length);
+    /* The grid track stays 278px wide whether this column holds anything
+       or not, because the three track widths are fixed, so hiding the
+       empty column reflows nothing on the canvas. It only removes the
+       stray gap the empty block would leave in the portrait restack. */
+    el.colWhy.hidden = !hasM;
+    el.whyLab.hidden = !hasM;
+    el.whyTxt.hidden = !hasM;
+    el.whyTxt.innerHTML = hasM ? m.t : "";
+    el.whySrc.hidden = !(hasM && m.src);
+    el.whySrc.innerHTML = (hasM && m.src) ? m.src : "";
+
+    /* the reserved link out, off unless a real URL exists */
+    var v = VIDEO[p.key] || { label:"", url:"" };
+    if(v.url && v.label){
+      el.vid.textContent = v.label;
+      el.vid.setAttribute("href", v.url);
+      el.vid.hidden = false;
+    } else {
+      el.vid.hidden = true;
+      el.vid.removeAttribute("href");
+      el.vid.textContent = "";
+    }
+
+    el.hint.innerHTML = (seen.length === DATA.length)
+      ? "<b>All six are open.</b> Four shapes of deal, running at the same time, and one deal sitting in two of them."
+      : "Arrow keys, the buttons, or a swipe move between partners. " +
+        (DATA.length - seen.length) + " still unopened.";
+  }
+
+  function announce(){
+    var p = DATA[sel];
+    var t = p.types.map(function(x){ return x.t; }).join(" and ");
+    el.say.textContent = p.name + ". " + t + ". " +
+      "Into Khan Academy: " + strip(p.inTxt) + " " +
+      p.outLead + " " + strip(p.outTxt) + " " +
+      "Opened " + seen.length + " of " + DATA.length + ".";
+  }
+
+  /* entities are fine in the visible copy and wrong in a live region */
+  function strip(html){
+    var d = document.createElement("div");
+    d.innerHTML = html;
+    return d.textContent || "";
+  }
+
+  /* ---------- the one state change in the build ----------
+     focus: "keep" leaves focus exactly where the student put it, which
+     is the right behaviour for a click or a nav button press. "node"
+     moves focus onto the node just opened, which is the right behaviour
+     for arrow keys inside the node group. Nothing is ever disabled and
+     no container holding a focusable element is ever rebuilt, so focus
+     cannot fall to BODY after a state change. */
+  function open(i, focus){
+    if(i < 0 || i >= DATA.length) return;
+    var fresh = (i !== sel);
+    sel = i;
+    if(seen.indexOf(i) === -1) seen.push(i);
+    drawDiagram(fresh);
+    paintNodes();
+    paintPanel();
+    announce();
+    if(focus === "node"){ try{ NODEB[i].focus(); }catch(e){} }
+  }
+
+  /* ---------- controls ---------- */
+
+  el.next.addEventListener("click", function(){
+    open(sel < 0 ? 0 : (sel + 1) % DATA.length, "keep");
+  });
+  el.prev.addEventListener("click", function(){
+    open(sel < 0 ? DATA.length - 1 : (sel - 1 + DATA.length) % DATA.length, "keep");
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.defaultPrevented) return;                     /* the node row owns its arrows */
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea" || tag === "a") return;
+
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault(); el.next.click();
+    } else if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      e.preventDefault(); el.prev.click();
+    } else if(e.key === "Home"){
+      e.preventDefault(); open(0, "keep");
+    } else if(e.key === "End"){
+      e.preventDefault(); open(DATA.length - 1, "keep");
+    }
+  });
+
+  /* Swipe, the third input method the craft spec asks for alongside the
+     buttons and the arrow keys. Deliberately fussy about what counts: a
+     gesture has to travel 50px and be more horizontal than vertical, or
+     the portrait layout could not be scrolled without changing state. */
+  (function(){
+    var x0 = 0, y0 = 0, live = false;
+    var host = $("stage");
+    host.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1){ live = false; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; live = true;
+    }, { passive:true });
+    host.addEventListener("touchend", function(e){
+      if(!live) return;
+      live = false;
+      var t = e.changedTouches && e.changedTouches[0];
+      if(!t) return;
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      if(Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 2) return;
+      if(dx < 0) el.next.click(); else el.prev.click();
+    }, { passive:true });
+  })();
+
+  /* ---------- first paint ---------- */
+  buildNodes();
+  paintNodes();
+  drawDiagram(false);      /* the portfolio, with nothing opened yet */
+
+  /* ---- scale the fixed canvas down to fit, never up ---- */
+  var stage = $("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or a measurement run
+     force a state, and lets the motive slot be tested with placeholder
+     copy without editing the file. */
+  window.__pf = {
+    open:function(i){ open(i, "keep"); },
+    count:DATA.length,
+    data:DATA,
+    motive:MOTIVE,
+    repaint:function(){ if(sel >= 0) paintPanel(); },
+    state:function(){ return { sel:sel, seen:seen.slice() }; }
+  };
+})();
+</script>
+</body>
+</html>
