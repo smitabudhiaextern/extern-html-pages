@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What each side put in</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. The only extra values below are low alpha
+     versions of #001D69 used for dashed edges and empty slots, and
+     no state is ever signalled by colour alone: every state also
+     carries a count, a label, or a border style.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
+    --on-highlight:#001D69; /* icons, arrows, accents                */
+    --bg:#FDF8F8;           /* canvas background, negative space     */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    --line:rgba(0,29,105,.28);   /* dashed edges, empty slots        */
+    --tint:rgba(0,29,105,.05);   /* empty slot fill                  */
+
+    /* motion, straight from the craft spec's timing table */
+    --t-fast:160ms;    /* UI feedback: hover, press, focus           */
+    --t-frame:300ms;   /* movement between states                    */
+    --t-reveal:600ms;  /* a value landing, with slight overshoot     */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===== 960x540 canvas, scaled down only, never up =====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the
+     canvas lays out at the viewport width between 600 and 899px and
+     the JS transform then scales it a second time, double shrinking
+     the design. The canvas must always hold 960 in layout. */
+  #stage{width:960px;height:540px;position:relative;flex:0 0 auto;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:20px 40px 18px;display:flex;flex-direction:column}
+
+  /* ===== header ===== */
+  .top{display:flex;align-items:center;gap:10px;flex:0 0 auto;height:18px}
+  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .pips{display:flex;gap:4px}
+  .pip{width:16px;height:6px;border-radius:3px;background:var(--line)}
+  .pip.on{background:var(--on-highlight)}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);margin:8px 0 5px;flex:0 0 auto}
+  .sub{font-size:16px;line-height:1.45;color:var(--body);flex:0 0 auto}
+
+  /* ===== the board: two columns, one gutter =====
+     Heights are fixed so nothing reflows as items land. */
+  .board{
+    margin-top:10px;flex:0 0 auto;position:relative;
+    width:880px;height:234px;
+    display:grid;grid-template-columns:394px 92px 394px;
+  }
+  .col{display:flex;flex-direction:column;min-width:0;transition:transform var(--t-reveal) var(--ease-out)}
+  .chead{display:flex;align-items:baseline;gap:10px;height:17px;flex:0 0 auto}
+  .cname{font-size:13px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--on-highlight)}
+  .ccount{font-size:13px;font-weight:600;color:var(--body);margin-left:auto;white-space:nowrap}
+
+  /* ===============================================================
+     RESERVED SLOT: one motive line per column, deliberately empty.
+     See the long comment in the markup below and MOTIVE in the
+     script. About 25px of vertical slack is held at the foot of
+     each column specifically so a one line motive can be switched
+     on here without moving a single item card.
+     =============================================================== */
+  .motive{font-size:13px;line-height:1.35;color:var(--body);margin-top:5px;flex:0 0 auto}
+
+  .slots{margin-top:8px;display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+  .slot{height:40px;border-radius:9px;position:relative}
+  /* an empty slot: dashed and hollow, so the student can see how many
+     items are still to come without any number being quoted at them */
+  .slot.empty{border:1.5px dashed var(--line);background:var(--tint)}
+
+  button.card{
+    width:100%;height:100%;display:flex;align-items:center;gap:10px;
+    background:var(--highlight);border:2px solid var(--highlight);border-radius:9px;
+    padding:0 12px;font-family:inherit;text-align:left;cursor:pointer;min-width:0;
+    transition:border-color var(--t-fast) var(--ease-out);
+  }
+  button.card:hover{border-color:var(--on-highlight)}
+  button.card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.card .ico{flex:0 0 auto;width:18px;height:18px}
+  button.card .ico svg{width:18px;height:18px;display:block}
+  button.card .lb{
+    font-size:15px;font-weight:600;color:var(--title);line-height:1.2;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  /* the card the panel is currently showing. Border plus an inset bar down
+     its leading edge, because in the final state every card carries a
+     border, and the panel also names the item in words. Never colour on
+     its own, and never one signal on its own. */
+  button.card[aria-current="true"]{border-color:var(--on-highlight);box-shadow:inset 4px 0 0 var(--on-highlight)}
+
+  /* an item arriving. It enters from its own side of the table, so the
+     motion says which side put it in. 600ms, slight overshoot, which is
+     the craft spec's value reveal timing. */
+  @keyframes inFromLeft{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
+  @keyframes inFromRight{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+  .slot.land-cb button.card{animation:inFromLeft var(--t-reveal) var(--ease-over) both}
+  .slot.land-ka button.card{animation:inFromRight var(--t-reveal) var(--ease-over) both}
+
+  .gut{width:0;margin:0 auto;align-self:center;height:196px;border-left:1.5px dashed var(--line);
+       transition:opacity var(--t-frame) var(--ease-out)}
+  .board.crossed .gut{opacity:.3}
+
+  /* the two crossing arrows, drawn only on the final state */
+  .cross{position:absolute;left:0;top:0;pointer-events:none}
+  .xhead{opacity:0}
+
+  /* the final state marks every card as in, with a border rather than a
+     fill change, and the column counts say the same thing in numbers */
+  .board.crossed button.card{border-color:var(--on-highlight)}
+
+  /* ===== the evidence panel =====
+     Fixed height, so the longest item does not push the controls off
+     the canvas and the shortest does not leave a hole. */
+  .ev{
+    margin-top:10px;flex:0 0 auto;height:108px;overflow:hidden;
+    background:var(--highlight);border-radius:12px;padding:8px 14px;
+  }
+  .evtop{display:flex;align-items:baseline;gap:7px;height:17px}
+  .evtop .who{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight)}
+  .evtop .sep{font-size:13px;color:var(--on-highlight)}
+  .evtop .lab{font-size:13px;font-weight:700;color:var(--title)}
+  .ev .t{margin-top:4px;font-size:17px;line-height:1.5;color:var(--body);max-width:88ch}
+  .ev .t b{color:var(--title);font-weight:600}
+  .ev .src{margin-top:2px;font-size:13px;line-height:1.35;color:var(--body)}
+  .ev .src a{color:var(--on-highlight)}
+
+  /* ===== controls ===== */
+  .bar{margin-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:10px;height:42px}
+  button.nav{
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 20px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:13px;line-height:1.35;color:var(--body)}
+  .hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ===== under 600px: portrait, restacked, not a shrunken slide ===== */
+  @media (max-width:599px){
+    /* Block layout on the body. As a flex item, #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the second column off screen. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important;position:static}
+    .frame{position:relative;inset:auto;padding:20px 16px 30px;min-height:100vh}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    .board{width:auto;height:auto;grid-template-columns:1fr;gap:16px;margin-top:14px}
+    /* the arrows cannot cross two stacked columns, and the panel copy
+       carries the same point in words, so they are dropped here */
+    .cross,.gut{display:none}
+    .col{transform:none!important}
+    .slot{height:auto}
+    button.card{padding:12px}
+    button.card .lb{font-size:16px;white-space:normal;overflow:visible}
+    .slot.empty{height:44px}
+    .ev{height:auto;padding:12px 14px}
+    .evtop{height:auto;flex-wrap:wrap}
+    .ev .t{font-size:16px;max-width:none}
+    .ev .src{font-size:14px}
+    .bar{height:auto;flex-wrap:wrap;margin-top:16px}
+    button.nav{font-size:16px;padding:13px 20px}
+    .hint{font-size:14px;flex:1 0 100%}
+  }
+
+  /* every transition collapses to an instant state change. The
+     information survives with zero motion. */
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame">
+
+    <div class="top">
+      <span class="progress" id="prog">1 of 8</span>
+      <span class="pips" id="pips" aria-hidden="true"></span>
+    </div>
+
+    <h1>What each side put in.</h1>
+    <p class="sub">Two organizations built one SAT practice program. Here is what each one put in.</p>
+
+    <div class="board" id="board">
+
+      <!-- The crossing arrows. Hidden by construction until the last
+           state: each line is drawn with its full length as a dash
+           offset, so there is nothing to see until the offset runs to
+           zero. Geometry is in canvas pixels because the canvas is a
+           fixed 960 and the whole stage is scaled uniformly. -->
+      <!-- Geometry note: the two curves are mirror images about x=440, the
+           centre of the gutter, so they cross there exactly. Both ends sit
+           inside a real card row rather than in the empty space under the
+           shorter column, and both stop 3px clear of the card edge so the
+           columns can lean in without covering an arrowhead. -->
+      <svg class="cross" id="cross" width="880" height="234" viewBox="0 0 880 234" aria-hidden="true" focusable="false">
+        <path class="xline" id="xa" d="M400 55 C 444 55, 436 150, 480 150"
+              fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"/>
+        <path class="xhead" id="xah" d="M474 145 L480 150 L474 155"
+              fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="xline" id="xb" d="M480 55 C 436 55, 444 150, 400 150"
+              fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round"/>
+        <path class="xhead" id="xbh" d="M406 145 L400 150 L406 155"
+              fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+
+      <section class="col" id="colCb" aria-labelledby="hCb">
+        <div class="chead">
+          <span class="cname" id="hCb">College Board put in</span>
+          <span class="ccount" id="ccCb">0 of 3</span>
+        </div>
+
+        <!-- ==================================================================
+             RESERVED SLOT, COLLEGE BOARD COLUMN: the motive line. EMPTY ON
+             PURPOSE. This interactive states WHAT each side put in and says
+             nothing about WHY. As of August 2026 no sourced statement of
+             either organization's motive is approved for student facing copy,
+             and one earlier draft asserted a motive that turned out to be
+             unsourced. So the claim is not made here at all.
+
+             To switch it on later: put one approved sentence in MOTIVE.cb in
+             the script below. The script fills this element and unhides it.
+             Nothing else has to change. Each column holds about 22px of
+             vertical slack at its foot for exactly this, so adding the line
+             does not move a single item card or reflow the canvas.
+
+             Rules for whatever goes in here: one sentence, no em dash, no
+             double hyphen, and it must carry its source.
+             ================================================================== -->
+        <p class="motive" id="motiveCb" hidden></p>
+
+        <div class="slots" id="slotsCb"></div>
+      </section>
+
+      <div class="gut" aria-hidden="true"></div>
+
+      <section class="col" id="colKa" aria-labelledby="hKa">
+        <div class="chead">
+          <span class="cname" id="hKa">Khan Academy put in</span>
+          <span class="ccount" id="ccKa">0 of 4</span>
+        </div>
+
+        <!-- ==================================================================
+             RESERVED SLOT, KHAN ACADEMY COLUMN: the motive line. EMPTY ON
+             PURPOSE, for the same reason as the College Board column above.
+             Fill MOTIVE.ka in the script to switch it on. Same rules: one
+             sentence, sourced, no em dash, no double hyphen.
+             ================================================================== -->
+        <p class="motive" id="motiveKa" hidden></p>
+
+        <div class="slots" id="slotsKa"></div>
+      </section>
+
+    </div>
+
+    <!-- the panel is the live region: it names the item that just landed,
+         gives the documented line behind it, and cites the source -->
+    <div class="ev" id="ev" role="status" aria-live="polite">
+      <p class="evtop">
+        <span class="who" id="evWho"></span>
+        <span class="sep" id="evSep" aria-hidden="true">&middot;</span>
+        <span class="lab" id="evLab"></span>
+      </p>
+      <p class="t" id="evText"></p>
+      <p class="src" id="evSrc"></p>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button" disabled>Back</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <span class="hint" id="hint"></span>
+    </div>
+
+  </div>
+</div>
+
+<noscript>
+  <!-- This style block has to sit INSIDE noscript so it lands after the
+       main sheet and wins on source order. Three things must happen: the
+       dead canvas is hidden, the flex centred body goes back to block flow
+       so this text is not laid out as a narrow column beside a 960px
+       canvas, and links are pinned to the palette so the browser default
+       blue never appears as a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:720px;margin:0 auto;padding:28px 22px 44px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:20px 0 8px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:9px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .src{font-size:14px}
+  </style>
+  <div class="nsf">
+    <h1>What each side put in.</h1>
+    <p>Two organizations built one SAT practice program. Here is what each one put in. Three items came from College Board, four from Khan Academy.</p>
+
+    <h2>College Board put in</h2>
+    <ul>
+      <li><strong>Official course content.</strong> Course content developed with College Board, so the practice came from the test maker rather than from a guess at the test.
+        <span class="src">Source: <a href="https://satsuite.collegeboard.org/practice/khan-academy">College Board, SAT practice on Khan Academy</a>.</span></li>
+      <li><strong>Early access.</strong> Khan Academy saw the redesigned test before anyone selling prep did.
+        <span class="src">Source: TechCrunch, 5 March 2014, which described the arrangement as rare and exclusive.</span></li>
+      <li><strong>The official designation.</strong> The practice could be described as coming from the organization that writes the test. College Board&rsquo;s own page calls it, verbatim, &ldquo;official practice directly from the people who created the test.&rdquo;
+        <span class="src">Source: <a href="https://satsuite.collegeboard.org/practice/khan-academy">College Board, SAT practice on Khan Academy</a>.</span></li>
+    </ul>
+
+    <h2>Khan Academy put in</h2>
+    <ul>
+      <li><strong>A platform that already existed.</strong> A working learning platform, already built and already running.</li>
+      <li><strong>Engineering.</strong> The build work behind practice that adapts to the student using it.</li>
+      <li><strong>Content production.</strong> Building the lessons, then keeping them current as the test changed.</li>
+      <li><strong>Free delivery to everyone.</strong> No paywall and no trial.</li>
+    </ul>
+
+    <h2>The completed trade</h2>
+    <p>Three items came from College Board. Four came from Khan Academy. Each side put in something it already had. Both columns together are the trade.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var EASE_OUT = "cubic-bezier(.2,.7,.3,1)";
+
+  /* ===============================================================
+     PLACEHOLDER ICONS. Simple geometric outline SVG, single weight
+     (1.7), outline style, one size (18px), colour #001D69, drawn
+     inline so nothing is fetched.
+
+     Per the style guide these are PLACEHOLDERS ONLY and are not the
+     shipped version. Swap them by hand for Phosphor Icons (regular
+     or light, one weight throughout) before this goes out. Fallback
+     library is Material Symbols. Keep the size and colour as they
+     are when you swap.
+     =============================================================== */
+  function ico(d){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" ' +
+           'stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+  }
+  var ICO = {
+    /* placeholder for: file text */
+    doc:  ico('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4"/>'),
+    /* placeholder for: clock */
+    clock:ico('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3.4 2"/>'),
+    /* placeholder for: seal check */
+    seal: ico('<circle cx="12" cy="10" r="6"/><path d="M9.6 10l1.7 1.7 3.1-3.1"/><path d="M8.6 15.4 7.5 21l4.5-2.3L16.5 21l-1.1-5.6"/>'),
+    /* placeholder for: browser */
+    plat: ico('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9.5h18M6.3 7.2h.01M9 7.2h.01"/>'),
+    /* placeholder for: code brackets */
+    code: ico('<path d="M9.5 7.5 5 12l4.5 4.5M14.5 7.5 19 12l-4.5 4.5"/>'),
+    /* placeholder for: stack */
+    stack:ico('<path d="M12 3l8 4.3-8 4.3-8-4.3z"/><path d="M4 12.2l8 4.3 8-4.3M4 16.6l8 4.3 8-4.3"/>'),
+    /* placeholder for: users */
+    users:ico('<circle cx="9.2" cy="8.2" r="3.2"/><path d="M3.2 19.6a6 6 0 0 1 12 0"/><path d="M16.2 5.6a3 3 0 0 1 0 5.4M18.4 19.6a6.2 6.2 0 0 0-2.1-4.5"/>')
+  };
+
+  /* ===============================================================
+     THE SIDES. Neutral, mechanical labels. Nothing here says why
+     either organization wanted this, or what either one lacked.
+     =============================================================== */
+  var SIDE = {
+    cb:{ head:"College Board put in", slots:"slotsCb", count:"ccCb", land:"land-cb" },
+    ka:{ head:"Khan Academy put in",  slots:"slotsKa", count:"ccKa", land:"land-ka" }
+  };
+
+  /* ===============================================================
+     RESERVED: the motive lines. Leave both strings empty until the
+     program owner approves a sourced sentence for each. See the long
+     comment in the markup. Filling a string here is the only change
+     needed: the layout already holds the space.
+     =============================================================== */
+  var MOTIVE = { cb:"", ka:"" };
+
+  var CB_SRC = { t:"College Board, SAT practice on Khan Academy",
+                 u:"https://satsuite.collegeboard.org/practice/khan-academy" };
+
+  /* ===============================================================
+     THE SEVEN ITEMS, in reveal order. College Board's three first,
+     then Khan Academy's four.
+
+     TODO before ship: the four Khan Academy items carry no link. They
+     are documented, but no primary source URL was supplied for them,
+     and an invented citation is worse than none. Add the real links
+     to src on those four when they are confirmed.
+     =============================================================== */
+  var ITEMS = [
+    { side:"cb", ico:"doc", label:"Official course content",
+      text:"Course content developed with College Board, so the practice came from the test maker rather than from a guess at the test.",
+      src:CB_SRC },
+
+    { side:"cb", ico:"clock", label:"Early access",
+      text:"Khan Academy saw the redesigned test before anyone selling prep did.",
+      srcnote:"Source: TechCrunch, 5 March 2014, which described the arrangement as rare and exclusive." },
+
+    { side:"cb", ico:"seal", label:"The official designation",
+      text:"The practice could be described as coming from the organization that writes the test. College Board&rsquo;s own page calls it, verbatim, <b>&ldquo;official practice directly from the people who created the test.&rdquo;</b>",
+      src:CB_SRC },
+
+    { side:"ka", ico:"plat", label:"A platform that already existed",
+      text:"A working learning platform, already built and already running." },
+
+    { side:"ka", ico:"code", label:"Engineering",
+      text:"The build work behind practice that adapts to the student using it." },
+
+    { side:"ka", ico:"stack", label:"Content production",
+      text:"Building the lessons, then keeping them current as the test changed." },
+
+    { side:"ka", ico:"users", label:"Free delivery to everyone",
+      text:"No paywall and no trial." }
+  ];
+
+  /* the final state. No outcome, no score data, no judgement about
+     whether the partnership worked. Just the shape of the trade. */
+  var FINAL = {
+    who:"The completed trade",
+    text:"Three items came from College Board. Four came from Khan Academy. Each side put in something it already had. Both columns together are the trade."
+  };
+
+  var LAST = ITEMS.length + 1;          /* 8 states: 7 reveals, then the trade */
+  var step = 1;                         /* 1 based                            */
+  var showing = 0;                      /* index of the item in the panel     */
+
+  var el = {};
+  ["prog","pips","board","colCb","colKa","slotsCb","slotsKa","ccCb","ccKa",
+   "motiveCb","motiveKa","ev","evWho","evSep","evLab","evText","evSrc",
+   "back","next","hint","cross","xa","xah","xb","xbh"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* ================ build the fixed slots ================ */
+
+  function build(){
+    ["cb","ka"].forEach(function(s){
+      var host = el[SIDE[s].slots], out = "";
+      ITEMS.forEach(function(it, i){
+        if(it.side !== s) return;
+        out += '<div class="slot empty" data-i="' + i + '"></div>';
+      });
+      host.innerHTML = out;
+    });
+
+    var pips = "";
+    for(var i=1;i<=LAST;i++){ pips += '<span class="pip"></span>'; }
+    el.pips.innerHTML = pips;
+
+    /* the reserved motive lines, off unless a sentence has been approved */
+    ["cb","ka"].forEach(function(s){
+      var node = el[s === "cb" ? "motiveCb" : "motiveKa"];
+      var line = MOTIVE[s];
+      if(line){ node.textContent = line; node.hidden = false; }
+      else { node.textContent = ""; node.hidden = true; }
+    });
+  }
+
+  function slotOf(i){ return el.board.querySelector('.slot[data-i="' + i + '"]'); }
+
+  /* ================ the item cards ================ */
+
+  function fill(i, animate){
+    var slot = slotOf(i), it = ITEMS[i];
+    if(!slot || slot.firstChild) return;
+    slot.classList.remove("empty");
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "card";
+    b.setAttribute("data-i", i);
+    b.setAttribute("aria-label", SIDE[it.side].head + ": " + it.label + ". Activate to read this one again.");
+    b.innerHTML = '<span class="ico" aria-hidden="true">' + ICO[it.ico] + '</span>' +
+                  '<span class="lb">' + it.label + '</span>';
+    b.addEventListener("click", function(){ show(i); });
+    slot.appendChild(b);
+    slot.classList.remove("land-cb","land-ka");
+    if(animate && !reduce){
+      /* restart the keyframe cleanly if the student steps back and forward */
+      void slot.offsetWidth;
+      slot.classList.add(SIDE[it.side].land);
+    }
+  }
+
+  function clear(i){
+    var slot = slotOf(i);
+    if(!slot) return;
+    slot.innerHTML = "";
+    slot.classList.remove("land-cb","land-ka");
+    slot.classList.add("empty");
+  }
+
+  /* ================ the evidence panel ================ */
+
+  function show(i){
+    showing = i;
+    var it = ITEMS[i];
+    el.evWho.textContent = SIDE[it.side].head;
+    el.evSep.hidden = false;
+    el.evLab.textContent = it.label;
+    el.evText.innerHTML = it.text;
+    if(it.src){
+      el.evSrc.innerHTML = 'Source: <a href="' + it.src.u + '" target="_blank" rel="noopener">' +
+                           it.src.t + '</a>.';
+    } else if(it.srcnote){
+      el.evSrc.textContent = it.srcnote;
+    } else {
+      el.evSrc.textContent = "";
+    }
+    markCurrent(i);
+  }
+
+  function showFinal(){
+    showing = -1;
+    el.evWho.textContent = FINAL.who;
+    el.evSep.hidden = true;
+    el.evLab.textContent = "";
+    el.evText.innerHTML = FINAL.text;
+    el.evSrc.textContent = "";
+    markCurrent(-1);
+  }
+
+  function markCurrent(i){
+    Array.prototype.slice.call(el.board.querySelectorAll("button.card")).forEach(function(b){
+      if(parseInt(b.getAttribute("data-i"), 10) === i) b.setAttribute("aria-current","true");
+      else b.removeAttribute("aria-current");
+    });
+  }
+
+  /* ================ the crossing arrows ================ */
+
+  /* Two curved arrows that cross in the gutter: what College Board put
+     in sweeps toward Khan Academy's side, and what Khan Academy put in
+     sweeps back the other way. The crossing is the whole point, which
+     is why this motion is not decoration: it is the only place the
+     two way shape of the trade is shown rather than described. */
+  function cross(on){
+    [el.xa, el.xb].forEach(function(p){
+      var len = 0;
+      try{ len = p.getTotalLength(); }catch(e){ len = 0; }
+      if(!len){ p.style.strokeDasharray = ""; p.style.strokeDashoffset = ""; return; }
+      p.style.strokeDasharray = len;
+      p.style.transition = reduce ? "none" : "stroke-dashoffset var(--t-reveal) " + EASE_OUT;
+      p.style.strokeDashoffset = on ? 0 : len;
+    });
+    [el.xah, el.xbh].forEach(function(h){
+      h.style.transition = reduce ? "none" : "opacity 200ms " + EASE_OUT + " 480ms";
+      h.style.opacity = on ? 1 : 0;
+    });
+    el.board.classList.toggle("crossed", !!on);
+    /* the columns lean in by 3px, so the two stacks visibly meet. Kept to
+       3px because the arrows stop 3px clear of the card edges. */
+    el.colCb.style.transform = (on && !reduce) ? "translateX(3px)"  : "";
+    el.colKa.style.transform = (on && !reduce) ? "translateX(-3px)" : "";
+  }
+
+  /* ================ state ================ */
+
+  function counts(){
+    var done = { cb:0, ka:0 }, total = { cb:0, ka:0 };
+    ITEMS.forEach(function(it, i){
+      total[it.side]++;
+      if(i < step) done[it.side]++;
+    });
+    el.ccCb.textContent = done.cb + " of " + total.cb;
+    el.ccKa.textContent = done.ka + " of " + total.ka;
+  }
+
+  function paint(newly){
+    /* idempotent: the board is rebuilt from step every time, so Back
+       un reveals cleanly and no undefined state is reachable */
+    ITEMS.forEach(function(it, i){
+      if(i < step) fill(i, i === newly);
+      else clear(i);
+    });
+
+    counts();
+    el.prog.textContent = step + " of " + LAST;
+    Array.prototype.slice.call(el.pips.children).forEach(function(p, i){
+      if(i < step) p.classList.add("on"); else p.classList.remove("on");
+    });
+
+    cross(step === LAST);
+
+    if(step === LAST) showFinal();
+    else show(step - 1);
+
+    el.back.disabled = (step === 1);
+    if(step === LAST){
+      el.next.textContent = "Start over";
+      el.hint.innerHTML = "All seven are in. <b>Start over</b> runs it again, or tap any item to read it once more.";
+    } else {
+      el.next.textContent = "Next";
+      el.hint.innerHTML = "<b>Next</b> adds the next item. Arrow keys and swipe work too, and tapping an item shows it again.";
+    }
+  }
+
+  function goTo(n){
+    var target = Math.min(Math.max(n, 1), LAST);
+    if(target === step) return;
+    var forward = target === step + 1;
+    step = target;
+    paint(forward ? step - 1 : -1);
+  }
+
+  function onNext(){
+    if(step === LAST){ step = 1; paint(-1); return; }   /* start over */
+    goTo(step + 1);
+  }
+
+  el.next.addEventListener("click", onNext);
+  el.back.addEventListener("click", function(){ goTo(step - 1); });
+
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){ e.preventDefault(); goTo(step + 1); return; }
+    if(e.key === "ArrowLeft"  || e.key === "ArrowUp"){   e.preventDefault(); goTo(step - 1); return; }
+    if(e.key === "Home"){ e.preventDefault(); goTo(1); return; }
+    if(e.key === "End"){  e.preventDefault(); goTo(LAST); }
+  });
+
+  /* Swipe, the third input method the craft spec asks for alongside the
+     buttons and the arrow keys. Deliberately fussy about what counts: a
+     gesture has to travel 50px and be more horizontal than vertical, or
+     the portrait layout could not be scrolled without changing state. */
+  (function(){
+    var x0 = 0, y0 = 0, live = false;
+    var host = document.getElementById("stage");
+    host.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1){ live = false; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; live = true;
+    }, {passive:true});
+    host.addEventListener("touchend", function(e){
+      if(!live) return;
+      live = false;
+      var t = e.changedTouches && e.changedTouches[0];
+      if(!t) return;
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      if(Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 2) return;
+      goTo(step + (dx < 0 ? 1 : -1));
+    }, {passive:true});
+  })();
+
+  /* ================ scale the fixed canvas down to fit, never up ================ */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  build();
+  paint(0);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot run force a state */
+  window.__ex = { go:goTo, show:show, state:function(){ return { step:step, showing:showing }; } };
+})();
+</script>
+</body>
+</html>

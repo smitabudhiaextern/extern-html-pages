@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ten years of one partnership</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. The rgba values below are #001D69 at low
+     alpha for hairlines, not new hues.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, the two org boxes   */
+    --on-highlight:#001D69; /* arrows, accents, interactive parts */
+    --bg:#FDF8F8;           /* canvas background, negative space  */
+    --body:#484646;         /* body copy, captions                */
+    --title:#1C1B1B;        /* headings, primary text             */
+
+    --line:rgba(0,29,105,.26);
+    /* Same ink, higher alpha, for a border that is the ONLY boundary of a
+       tap target. Decorative hairlines keep --line; anything a student has
+       to see the edge of to hit it uses this, which clears 3:1 against the
+       background. */
+    --line-strong:rgba(0,29,105,.45);
+
+    --t-fast:160ms;    /* UI feedback                     */
+    --t-frame:300ms;   /* between-beat movement           */
+    --t-reveal:560ms;  /* a value counting to its figure  */
+    --t-sever:420ms;   /* a connection breaking           */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ==== 960x540 canvas, scaled down only, never up ====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the stage
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then shrinks it a second time, which re-wraps every line
+     at a width the design never targeted. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:16px 44px 14px;display:flex;flex-direction:column}
+
+  /* ==== top row: the count, always visible ==== */
+  .top{display:flex;align-items:baseline;gap:12px;flex:0 0 auto}
+  .count{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .topnote{font-size:12px;color:var(--body);margin-left:auto;text-align:right}
+
+  /* ==== the rail, which is also the timeline ==== */
+  .rail{position:relative;display:flex;margin-top:8px;flex:0 0 auto;height:34px}
+  .rail::before{
+    content:"";position:absolute;left:14px;right:14px;top:6px;height:2px;
+    background:var(--line);
+  }
+  .rbtn{
+    flex:1 1 0;min-width:0;background:transparent;border:0;padding:1px 2px 0;cursor:pointer;
+    font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:5px;
+  }
+  .rbtn:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:6px}
+  .dot{
+    width:11px;height:11px;border-radius:50%;position:relative;z-index:1;
+    border:2px solid var(--on-highlight);background:var(--bg);flex:0 0 auto;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out);
+  }
+  .rbtn[data-state="past"] .dot{background:var(--on-highlight)}
+  .rbtn[aria-current="step"] .dot{background:var(--on-highlight);box-shadow:0 0 0 4px var(--highlight)}
+  .rlab{font-size:12px;line-height:1.2;color:var(--body);white-space:nowrap}
+  .rbtn[aria-current="step"] .rlab{font-weight:600;color:var(--title)}
+  .rbtn:hover .rlab{color:var(--title)}
+
+  /* ==== headline ==== */
+  h1{
+    font-size:27px;line-height:1.22;font-weight:600;color:var(--title);
+    margin-top:8px;flex:0 0 auto;
+  }
+  .hdate{
+    display:inline-block;vertical-align:3px;margin-right:9px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:12px;font-weight:600;letter-spacing:.03em;
+    padding:3px 9px;border-radius:5px;white-space:nowrap;
+  }
+
+  /* ==== the diagram, the centerpiece ====
+     This height must stay equal to L.h in the script. The landscape SVG is
+     drawn 1:1 in real pixels, so if the box is shorter than the viewBox the
+     whole diagram scales down and every label lands below the size it says
+     it is. Changing one without the other is the bug to watch for. */
+  .dia{margin-top:6px;flex:0 0 auto;height:166px}
+  .dia svg{display:block;width:100%;height:100%}
+
+  .nbox{fill:var(--highlight)}
+  .nbox.out{fill:var(--bg);stroke:var(--on-highlight);stroke-width:1.5}
+  .ntitle{font-size:15px;font-weight:600;fill:var(--on-highlight)}
+  .ncap{font-size:12px;fill:var(--body)}
+  .nbadge{font-size:12px;font-weight:600;fill:var(--on-highlight)}
+
+  .shaft{fill:none;stroke:var(--on-highlight);stroke-width:2.5;stroke-linecap:butt}
+  .shaft.planned{stroke-dasharray:7 5}
+  .ahead{fill:var(--on-highlight)}
+  .alab{font-size:12.5px;fill:var(--body)}
+  .xmark{fill:none;stroke:var(--on-highlight);stroke-width:2.5;stroke-linecap:round}
+  .pnum{display:none}
+  .pnumtxt{font-size:13px;font-weight:600;fill:var(--bg)}
+
+  .figbox{fill:var(--highlight)}
+  .fignum{font-size:15px;font-weight:600;fill:var(--on-highlight)}
+  .figlab{font-size:13px;fill:var(--body)}
+
+  /* motion: an arrow drawing itself, a connection breaking, a figure
+     counting. Nothing here moves that is not a change in the wiring. */
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .aenter .ahead,.aenter .alab{animation:fadein 260ms var(--ease-out) 150ms both}
+  .afade{animation:fadein var(--t-frame) var(--ease-out) both}
+
+  .segL{transform:translateX(-9px)}
+  .segR{transform:translateX(9px)}
+  .segT{transform:translateY(-9px)}
+  .segB{transform:translateY(9px)}
+  .sev .segL{animation:sevL var(--t-sever) var(--ease-out) both}
+  .sev .segR{animation:sevR var(--t-sever) var(--ease-out) both}
+  .sev .segT{animation:sevT var(--t-sever) var(--ease-out) both}
+  .sev .segB{animation:sevB var(--t-sever) var(--ease-out) both}
+  @keyframes sevL{from{transform:translateX(0)}to{transform:translateX(-9px)}}
+  @keyframes sevR{from{transform:translateX(0)}to{transform:translateX(9px)}}
+  @keyframes sevT{from{transform:translateY(0)}to{transform:translateY(-9px)}}
+  @keyframes sevB{from{transform:translateY(0)}to{transform:translateY(9px)}}
+  .sev .xmark{animation:fadein 300ms var(--ease-out) 220ms both}
+
+  /* ==== supporting text ==== */
+  .strip{
+    margin-top:8px;flex:0 0 auto;height:106px;
+    display:grid;grid-template-columns:1fr 300px;gap:24px;
+  }
+  .cell{min-width:0}
+  .slab{
+    font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:4px;
+  }
+  .stext{font-size:14px;line-height:1.5;color:var(--body)}
+  .stext b{color:var(--title);font-weight:600}
+  .src{margin-top:6px;flex:0 0 auto;font-size:12px;line-height:1.35}
+  .src a{color:var(--on-highlight)}
+  .src .flag{color:var(--on-highlight);font-weight:600}
+
+  @keyframes tin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .tfade{animation:tin var(--t-frame) var(--ease-io) both}
+
+  /* ==== controls ==== */
+  .bar{margin-top:auto;padding-top:8px;flex:0 0 auto;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12.5px;line-height:1.4;max-width:68ch}
+  .hint b{color:var(--title);font-weight:600}
+
+  /* The diagram in words. Screen readers get this at every width, and it
+     becomes the visible diagram key under 600px, where arrow labels drawn
+     inside the SVG would fall below the 16px floor. */
+  .dlist{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ==== under 600px: portrait restack, not a shrunken slide ==== */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto,
+       refuses to shrink below its content width, and pushes the rail off
+       screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .count{font-size:14px}
+    .topnote{display:none}
+    .rail{height:auto;flex-wrap:wrap;gap:6px;margin-top:12px}
+    .rail::before{display:none}
+    .rbtn{
+      flex:0 0 auto;flex-direction:row;gap:7px;border:1.5px solid var(--line);
+      border-radius:999px;padding:7px 11px;
+    }
+    .rbtn[aria-current="step"]{border-color:var(--on-highlight);background:var(--highlight)}
+    .rlab{font-size:14px}
+    h1{font-size:22px;margin-top:14px}
+    .hdate{font-size:13px;vertical-align:2px}
+    .dia{height:auto;margin-top:12px}
+    .dia svg{height:auto}
+    .alab,.ncap,.nbadge,.figbox,.fignum,.figlab{display:none}
+    .pnum{display:block}
+    .pnumtxt{font-size:13px;font-weight:600;fill:var(--bg)}
+    .strip{display:block;height:auto;margin-top:16px}
+    .cell+.cell{margin-top:14px}
+    .slab{font-size:12px}
+    .stext{font-size:16px}
+    .src{font-size:14px;margin-top:12px}
+    .dlist{
+      position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal;
+      margin-top:16px;background:var(--highlight);border-radius:12px;padding:13px 14px;
+    }
+    .dlh{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:7px}
+    .dlist ul{margin:0;padding-left:0;list-style:none}
+    .dlist li{font-size:16px;line-height:1.5;color:var(--body);margin-bottom:9px;display:flex;gap:9px}
+    .dlist li:last-child{margin-bottom:0}
+    .dlist li .n{
+      flex:0 0 auto;width:20px;height:20px;border-radius:50%;margin-top:2px;
+      background:var(--on-highlight);color:var(--bg);font-size:12px;font-weight:600;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .bar{margin-top:20px;padding-top:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    .hint{font-size:13.5px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame">
+
+    <div class="top">
+      <span class="count" id="count">1 of 8</span>
+      <span class="topnote">Two organizations. One relationship. Watch what runs between them.</span>
+    </div>
+
+    <div class="rail" id="rail" aria-label="Eight points on the timeline"></div>
+
+    <h1 id="head"></h1>
+
+    <div class="dia" id="dia"></div>
+
+    <div class="strip">
+      <div class="cell">
+        <div class="slab">What moved between them</div>
+        <div class="stext" id="moved"></div>
+      </div>
+      <div class="cell">
+        <div class="slab">What a student experienced</div>
+        <div class="stext" id="student"></div>
+      </div>
+    </div>
+
+    <p class="src" id="src"></p>
+
+    <div class="dlist" id="dlist">
+      <div class="dlh">The diagram in words</div>
+      <ul id="dlul"></ul>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" id="prev" type="button">&#8249; Back</button>
+      <button class="nav" id="next" type="button">Next &#8250;</button>
+      <span class="hint" id="hint"></span>
+    </div>
+
+    <p class="sr" id="live" role="status" aria-live="polite"></p>
+  </div>
+</div>
+
+<noscript>
+  <style>#stage{display:none}</style>
+  <div style="max-width:720px;padding:28px;font-size:16px;line-height:1.55;color:#484646">
+    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:10px">Ten years of one partnership</h1>
+    <p style="margin-bottom:8px">A partnership is plumbing, not an announcement. The interactive version of this
+      shows College Board and Khan Academy as two boxes with a labelled arrow layer between them, and the arrows
+      change at every point below. Here are all eight points as text: the date, what moved between the two
+      organizations, what a student experienced as a result, and the source.</p>
+    <p style="margin-bottom:16px">Nothing here is a judgment about whether the partnership worked. It is a record of
+      what was connected to what, and when.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">1. March 2014: the partnership is announced</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> College Board and Khan Academy announce a partnership.
+      College Board will open real SAT question content to Khan Academy so practice can be built from the actual test.
+      Nothing is built yet. One planned connection, College Board to Khan Academy.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> Nothing changes yet. There is no product to open.</p>
+    <p style="margin-bottom:16px">Source: College Board announcement, 5 March 2014.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">2. June 2015: free official SAT practice goes live</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> The content starts flowing. Khan Academy publishes free
+      official SAT practice built from College Board's question content. One live connection, College Board to Khan Academy.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student can open Khan Academy and
+      practice on official SAT material at no cost.</p>
+    <p style="margin-bottom:16px">Source: College Board launch release, 2 June 2015,
+      <a href="https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg" style="color:#001D69">newsroom.collegeboard.org</a>.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">3. March 2016: the redesigned SAT debuts</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> The wiring does not change. The test the practice was
+      built for arrives, so what crosses between the two organizations now matches the exam a student will sit.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student sits the redesigned test, and
+      the practice they used was built for that version of it.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">4. June 2016: the plumbing in action</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> Linking is the mechanism. A student connects their two
+      accounts, College Board passes their real scores to Khan Academy, and Khan Academy turns those scores into a
+      study plan aimed at what the student had missed. More than 450,000 students had linked their College Board and
+      Khan Academy accounts within the first six months. Three connections now: content one way, scores the same way,
+      targeted practice back.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student who linked accounts got
+      practice chosen from their own score report instead of a generic course.</p>
+    <p style="margin-bottom:16px">Source: College Board, 2 June 2016,
+      <a href="https://newsroom.collegeboard.org/one-year-launch-official-satr-practice-khan-academyr-leveling-playing-field-students" style="color:#001D69">newsroom.collegeboard.org</a>.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">5. January 2020: scale</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> The wiring is unchanged. Volume is what moved: more than
+      10 million sign-ups for official SAT practice, cumulative across the five years since launch.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student in 2020 used the same
+      connections a student used in 2016. There were simply many more students on them.</p>
+    <p style="margin-bottom:16px">Source: Khan Academy blog, 27 January 2020,
+      <a href="https://blog.khanacademy.org/college-board-khan-academy-mark-10-million/" style="color:#001D69">blog.khanacademy.org</a>.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">6. December 2023: the data link ends</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> Account linking is discontinued. Scores no longer pass
+      between the two systems, and the study plan built from a student's own scores goes with it. Two of the three
+      connections end here. The question content connection stays.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student can still practice on Khan
+      Academy. Their College Board scores no longer arrive to aim that practice.</p>
+    <p style="margin-bottom:16px">Source: College Board Privacy Center,
+      <a href="https://privacy.collegeboard.org/program-specific-privacy-policies/test-preparation/khan-academy" style="color:#001D69">privacy.collegeboard.org</a>.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">7. January 2024: the role narrows</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> Khan Academy documents that its original Official SAT
+      Prep product is deprecated, and that full-length practice tests have moved to College Board's Bluebook app.
+      Khan Academy keeps skill instruction and targeted practice, reached through a &ldquo;Practice on Khan
+      Academy&rdquo; button from a Bluebook scorecard. Two connections: a referral in, a product function out.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student takes full-length practice
+      tests in Bluebook, then follows the button on their scorecard into Khan Academy for skill practice.</p>
+    <p style="margin-bottom:16px">Source: Khan Academy help center article published 17 January 2024,
+      <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821-Helping-your-students-prepare-for-the-Digital-SAT-on-Khan-Academy" style="color:#001D69">support.khanacademy.org</a>.</p>
+
+    <h2 style="font-size:17px;color:#1C1B1B;margin-bottom:4px">8. April 2026: a second structure appears</h2>
+    <p style="margin-bottom:4px"><strong>What moved.</strong> A paid track appears next to the free one. Districts that
+      adopt College Board's full SAT Suite qualify for Khan Academy Districts, a paid product, at $10 per student for
+      the 2026-27 school year, and College Board representatives help districts qualify. A third party enters the
+      diagram, and money runs from districts to Khan Academy.</p>
+    <p style="margin-bottom:4px"><strong>What a student experienced.</strong> A student in a qualifying district reaches
+      Khan Academy through a product their district pays for, alongside the free track anyone can use.</p>
+    <p style="margin-bottom:16px">Source: Khan Academy blog, 9 April 2026,
+      <a href="https://blog.khanacademy.org/get-more-from-the-sat-suite-khan-academy-districts-for-10-per-student/" style="color:#001D69">blog.khanacademy.org</a>.</p>
+
+    <p><strong>The two boxes never changed.</strong> What runs between them was rewired more than once, and by 2026
+      there are two structures running at the same time.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===============================================================
+     THE NODES. Two organizations, plus school districts, which only
+     appear at the point where they enter the arrangement.
+     =============================================================== */
+  var NODES = {
+    cb:{ title:"College Board", cap:"owns and runs the SAT" },
+    ka:{ title:"Khan Academy",  cap:"builds and hosts the practice" },
+    dt:{ title:"School districts", cap:"adopt the suite, pay per student", outline:true }
+  };
+  var NAME = { cb:"College Board", ka:"Khan Academy", dt:"School districts" };
+
+  /* ===============================================================
+     THE EIGHT BEATS. Every figure and every claim carries its source
+     on the frame it appears on. Nothing here says whether the deal
+     was good, only what was connected to what.
+     =============================================================== */
+  var BEATS = [
+    {
+      rail:"Mar 2014", date:"March 2014", head:"The partnership is announced",
+      moved:"College Board and Khan Academy announce a partnership. College Board will open <b>real SAT question content</b> to Khan Academy so practice can be built from the actual test. Nothing is built yet. This is a commitment, not a product.",
+      student:"Nothing changes yet. There is no product to open.",
+      src:{ t:"College Board announcement, 5 March 2014." },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"planned",
+          label:"Planned: real SAT question content",
+          plain:"a planned connection for real SAT question content. Agreed, not yet running." }
+      ]
+    },
+    {
+      rail:"Jun 2015", date:"June 2015", head:"Free official SAT practice goes live",
+      moved:"The content starts flowing. Khan Academy publishes <b>free official SAT practice</b> built from College Board's question content.",
+      student:"A student can open Khan Academy and practice on official SAT material at no cost.",
+      src:{ t:"College Board launch release, 2 June 2015",
+            u:"https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg" },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content, now running." }
+      ]
+    },
+    {
+      rail:"Mar 2016", date:"March 2016", head:"The redesigned SAT debuts",
+      moved:"The wiring does not change. The test the practice was built for arrives, so what crosses between the two organizations now matches the exam a student will actually sit.",
+      student:"A student sits the redesigned test, and the practice they used was built for that version of it.",
+      src:null,
+      badges:{ cb:["Redesigned SAT","now in use"] },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content, unchanged." }
+      ]
+    },
+    {
+      rail:"Jun 2016", date:"June 2016", head:"The plumbing in action",
+      moved:"Linking is the mechanism. A student connects their two accounts, College Board passes their <b>real scores</b> to Khan Academy, and Khan Academy turns those scores into a study plan aimed at what that student had missed.",
+      student:"A student who linked accounts got practice chosen from their own score report instead of a generic course.",
+      src:{ t:"College Board, 2 June 2016",
+            u:"https://newsroom.collegeboard.org/one-year-launch-official-satr-practice-khan-academyr-leveling-playing-field-students" },
+      fig:{ value:450000, plus:true, label:"accounts linked in the first six months" },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content." },
+        { k:"scores", from:"cb", to:"ka", state:"live",
+          label:"Linked accounts: a student's real SAT scores",
+          plain:"linked accounts, carrying a student's real SAT scores." },
+        { k:"plan", from:"cb", to:"ka", state:"live",
+          label:"Those scores aim the practice",
+          plain:"the scores aiming the practice, which Khan Academy then delivers to the student who linked." }
+      ]
+    },
+    {
+      rail:"Jan 2020", date:"January 2020", head:"Scale",
+      moved:"The wiring is unchanged. Volume is what moved: more than 10 million sign-ups for official SAT practice, cumulative across the five years since launch.",
+      student:"A student in 2020 used the same connections a student used in 2016. There were simply many more students on them.",
+      src:{ t:"Khan Academy blog, 27 January 2020",
+            u:"https://blog.khanacademy.org/college-board-khan-academy-mark-10-million/" },
+      fig:{ value:10000000, plus:true, label:"sign-ups since the 2015 launch" },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content." },
+        { k:"scores", from:"cb", to:"ka", state:"live",
+          label:"Linked accounts: a student's real SAT scores",
+          plain:"linked accounts, carrying a student's real SAT scores." },
+        { k:"plan", from:"cb", to:"ka", state:"live",
+          label:"Those scores aim the practice",
+          plain:"the scores aiming the practice a student sees." }
+      ]
+    },
+    {
+      rail:"Dec 2023", date:"December 2023", head:"The data link ends",
+      moved:"Account linking is discontinued. Scores no longer pass between the two systems, and the study plan built from a student's own scores goes with it. The question content connection stays.",
+      student:"A student can still practice on Khan Academy. Their College Board scores no longer arrive to aim that practice.",
+      src:{ t:"College Board Privacy Center",
+            u:"https://privacy.collegeboard.org/program-specific-privacy-policies/test-preparation/khan-academy" },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content, still running." },
+        { k:"scores", from:"cb", to:"ka", state:"ended",
+          label:"Account linking discontinued, scores stop",
+          plain:"account linking, discontinued. Scores stop passing." },
+        { k:"plan", from:"cb", to:"ka", state:"ended",
+          label:"The score-driven study plan stops with it",
+          plain:"the score-driven study plan, which stops with it." }
+      ]
+    },
+    {
+      rail:"Jan 2024", date:"January 2024", head:"The role narrows",
+      moved:"Khan Academy documents that its original Official SAT Prep product is retired, and that full-length practice tests have moved to College Board's Bluebook app. Khan Academy keeps skill instruction and targeted practice, reached through a &ldquo;Practice on Khan Academy&rdquo; button on a practice-test scorecard.",
+      student:"A student takes full-length practice tests in Bluebook, then follows the button on their scorecard into Khan Academy for skill practice.",
+      src:{ t:"Khan Academy help center, 17 January 2024, for the product retirement. College Board SAT Suite for the button.",
+            u:"https://satsuite.collegeboard.org/practice/khan-academy" },
+      badges:{ ka:["Keeps skill instruction","and targeted practice"] },
+      arrows:[
+        { k:"content", from:"cb", to:"ka", state:"live",
+          label:"Official SAT question content",
+          plain:"official SAT question content." },
+        { k:"referral", from:"cb", to:"ka", state:"live",
+          label:"Referral: a Practice on Khan Academy button in Bluebook",
+          plain:"a referral. College Board describes a Practice on Khan Academy button reached from a practice-test scorecard." },
+        { k:"tests", from:"ka", to:"cb", state:"live",
+          label:"Full-length practice tests move to Bluebook",
+          plain:"full-length practice tests, moving out of Khan Academy and into College Board's Bluebook app." }
+      ]
+    },
+    {
+      rail:"Apr 2026", date:"April 2026", head:"A second structure appears",
+      moved:"A paid track appears next to the free one. Districts that adopt College Board's full SAT Suite qualify for <b>Khan Academy Districts</b>, a paid product, at $10 per student for the 2026-27 school year, and College Board representatives help districts qualify.",
+      student:"A student in a qualifying district reaches Khan Academy through a product their district pays for, alongside the free track anyone can use.",
+      src:{ t:"Khan Academy blog, 9 April 2026",
+            u:"https://blog.khanacademy.org/get-more-from-the-sat-suite-khan-academy-districts-for-10-per-student/" },
+      arrows:[
+        { k:"free", from:"cb", to:"ka", state:"live",
+          label:"The free practice track continues",
+          plain:"the free practice track from 2024, still running." },
+        { k:"qualify", from:"cb", to:"dt", state:"live",
+          label:"Reps help districts qualify",
+          plain:"College Board representatives helping districts qualify, once a district adopts the full SAT Suite." },
+        { k:"pay", from:"dt", to:"ka", state:"live",
+          label:"$10 per student, 2026-27",
+          plain:"money. $10 per student for the 2026-27 school year, from districts to Khan Academy." }
+      ]
+    }
+  ];
+
+  var CLOSER = "The two boxes never changed. What runs between them was rewired more than once, and by 2026 two structures run at the same time.";
+
+  /* ===============================================================
+     GEOMETRY. Two layouts, not one scaled down. Landscape is drawn
+     1:1 in real pixels inside the 960 canvas, so every label is the
+     size it says it is. Portrait stacks the same nodes vertically and
+     hands the labels to the visible list beneath the diagram.
+     =============================================================== */
+  var L = {
+    kind:"landscape", w:872, h:206, axis:"h",
+    cb:{x:0,y:2,w:196,h:118},
+    ka:{x:676,y:2,w:196,h:118},
+    dt:{x:278,y:154,w:316,h:48},
+    rows:[26,61,96],
+    chan:[212,660],
+    fig:{cy:139},
+    qualify:{ tapX:98, runY:178, headAt:278, labX:106, labY:170, anchor:"start" },
+    pay:{ tapX:768, runY:178, startAt:598, labX:762, labY:170, anchor:"end" }
+  };
+
+  var P = {
+    kind:"portrait", w:320, h:470, axis:"v",
+    cb:{x:40,y:0,w:240,h:58},
+    ka:{x:40,y:412,w:240,h:58},
+    dt:{x:118,y:198,w:196,h:56},
+    cols:[100,160,220],
+    colsWithDt:[74],
+    chan:[74,396],
+    qualify:{ tapX:200, runY:0, headAt:198 },
+    pay:{ tapX:244, startAt:254 }
+  };
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var cur = 0;
+  var prevStates = null;   /* arrow key to state, from the last render */
+  var lastKind = null;
+
+  var el = {};
+  ["count","rail","head","dia","moved","student","src","dlul","prev","next","hint","live"]
+    .forEach(function(k){ el[k] = document.getElementById(k); });
+
+  function fmt(n){
+    var s = String(n), out = "", c = 0;
+    for(var i = s.length - 1; i >= 0; i--){
+      out = s.charAt(i) + out; c++;
+      if(c % 3 === 0 && i > 0) out = "," + out;
+    }
+    return out;
+  }
+
+  /* ===============================================================
+     SVG builders
+     =============================================================== */
+
+  function nodeSVG(id, g, beat){
+    var b = g[id], n = NODES[id], lines = (beat.badges && beat.badges[id]) || [];
+    var cx = b.x + b.w / 2;
+    var s = '<g class="node">';
+    s += '<rect class="nbox' + (n.outline ? " out" : "") + '" x="' + b.x + '" y="' + b.y +
+         '" width="' + b.w + '" height="' + b.h + '" rx="12"/>';
+    if(g.kind === "landscape"){
+      /* the districts box is a short band, so its two lines sit tighter */
+      var tY = b.h < 70 ? 21 : 32, cY = b.h < 70 ? 38 : 52;
+      s += '<text class="ntitle" x="' + cx + '" y="' + (b.y + tY) + '" text-anchor="middle">' + n.title + '</text>';
+      s += '<text class="ncap" x="' + cx + '" y="' + (b.y + cY) + '" text-anchor="middle">' + n.cap + '</text>';
+      for(var i = 0; i < lines.length; i++){
+        s += '<text class="nbadge" x="' + cx + '" y="' + (b.y + 82 + i * 17) + '" text-anchor="middle">' + lines[i] + '</text>';
+      }
+    } else {
+      s += '<text class="ntitle" x="' + cx + '" y="' + (b.y + 36) + '" text-anchor="middle">' + n.title + '</text>';
+    }
+    return s + '</g>';
+  }
+
+  /* A straight arrow along one axis, in one of three states:
+     planned (dashed), live (solid), ended (broken open with an X).
+     State is never carried by colour: the whole diagram is one ink. */
+  function straight(a, p1, p2, axis, lab, num, anim){
+    var dx = axis === "h" ? (p2.x > p1.x ? 1 : -1) : 0;
+    var dy = axis === "v" ? (p2.y > p1.y ? 1 : -1) : 0;
+    var tip = { x:p2.x, y:p2.y };
+    var end = { x:p2.x - dx * 11, y:p2.y - dy * 11 };
+    var cls = "arrow" + (anim === "enter" ? " aenter" : "") + (anim === "sever" ? " sev" : "");
+    var s = '<g class="' + cls + '" data-k="' + a.k + '">';
+
+    if(a.state === "ended"){
+      /* split at the midpoint of the full channel, not of the shortened
+         shaft, so an X on a leftward arrow lines up with one on a
+         rightward arrow directly above it */
+      var mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      var lowCls  = axis === "h" ? "segL" : "segT";
+      var highCls = axis === "h" ? "segR" : "segB";
+      var firstIsLow = axis === "h" ? (p1.x < end.x) : (p1.y < end.y);
+      s += '<path class="shaft ' + (firstIsLow ? lowCls : highCls) + '" d="M' + p1.x + ' ' + p1.y + 'L' + mx + ' ' + my + '"/>';
+      s += '<g class="' + (firstIsLow ? highCls : lowCls) + '">';
+      s += '<path class="shaft" d="M' + mx + ' ' + my + 'L' + end.x + ' ' + end.y + '"/>';
+      s += head(tip, dx, dy);
+      s += '</g>';
+      s += '<path class="xmark" d="M' + (mx - 6) + ' ' + (my - 6) + 'L' + (mx + 6) + ' ' + (my + 6) +
+           'M' + (mx + 6) + ' ' + (my - 6) + 'L' + (mx - 6) + ' ' + (my + 6) + '"/>';
+    } else {
+      s += '<path class="shaft' + (a.state === "planned" ? " planned" : "") +
+           '" data-draw="' + (anim === "enter" && a.state === "live" ? "1" : "0") +
+           '" d="M' + p1.x + ' ' + p1.y + 'L' + end.x + ' ' + end.y + '"/>';
+      s += head(tip, dx, dy);
+    }
+
+    if(lab) s += '<text class="alab" x="' + lab.x + '" y="' + lab.y + '" text-anchor="' + (lab.anchor || "middle") + '">' + a.label + '</text>';
+    s += numBadge((p1.x + end.x) / 2, (p1.y + end.y) / 2, num);
+    return s + '</g>';
+  }
+
+  /* An elbow arrow, used only for the two district connections. */
+  function elbow(a, pts, lab, num, anim){
+    var n = pts.length;
+    var p1 = pts[n - 2], p2 = pts[n - 1];
+    var dx = p2.x === p1.x ? 0 : (p2.x > p1.x ? 1 : -1);
+    var dy = p2.y === p1.y ? 0 : (p2.y > p1.y ? 1 : -1);
+    var end = { x:p2.x - dx * 11, y:p2.y - dy * 11 };
+    var d = "M" + pts[0].x + " " + pts[0].y;
+    for(var i = 1; i < n - 1; i++) d += "L" + pts[i].x + " " + pts[i].y;
+    d += "L" + end.x + " " + end.y;
+
+    var s = '<g class="arrow' + (anim === "enter" ? " aenter" : "") + '" data-k="' + a.k + '">';
+    s += '<path class="shaft" data-draw="' + (anim === "enter" ? "1" : "0") + '" d="' + d + '"/>';
+    s += head(p2, dx, dy);
+    if(lab) s += '<text class="alab" x="' + lab.x + '" y="' + lab.y + '" text-anchor="' + (lab.anchor || "middle") + '">' + a.label + '</text>';
+    s += numBadge(pts[n - 2].x + dx * 34, pts[n - 2].y + dy * 34, num);
+    return s + '</g>';
+  }
+
+  function head(tip, dx, dy){
+    var p;
+    if(dx === 1)      p = tip.x + "," + tip.y + " " + (tip.x - 11) + "," + (tip.y - 6) + " " + (tip.x - 11) + "," + (tip.y + 6);
+    else if(dx === -1)p = tip.x + "," + tip.y + " " + (tip.x + 11) + "," + (tip.y - 6) + " " + (tip.x + 11) + "," + (tip.y + 6);
+    else if(dy === 1) p = tip.x + "," + tip.y + " " + (tip.x - 6) + "," + (tip.y - 11) + " " + (tip.x + 6) + "," + (tip.y - 11);
+    else              p = tip.x + "," + tip.y + " " + (tip.x - 6) + "," + (tip.y + 11) + " " + (tip.x + 6) + "," + (tip.y + 11);
+    return '<polygon class="ahead" points="' + p + '"/>';
+  }
+
+  /* Numbered ties between an arrow and the list beneath it. Shown only in
+     portrait, where SVG labels would fall under the 16px reading floor. */
+  function numBadge(x, y, num){
+    return '<g class="pnum"><circle cx="' + x + '" cy="' + y + '" r="10" fill="#001D69"/>' +
+           '<text class="pnumtxt" x="' + x + '" y="' + (y + 4.5) + '" text-anchor="middle">' + num + '</text></g>';
+  }
+
+  function figSVG(fig, g){
+    if(g.kind !== "landscape") return "";
+    var num = fmt(fig.value) + (fig.plus ? "+" : "");
+    var lab = fig.label;
+    var numW = num.length * 8.4, labW = lab.length * 6.3;
+    var inner = numW + 7 + labW, w = inner + 28, x = (g.w - w) / 2;
+    var y = g.fig.cy - 13, base = g.fig.cy + 5;
+    var numX = x + 14 + numW;
+    return '<g class="afade">' +
+      '<rect class="figbox" x="' + x + '" y="' + y + '" width="' + w + '" height="26" rx="13"/>' +
+      '<text class="fignum" id="figNum" x="' + numX + '" y="' + base + '" text-anchor="end">' + num + '</text>' +
+      '<text class="figlab" x="' + (numX + 7) + '" y="' + base + '">' + lab + '</text>' +
+      '</g>';
+  }
+
+  /* ===============================================================
+     Render one beat
+     =============================================================== */
+
+  function channelArrows(beat){
+    var out = [];
+    for(var i = 0; i < beat.arrows.length; i++){
+      var a = beat.arrows[i];
+      if((a.from === "cb" && a.to === "ka") || (a.from === "ka" && a.to === "cb")) out.push(a);
+    }
+    return out;
+  }
+
+  function trackList(tracks, n){
+    if(n >= 3) return tracks;
+    if(n === 2) return [tracks[0], tracks[2]];
+    return [tracks[1]];
+  }
+
+  function animFor(a){
+    if(!prevStates) return null;
+    var was = prevStates[a.k];
+    if(a.state === "ended") return was === "live" ? "sever" : null;
+    if(!was) return "enter";
+    return null;
+  }
+
+  function drawDiagram(beat, g){
+    var svg = '<svg viewBox="0 0 ' + g.w + ' ' + g.h + '" width="' + g.w + '" height="' + g.h +
+              '" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">';
+
+    var usesDt = false, i, a;
+    for(i = 0; i < beat.arrows.length; i++){ if(beat.arrows[i].from === "dt" || beat.arrows[i].to === "dt") usesDt = true; }
+
+    svg += nodeSVG("cb", g, beat);
+    svg += nodeSVG("ka", g, beat);
+    if(usesDt) svg += nodeSVG("dt", g, beat);
+
+    var chan = channelArrows(beat);
+    var tracks = g.kind === "landscape"
+      ? trackList(g.rows, chan.length)
+      : (usesDt ? g.colsWithDt : trackList(g.cols, chan.length));
+
+    var num = 0;
+    for(i = 0; i < chan.length; i++){
+      a = chan[i]; num++;
+      var t = tracks[i];
+      var p1, p2, lab;
+      if(g.kind === "landscape"){
+        var xa = g.chan[0], xb = g.chan[1];
+        if(a.from === "cb"){ p1 = {x:xa, y:t}; p2 = {x:xb, y:t}; }
+        else               { p1 = {x:xb, y:t}; p2 = {x:xa, y:t}; }
+        /* an ended arrow carries an X on the break, so its label lifts
+           clear of it. Live arrows sit closer to their own shaft. */
+        lab = { x:(xa + xb) / 2, y:t - (a.state === "ended" ? 16 : 12), anchor:"middle" };
+        svg += straight(a, p1, p2, "h", lab, num, animFor(a));
+      } else {
+        var ya = g.chan[0], yb = g.chan[1];
+        if(a.from === "cb"){ p1 = {x:t, y:ya}; p2 = {x:t, y:yb}; }
+        else               { p1 = {x:t, y:yb}; p2 = {x:t, y:ya}; }
+        svg += straight(a, p1, p2, "v", null, num, animFor(a));
+      }
+    }
+
+    for(i = 0; i < beat.arrows.length; i++){
+      a = beat.arrows[i];
+      if(a.k === "qualify"){
+        num++;
+        if(g.kind === "landscape"){
+          svg += elbow(a, [
+            {x:g.qualify.tapX, y:g.cb.y + g.cb.h},
+            {x:g.qualify.tapX, y:g.qualify.runY},
+            {x:g.qualify.headAt, y:g.qualify.runY}
+          ], {x:g.qualify.labX, y:g.qualify.labY, anchor:g.qualify.anchor}, num, animFor(a));
+        } else {
+          svg += elbow(a, [
+            {x:g.qualify.tapX, y:g.cb.y + g.cb.h},
+            {x:g.qualify.tapX, y:g.qualify.headAt}
+          ], null, num, animFor(a));
+        }
+      }
+      if(a.k === "pay"){
+        num++;
+        if(g.kind === "landscape"){
+          svg += elbow(a, [
+            {x:g.pay.startAt, y:g.pay.runY},
+            {x:g.pay.tapX, y:g.pay.runY},
+            {x:g.pay.tapX, y:g.ka.y + g.ka.h}
+          ], {x:g.pay.labX, y:g.pay.labY, anchor:g.pay.anchor}, num, animFor(a));
+        } else {
+          svg += elbow(a, [
+            {x:g.pay.tapX, y:g.pay.startAt},
+            {x:g.pay.tapX, y:g.ka.y}
+          ], null, num, animFor(a));
+        }
+      }
+    }
+
+    if(beat.fig) svg += figSVG(beat.fig, g);
+
+    svg += '</svg>';
+    el.dia.innerHTML = svg;
+
+    /* A new live connection draws itself along its own path. That is the
+       only thing this animation says: this pipe was not here before. */
+    var shafts = el.dia.querySelectorAll('.shaft[data-draw="1"]');
+    if(!reduce){
+      for(i = 0; i < shafts.length; i++){
+        (function(sh){
+          var len = 0;
+          try{ len = sh.getTotalLength(); }catch(e){ len = 0; }
+          if(!len) return;
+          sh.style.strokeDasharray = len + " " + len;
+          sh.style.strokeDashoffset = len;
+          requestAnimationFrame(function(){
+            sh.style.transition = "stroke-dashoffset " + 300 + "ms cubic-bezier(.2,.7,.3,1)";
+            sh.style.strokeDashoffset = "0";
+          });
+        })(shafts[i]);
+      }
+    }
+
+    if(beat.fig){
+      var node = document.getElementById("figNum");
+      if(node) countTo(node, beat.fig.value, beat.fig.plus, 560);
+    }
+  }
+
+  /* A figure counting to its real value, 560ms, ease-out. Progress is
+     clamped so a clock adjustment cannot drive the ease out of range and
+     print a number that was never true. */
+  function countTo(node, target, plus, ms){
+    var suffix = plus ? "+" : "";
+    if(reduce){ node.textContent = fmt(target) + suffix; return; }
+    var start = performance.now();
+    function step(now){
+      var p = Math.min(Math.max((now - start) / ms, 0), 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      node.textContent = fmt(Math.max(Math.round(target * eased), 0)) + suffix;
+      if(p < 1) requestAnimationFrame(step);
+      else node.textContent = fmt(target) + suffix;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function renderList(beat){
+    var out = "", n = 0, i, a;
+    var chan = channelArrows(beat);
+    for(i = 0; i < chan.length; i++){
+      a = chan[i]; n++;
+      out += '<li><span class="n" aria-hidden="true">' + n + '</span><span>' +
+             NAME[a.from] + " to " + NAME[a.to] + ": " + a.plain + '</span></li>';
+    }
+    for(i = 0; i < beat.arrows.length; i++){
+      a = beat.arrows[i];
+      if(a.k === "qualify" || a.k === "pay"){
+        n++;
+        out += '<li><span class="n" aria-hidden="true">' + n + '</span><span>' +
+               NAME[a.from] + " to " + NAME[a.to] + ": " + a.plain + '</span></li>';
+      }
+    }
+    if(beat.badges){
+      for(var id in beat.badges){
+        if(!Object.prototype.hasOwnProperty.call(beat.badges, id)) continue;
+        out += '<li><span class="n" aria-hidden="true">&bull;</span><span>' +
+               NAME[id] + ": " + beat.badges[id].join(" ") + '.</span></li>';
+      }
+    }
+    if(beat.fig){
+      out += '<li><span class="n" aria-hidden="true">&bull;</span><span>' +
+             fmt(beat.fig.value) + (beat.fig.plus ? " and counting" : "") + " " + beat.fig.label + '.</span></li>';
+    }
+    el.dlul.innerHTML = out;
+  }
+
+  function renderRail(){
+    var out = "";
+    for(var i = 0; i < BEATS.length; i++){
+      var state = i < cur ? "past" : (i === cur ? "now" : "ahead");
+      out += '<button class="rbtn" type="button" data-i="' + i + '" data-state="' + state + '"' +
+             (i === cur ? ' aria-current="step"' : '') +
+             ' aria-label="Point ' + (i + 1) + ' of ' + BEATS.length + ', ' + BEATS[i].date + ', ' + BEATS[i].head + '">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span class="rlab">' + BEATS[i].rail + '</span></button>';
+    }
+    el.rail.innerHTML = out;
+  }
+
+  function srcHTML(src){
+    if(!src) return '';
+    if(src.flag) return 'Source: <span class="flag">' + src.flag + '</span>';
+    if(src.u) return 'Source: <a href="' + src.u + '" target="_blank" rel="noopener">' + src.t + '</a>.';
+    return "Source: " + src.t;
+  }
+
+  function show(i, viaNav){
+    if(i < 0 || i >= BEATS.length) return;
+    var g = window.matchMedia("(max-width:599px)").matches ? P : L;
+    /* a layout flip is not a beat change, so it must not replay motion */
+    if(lastKind && lastKind !== g.kind) prevStates = null;
+    if(!viaNav) prevStates = null;
+
+    cur = i;
+    var b = BEATS[i];
+
+    el.count.textContent = (i + 1) + " of " + BEATS.length;
+    el.head.innerHTML = '<span class="hdate">' + b.date + '</span>' + b.head;
+    el.moved.innerHTML = b.moved;
+    el.student.innerHTML = b.student;
+    el.src.innerHTML = srcHTML(b.src);
+
+    drawDiagram(b, g);
+    renderList(b);
+    renderRail();
+
+    /* the text block cross-fades so the eye returns to it; the boxes do
+       not move, which is the point of the whole frame */
+    ["head","moved","student","src"].forEach(function(k){
+      el[k].classList.remove("tfade");
+      void el[k].offsetWidth;
+      el[k].classList.add("tfade");
+    });
+
+    el.prev.disabled = (i === 0);
+    el.next.disabled = (i === BEATS.length - 1);
+    el.hint.innerHTML = (i === BEATS.length - 1)
+      ? "<b>" + CLOSER + "</b>"
+      : "Arrow keys move through the timeline, or pick any point on the rail above.";
+
+    var states = {};
+    for(var j = 0; j < b.arrows.length; j++) states[b.arrows[j].k] = b.arrows[j].state;
+    prevStates = states;
+    lastKind = g.kind;
+
+    var nLive = 0, nEnd = 0, nPlan = 0;
+    for(var q = 0; q < b.arrows.length; q++){
+      if(b.arrows[q].state === "ended") nEnd++;
+      else if(b.arrows[q].state === "planned") nPlan++;
+      else nLive++;
+    }
+    var say = "Point " + (i + 1) + " of " + BEATS.length + ". " + b.date + ". " + b.head + ". ";
+    if(nPlan) say += nPlan + " planned connection on the diagram. ";
+    if(nLive) say += nLive + (nLive === 1 ? " connection" : " connections") + " running. ";
+    if(nEnd)  say += nEnd + (nEnd === 1 ? " connection ends" : " connections end") + " here. ";
+    say += "Full description in the diagram in words below.";
+    el.live.textContent = say;
+  }
+
+  /* ===============================================================
+     Navigation: buttons, rail, keyboard, swipe
+     =============================================================== */
+
+  el.prev.addEventListener("click", function(){ if(cur > 0) show(cur - 1, true); });
+  el.next.addEventListener("click", function(){ if(cur < BEATS.length - 1) show(cur + 1, true); });
+
+  el.rail.addEventListener("click", function(e){
+    var t = e.target.closest ? e.target.closest(".rbtn") : null;
+    if(t) show(parseInt(t.getAttribute("data-i"), 10), true);
+  });
+
+  document.addEventListener("keydown", function(e){
+    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault(); if(cur < BEATS.length - 1) show(cur + 1, true);
+    } else if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      e.preventDefault(); if(cur > 0) show(cur - 1, true);
+    } else if(e.key === "Home"){
+      e.preventDefault(); show(0, true);
+    } else if(e.key === "End"){
+      e.preventDefault(); show(BEATS.length - 1, true);
+    }
+  });
+
+  var tx = 0, ty = 0, tracking = false;
+  document.addEventListener("touchstart", function(e){
+    if(e.touches.length !== 1){ tracking = false; return; }
+    tracking = true; tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(!tracking || !e.changedTouches.length) return;
+    tracking = false;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if(dx < 0 && cur < BEATS.length - 1) show(cur + 1, true);
+    if(dx > 0 && cur > 0) show(cur - 1, true);
+  }, {passive:true});
+
+  /* ==== scale the fixed canvas down to fit, never up ==== */
+  var stage = document.getElementById("stage");
+  var wasPortrait = window.matchMedia("(max-width:599px)").matches;
+  function fit(){
+    var portrait = window.matchMedia("(max-width:599px)").matches;
+    if(portrait){ stage.style.transform = ""; }
+    else {
+      var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + s + ")";
+    }
+    if(portrait !== wasPortrait){ wasPortrait = portrait; show(cur, false); }
+  }
+  window.addEventListener("resize", fit);
+
+  show(0, false);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot run force a state */
+  window.__tl = {
+    go:function(i){ show(i, true); },
+    jump:function(i){ show(i, false); },
+    count:BEATS.length,
+    state:function(){ return { i:cur, states:prevStates }; }
+  };
+})();
+</script>
+</body>
+</html>
