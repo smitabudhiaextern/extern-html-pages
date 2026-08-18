@@ -7,24 +7,42 @@
 <style>
   /* ---------------------------------------------------------------
      Extern design system. These five values are the entire palette.
-     Do not add a sixth.
+     Do not add a sixth. The only second values are low-alpha rgba of
+     --on-highlight for hairlines, and no state is signalled by colour
+     alone: every one pairs with an icon and a word.
+
+     INTERACTION, rebuilt 18 August 2026. This used to be a match
+     exercise: four deals and six labels on screen at once, select a
+     label then place it, nothing checked until all four were
+     committed, drag-and-drop wired up alongside. It is now one deal at
+     a time with six labels underneath and immediate feedback on the
+     press, ported from khan-academy-p1-restricted-unrestricted.html,
+     which shipped that pattern in this program and passed an
+     independent QA pass. There is no selection state, no drop target
+     and no drag handler left anywhere in this file.
      --------------------------------------------------------------- */
   :root{
-    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
-    --on-highlight:#001D69; /* accents, icons, the thing THEY did    */
-    --bg:#FDF8F8;           /* canvas background, negative space     */
-    --body:#484646;         /* body copy, captions                   */
-    --title:#1C1B1B;        /* headings, primary text                */
+    --highlight:#DCE1FF;    /* the deal card, panels                  */
+    --on-highlight:#001D69; /* accents, icons, controls, the answer   */
+    --bg:#FDF8F8;           /* canvas background, negative space      */
+    --body:#484646;         /* body copy, captions                    */
+    --title:#1C1B1B;        /* headings, primary text                 */
 
-    --t-fast:160ms;    /* UI feedback            */
-    --t-frame:300ms;   /* between-frame movement */
-    --t-reveal:260ms;  /* explanation expanding  */
+    /* hairlines only. Never carries meaning on its own: any border
+       that has to be read is --on-highlight, which clears 3:1 on both
+       --bg and --highlight by a wide margin. */
+    --edge:rgba(0,29,105,.22);
+
+    --t-fast:160ms;   /* UI feedback            */
+    --t-frame:300ms;  /* between-frame movement */
     --ease-out:cubic-bezier(.2,.7,.3,1);
     --ease-io:cubic-bezier(.4,0,.2,1);
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%}
+  /* the embed is a fixed 16:9 canvas, so it never scrolls. The mobile
+     block below hands scrolling back for the restacked portrait layout. */
+  html,body{height:100%;overflow:hidden}
   body{
     background:var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -34,260 +52,294 @@
   }
 
   /* ---- 960x540 canvas, scaled down only, never up ----
-     flex:0 0 auto is load-bearing. Without it the stage is a shrinkable
-     flex item, lays out at the viewport width between 600 and 899px, and
-     then the JS transform shrinks it a second time. Double-shrunk text
-     re-wraps at a width the design never targeted. */
-  #stage{
-    width:960px;height:540px;position:relative;transform-origin:center center;
-    flex:0 0 auto;
-  }
-  .frame{position:absolute;inset:0;padding:30px 52px 26px;display:flex;flex-direction:column}
-  #f2{display:none}
+     flex:0 0 auto matters. As a shrinkable flex item the stage collapses
+     to the viewport width between 600 and 899px, so the canvas narrows
+     AND the transform scales it again, which crushes the layout. The
+     canvas holds 960 in layout; the transform does all the fitting. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;transform-origin:center center}
+  .frame{position:absolute;inset:0;padding:22px 44px 20px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+  #fEnd{display:none}
 
-  .progress{
-    font-size:13px;font-weight:500;color:var(--body);
-    letter-spacing:.02em;margin-bottom:10px;flex:0 0 auto;
-  }
-  h1{font-size:27px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:7px;flex:0 0 auto}
-  .sub{font-size:16px;line-height:1.45;flex:0 0 auto}
-  .sub b{color:var(--title);font-weight:600}
+  /* ---- standing header: progress is visible in every single state ---- */
+  .head{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:9px}
+  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em}
+  .segs{display:flex;gap:5px;align-items:center}
+  .seg{width:20px;height:5px;border-radius:3px;background:var(--edge)}
+  .seg.on{background:var(--on-highlight)}
+  .seg.here{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--on-highlight)}
+  .headnote{margin-left:auto;font-size:13px;color:var(--body)}
 
-  /* ---- Frame 1: four deals across, six labels beneath ---- */
-  .deals{
-    margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);
-    gap:12px;flex:0 0 auto;
+  /* ---- the one deal on screen ---- */
+  .card{
+    flex:0 0 auto;background:var(--highlight);border-radius:12px;
+    padding:11px 15px 12px;margin-bottom:12px;
   }
-  .deal{
-    background:var(--highlight);border:2px solid transparent;border-radius:11px;
-    padding:12px 13px 11px;min-width:0;text-align:left;cursor:pointer;
-    font-family:inherit;color:var(--body);
-    display:flex;flex-direction:column;gap:5px;min-height:176px;
-    transition:border-color var(--t-fast) var(--ease-out),
-               transform var(--t-fast) var(--ease-out),
-               background var(--t-fast) var(--ease-out);
+  .card .top{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .card .ico{flex:0 0 auto;width:21px;height:21px}
+  .card .ico svg{width:21px;height:21px;display:block}
+  h1{
+    font-size:24px;line-height:1.2;font-weight:600;color:var(--title);
+    max-width:820px;
   }
-  .deal .who{font-size:15px;font-weight:600;color:var(--title);line-height:1.2}
-  .deal .what{font-size:13px;line-height:1.38;overflow-wrap:break-word}
-  .deal:hover{transform:translateY(-2px);border-color:var(--on-highlight)}
-  .deal:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  /* active = this is the card a label will land on */
-  .deal[aria-pressed="true"]{border-color:var(--on-highlight);box-shadow:inset 0 0 0 1px var(--on-highlight)}
+  h1:focus,h1:focus-visible{outline:none}
+  .what{font-size:16px;line-height:1.45;color:var(--title);max-width:80ch}
+  /* the source is the point, not decoration: this program teaches
+     students to click it. Quieter than the deal text, never hidden. */
+  .src{font-size:12.5px;line-height:1.4;color:var(--body);margin-top:6px}
+  .src a{color:var(--on-highlight)}
+  .src a:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:3px}
 
-  .slot{
-    margin-top:auto;border:1.5px dashed var(--on-highlight);border-radius:7px;
-    min-height:32px;display:flex;align-items:center;gap:6px;padding:5px 8px;
-    font-size:13px;font-weight:600;color:var(--on-highlight);
-  }
-  .slot .ph{font-weight:500;opacity:.75}
-  .deal[data-filled="1"] .slot{
-    background:var(--on-highlight);border-style:solid;border-color:var(--on-highlight);color:var(--bg);
-  }
-  .slot .mk{flex:0 0 auto;width:14px;height:14px;display:none}
-  .deal[data-filled="1"] .slot .mk{display:block}
-  .slot .mk svg{width:14px;height:14px;display:block}
-  .deal[data-locked="1"]{cursor:default;opacity:1}
-  .deal[data-locked="1"]:hover{transform:none;border-color:transparent}
+  .ask{flex:0 0 auto;font-size:16px;line-height:1.5;max-width:72ch;margin-bottom:8px}
 
-  .banklab{margin-top:14px;font-size:13px;flex:0 0 auto}
-  .banklab b{color:var(--title);font-weight:600}
-  .bank{margin-top:7px;display:grid;grid-template-columns:repeat(6,1fr);gap:9px;flex:0 0 auto}
-  .chip{
-    background:transparent;border:2px solid var(--on-highlight);border-radius:9px;
-    min-width:0;min-height:48px;cursor:pointer;font-family:inherit;
-    font-size:14px;font-weight:600;color:var(--on-highlight);line-height:1.2;
-    display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 7px;
-    text-align:center;
-    transition:background var(--t-fast) var(--ease-out),
-               color var(--t-fast) var(--ease-out),
-               transform var(--t-fast) var(--ease-out);
+  /* ---- six buttons, one press. No targeting, no drag, no drop zone ---- */
+  .row{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  button.ans{
+    font-family:inherit;font-size:16px;font-weight:600;line-height:1.2;
+    min-height:44px;padding:11px 14px;border-radius:9px;cursor:pointer;text-align:left;
+    background:var(--bg);border:2px solid var(--on-highlight);color:var(--on-highlight);
+    display:flex;align-items:center;gap:8px;min-width:0;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
   }
-  .chip .num{
-    flex:0 0 auto;font-size:11px;font-weight:600;
-    width:16px;height:16px;border-radius:4px;
-    background:var(--on-highlight);color:var(--bg);
-    display:flex;align-items:center;justify-content:center;
-  }
-  .chip:hover{transform:translateY(-2px);background:var(--highlight)}
-  .chip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  .chip[data-used="1"]{background:var(--highlight)}
+  button.ans:hover:not(:disabled){background:var(--on-highlight);color:var(--bg)}
+  button.ans:hover:not(:disabled) svg{stroke:var(--bg)}
+  button.ans:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  /* every marked state is border shape + icon + a word in the feedback,
+     never a colour on its own */
+  button.ans .mk{flex:0 0 auto;width:18px;height:18px;display:none}
+  button.ans .mk svg{width:18px;height:18px;display:block}
+  button.ans.tried{border-style:dashed}
+  button.ans.tried .mk.qm{display:block}
+  button.ans.shake{animation:shake 150ms linear 1}
+  button.ans.key{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  button.ans.key svg{stroke:var(--bg)}
+  button.ans.key .mk.ck{display:block}
+  button.ans.key .mk.qm{display:none}
+  button.ans.pick:not(.key){border-style:dashed}
+  button.ans.pick:not(.key) .mk.qm{display:block}
+  button.ans:disabled{cursor:default}
+  button.ans:disabled:not(.key):not(.pick){border-color:var(--edge);color:var(--body)}
+  button.ans:disabled:not(.key):not(.pick) svg{stroke:#484646}
+  @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}100%{transform:translateX(0)}}
 
-  /* ---- Frame 2: results, one open at a time ----
-     The list scrolls inside the canvas rather than pushing the controls off
-     the bottom edge. The fade is a static affordance for that, switched on
-     only while there is genuinely more to see. */
-  .rowswrap{position:relative;flex:1 1 auto;min-height:0;display:flex;margin-top:14px}
-  .rows{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;padding:3px 3px 0}
-  .rowswrap::after{
-    content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
-    background:linear-gradient(to bottom,rgba(253,248,248,0),rgba(253,248,248,.97));
-    opacity:0;transition:opacity var(--t-fast) var(--ease-out);
+  /* ---- feedback. Grows downward into the slack above the pinned bar,
+          so pressing a button never moves the buttons. ---- */
+  .fb{
+    flex:0 0 auto;margin-top:11px;display:flex;align-items:flex-start;gap:9px;
+    font-size:16px;line-height:1.5;max-width:84ch;
+    animation:rise 220ms var(--ease-out) both;
   }
-  .rowswrap.more::after{opacity:1}
-  .row{margin-bottom:8px}
-  .rowhead{
-    width:100%;background:var(--highlight);border:2px solid transparent;border-radius:10px;
-    padding:9px 12px;cursor:pointer;font-family:inherit;text-align:left;
-    display:flex;align-items:center;gap:10px;min-width:0;
-    transition:border-color var(--t-fast) var(--ease-out);
-  }
-  .rowhead:hover{border-color:var(--on-highlight)}
-  .rowhead:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
-  .rowhead[aria-expanded="true"]{border-color:var(--on-highlight)}
-  .rowhead .rwho{font-size:14px;font-weight:600;color:var(--title);flex:0 0 128px;min-width:0}
-  .rowhead .rsaid{font-size:13px;color:var(--body);flex:1 1 auto;min-width:0}
-  .rowhead .rsaid b{color:var(--title);font-weight:600}
-  .stat{
-    flex:0 0 auto;display:flex;align-items:center;gap:5px;
-    font-size:12px;font-weight:600;letter-spacing:.01em;
-    border:1.5px solid var(--on-highlight);border-radius:20px;padding:3px 9px;
-    color:var(--on-highlight);background:var(--bg);
-  }
-  .stat.ok{background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight)}
-  .stat svg{width:13px;height:13px;display:block;flex:0 0 auto}
-  .caret{flex:0 0 auto;width:15px;height:15px;transition:transform var(--t-fast) var(--ease-out)}
-  .rowhead[aria-expanded="true"] .caret{transform:rotate(180deg)}
-  .caret svg{width:15px;height:15px;display:block}
+  .fb[hidden]{display:none}
+  .fb .ico{flex:0 0 auto;width:20px;height:20px;margin-top:2px}
+  .fb .ico svg{width:20px;height:20px;display:block}
+  .fb .ico .g{display:none}
+  .fb.ok .ico .ck,.fb.bad .ico .qm,.fb.info .ico .nf{display:block}
+  .fb b{color:var(--title);font-weight:600}
+  @keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
-  .panel{
-    max-height:0;overflow:hidden;
-    transition:max-height var(--t-reveal) var(--ease-io);
-  }
-  .panelin{
-    padding:10px 14px 11px;border-left:3px solid var(--on-highlight);
-    margin:7px 0 2px 6px;font-size:13.5px;line-height:1.46;
-  }
-  .panelin .ahead{
-    display:block;font-size:13px;font-weight:600;color:var(--on-highlight);
-    margin-bottom:4px;letter-spacing:.01em;
-  }
-  .panelin p{margin-bottom:8px;color:var(--body)}
-  .panelin p:last-child{margin-bottom:0}
-  .panelin strong{color:var(--title);font-weight:600}
-  .panelin q{font-style:normal;color:var(--title)}
-  .panelin .src{font-size:12px;line-height:1.4}
-  .panelin .src a{color:var(--on-highlight)}
-  .both{
-    margin-top:9px;background:var(--highlight);border-radius:8px;padding:10px 12px;
-    font-size:13.5px;line-height:1.45;color:var(--title);
-  }
-
+  /* the closing note on the two labels that fit nothing. Left rule, no
+     fill: it sits directly under a --highlight panel, and two filled
+     panels stacked read as one undifferentiated block. */
   .closer{
-    background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:8px;
-    padding:11px 14px;font-size:14.5px;line-height:1.5;color:var(--title);margin-bottom:8px;
+    flex:0 0 auto;margin-top:14px;border-left:3px solid var(--on-highlight);
+    padding-left:13px;font-size:16px;line-height:1.5;color:var(--title);max-width:84ch;
+    animation:rise 220ms var(--ease-out) 90ms both;
   }
   .closer b{font-weight:600}
 
-  /* ---- controls ---- */
-  .frame:focus{outline:none}   /* focus lands on a real control, not the slide */
-  .bar{margin-top:auto;padding-top:11px;flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  /* ---- controls, pinned to the bottom of the canvas ---- */
+  .bar{margin-top:auto;padding-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   button.nav{
-    font-family:inherit;font-size:15px;font-weight:600;padding:10px 19px;border-radius:8px;
+    font-family:inherit;font-size:15px;font-weight:600;padding:10px 16px;border-radius:8px;
     cursor:pointer;border:2px solid var(--on-highlight);
     background:var(--on-highlight);color:var(--bg);
     transition:opacity var(--t-fast) var(--ease-out);
   }
   button.nav.ghost{background:transparent;color:var(--on-highlight)}
-  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav:disabled{opacity:.4;cursor:not-allowed}
   button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  .hint{font-size:13px;line-height:1.35;max-width:62ch}
-  .hint b{color:var(--title);font-weight:600}
+  button.nav[hidden]{display:none}
+  .hint{font-size:13px;line-height:1.4;color:var(--body);max-width:52ch}
+  .right{margin-left:auto}
 
   .fade{animation:fin var(--t-frame) var(--ease-io) both}
   @keyframes fin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-  /* single 150ms shake, no repeat, for an action that cannot land yet */
-  .shake{animation:shk 150ms linear 1}
-  @keyframes shk{0%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}100%{transform:translateX(0)}}
-
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-  /* ---- under 600px: portrait restack, not a shrunken slide ---- */
+  /* ---- mobile: portrait, restacked, not a shrunken slide ---- */
   @media (max-width:599px){
-    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
-       and refuses to shrink below its content width, which pushes the grid
-       off-screen and clips the controls. Block layout removes that floor. */
+    /* Drop flex on the body. As a flex item, #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the controls off screen. Block layout removes
+       that floor and hands vertical scrolling back. */
+    html,body{height:auto;overflow:visible}
     body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
-    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
-           height:auto!important;transform:none!important}
-    .frame{position:relative;inset:auto;padding:22px 18px 30px;min-height:100vh}
-    h1{font-size:22px}
-    .sub{font-size:16px}
-    .deals{grid-template-columns:1fr;gap:9px;margin-top:14px}
-    .deal{min-height:0}
-    .deal .what{font-size:14px}
-    .bank{grid-template-columns:repeat(2,1fr)}
-    .rowswrap{display:block;margin-top:12px}
-    .rowswrap::after{display:none}
-    .rows{overflow-y:visible;max-height:none}
-    .rowhead{flex-wrap:wrap;gap:7px}
-    .rowhead .rwho{flex:0 0 100%}
-    .rowhead .rsaid{flex:1 1 60%;font-size:13.5px}
-    .bar{flex-wrap:wrap}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:20px 16px 30px;min-height:100vh}
+    .head{flex-wrap:wrap;gap:8px}
+    .headnote{margin-left:0;width:100%}
+    h1{font-size:21px;max-width:100%}
+    .what{font-size:15.5px;max-width:100%}
+    .ask{font-size:15.5px}
+    /* the desktop grid exists to fit six labels on a 16:9 slide. In
+       portrait they stack full width, which is also the bigger tap
+       target. */
+    .row{grid-template-columns:1fr;gap:9px}
+    button.ans{font-size:16px;width:100%;padding:13px 14px}
+    .fb{font-size:15.5px;max-width:100%}
+    .closer{font-size:15.5px;max-width:100%}
+    /* margin-top:auto pins the controls to the bottom of a 16:9 canvas,
+       which is right on a slide and wrong on a phone: it strands Next
+       below a screen of empty space. In portrait the controls follow the
+       content. */
+    .bar{margin-top:22px;padding-top:0}
+    .right{margin-left:0}
+    .hint{font-size:12px;width:100%;max-width:100%}
   }
 
   @media (prefers-reduced-motion:reduce){
+    /* nothing in this build has a base opacity below 1 or a base
+       transform, so killing animation leaves every state fully painted
+       and fully readable. There is no half-faded residue to clean up. */
     *{animation:none!important;transition:none!important}
-    .deal:hover,.chip:hover{transform:none}
+    button.ans:hover{transform:none}
   }
 </style>
 </head>
 <body>
 <div id="stage">
 
-  <!-- ================= FRAME 1: the board ================= -->
-  <div class="frame fade" id="f1">
-    <div class="progress" id="prog1">1 of 2 &middot; 0 of 4 labels placed</div>
-    <h1>Four real deals. Six labels.</h1>
-    <p class="sub">Pick a deal, then pick its label. <b>Two of these labels fit nothing here.</b> You can use a label more than once, and you do not have to use them all. Nothing is checked and nothing is explained until you commit all four.</p>
+  <!-- ================= ONE DEAL AT A TIME ================= -->
+  <div class="frame fade" id="fCard">
+    <div class="head">
+      <span class="progress" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="headnote">Four deals, one at a time.</span>
+    </div>
 
-    <div class="deals" id="deals" role="group" aria-label="Four Khan Academy partnerships"></div>
+    <div class="card">
+      <div class="top">
+        <span class="ico" id="cIco"></span>
+        <h1 id="who">AAMC</h1>
+      </div>
+      <p class="what" id="what"></p>
+      <p class="src">Source: <a id="srcA" href="https://www.khanacademy.org/" target="_blank" rel="noopener">source</a></p>
+    </div>
 
-    <p class="banklab"><b>Label bank.</b> Keyboard: arrow keys move, Enter places, and the digit on a label places it straight onto the deal you picked.</p>
-    <div class="bank" id="bank" role="group" aria-label="Label bank, six options"></div>
+    <p class="ask" id="ask">Which shape is this deal? Two of the six labels fit nothing here.</p>
+
+    <div class="row" role="group" id="answers" aria-labelledby="who ask">
+      <button class="ans" type="button" id="bLicensing"   data-k="licensing"><span class="mk ck"></span><span class="mk qm"></span><span>Licensing</span></button>
+      <button class="ans" type="button" id="bInkind"      data-k="inkind"><span class="mk ck"></span><span class="mk qm"></span><span>In-kind</span></button>
+      <button class="ans" type="button" id="bSponsorship" data-k="sponsorship"><span class="mk ck"></span><span class="mk qm"></span><span>Sponsorship</span></button>
+      <button class="ans" type="button" id="bCocreation"  data-k="cocreation"><span class="mk ck"></span><span class="mk qm"></span><span>Co-creation</span></button>
+      <button class="ans" type="button" id="bRevshare"    data-k="revshare"><span class="mk ck"></span><span class="mk qm"></span><span>Revenue share</span></button>
+      <button class="ans" type="button" id="bDist"        data-k="dist"><span class="mk ck"></span><span class="mk qm"></span><span>Distribution deal</span></button>
+    </div>
+
+    <p class="fb" id="fb" role="status" aria-live="polite" hidden>
+      <span class="ico"><span class="g ck"></span><span class="g qm"></span><span class="g nf"></span></span>
+      <span><b id="fbLead"></b> <span id="fbText"></span></span>
+    </p>
 
     <div class="bar">
-      <button class="nav" id="commit" disabled>Commit all four</button>
-      <span class="hint" id="hint1">Pick a deal to start. Four to place.</span>
+      <button class="nav" type="button" id="next" disabled>Next deal</button>
+      <span class="hint" id="hint">Pick the shape. Nothing here is scored.</span>
+      <button class="nav ghost right" type="button" id="back" hidden>Previous deal</button>
     </div>
   </div>
 
-  <!-- ================= FRAME 2: what each call turned on ================= -->
-  <div class="frame" id="f2">
-    <div class="progress" id="prog2">2 of 2 &middot; committed</div>
-    <h1 id="h2">Here is what each call turned on.</h1>
-    <p class="sub" id="sub2">Open a row to see it. One at a time, so each one gets read.</p>
-
-    <div class="rowswrap" id="rowswrap">
-      <div class="rows" id="rows"></div>
+  <!-- ================= THE TWO LABELS THAT FIT NOTHING ================= -->
+  <div class="frame" id="fEnd">
+    <div class="head">
+      <span class="progress">4 of 4 done</span>
+      <span class="segs" id="segs2" aria-hidden="true"></span>
+      <span class="headnote">One thing left to notice.</span>
     </div>
 
+    <div class="card">
+      <div class="top">
+        <span class="ico" id="eIco"></span>
+        <h1>Two labels you never used.</h1>
+      </div>
+      <p class="what">Revenue share and distribution deal fit none of these four. Nobody's revenue is being split, and in all four the content sits on Khan Academy's own site. A label bank with a home for every card teaches you to fill boxes. A real one has spares.</p>
+    </div>
+
+    <p class="closer">
+      <b>Khan Academy has already run all four of these shapes.</b> Before you move on, pick one of the four.
+      If you had to use it with a partner Khan Academy has never worked with before, which would you reach for
+      first, and what would make it fail?
+    </p>
+
     <div class="bar">
-      <button class="nav" id="reopen">Back to the board</button>
-      <span class="hint" id="hint2"></span>
+      <button class="nav ghost" type="button" id="restart">Start over</button>
+      <span class="hint">Nothing here was scored. Every deal is still open behind you.</span>
+      <button class="nav ghost right" type="button" id="eback">Back to deal 4</button>
     </div>
   </div>
 
 </div>
 
-<p class="sr" id="live" role="status" aria-live="polite"></p>
+<p class="sr" id="say" role="status" aria-live="polite"></p>
 
 <noscript>
-  <div style="max-width:680px;padding:28px;font-size:17px;line-height:1.55;color:#484646">
-    <h1 style="font-size:24px;color:#1C1B1B;margin-bottom:12px">Spot the shape: four real Khan Academy deals</h1>
-    <p style="margin-bottom:14px">Four deals. Six labels: licensing, in-kind, sponsorship, co-creation, revenue share, distribution deal. Two of those six fit nothing here. Name each shape yourself before you read the answers.</p>
-    <ol style="margin:0 0 16px 22px">
-      <li style="margin-bottom:8px"><strong>AAMC</strong> funds and maintains the free MCAT prep collection, and has kept paying for it year after year.</li>
-      <li style="margin-bottom:8px"><strong>Microsoft</strong> donated the Azure AI infrastructure behind free Khanmigo for Teachers instead of writing a check.</li>
-      <li style="margin-bottom:8px"><strong>Walmart</strong> is the founding sponsor of the Financial Literacy course, launched July 2023.</li>
-      <li><strong>Disney and Pixar.</strong> Pixar's own animators helped build Pixar in a Box, and Khan Academy's course page says the collaboration is sponsored by Disney.</li>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the main stylesheet and lets it win on source order. An
+       override placed before the main sheet loses and the fallback silently
+       fails. Three things must happen here: the dead interactive shell has
+       to be hidden, the flex-centred body has to go back to block flow with
+       scrolling restored (otherwise this text is laid out beside the 960px
+       canvas and pushed off the right edge), and links have to be pinned to
+       the palette so the browser default blue never shows up as a sixth
+       colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto;overflow:visible}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 44px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.22;color:#1C1B1B;margin-bottom:10px;max-width:100%}
+    .nsf h2{font-size:19px;line-height:1.3;color:#1C1B1B;margin:20px 0 8px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:14px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .a{color:#001D69;font-weight:600}
+    .nsf .s{font-size:14px;line-height:1.4}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Spot the shape: four real Khan Academy deals</h1>
+    <p>Four deals, one at a time. Six labels to choose from: <strong>licensing</strong>, <strong>in-kind</strong>, <strong>sponsorship</strong>, <strong>co-creation</strong>, <strong>revenue share</strong>, <strong>distribution deal</strong>. Two of those six fit nothing here. Name each shape yourself, then read what it turned on.</p>
+
+    <h2>The four deals, and the shape each one is</h2>
+    <ol>
+      <li><strong>AAMC.</strong> Khan Academy's free MCAT prep collection was created by Khan Academy with support and funding from the AAMC and the Robert Wood Johnson Foundation.
+        <br><span class="a">This is licensing.</span> Paying the gardener, not buying the plants. The AAMC's money helped build the collection. It did not buy it. The content and the brand stay Khan Academy's leverage, and no gardener ever owns the lawn.
+        <br><span class="s">Source: <a href="https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources">AAMC, free planning and study resources</a>, retrieved August 2026.</span></li>
+
+      <li><strong>Microsoft.</strong> In May 2024 Microsoft donated access to Azure AI-optimized infrastructure to run Khanmigo for Teachers free for US teachers, rather than writing Khan Academy a check.
+        <br><span class="a">This is in-kind.</span> Being paid in bread. It is worth exactly the cost it displaces, not its list price. And bread does not lock you in the way infrastructure can: build on someone's platform and free has already bought your switching costs.
+        <br><span class="s">Source: <a href="https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/">Microsoft, 21 May 2024</a>.</span></li>
+
+      <li><strong>Walmart.</strong> Founding sponsor of Khan Academy's Financial Literacy course, launched July 2023, with additional support from Intuit and Capital One.
+        <br><span class="a">This is sponsorship.</span> The name on the little league jersey. The sponsor does not care about baseball, it cares about the parents in the stands. That makes it the least sticky of the four shapes: marketing budgets move, and the sponsor never takes on any real dependence on you.
+        <br><span class="s">Source: <a href="https://blog.khanacademy.org/introducing-our-new-course-on-financial-literacy/">Khan Academy blog, 18 July 2023</a>.</span></li>
+
+      <li><strong>Disney and Pixar.</strong> Pixar in a Box. Pixar's own animators helped build it alongside Khan Academy's team, and Khan Academy's course page says the collaboration is sponsored by Disney.
+        <br><span class="a">Co-creation and sponsorship are both right here, and either one counts.</span> The collab drop: Pixar's animators did real work on the course and neither side could have made it alone, so it is co-creation. Khan Academy's course page says the collaboration is sponsored by Disney, so it is sponsorship too. Two boxes at once, and noticing that is analysis, not error.
+        <br><span class="s">Source: <a href="https://www.khanacademy.org/computing/pixar">Khan Academy, Pixar in a Box</a>.</span></li>
     </ol>
-    <p style="margin-bottom:10px"><strong>AAMC is licensing.</strong> Money for upkeep. Paying the gardener, not buying the plants: grass grows back and the MCAT changes every few years, but you still own the lawn.</p>
-    <p style="margin-bottom:10px"><strong>Microsoft is in-kind.</strong> Something the partner already owns, handed over instead of cash. Being paid in bread: worth the cost it displaces, not its list price. Bread does not lock you in the way infrastructure can.</p>
-    <p style="margin-bottom:10px"><strong>Walmart is sponsorship.</strong> The name on the little league jersey. The sponsor does not care about baseball, it cares about the parents in the stands.</p>
-    <p style="margin-bottom:10px"><strong>Disney and Pixar is co-creation, and it is also sponsorship.</strong> Both are accepted. The collab drop: both names on it and neither side could have made it alone. And Khan Academy's own course page says, word for word, "This collaboration between Pixar Animation Studios and Khan Academy is sponsored by Disney." Real deals sit in two boxes at once more often than a vocabulary list suggests, and noticing that is analysis, not error.</p>
-    <p style="margin-bottom:10px"><strong>Revenue share and distribution deal fit nothing here.</strong> Nobody's revenue is being split, and in all four the content stays on Khan Academy's own site.</p>
-    <p>Before you move on: pick one of the four shapes. If you had to use it with a partner Khan Academy has never worked with, which would you reach for first, and what would make it fail?</p>
+
+    <h2>Two labels you never used</h2>
+    <p>Revenue share and distribution deal fit none of these four. Nobody's revenue is being split, and in all four the content sits on Khan Academy's own site. A label bank with a home for every card teaches you to fill boxes. A real one has spares.</p>
+    <p><strong>Khan Academy has already run all four of these shapes.</strong> Before you move on, pick one of the four. If you had to use it with a partner Khan Academy has never worked with before, which would you reach for first, and what would make it fail?</p>
   </div>
 </noscript>
 
@@ -295,467 +347,374 @@
 (function(){
   "use strict";
 
-  /* ---------------- content ---------------- */
+  /* Phosphor-manner outline icons, single weight, one size per slot. */
+  var ICO = {
+    money:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.7"/><path d="M6 12h.01M18 12h.01"/></svg>',
+    server:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>',
+    star:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2l2.5 5 5.5.8-4 3.9.95 5.5L12 16.8l-4.9 2.6.95-5.5-4-3.9 5.5-.8z"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6.5a3 3 0 0 1 0 5.5M18 20a6 6 0 0 0-2-4.4"/></svg>',
+    boxes:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/><path d="M13.5 5.2h7M13.5 8.8h7M3.5 15.2h7M3.5 18.8h7"/></svg>',
+    tick:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+    quest:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 1 1 2.7 3.1v1.2M12.1 17.1h.01"/></svg>',
+    info:'<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.8h.01"/></svg>'
+  };
 
-  var DEALS = [
-    { k:"aamc", who:"AAMC",
-      what:"Funds and maintains Khan Academy's free MCAT prep collection, and has kept paying for it year after year.",
-      right:["licensing"],
-      src:'<a href="https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources" target="_blank" rel="noopener">AAMC free resources page</a>, retrieved Aug 2026.' },
-    { k:"msft", who:"Microsoft",
-      what:"Donated the Azure AI infrastructure behind free Khanmigo for Teachers, rather than writing Khan Academy a check.",
-      right:["inkind"],
-      src:'<a href="https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/" target="_blank" rel="noopener">Microsoft, 21 May 2024</a>.' },
-    { k:"wmt", who:"Walmart",
-      what:"Founding sponsor of Khan Academy's Financial Literacy course, launched July 2023, with support from Intuit and Capital One.",
-      right:["sponsorship"],
-      src:'<a href="https://blog.khanacademy.org/introducing-our-new-course-on-financial-literacy/" target="_blank" rel="noopener">Khan Academy blog, 18 July 2023</a>.' },
-    { k:"pixar", who:"Disney / Pixar",
-      what:"Pixar in a Box. Pixar's own animators helped build it alongside Khan Academy's team, and the course page says it is sponsored by Disney.",
-      right:["cocreation","sponsorship"],
-      src:'<a href="https://www.khanacademy.org/computing/pixar" target="_blank" rel="noopener">Khan Academy, Pixar in a Box</a>.' }
-  ];
-
-  var LABELS = [
-    { k:"licensing",   t:"Licensing" },
-    { k:"inkind",      t:"In-kind" },
-    { k:"sponsorship", t:"Sponsorship" },
-    { k:"cocreation",  t:"Co-creation" },
-    { k:"revshare",    t:"Revenue share" },
-    { k:"dist",        t:"Distribution deal" }
-  ];
-
-  var LT = {};
-  LABELS.forEach(function(l){ LT[l.k] = l.t; });
-
-  /* The anchor analogy, surfaced on a correct placement. One per shape,
-     and each one names where it breaks. */
+  /* The anchor analogy, one per shape, each one naming where it breaks.
+     Kept from the match build: the flow changed, the analogies did not. */
   var ANCHOR = {
     licensing:{
       head:"Paying the gardener, not buying the plants.",
-      body:"Grass grows back, and the MCAT changes every few years, so somebody has to keep cutting it. But you still own the lawn. The content and the brand stay Khan Academy's leverage, and no gardener has that."
+      body:"The AAMC's money helped build the collection. It did not buy it. The content and the brand stay Khan Academy's leverage, and no gardener ever owns the lawn."
     },
     inkind:{
       head:"Being paid in bread.",
-      body:"It is worth exactly the cost it displaces, not its list price. But bread does not lock you in the way infrastructure can. Once you have built on someone's platform, free has already bought your switching costs."
+      body:"It is worth exactly the cost it displaces, not its list price. And bread does not lock you in the way infrastructure can: build on someone's platform and free has already bought your switching costs."
     },
     sponsorship:{
       head:"The name on the little league jersey.",
-      body:"The sponsor does not care about baseball. It cares about the parents in the stands. This is the most renewable-looking of the four shapes and the least sticky: marketing budgets move, and the sponsor never takes on any real dependence on you."
+      body:"The sponsor does not care about baseball, it cares about the parents in the stands. That makes it the least sticky of the four shapes: marketing budgets move, and the sponsor never takes on any real dependence on you."
     },
     cocreation:{
       head:"The collab drop.",
-      body:"Both names are on it, and neither side could have made it alone. It only holds if both sides genuinely bring something the other lacks. A collab where one partner just supplies a logo is not really one."
+      body:"Both names are on it, and neither side could have made it alone. It only holds if both sides genuinely bring something the other lacks."
     }
   };
 
-  /* Wrong answers return the distinguishing question, never a bare
-     "incorrect". Keyed by deal, then by the label they reached for. */
-  var WRONG = {
-    aamc:{
-      inkind:"Does the partner hand over money, or something it already owns? AAMC pays Khan Academy to keep MCAT content current as the exam changes. Money for upkeep is licensing. In-kind is what Microsoft did: server capacity instead of a check.",
-      sponsorship:"Is the partner buying a name on the thing, or buying its upkeep? A sponsor's money launches something and lands a logo. AAMC's money keeps the collection accurate year after year, which is the licensing shape.",
-      cocreation:"Whose people did the building? AAMC funds and maintains the collection. It did not send its own test writers to sit alongside Khan Academy's team, and that is what co-creation means."
-    },
-    msft:{
-      licensing:"Is Microsoft paying to maintain something, or handing over something it already owns? It donated infrastructure Khan Academy would otherwise have had to buy. That is in-kind, not licensing.",
-      sponsorship:"Is Microsoft's name the point here, or is the compute the point? Nobody bought a logo slot. A partner giving a resource it already owns, instead of cash, is in-kind.",
-      cocreation:"Did Microsoft's engineers build the thing, or supply what it runs on? Servers handed over instead of a check is in-kind. Co-creation means two teams' work inside the product itself."
-    },
-    wmt:{
-      cocreation:"Who put work into the thing itself? Walmart did not write the Financial Literacy lessons. It funded the course as founding sponsor and got its name on it. Co-creation means both sides contribute real work.",
-      licensing:"Is this money for upkeep, year after year, or money to launch a course with a name on it? Founding sponsor is the second one.",
-      inkind:"Did Walmart hand over something it already owns, or write a check? It funded the course. In-kind is what Microsoft did with server capacity."
-    },
-    pixar:{
-      licensing:"Is Disney paying Khan Academy to keep this current, or did Pixar's own people help make it? Look at who did the building, and at whose name went on it.",
-      inkind:"Pixar sent artists, not spare capacity. Is that a resource handed over instead of cash, or people at the table doing the work?"
-    }
+  /* ---------------- the four deals ----------------
+     `right` is the list of accepted labels. Pixar has two of them and
+     both are correct: Khan Academy's own course page calls it a
+     collaboration AND says Disney sponsored it, so grading the student
+     into one answer is the unique-solvability failure recorded in
+     HANDOVER-2026-08-12 section 5.
+
+     Every deal text here is source-scoped. The AAMC line in particular
+     is creation-scoped on purpose: the source says the collection "was
+     created by Khan Academy with support and funding from the AAMC and
+     the Robert Wood Johnson Foundation", so this build never says
+     "funds and maintains", never says "no published end date", never
+     says a bare "until 2026", and makes no claim either way about
+     whether the arrangement is still running.
+
+     `wrong` lines never say incorrect. Each one asks the question that
+     separates the shape they reached for from the shape in front of
+     them, and the card stays open so they can press again. */
+  var CARDS = [
+    { k:"aamc", ico:"money", who:"AAMC",
+      what:"Khan Academy's free MCAT prep collection was created by Khan Academy with support and funding from the AAMC and the Robert Wood Johnson Foundation. The AAMC is the body that runs the MCAT.",
+      src:{ t:"AAMC, free planning and study resources, retrieved August 2026",
+            u:"https://students-residents.aamc.org/prepare-mcat-exam/free-planning-and-study-resources" },
+      right:["licensing"],
+      ok:{ lead:"Licensing, yes. " + ANCHOR.licensing.head, text:ANCHOR.licensing.body },
+      wrong:{
+        inkind:["The AAMC sent money, not a thing it already owned.","In-kind is Microsoft's move on the next card: capacity it already had, handed over instead of a check."],
+        sponsorship:["A sponsor is buying a name on the thing.","What the source names here is support and funding for building the collection, which is the licensing shape."],
+        cocreation:["Whose people did the building?","The source says Khan Academy created the collection with the AAMC's support and funding. Co-creation means the partner's own people at the table."]
+      }},
+
+    { k:"msft", ico:"server", who:"Microsoft",
+      what:"In May 2024 Microsoft donated access to Azure AI-optimized infrastructure to run Khanmigo for Teachers free for US teachers, rather than writing Khan Academy a check.",
+      src:{ t:"Microsoft, 21 May 2024",
+            u:"https://news.microsoft.com/source/features/ai/khan-academy-and-microsoft-partner-to-expand-access-to-ai-tools/" },
+      right:["inkind"],
+      ok:{ lead:"In-kind, yes. " + ANCHOR.inkind.head, text:ANCHOR.inkind.body },
+      wrong:{
+        licensing:["No money crossed here.","Microsoft handed over access to infrastructure Khan Academy would otherwise have had to buy, which is in-kind, not funding for a build."],
+        sponsorship:["The compute is the point, not the logo.","Nobody bought a name slot. A partner giving a resource it already owns, instead of cash, is in-kind."],
+        cocreation:["Microsoft supplied what the thing runs on, not the work inside it.","Co-creation means two teams' own people building the product together."]
+      }},
+
+    { k:"wmt", ico:"star", who:"Walmart",
+      what:"Founding sponsor of Khan Academy's Financial Literacy course, launched July 2023, with additional support from Intuit and Capital One.",
+      src:{ t:"Khan Academy blog, 18 July 2023",
+            u:"https://blog.khanacademy.org/introducing-our-new-course-on-financial-literacy/" },
+      right:["sponsorship"],
+      ok:{ lead:"Sponsorship, yes. " + ANCHOR.sponsorship.head, text:ANCHOR.sponsorship.body },
+      wrong:{
+        licensing:["The name going on it is the tell.","Walmart is credited as founding sponsor of the course, and a credit is what sponsorship buys."],
+        inkind:["Walmart wrote a check.","In-kind is something the partner already owns, handed over instead of money, the way Microsoft handed over compute."],
+        cocreation:["Walmart did not write the lessons.","It funded the course as founding sponsor and got its name on it. Co-creation means both sides do real work on the thing itself."]
+      }},
+
+    { k:"pixar", ico:"users", who:"Disney and Pixar",
+      what:"Pixar in a Box. Pixar's own animators helped build it alongside Khan Academy's team, and Khan Academy's course page says the collaboration is sponsored by Disney.",
+      src:{ t:"Khan Academy, Pixar in a Box",
+            u:"https://www.khanacademy.org/computing/pixar" },
+      right:["cocreation","sponsorship"],
+      ok:{ lead:"Co-creation and sponsorship are both right here, and either one counts.",
+           text:ANCHOR.cocreation.head + " Pixar's animators did real work on the course and neither side could have made it alone, so it is co-creation. Khan Academy's course page says the collaboration is sponsored by Disney, so it is sponsorship too. Two boxes at once, and noticing that is analysis, not error." },
+      wrong:{
+        licensing:["Look at who did the building.","Pixar's own animators worked on the course and Disney's name is on it. Neither of those is money for a build."],
+        inkind:["Pixar sent artists, not spare capacity.","People at the table doing the work is a different shape from a resource handed over instead of cash."]
+      }}
+  ];
+
+  /* The two decoys. They fit none of the four deals, which is the point,
+     so the line is the same wherever it is pressed. */
+  var DECOY = {
+    revshare:["Whose revenue is being split?","Nobody's, in any of these four. Revenue share means money coming in gets divided between the two sides."],
+    dist:["Whose channel is the content traveling through?","In all four of these it sits on Khan Academy's own site. A distribution deal means someone else carries your content to their audience."]
   };
 
-  var WRONG_ANY = {
-    revshare:"Whose revenue is being split? Nobody's, in any of these four. Revenue share means money coming in gets divided between the two sides. Look again at what each side actually gave and got.",
-    dist:"Whose channel is the content traveling through? In all four of these it sits on Khan Academy's own site. A distribution deal means someone else carries your content to their audience."
+  var $ = function(id){ return document.getElementById(id); };
+
+  var fCard=$("fCard"), fEnd=$("fEnd"),
+      prog=$("prog"), segs=$("segs"), segs2=$("segs2"),
+      cIco=$("cIco"), eIco=$("eIco"), who=$("who"), what=$("what"), srcA=$("srcA"),
+      fb=$("fb"), fbLead=$("fbLead"), fbText=$("fbText"),
+      next=$("next"), back=$("back"), hint=$("hint"),
+      restart=$("restart"), eback=$("eback"), say=$("say");
+
+  var KEYS = ["licensing","inkind","sponsorship","cocreation","revshare","dist"];
+  var ANS = {
+    licensing:$("bLicensing"), inkind:$("bInkind"), sponsorship:$("bSponsorship"),
+    cocreation:$("bCocreation"), revshare:$("bRevshare"), dist:$("bDist")
   };
 
-  /* The Pixar case has two defensible answers, so both are accepted, and
-     the ambiguity is the teaching moment rather than a scored error. */
-  var PIXAR_QUOTE = "Khan Academy's own course page says, word for word: <q>This collaboration between Pixar Animation Studios and Khan Academy is sponsored by Disney.</q>";
-  var PIXAR_BOTH =
-    '<div class="both"><strong>Sponsorship and co-creation are both accepted here.</strong> ' + PIXAR_QUOTE +
-    " Pixar's animators did real work on the course, so it is co-creation. Disney paid for it and its name is on it, so it is sponsorship. " +
-    'Real deals sit in two boxes at once more often than a vocabulary list suggests, and noticing that is analysis, not error. ' +
-    'It is the same muscle as saying <strong>you cannot tell from public information</strong> when that is the honest answer.</div>';
+  /* ---------- state ----------
+     i        which deal is on screen, 0 to 3
+     done[i]  the label that resolved deal i, undefined while unresolved
+     tried[i] wrong labels already pressed on deal i, plus .last
+     view     "card" or "end"                                        */
+  var i = 0, done = [], tried = [], view = "card";
+  for (var n = 0; n < CARDS.length; n++) tried[n] = {};
 
-  /* ---------------- state ---------------- */
+  /* one-time icon fills. Every icon slot is painted once, at build time,
+     and after that only classes move. No container holding a focusable
+     element is ever rebuilt, which is what keeps focus from being
+     destroyed underneath the student. */
+  (function paintIcons(){
+    Array.prototype.forEach.call(document.querySelectorAll(".mk.ck, .fb .ico .ck"), function(s){ s.innerHTML = ICO.tick; });
+    Array.prototype.forEach.call(document.querySelectorAll(".mk.qm, .fb .ico .qm"), function(s){ s.innerHTML = ICO.quest; });
+    Array.prototype.forEach.call(document.querySelectorAll(".fb .ico .nf"), function(s){ s.innerHTML = ICO.info; });
+    eIco.innerHTML = ICO.boxes;
 
-  var placed = {};   // dealKey -> labelKey
-  var locked = {};   // dealKey -> true once named correctly
-  var active = null; // dealKey currently taking a label
-  var committed = false;
-  var attempt = 0;
+    for (var k = 0; k < CARDS.length; k++){
+      var d = document.createElement("span");
+      d.className = "seg";
+      segs.appendChild(d);
+      segs2.appendChild(d.cloneNode());
+    }
+  })();
 
-  var f1=document.getElementById("f1"), f2=document.getElementById("f2"),
-      dealsEl=document.getElementById("deals"), bankEl=document.getElementById("bank"),
-      rowsEl=document.getElementById("rows"), wrapEl=document.getElementById("rowswrap"),
-      commitBtn=document.getElementById("commit"), reopen=document.getElementById("reopen"),
-      hint1=document.getElementById("hint1"), hint2=document.getElementById("hint2"),
-      prog1=document.getElementById("prog1"), prog2=document.getElementById("prog2"),
-      h2=document.getElementById("h2"), sub2=document.getElementById("sub2"),
-      live=document.getElementById("live");
-
-  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  var CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 6"/></svg>';
-  var ASK   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4.9c0 1.9-2.7 2.2-2.7 4"/><path d="M12 17.4h.01"/></svg>';
-  var CARET = '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
-
-  function say(t){ live.textContent = t; }
-
-  /* ---------------- build frame 1 ---------------- */
-
-  DEALS.forEach(function(d){
-    var b = document.createElement("button");
-    b.className = "deal";
-    b.type = "button";
-    b.setAttribute("data-k", d.k);
-    b.setAttribute("aria-pressed","false");
-    b.setAttribute("data-filled","0");
-    b.innerHTML =
-      '<span class="who">' + d.who + '</span>' +
-      '<span class="what">' + d.what + '</span>' +
-      '<span class="slot"><span class="mk">' + CHECK + '</span><span class="lab"><span class="ph">no label yet</span></span></span>';
-    dealsEl.appendChild(b);
-  });
-
-  LABELS.forEach(function(l,i){
-    var b = document.createElement("button");
-    b.className = "chip";
-    b.type = "button";
-    b.setAttribute("data-l", l.k);
-    b.setAttribute("data-used","0");
-    b.innerHTML = '<span class="num" aria-hidden="true">' + (i+1) + '</span><span>' + l.t + '</span>';
-    b.setAttribute("aria-label", l.t + ", label " + (i+1));
-    bankEl.appendChild(b);
-  });
-
-  var dealBtns = Array.prototype.slice.call(dealsEl.querySelectorAll(".deal"));
-  var chipBtns = Array.prototype.slice.call(bankEl.querySelectorAll(".chip"));
-
-  function dealBtn(k){
-    for (var i=0;i<dealBtns.length;i++){ if (dealBtns[i].getAttribute("data-k")===k) return dealBtns[i]; }
-    return null;
+  function setFb(lead, text, kind){
+    fb.hidden = false;
+    fb.className = "fb " + kind;
+    fbLead.textContent = lead;
+    fbText.textContent = text;
+    /* restart the entry animation without touching any child element's
+       identity, so nothing focusable is replaced */
+    fb.style.animation = "none"; void fb.offsetWidth; fb.style.animation = "";
   }
 
-  function countPlaced(){
-    var n=0; DEALS.forEach(function(d){ if (placed[d.k]) n++; }); return n;
-  }
+  function clearFb(){ fb.hidden = true; fb.className = "fb"; fbLead.textContent = ""; fbText.textContent = ""; }
 
-  function setActive(k){
-    active = k;
-    dealBtns.forEach(function(b){
-      b.setAttribute("aria-pressed", b.getAttribute("data-k")===k ? "true" : "false");
-    });
-    if (k){
-      var d = DEALS.filter(function(x){ return x.k===k; })[0];
-      hint1.innerHTML = '<b>' + d.who + '</b> is picked. Now choose its label below, or press a digit from 1 to 6.';
-      say(d.who + " selected. Choose a label.");
+  function paintSegs(){
+    var list = segs.children, list2 = segs2.children, k;
+    for (k = 0; k < CARDS.length; k++){
+      var on = !!done[k];
+      list[k].className = "seg" + (on ? " on" : "") + (view === "card" && k === i ? " here" : "");
+      list2[k].className = "seg" + (on ? " on" : "");
     }
   }
 
-  function nextOpen(fromK){
-    var order = DEALS.map(function(d){ return d.k; });
-    var start = fromK ? order.indexOf(fromK)+1 : 0;
-    for (var i=0;i<order.length;i++){
-      var k = order[(start+i) % order.length];
-      if (!placed[k] && !locked[k]) return k;
-    }
-    return null;
+  function lineFor(c, k){
+    return (c.wrong && c.wrong[k]) || DECOY[k] ||
+      ["One question settles it.","What did each side actually hand over, and what did each side get back?"];
   }
 
-  function assign(dealK, labelK){
-    if (!dealK || locked[dealK]) return;
-    placed[dealK] = labelK;
-    var b = dealBtn(dealK);
-    b.setAttribute("data-filled","1");
-    b.querySelector(".slot .lab").textContent = LT[labelK];
-    refresh();
-    var nxt = nextOpen(dealK);
-    if (nxt){ setActive(nxt); var nb = dealBtn(nxt); if (nb) nb.focus(); }
-    else {
-      setActive(null);
-      hint1.innerHTML = 'All four placed. <b>Commit</b> to see what each call turned on.';
-      commitBtn.focus();
-    }
-    say(LT[labelK] + " placed on " + DEALS.filter(function(x){return x.k===dealK;})[0].who + ". " + countPlaced() + " of 4 placed.");
-  }
+  function paintCard(){
+    var c = CARDS[i];
 
-  function clearOne(dealK){
-    if (!dealK || locked[dealK] || !placed[dealK]) return;
-    delete placed[dealK];
-    var b = dealBtn(dealK);
-    b.setAttribute("data-filled","0");
-    b.querySelector(".slot .lab").innerHTML = '<span class="ph">no label yet</span>';
-    refresh();
-    say("Label cleared.");
-  }
+    cIco.innerHTML = ICO[c.ico];       /* not focusable, never holds focus */
+    who.textContent = c.who;
+    what.textContent = c.what;
+    /* the link element itself is never replaced, only its text and href,
+       so it can hold focus safely across a card change */
+    srcA.textContent = c.src.t;
+    srcA.href = c.src.u;
+    prog.textContent = (i + 1) + " of 4";
+    paintSegs();
 
-  function refresh(){
-    var n = countPlaced();
-    prog1.innerHTML = "1 of 2 &middot; " + n + " of 4 labels placed";
-    commitBtn.disabled = (n < 4);
-    var used = {};
-    DEALS.forEach(function(d){ if (placed[d.k]) used[placed[d.k]] = 1; });
-    chipBtns.forEach(function(c){
-      c.setAttribute("data-used", used[c.getAttribute("data-l")] ? "1" : "0");
-    });
-    if (n < 4 && !active){
-      hint1.innerHTML = (n===0)
-        ? "Pick a deal to start. Four to place."
-        : "<b>" + (4-n) + "</b> still to place. Pick the next deal.";
-    }
-  }
-
-  /* roving focus helper */
-  function arrows(list, i, e){
-    var n=null;
-    if (e.key==="ArrowRight"||e.key==="ArrowDown") n=list[(i+1)%list.length];
-    if (e.key==="ArrowLeft" ||e.key==="ArrowUp")   n=list[(i-1+list.length)%list.length];
-    if (n){ e.preventDefault(); n.focus(); return true; }
-    return false;
-  }
-
-  dealBtns.forEach(function(b,i){
-    b.addEventListener("click", function(){
-      var k=b.getAttribute("data-k");
-      if (locked[k]){ hint1.innerHTML='That one is already named. <b>Change the ones still open.</b>'; return; }
-      setActive(k);
-    });
-    b.addEventListener("keydown", function(e){
-      if (arrows(dealBtns,i,e)) return;
-      if (e.key==="Backspace"||e.key==="Delete"){ e.preventDefault(); clearOne(b.getAttribute("data-k")); }
-    });
-  });
-
-  chipBtns.forEach(function(c,i){
-    c.addEventListener("click", function(){ place(c); });
-    c.addEventListener("keydown", function(e){ arrows(chipBtns,i,e); });
-  });
-
-  function place(chip){
-    if (!active){
-      var k = nextOpen(null);
-      chip.classList.remove("shake"); void chip.offsetWidth; chip.classList.add("shake");
-      if (k){
-        setActive(k);
-        hint1.innerHTML = 'Pick a deal first. <b>' + DEALS.filter(function(x){return x.k===k;})[0].who + '</b> is now picked, so press that label again.';
-        var b=dealBtn(k); if(b) b.focus();
-      } else {
-        hint1.innerHTML = 'All four are placed. Pick a deal again if you want to change one.';
+    var resolved = !!done[i];
+    KEYS.forEach(function(k){
+      var b = ANS[k];
+      b.classList.remove("tried","pick","key","shake");
+      if (!resolved && tried[i][k]) b.classList.add("tried");
+      if (resolved){
+        if (k === done[i]) b.classList.add("pick");
+        if (c.right.indexOf(k) !== -1) b.classList.add("key");
       }
-      say("Pick a deal first.");
+      b.disabled = resolved;
+      b.setAttribute("aria-label", b.lastElementChild.textContent +
+        (resolved
+          ? (c.right.indexOf(k) !== -1
+              ? (c.right.length > 1 ? ". Accepted shape for this deal." : ". The shape of this deal.")
+              : (k === done[i] ? ". Your answer." : ""))
+          : (tried[i][k] ? ". Already tried." : "")));
+    });
+
+    if (resolved){
+      setFb(c.ok.lead, c.ok.text, "ok");
+    } else if (tried[i].last){
+      var g = lineFor(c, tried[i].last);
+      setFb(g[0], g[1], "bad");
+    } else {
+      clearFb();
+    }
+
+    next.disabled = !resolved;
+    next.textContent = (i === CARDS.length - 1) ? "What you never used" : "Next deal";
+    back.hidden = (i === 0);
+    hint.textContent = resolved
+      ? "Nothing is scored. You can walk back through any deal."
+      : (tried[i].last ? "Try another one. Nothing here is scored." : "Pick the shape. Nothing here is scored.");
+  }
+
+  /* Every path into a deal ends here, and it always leaves focus on a
+     real control. Focus is never allowed to fall to BODY after a state
+     change, which is the bug that shipped twice on this project. */
+  function focusCard(){
+    if (done[i]){
+      next.focus();
+      say.textContent = "Deal " + (i+1) + " of 4, " + CARDS[i].who + ". Already answered.";
+    } else {
+      ANS[KEYS[0]].focus();
+      say.textContent = "Deal " + (i+1) + " of 4, " + CARDS[i].who + ". Pick a shape.";
+    }
+  }
+
+  function showCard(k, moveFocus){
+    i = k;
+    view = "card";
+    fEnd.style.display = "none";
+    fCard.style.display = "flex";
+    fCard.classList.remove("fade"); void fCard.offsetWidth; fCard.classList.add("fade");
+    paintCard();
+    if (moveFocus !== false) focusCard();
+  }
+
+  function press(k){
+    var c = CARDS[i];
+    if (done[i]) return;
+
+    if (c.right.indexOf(k) !== -1){
+      /* Resolve. Move focus to the forward control FIRST, then let
+         paintCard disable the answer buttons. Disabling the button that
+         currently holds focus drops focus to the document, and a
+         keyboard user loses their place entirely. */
+      done[i] = k;
+      next.disabled = false;
+      next.textContent = (i === CARDS.length - 1) ? "What you never used" : "Next deal";
+      next.focus();
+      paintCard();
+      say.textContent = c.right.length > 1
+        ? "Both shapes are accepted on this deal. Read the feedback, then continue."
+        : "That is the shape. Read the feedback, then continue.";
       return;
     }
-    assign(active, chip.getAttribute("data-l"));
+
+    tried[i][k] = true;
+    tried[i].last = k;
+    var g = lineFor(c, k);
+    setFb(g[0], g[1], "bad");
+    paintCard();
+    /* focus stays where the student put it: on the button they pressed,
+       which is still enabled so they can try again on the same deal */
+    ANS[k].focus();
+    ANS[k].classList.remove("shake"); void ANS[k].offsetWidth; ANS[k].classList.add("shake");
   }
 
+  KEYS.forEach(function(k){
+    var b = ANS[k];
+    b.addEventListener("click", function(){ press(k); });
+    b.addEventListener("keydown", function(e){
+      var j = KEYS.indexOf(k), t = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") t = KEYS[(j+1) % KEYS.length];
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   t = KEYS[(j-1+KEYS.length) % KEYS.length];
+      if (t){ e.preventDefault(); ANS[t].focus(); }
+    });
+  });
+
+  next.addEventListener("click", function(){
+    if (i < CARDS.length - 1) showCard(i + 1);
+    else showEnd();
+  });
+  back.addEventListener("click", function(){ if (i > 0) showCard(i - 1); });
+
+  /* ---------- the closing frame ---------- */
+
+  function showEnd(){
+    view = "end";
+    fCard.style.display = "none";
+    fEnd.style.display = "flex";
+    fEnd.classList.remove("fade"); void fEnd.offsetWidth; fEnd.classList.add("fade");
+    paintSegs();
+    restart.focus();
+    say.textContent = "All four deals named. Two labels fit nothing here.";
+  }
+
+  restart.addEventListener("click", function(){
+    done = []; tried = [];
+    for (var m = 0; m < CARDS.length; m++) tried[m] = {};
+    showCard(0);
+  });
+
+  eback.addEventListener("click", function(){ showCard(CARDS.length - 1); });
+
+  /* ---------- keyboard and swipe, on top of the visible buttons ---------- */
+
   document.addEventListener("keydown", function(e){
-    if (f1.style.display === "none") return;
-    if (e.key>="1" && e.key<="6" && !e.metaKey && !e.ctrlKey && !e.altKey){
-      var idx = parseInt(e.key,10)-1;
-      if (chipBtns[idx]){ e.preventDefault(); place(chipBtns[idx]); }
+    if (e.defaultPrevented) return;      /* the answer grid owns its arrows */
+    if (e.key === "Escape"){
+      if (view === "end") showCard(CARDS.length - 1);
+      else if (i > 0) showCard(i - 1);
+      return;
+    }
+    if (e.key === "ArrowRight"){
+      if (view === "card" && !next.disabled){ e.preventDefault(); next.click(); }
+      return;
+    }
+    if (e.key === "ArrowLeft"){
+      if (view === "card" && i > 0){ e.preventDefault(); showCard(i - 1); }
+      else if (view === "end"){ e.preventDefault(); showCard(CARDS.length - 1); }
     }
   });
 
-  /* ---------------- commit and results ---------------- */
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if (e.touches.length !== 1){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if (tx === null || !e.changedTouches.length) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    tx = null;
+    /* a tap has almost no delta, so this cannot fire on a button press,
+       and vertical dominance keeps it out of the way of scrolling */
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0){ if (view === "card" && !next.disabled) next.click(); }
+    else { if (view === "card" && i > 0) showCard(i - 1); else if (view === "end") showCard(CARDS.length - 1); }
+  }, {passive:true});
 
-  function isRight(d, labelK){ return d.right.indexOf(labelK) !== -1; }
-
-  function panelHTML(d, labelK, right){
-    var h = "";
-    if (right){
-      if (d.k === "pixar"){
-        /* Two defensible answers, so the ambiguity leads and both anchors
-           follow. Marking one of them wrong would be a solvability failure. */
-        var first = ANCHOR[labelK], second = ANCHOR[labelK==="cocreation" ? "sponsorship" : "cocreation"];
-        h += PIXAR_BOTH;
-        h += '<p style="margin-top:9px"><span class="ahead">Your label: ' + first.head + '</span>' + first.body + '</p>';
-        h += '<p><span class="ahead">The other one: ' + second.head + '</span>' + second.body + '</p>';
-      } else {
-        var a = ANCHOR[labelK];
-        h += '<p><span class="ahead">' + a.head + '</span>' + a.body + '</p>';
-      }
-    } else {
-      var msg = (WRONG[d.k] && WRONG[d.k][labelK]) || WRONG_ANY[labelK] ||
-        "Ask the same question you would ask of any deal: what did each side actually hand over, and what did each side get back?";
-      h += '<p><span class="ahead">The question to ask here</span>' + msg + '</p>';
-    }
-    h += '<p class="src">' + d.src + '</p>';
-    return '<div class="panelin">' + h + '</div>';
-  }
-
-  function statHTML(d, labelK, right){
-    if (!right) return '<span class="stat">' + ASK + 'Another look</span>';
-    if (d.k === "pixar") return '<span class="stat ok">' + CHECK + 'Match, both boxes fit</span>';
-    return '<span class="stat ok">' + CHECK + 'Match</span>';
-  }
-
-  function commit(){
-    if (countPlaced() < 4) return;
-    committed = true;
-    attempt++;
-    var nRight = 0;
-    rowsEl.innerHTML = "";
-
-    DEALS.forEach(function(d,i){
-      var labelK = placed[d.k];
-      var right = isRight(d, labelK);
-      if (right){ nRight++; locked[d.k] = true; }
-
-      var wrap = document.createElement("div");
-      wrap.className = "row";
-      var pid = "p-" + d.k;
-      wrap.innerHTML =
-        '<button class="rowhead" type="button" aria-expanded="false" aria-controls="' + pid + '">' +
-          '<span class="rwho">' + d.who + '</span>' +
-          '<span class="rsaid">You said <b>' + LT[labelK] + '</b></span>' +
-          statHTML(d, labelK, right) +
-          '<span class="caret" aria-hidden="true">' + CARET + '</span>' +
-        '</button>' +
-        '<div class="panel" id="' + pid + '">' + panelHTML(d, labelK, right) + '</div>';
-      rowsEl.appendChild(wrap);
-    });
-
-    var allRight = (nRight === 4);
-
-    if (allRight){
-      var closer = document.createElement("div");
-      closer.className = "closer";
-      closer.innerHTML = '<b>Khan Academy has already done all four of these.</b> Which raises the obvious next question: what has it tried that did not work? ' +
-        'Before you move on, pick one of the four shapes. If you had to use it with a partner Khan Academy has never worked with before, which would you reach for first, and what would make it fail?';
-      rowsEl.appendChild(closer);
-    }
-
-    h2.textContent = allRight
-      ? "All four shapes named."
-      : (nRight === 0 ? "Here is what each call turned on."
-                      : "You named " + nRight + " of the four.");
-    sub2.innerHTML = allRight
-      ? "Open a row to see the comparison it unlocked. One at a time, so each one gets read."
-      : "Open a row to see it. The ones you named are locked in; the rest come back open when you return to the board.";
-    prog2.innerHTML = "2 of 2 &middot; committed" + (attempt>1 ? " (pass " + attempt + ")" : "");
-    hint2.innerHTML = allRight
-      ? "Nothing left to fix. Go back if you want to re-read the board."
-      : "<b>" + (4-nRight) + "</b> to redo. The board keeps what you got right.";
-    reopen.textContent = allRight ? "Back to the board" : "Fix the ones still open";
-
-    wireRows();
-
-    f1.style.display = "none";
-    f2.style.display = "flex";
-    f2.classList.remove("fade"); void f2.offsetWidth; f2.classList.add("fade");
-    var firstHead = rowsEl.querySelector(".rowhead");
-    if (firstHead) firstHead.focus();
-    say("Committed. " + nRight + " of 4 named. Open a row to read what it turned on.");
-  }
-
-  function moreCue(){
-    var over = rowsEl.scrollHeight - rowsEl.clientHeight - rowsEl.scrollTop;
-    wrapEl.classList.toggle("more", over > 4);
-  }
-
-  function panelOf(hd){ return document.getElementById(hd.getAttribute("aria-controls")); }
-
-  function closeRow(hd){
-    var p = panelOf(hd);
-    if (hd.getAttribute("aria-expanded") !== "true"){ p.style.maxHeight = "0px"; return; }
-    hd.setAttribute("aria-expanded","false");
-    p.style.maxHeight = p.scrollHeight + "px";   // from "none" back to a number
-    void p.offsetWidth;
-    p.style.maxHeight = "0px";
-  }
-
-  function openRow(hd){
-    hd.setAttribute("aria-expanded","true");
-    var p = panelOf(hd);
-    p.style.maxHeight = p.scrollHeight + "px";
-    /* The height animation must never be what the layout depends on. Once it
-       has had its 300ms, the cap comes off, so the panel is at full height
-       whether or not the transition actually ran. */
-    function settle(){
-      if (hd.getAttribute("aria-expanded") !== "true") return;
-      p.style.maxHeight = "none";
-      rowsEl.scrollTop += hd.getBoundingClientRect().top - rowsEl.getBoundingClientRect().top;
-      moreCue();
-    }
-    if (reduce) settle(); else setTimeout(settle, 300);
-  }
-
-  function wireRows(){
-    var heads = Array.prototype.slice.call(rowsEl.querySelectorAll(".rowhead"));
-    heads.forEach(function(hd,i){
-      hd.addEventListener("click", function(){
-        var wasOpen = hd.getAttribute("aria-expanded") === "true";
-        heads.forEach(closeRow);
-        if (!wasOpen) openRow(hd);
-        moreCue(); setTimeout(moreCue, 320);
-      });
-      hd.addEventListener("keydown", function(e){ arrows(heads,i,e); });
-    });
-    rowsEl.addEventListener("scroll", moreCue);
-    moreCue();
-  }
-
-  function board(){
-    // Correct calls are locked so a return pass is a real second attempt,
-    // not a reshuffle of four cards.
-    DEALS.forEach(function(d){
-      var b = dealBtn(d.k);
-      if (locked[d.k]){
-        b.setAttribute("data-locked","1");
-        b.setAttribute("aria-disabled","true");
-        b.querySelector(".slot .lab").textContent = LT[placed[d.k]] + " (locked)";
-      } else if (placed[d.k]){
-        delete placed[d.k];
-        b.setAttribute("data-filled","0");
-        b.querySelector(".slot .lab").innerHTML = '<span class="ph">no label yet</span>';
-      }
-    });
-    f2.style.display = "none";
-    f1.style.display = "flex";
-    f1.classList.remove("fade"); void f1.offsetWidth; f1.classList.add("fade");
-    setActive(nextOpen(null));
-    refresh();
-    var k = nextOpen(null);
-    var target = k ? dealBtn(k) : commitBtn;
-    if (target) target.focus();
-  }
-
-  commitBtn.addEventListener("click", commit);
-  reopen.addEventListener("click", board);
-  document.addEventListener("keydown", function(e){
-    if (e.key === "Escape" && f2.style.display === "flex") board();
-  });
-
-  refresh();
+  /* ---------- first paint ---------- */
+  paintCard();
 
   /* ---- scale the fixed canvas down to fit, never up ---- */
-  var stage = document.getElementById("stage");
+  var stage = $("stage");
   function fit(){
-    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform=""; return; }
-    var s = Math.min(window.innerWidth/960, window.innerHeight/540, 1);
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
     stage.style.transform = "scale(" + s + ")";
   }
   window.addEventListener("resize", fit); fit();
 
   /* test hook, used only by the render QA harness */
   window.__spot = {
-    place:function(dk,lk){ setActive(dk); assign(dk,lk); },
-    commit:commit,
-    open:function(dk){
-      var hd = rowsEl.querySelector('[aria-controls="p-' + dk + '"]');
-      if (hd) hd.click();
-    }
+    press:function(k){ press(k); },
+    go:function(k){ showCard(k); },
+    next:function(){ next.click(); },
+    end:showEnd,
+    state:function(){ return { i:i, view:view, done:done.slice(), focus:(document.activeElement && (document.activeElement.id || document.activeElement.tagName)) }; }
   };
 })();
 </script>
