@@ -3,29 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Run three candidates through the rails and the bar</title>
+<title>Three pitches, two filters</title>
 <style>
-  /* ---------------------------------------------------------------
+  /* ===============================================================
      Extern design system. These five values are the entire palette.
-     Do not add a sixth. Every tint below is an rgba of #001D69, so
-     the file never introduces a new hue. State is never carried by
-     colour alone: every coloured state also has a glyph or a label.
-     --------------------------------------------------------------- */
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     coloured state also carries a glyph or a label.
+     =============================================================== */
   :root{
-    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks     */
-    --on-highlight:#001D69; /* accents, the thing THEY did           */
-    --bg:#FDF8F8;           /* canvas background, negative space     */
-    --body:#484646;         /* body copy, captions                   */
-    --title:#1C1B1B;        /* headings, primary text                */
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
 
-    --line:rgba(0,29,105,.24);
+    --line:rgba(0,29,105,.26);
     --tint:rgba(0,29,105,.055);
-    --tint2:rgba(0,29,105,.12);
+    --tint2:rgba(0,29,105,.13);
     --scrim:rgba(0,29,105,.32);
 
     --t-fast:160ms;    /* UI feedback              */
     --t-frame:300ms;   /* between-frame movement   */
-    --t-reveal:420ms;  /* a value resolving        */
+    --t-reveal:420ms;  /* a verdict resolving      */
     --ease-out:cubic-bezier(.2,.7,.3,1);
     --ease-over:cubic-bezier(.2,.9,.25,1.06);
     --ease-io:cubic-bezier(.4,0,.2,1);
@@ -42,134 +42,172 @@
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---- 960x540 canvas, scaled down only, never up ----
+  /* ---- the 960x540 canvas, scaled down only, never up ----
      flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
-     lays out at the viewport width between 600 and 899px, and the JS
-     transform then scales it again, double-shrinking the design. The
-     canvas must always hold 960 in layout. Verified with
-     getComputedStyle(stage).width, which reads 960px unscaled. */
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
   #stage{
     width:960px;height:540px;position:relative;transform-origin:center center;
     flex:0 0 auto;overflow:hidden;
   }
-  .frame{position:absolute;inset:0;padding:22px 44px 18px;display:flex;flex-direction:column}
+  .frame{position:absolute;inset:0;padding:18px 40px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
 
-  /* ---- header ---- */
-  .top{display:flex;align-items:center;gap:10px;flex:0 0 auto}
-  .progress{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
-  .pips{display:flex;gap:4px}
-  .pip{width:16px;height:6px;border-radius:3px;background:var(--tint2)}
-  .pip.on{background:var(--on-highlight)}
+  /* ---- header: progress, visible from first paint ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:7px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:20px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
 
-  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);margin:7px 0 4px;flex:0 0 auto}
-  .sub{font-size:17px;line-height:1.45;max-width:60ch;flex:0 0 auto;margin-top:2px}
+  h1{font-size:21px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  .sub{flex:0 0 auto;font-size:14px;line-height:1.45;max-width:96ch;margin-bottom:6px}
   .sub b{color:var(--title);font-weight:600}
 
   /* ---- boards ---- */
-  .board{margin-top:11px;flex:1 1 auto;display:grid;gap:16px;min-height:0;min-width:0}
-  .board.cand{grid-template-columns:512px 1fr}
-  .board.rev{grid-template-columns:1fr 268px}
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;gap:18px}
   .board.two{grid-template-columns:1fr 1fr}
+  .board.cand{grid-template-columns:1fr 356px}
+  .board.rev{grid-template-columns:1fr 268px}
   .board.one{grid-template-columns:1fr}
 
   .panel{
-    background:var(--highlight);border-radius:12px;padding:13px 15px;
+    background:var(--highlight);border-radius:11px;padding:11px 13px;
     display:flex;flex-direction:column;min-width:0;min-height:0;
   }
   /* a panel that takes focus on a state change pins its ring to the
      palette rather than using the browser default */
   .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
   .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
-
-  /* filter two is drawn differently from filter one on purpose: one is
-     the team's policy, the other is one manager's note pinned beside it.
-     Fill, border style and sub-label all carry the difference, so it
-     never rests on colour. */
+  /* the hedge sits in a differently drawn card on purpose: it is the
+     reading of her sentence, not her sentence. Fill, border style and
+     label all carry the difference, so it never rests on colour. */
   .panel.note{background:var(--bg);border:2px dashed var(--on-highlight)}
 
-  .plab{font-size:15px;font-weight:600;color:var(--title);line-height:1.25;flex:0 0 auto}
-  .psub{font-size:13px;font-weight:600;color:var(--on-highlight);margin-top:2px;line-height:1.3;flex:0 0 auto}
-  .quo{font-size:26px;line-height:.8;color:var(--on-highlight);font-weight:700}
-  .plabrow{display:flex;align-items:baseline;gap:7px;flex:0 0 auto}
+  .plab{font-size:13.5px;font-weight:600;color:var(--title);line-height:1.25;flex:0 0 auto}
+  .plabrow{display:flex;align-items:baseline;gap:8px;flex:0 0 auto}
   .tag{
-    font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
     color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
     padding:1px 5px;flex:0 0 auto;
   }
 
-  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:8px}
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:7px}
   .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
-  .pbody{font-size:17px;line-height:1.5;max-width:60ch}
-  .pbody b{color:var(--title);font-weight:600}
-  .pbody p{margin-bottom:9px}
-  .pbody p:last-child{margin-bottom:0}
-  .rails{list-style:none;font-size:17px;line-height:1.4}
-  .rails li{position:relative;padding-left:20px;margin-bottom:7px}
-  .rails li::before{
-    content:"";position:absolute;left:0;top:8px;width:10px;height:3px;
-    border-radius:2px;background:var(--on-highlight);
+  .more{font-size:11.5px;font-weight:600;color:var(--on-highlight);margin-top:5px;flex:0 0 auto}
+
+  /* ---- her sentence. It is the source every filter in this build comes
+         from, so it is quoted whole and never paraphrased. ---- */
+  .quote{background:var(--highlight);border-radius:11px;padding:11px 13px;flex:0 0 auto}
+  .qh{
+    display:flex;align-items:center;gap:6px;margin-bottom:5px;
+    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);
   }
-  .pcap{font-size:13px;line-height:1.4;margin-top:9px;flex:0 0 auto}
-  .pcap b{color:var(--title);font-weight:600}
-  .more{font-size:13px;font-weight:600;color:var(--on-highlight);margin-top:6px;flex:0 0 auto}
+  .qh svg{width:14px;height:14px;flex:0 0 auto;display:block}
+  .qt{font-size:14.5px;line-height:1.5;color:var(--title)}
+  .qt q{quotes:"\201C" "\201D"}
+  .qa{font-size:11.5px;line-height:1.35;color:var(--on-highlight);font-weight:600;margin-top:6px}
+
+  /* ---- the two filters, numbered, standing first ---- */
+  .fl{list-style:none;flex:0 0 auto}
+  .fl li{position:relative;padding-left:24px;font-size:14.5px;line-height:1.45;margin-bottom:7px}
+  .fl li:last-child{margin-bottom:0}
+  .fl li b{color:var(--title);font-weight:600}
+  .fl li .n{
+    position:absolute;left:0;top:1px;width:17px;height:17px;border-radius:50%;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:10.5px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .hedge{font-size:13.5px;line-height:1.45;margin-top:8px;flex:0 0 auto}
+  .hedge b{color:var(--title);font-weight:600}
+
+  /* ---- the reminder strip on every deal frame ---- */
+  .rem{
+    flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:16px;
+    background:var(--tint);border-radius:9px;padding:7px 11px;margin-bottom:8px;
+  }
+  .rem p{font-size:13px;line-height:1.35}
+  .rem p b{color:var(--on-highlight);font-weight:600}
+
+  /* ---- the pitch, three labelled parts, same three every time ---- */
+  .fields{min-width:0}
+  .fld{font-size:14.5px;line-height:1.5;margin-bottom:7px}
+  .fld:last-child{margin-bottom:0}
+  .fld b.lab{color:var(--title);font-weight:600}
 
   /* ---- the four verdicts ---- */
-  .vwrap{display:flex;flex-direction:column;min-height:0}
-  .vlab{font-size:15px;font-weight:600;color:var(--title);margin-bottom:8px;flex:0 0 auto}
-  .choices{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+  .vwrap{display:flex;flex-direction:column;min-height:0;min-width:0}
+  .vlab{font-size:13.5px;font-weight:600;color:var(--title);margin-bottom:7px;flex:0 0 auto}
+  .choices{display:flex;flex-direction:column;gap:7px;flex:0 0 auto}
   button.ch{
     display:flex;align-items:flex-start;gap:9px;text-align:left;width:100%;
-    font-family:inherit;font-size:17px;line-height:1.3;font-weight:600;color:var(--title);
-    background:var(--highlight);border:2px solid transparent;border-radius:10px;
-    padding:10px 12px;cursor:pointer;
+    font-family:inherit;font-size:14.5px;line-height:1.35;font-weight:600;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:9px 11px;cursor:pointer;
     transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
   }
   button.ch .dot{
-    flex:0 0 auto;width:16px;height:16px;border-radius:50%;margin-top:3px;
-    border:2px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;
-  }
-  button.ch[aria-pressed="true"] .dot::after{
-    content:"";width:8px;height:8px;border-radius:50%;background:var(--on-highlight);
+    flex:0 0 auto;width:16px;height:16px;border-radius:50%;margin-top:2px;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
   }
   button.ch:hover:not(:disabled){border-color:var(--on-highlight)}
   button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
   button.ch[aria-pressed="true"]{border-color:var(--on-highlight)}
+  button.ch[aria-pressed="true"] .dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--on-highlight)}
   button.ch:disabled{cursor:default}
-  button.ch:disabled[aria-pressed="false"]{opacity:.4}
+  /* ruled out by the student's own wrong pick: glyph, struck label and a
+     dashed border. Three signals, none of them colour on its own. */
+  button.ch.out{background:transparent;border:2px dashed var(--line);color:var(--body);font-weight:500}
+  button.ch.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.ch.out .dot{border-style:dashed}
+  button.ch.out .dot::after{content:none}
+  /* dimmed but still readable: .7 keeps #1C1B1B on #DCE1FF at 4.7:1, and
+     a disabled label that fails contrast is still a label a student reads. */
+  button.ch:disabled.done[aria-pressed="false"]{opacity:.7}
 
   /* ---- the reveal ---- */
-  .lead{font-size:17px;line-height:1.4;font-weight:600;color:var(--title);margin-bottom:9px}
+  .lead{font-size:12.5px;line-height:1.4;font-weight:600;color:var(--on-highlight);margin-bottom:7px}
+  .rbody{font-size:14.5px;line-height:1.5}
+  .rbody p{margin-bottom:8px}
+  .rbody p:last-child{margin-bottom:0}
+  .rbody b{color:var(--title);font-weight:600}
   .vcard{
-    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:10px 11px;
     display:flex;flex-direction:column;gap:9px;min-height:0;overflow-y:auto;
   }
   .vrow{display:flex;flex-direction:column;gap:3px}
-  .vk{font-size:13px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em}
-  .vv{font-size:15px;font-weight:600;color:var(--title);line-height:1.25;display:flex;align-items:flex-start;gap:6px}
+  .vk{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .vv{font-size:13.5px;font-weight:600;color:var(--title);line-height:1.3;display:flex;align-items:flex-start;gap:6px}
   .g{
-    flex:0 0 auto;width:17px;height:17px;border-radius:50%;font-size:11px;font-weight:700;
+    flex:0 0 auto;width:16px;height:16px;border-radius:50%;font-size:10px;font-weight:700;line-height:1;
     display:flex;align-items:center;justify-content:center;margin-top:1px;
     border:1.5px solid var(--on-highlight);color:var(--on-highlight);
   }
   .g.fill{background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight)}
-  .vnote{font-size:13px;line-height:1.4;border-top:1.5px solid var(--line);padding-top:8px}
+  .vnote{font-size:12px;line-height:1.4;border-top:1.5px solid var(--line);padding-top:8px}
   .vnote b{color:var(--title);font-weight:600}
   .reveal.on{animation:rise var(--t-reveal) var(--ease-out) both}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-  /* ---- screen 10, the two facts ---- */
-  .opts{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:0 0 auto}
+  /* ---- the fact picker ---- */
+  .opts{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
   button.opt{
     display:flex;align-items:flex-start;gap:9px;text-align:left;
-    font-family:inherit;font-size:17px;line-height:1.3;font-weight:500;color:var(--title);
-    background:var(--highlight);border:2px solid transparent;border-radius:10px;
-    padding:10px 12px;cursor:pointer;
+    font-family:inherit;font-size:14.5px;line-height:1.35;font-weight:500;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:9px 12px;cursor:pointer;
     transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
   }
   button.opt .box{
-    flex:0 0 auto;width:16px;height:16px;border-radius:4px;margin-top:3px;
+    flex:0 0 auto;width:16px;height:16px;border-radius:4px;margin-top:2px;
     border:2px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;
-    font-size:11px;font-weight:700;color:var(--bg);
+    font-size:10px;font-weight:700;line-height:1;color:var(--bg);
   }
   button.opt[aria-pressed="true"] .box{background:var(--on-highlight)}
   button.opt[aria-pressed="true"] .box::after{content:"\2713"}
@@ -177,88 +215,104 @@
   button.opt:hover:not(:disabled){border-color:var(--on-highlight)}
   button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
   button.opt:disabled{cursor:default}
-  button.opt:disabled[aria-pressed="false"]{opacity:.45}
-  .shake{animation:shake 150ms linear 1}
-  @keyframes shake{0%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}100%{transform:none}}
+  button.opt:disabled[aria-pressed="false"]{opacity:.7}
 
-  .fbl{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
-  .fbl .wide{grid-column:1 / -1;max-width:64ch}
-  .fb{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px}
+  .fbl{display:flex;flex-direction:column;gap:7px}
+  .fb{background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:7px 11px}
   .fb.yes{border-color:var(--on-highlight)}
-  .fb.no{border-style:dashed;border-color:var(--on-highlight)}
-  .fbh{font-size:15px;font-weight:600;color:var(--title);display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;line-height:1.25}
-  .fbt{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--on-highlight)}
-  .fbb{font-size:17px;line-height:1.45}
+  .fb.no{border-style:dashed}
+  .fbh{font-size:13.5px;font-weight:600;color:var(--title);display:flex;align-items:flex-start;gap:7px;line-height:1.3}
+  .fbt{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);margin:3px 0 3px 23px}
+  .fbb{font-size:13.5px;line-height:1.45;margin-left:23px}
   .fbb b{color:var(--title);font-weight:600}
 
-  /* ---- screen 11, the receipt ---- */
-  .rec{display:flex;flex-direction:column;gap:0;flex:0 0 auto}
-  .rrow{display:grid;grid-template-columns:1fr 190px 190px 26px;gap:10px;align-items:center;
-        padding:7px 2px;border-bottom:1.5px solid var(--line)}
-  .rrow.head{border-bottom:2px solid var(--on-highlight);padding-bottom:5px}
-  .rrow.head span{font-size:13px;font-weight:700;color:var(--on-highlight);letter-spacing:.03em;text-transform:uppercase}
-  .rc{font-size:15px;line-height:1.25;color:var(--title);font-weight:600}
-  .rm{font-size:15px;line-height:1.25}
-  .rm.same{font-weight:600;color:var(--title)}
+  /* ---- the closing rows ---- */
+  .rows{display:flex;flex-direction:column;gap:7px;flex:0 0 auto}
+  .row{display:grid;grid-template-columns:210px 1fr;gap:14px;align-items:baseline;
+       background:var(--highlight);border-radius:9px;padding:8px 12px}
+  .row .nm{font-size:14px;font-weight:600;color:var(--title);line-height:1.3}
+  .row .rr{font-size:14px;line-height:1.42;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+  .decoy{
+    flex:0 0 auto;margin-top:9px;border:2px dashed var(--on-highlight);border-radius:9px;
+    padding:10px 13px;font-size:13.5px;line-height:1.5;
+  }
+  .decoy b{color:var(--title);font-weight:600}
 
-  /* ---- the filters overlay ---- */
+  /* ---- her words, on demand, from any deal frame ---- */
   #overlay{position:absolute;inset:0;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px}
   .ovcard{
     background:var(--bg);border:2px solid var(--on-highlight);border-radius:14px;
-    padding:16px 18px 14px;width:100%;max-width:860px;max-height:100%;
+    padding:15px 17px 14px;width:100%;max-width:820px;max-height:100%;
     display:flex;flex-direction:column;min-height:0;
   }
-  .ovtop{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-bottom:10px}
-  .ovtop h2{font-size:20px;line-height:1.2;font-weight:600;color:var(--title)}
-  .ovbody{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:0;overflow-y:auto}
+  .ovtop{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-bottom:9px}
+  .ovtop h2{font-size:17px;line-height:1.2;font-weight:600;color:var(--title)}
+  .ovbody{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
 
-  /* ---- controls ---- */
-  .bar{margin-top:10px;flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row. ---- */
+  .bar{margin-top:9px;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:52px;flex-wrap:wrap}
   button.nav{
-    font-family:inherit;font-size:15px;font-weight:600;padding:10px 17px;border-radius:8px;cursor:pointer;
-    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
     transition:opacity var(--t-fast) var(--ease-out);
   }
   button.nav.ghost{background:transparent;color:var(--on-highlight)}
-  button.nav.small{font-size:13px;padding:7px 12px}
-  button.nav:disabled{opacity:.35;cursor:not-allowed}
+  button.nav.small{font-size:12px;padding:7px 12px}
+  button.nav:disabled{opacity:.4;cursor:not-allowed}
   button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
   .push{margin-left:auto}
-  .hint{font-size:13px;line-height:1.4;max-width:56ch}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.4}
   .hint b{color:var(--title);font-weight:600}
-  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:11px;font-weight:600;color:var(--on-highlight)}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
 
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-  /* ---- under 600px: restack, do not shrink a slide ---- */
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
   @media (max-width:599px){
     /* Drop flex on the body. As a flex item #stage inherits min-width:auto
-       and refuses to shrink below its content width, which pushes the
-       board off screen. Block layout removes that floor. */
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
     body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
     #stage{
       width:100%!important;max-width:100%!important;min-width:0!important;
       height:auto!important;transform:none!important;overflow:visible;
     }
-    .frame{position:relative;inset:auto;padding:20px 16px 34px;min-height:100vh}
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
     h1{font-size:22px}
-    .sub{font-size:16px}
-    .board,.board.cand,.board.rev,.board.two,.board.one{grid-template-columns:1fr;gap:14px;flex:0 0 auto;align-items:start}
+    .sub{font-size:15px}
+    /* align-content, not just align-items: a stretched one column grid
+       hands its leftover height to the auto rows, which opens a dead band
+       between the two stacked panels on a tall phone. */
+    .board,.board.two,.board.cand,.board.rev,.board.one{
+      grid-template-columns:1fr;gap:16px;flex:0 0 auto;align-items:start;align-content:start;
+    }
     .scroll{overflow:visible}
     .vcard{overflow:visible}
-    .pbody,.rails,.fbb{font-size:16px}
+    .qt{font-size:16px;line-height:1.5}
+    .qa{font-size:13px}
+    .fl li{font-size:16px}
+    .hedge{font-size:15px}
+    .rem{grid-template-columns:1fr;gap:6px;padding:11px 13px}
+    .rem p{font-size:15px}
+    .fld{font-size:16px}
     .more{display:none}
-    .opts{grid-template-columns:1fr}
-    .fbl{grid-template-columns:1fr}
-    button.ch,button.opt{font-size:16px;padding:13px 13px}
-    .rrow{grid-template-columns:1fr 26px;row-gap:3px}
-    .rrow.head{display:none}
-    .rc{font-size:16px}
-    .rm{font-size:15px}
-    .rm::before{content:attr(data-k) ": ";color:#001D69;font-weight:600}
-    .ovbody{grid-template-columns:1fr}
+    button.ch,button.opt{font-size:16px;padding:12px 13px}
+    .rbody{font-size:16px}
+    .lead{font-size:15px}
+    .vv{font-size:16px}
+    .vnote{font-size:14px}
+    .fbb{font-size:15px}
+    .fbh{font-size:16px}
+    .row{grid-template-columns:1fr;gap:4px;padding:11px 13px}
+    .row .nm{font-size:16px}
+    .row .rr{font-size:15px}
+    .decoy{font-size:15px}
     #overlay{position:fixed;padding:12px}
-    .bar{margin-top:16px}
+    .bar{margin-top:16px;min-height:0}
     button.nav{font-size:16px;padding:13px 18px}
     button.nav.small{font-size:14px;padding:10px 14px}
     .hint{font-size:14px}
@@ -273,72 +327,67 @@
 
 <div id="stage">
 
-  <!-- ==================== SCREEN 1: THE TWO FILTERS ==================== -->
+  <!-- ==================== FRAME 1: ORIENTATION ==================== -->
   <div class="frame" id="f1">
     <div class="top">
-      <span class="progress" id="p1">1 of 6 &middot; The two filters</span>
-      <span class="pips" id="pips1" aria-hidden="true"></span>
+      <span class="prog" id="p1">1 of 6 &middot; The two filters</span>
+      <span class="segs" id="segs1" aria-hidden="true"></span>
     </div>
 
-    <h1>Two filters, and only one of them is Khan Academy's.</h1>
+    <h1>Two filters, and Sarah says both of them out loud.</h1>
 
     <div class="board two">
-      <section class="panel" aria-labelledby="l-rails">
-        <div class="plab" id="l-rails">Filter one, the rails</div>
-        <div class="psub">The team's. From the document you just read.</div>
-        <div class="scroll" tabindex="0" role="group" aria-label="The rails, scrollable">
-          <ul class="rails">
-            <li>No competing college-admissions assessment.</li>
-            <li>Not a district sale. Selling into a named school is the sales team's job.</li>
-            <li>No reach that only pays off if the partner's users change what they do.</li>
-            <li>Nothing that leaves us empty if the partner names a different vendor.</li>
-          </ul>
-          <p class="pcap"><b>One relay marker.</b> The third entry, about reach, is not published anywhere. It comes from what Sarah told the team.</p>
+      <section class="panel" aria-labelledby="q1h" style="background:transparent;padding:0">
+        <div class="quote">
+          <div class="qh" id="q1h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H8.5L4 22.5V17A8 8 0 0 1 12 4a8 8 0 0 1 8 8z"/><path d="M9 10h6M9 14h4"/></svg><span>Asked what makes a partnership worth doing</span></div>
+          <p class="qt"><q>It really just depends. We have a decent market share and high public trust, so we would want to ensure anyone we work with is similarly well-placed and trusted. That being said, if someone small has a really great opportunity, I wouldn't say no. It would just have to be financially beneficial for us. As a general rule, let's just say that we probably wouldn't do anything that didn't provide a minimum of $250K/year.</q></p>
+          <p class="qa">Sarah Thaler, Senior Strategic Partnerships Manager</p>
         </div>
       </section>
 
-      <section class="panel note" aria-labelledby="l-bar">
-        <div class="plabrow">
-          <span class="quo" aria-hidden="true">&ldquo;</span>
-          <div>
-            <div class="plab" id="l-bar">Filter two, the size bar</div>
-            <div class="psub">Wes's. Only Wes's.</div>
-          </div>
-        </div>
-        <div class="scroll" tabindex="0" role="group" aria-label="Wes's size bar, scrollable">
-          <div class="pbody">
-            <p><b>Wes's rule of thumb.</b> He does not take anything under about $250,000 a year to Sarah. Not greed, arithmetic: a deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000, so saying yes to the small one costs you the big one you could have chased instead.</p>
-            <p>This number is Wes's, and only Wes's. Khan Academy has never published a deal size it will or will not consider. It is one manager's read on what is worth his own time.</p>
-          </div>
-        </div>
-        <div class="more" id="more1" hidden>More below. Scroll inside this panel.</div>
-      </section>
+      <div style="display:flex;flex-direction:column;min-height:0;min-width:0;gap:10px">
+        <section class="panel" aria-labelledby="l-fl">
+          <div class="plab" id="l-fl">Her two filters, in her order</div>
+          <ul class="fl" style="margin-top:7px">
+            <li><span class="n" aria-hidden="true">1</span><b>Standing.</b> Is the partner similarly well-placed and trusted?</li>
+            <li><span class="n" aria-hidden="true">2</span><b>Financial benefit.</b> Does what arrives make this worth doing? Her general rule is a minimum of $250K a year.</li>
+          </ul>
+        </section>
+        <section class="panel note" aria-labelledby="l-hedge">
+          <div class="plab" id="l-hedge">Read the hedges on that number</div>
+          <p class="hedge">She says <b>as a general rule</b>, <b>let's just say</b> and <b>probably</b>, and the sentence before the number says she would not say no to someone small with a really great opportunity. The $250K is a general rule with hedges on it, <b>not a hard cut-off.</b> It is where the conversation starts.</p>
+        </section>
+      </div>
     </div>
 
     <div class="bar">
-      <button class="nav" id="start" type="button">Start with candidate 1</button>
-      <span class="hint">Four judgments, three candidates. You commit to a verdict, then you get the reasoning. <span id="resume"></span></span>
+      <button class="nav" id="start" type="button">Start with pitch 1</button>
+      <span class="hint">Three pitches came in. You give each one a verdict, then you get the reasoning. <span id="resume"></span></span>
     </div>
   </div>
 
-  <!-- ==================== SCREEN 2: A CANDIDATE ==================== -->
+  <!-- ==================== FRAME 2: A PITCH ==================== -->
   <div class="frame" id="f2" hidden>
     <div class="top">
-      <span class="progress" id="p2">2 of 6 &middot; Candidate 1 of 3</span>
-      <span class="pips" id="pips2" aria-hidden="true"></span>
+      <span class="prog" id="p2">2 of 6 &middot; Pitch 1 of 3</span>
+      <span class="segs" id="segs2" aria-hidden="true"></span>
     </div>
 
-    <h1 id="qh">Does a rail or the bar kill this one?</h1>
+    <h1 id="qh">Which verdict does this one get?</h1>
+
+    <div class="rem" aria-label="Her two filters, in her order">
+      <p><b>1. Standing.</b> Is the partner similarly well-placed and trusted?</p>
+      <p><b>2. Financial benefit.</b> Does what arrives make this worth doing?</p>
+    </div>
 
     <div class="board cand">
       <section class="panel" aria-labelledby="qlab">
         <div class="plabrow">
-          <span class="plab" id="qlab">Candidate 1, as it came in</span>
-          <span class="tag" id="qtag" hidden>Update</span>
+          <span class="plab" id="qlab">Pitch 1</span>
+          <span class="tag" id="qtag">Hypothetical inbound offer</span>
         </div>
-        <div class="scroll" id="qscroll" tabindex="0" role="group" aria-label="The pitch, scrollable">
-          <div class="pbody" id="qpitch"></div>
-          <p class="pcap" id="qcap"></p>
+        <div class="scroll" id="qscroll" tabindex="0" role="group" aria-label="The pitch">
+          <div class="fields" id="qpitch"></div>
         </div>
         <div class="more" id="more2" hidden>More below. Scroll inside this card.</div>
       </section>
@@ -351,39 +400,41 @@
 
     <div class="bar">
       <button class="nav ghost small" id="qback" type="button">Back</button>
-      <button class="nav ghost small" id="qfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
-      <button class="nav small" id="qnext" type="button" hidden>See the verdict again</button>
-      <span class="hint" id="qhint">Pick one. You get the reasoning either way, including why the other three do not fit.</span>
+      <button class="nav ghost small" id="qwords" type="button">Sarah's words <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav small" id="qnext" type="button" hidden>See the reasoning again</button>
+      <span class="hint" id="qhint">Pick one. Keys <span class="key">1</span> to <span class="key">4</span> also work.</span>
     </div>
   </div>
 
-  <!-- ==================== SCREEN 3: THE REVEAL ====================
-       The reasoning gets its own screen. Sharing one frame with the
-       pitch and four buttons left the longest feedback in the exercise
-       below a scroll, which is where the teaching was. -->
+  <!-- ==================== FRAME 3: THE REASONING ====================
+       The reasoning gets its own frame. Sharing one frame with the pitch
+       and four buttons left the longest refutation in the exercise below
+       a scroll, which is where the teaching was. It carries the same
+       step number as the pitch it belongs to. -->
   <div class="frame" id="f3" hidden>
     <div class="top">
-      <span class="progress" id="p3">2 of 6 &middot; Candidate 1, the verdict</span>
-      <span class="pips" id="pips3" aria-hidden="true"></span>
+      <span class="prog" id="p3">2 of 6 &middot; Pitch 1, the reasoning</span>
+      <span class="segs" id="segs3" aria-hidden="true"></span>
     </div>
 
     <h1 id="rh"></h1>
 
     <div class="board rev">
       <section class="panel reveal" id="rpanel" aria-labelledby="rh" tabindex="-1">
-        <div class="scroll" id="rscroll" tabindex="0" role="group" aria-label="The reasoning, scrollable">
-          <div class="pbody" id="rbody"></div>
+        <div class="scroll" id="rscroll" tabindex="0" role="group" aria-label="The reasoning" style="margin-top:0">
+          <p class="lead" id="rlead"></p>
+          <div class="rbody" id="rbody"></div>
         </div>
         <div class="more" id="more3" hidden>More below. Scroll inside this panel.</div>
       </section>
 
-      <aside class="vcard" aria-label="Your call and the call">
+      <aside class="vcard" aria-label="Your verdict and where this one stands">
         <div class="vrow">
-          <span class="vk">Your call</span>
+          <span class="vk">Your verdict</span>
           <span class="vv" id="rmine"></span>
         </div>
-        <div class="vrow">
-          <span class="vk">The call</span>
+        <div class="vrow" id="rtruerow">
+          <span class="vk">The verdict</span>
           <span class="vv" id="rtrue"></span>
         </div>
         <p class="vnote" id="rnote"></p>
@@ -391,100 +442,88 @@
     </div>
 
     <div class="bar">
-      <button class="nav ghost small" id="rchange" type="button">Change my call</button>
-      <button class="nav ghost small" id="rfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav ghost small" id="rback" type="button">Back to the pitch</button>
+      <button class="nav ghost small" id="rwords" type="button">Sarah's words <span class="key" aria-hidden="true">F</span></button>
       <button class="nav" id="rnext" type="button">Next</button>
+      <span class="hint" id="rhint"></span>
     </div>
   </div>
 
-  <!-- ==================== SCREEN 10: THE TWO FACTS ==================== -->
+  <!-- ==================== FRAME 4: THE ONE FACT ==================== -->
   <div class="frame" id="f4" hidden>
     <div class="top">
-      <span class="progress" id="p4">5 of 6 &middot; Candidate 3, the two facts</span>
-      <span class="pips" id="pips4" aria-hidden="true"></span>
+      <span class="prog" id="p4">5 of 6 &middot; The platform, the one fact</span>
+      <span class="segs" id="segs4" aria-hidden="true"></span>
     </div>
 
-    <h1 id="fh">So what would you go and get?</h1>
-    <p class="sub" id="fsub">Pick the two that would actually change your answer. Two of these four would not.</p>
+    <h1 id="fh">So what is the one fact you would ask for before answering?</h1>
+    <p class="sub" id="fsub">Both filters pass on the platform. One of these three decides it and two of them do not.</p>
 
-    <div class="board one" id="fboard">
-      <div class="opts" id="opts"></div>
-      <section class="panel" id="fpanel" hidden aria-label="Which facts move this">
-        <div class="scroll" id="fscroll" tabindex="0" role="group" aria-label="Feedback on all four, scrollable">
-          <div class="fbl" id="fbl"></div>
-        </div>
-        <div class="more" id="more4" hidden>More below. Scroll inside this panel.</div>
-      </section>
+    <div class="board one">
+      <div class="vwrap" id="fwrap">
+        <div class="opts" id="opts"></div>
+        <section class="panel" id="fpanel" hidden aria-label="All three facts, explained" tabindex="-1">
+          <div class="scroll" id="fscroll" tabindex="0" role="group" aria-label="All three facts, explained" style="margin-top:0">
+            <div class="fbl" id="fbl"></div>
+          </div>
+          <div class="more" id="more4" hidden>More below. Scroll inside this panel.</div>
+        </section>
+      </div>
     </div>
 
     <div class="bar">
       <button class="nav ghost small" id="fback" type="button">Back</button>
-      <button class="nav ghost small" id="fredo" type="button" hidden>Change my two</button>
-      <button class="nav" id="fcheck" type="button" disabled>Check my two</button>
-      <button class="nav" id="fnext" type="button" hidden>Last screen</button>
-      <span class="hint" id="fhint">Two picks, then check. Nothing is graded until you do.</span>
+      <button class="nav ghost small" id="fredo" type="button" hidden>Change my pick</button>
+      <button class="nav" id="fnext" type="button" hidden>Last frame</button>
+      <span class="hint" id="fhint">Pick one. Nothing is graded until you do.</span>
     </div>
   </div>
 
-  <!-- ==================== SCREEN 11: THE CLOSE ==================== -->
+  <!-- ==================== FRAME 5: THE CLOSE ==================== -->
   <div class="frame" id="f5" hidden>
     <div class="top">
-      <span class="progress" id="p5">6 of 6 &middot; What you take with you</span>
-      <span class="pips" id="pips5" aria-hidden="true"></span>
+      <span class="prog" id="p5">6 of 6 &middot; What you take with you</span>
+      <span class="segs" id="segs5" aria-hidden="true"></span>
     </div>
 
-    <h1>Four calls, and what they were.</h1>
+    <h1>Three pitches, and the button that was never right</h1>
+    <p class="sub">Two filters, in Sarah's order. Standing first: is this partner similarly well-placed and trusted? Then financial benefit: does what actually arrives make it worth doing?</p>
 
     <div class="board one">
-      <section class="panel" aria-label="Your four calls">
-        <div class="scroll" id="cscroll" tabindex="0" role="group" aria-label="Your four calls, scrollable">
-          <div class="rec" id="rec"></div>
-          <div class="pbody" id="cclose" style="margin-top:11px"></div>
+      <div class="vwrap">
+        <div class="rows" id="rows"></div>
+        <div class="decoy">
+          <p><b>One button was never the right answer.</b> "Not financially beneficial enough" fits none of these three, and it is on screen because reading her $250K as a hard cut-off is the most common way to get deal 1 wrong. Her words are "as a general rule", "let's just say" and "probably", and the sentence before the number says she would not say no to someone small with a really great opportunity. Treat it as the point where the conversation starts, not the point where it ends.</p>
         </div>
-        <div class="more" id="more5" hidden>More below. Scroll inside this panel.</div>
-      </section>
+      </div>
     </div>
 
     <div class="bar">
-      <button class="nav ghost small" id="cback" type="button">Back to candidate 3</button>
-      <button class="nav ghost small" id="cfilters" type="button">The two filters <span class="key" aria-hidden="true">F</span></button>
+      <button class="nav ghost small" id="cback" type="button">Back to the one fact</button>
+      <button class="nav ghost small" id="cwords" type="button">Sarah's words <span class="key" aria-hidden="true">F</span></button>
       <button class="nav ghost small" id="creset" type="button">Run them again</button>
       <span class="hint push"><b>That is the end of this one.</b> Nothing further to click.</span>
     </div>
   </div>
 
-  <!-- ==================== THE FILTERS OVERLAY ==================== -->
+  <!-- ==================== SARAH'S WORDS, ON DEMAND ==================== -->
   <div id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ovh">
     <div class="ovcard">
       <div class="ovtop">
-        <h2 id="ovh">The two filters</h2>
+        <h2 id="ovh">Sarah's words, and the two filters</h2>
         <button class="nav ghost small push" id="ovclose" type="button">Close <span class="key" aria-hidden="true">Esc</span></button>
       </div>
       <div class="ovbody">
-        <section class="panel" aria-labelledby="ol-rails">
-          <div class="plab" id="ol-rails">Filter one, the rails</div>
-          <div class="psub">The team's. From the document you just read.</div>
-          <ul class="rails" style="margin-top:8px">
-            <li>No competing college-admissions assessment.</li>
-            <li>Not a district sale. Selling into a named school is the sales team's job.</li>
-            <li>No reach that only pays off if the partner's users change what they do.</li>
-            <li>Nothing that leaves us empty if the partner names a different vendor.</li>
-          </ul>
-          <p class="pcap"><b>One relay marker.</b> The third entry, about reach, is not published anywhere. It comes from what Sarah told the team.</p>
-        </section>
-        <section class="panel note" aria-labelledby="ol-bar">
-          <div class="plabrow">
-            <span class="quo" aria-hidden="true">&ldquo;</span>
-            <div>
-              <div class="plab" id="ol-bar">Filter two, the size bar</div>
-              <div class="psub">Wes's. Only Wes's.</div>
-            </div>
-          </div>
-          <div class="pbody" style="margin-top:8px">
-            <p>He does not take anything under about $250,000 a year to Sarah. A deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000.</p>
-            <p>Wes's number, and only Wes's. Khan Academy has never published a deal size it will or will not consider.</p>
-          </div>
-        </section>
+        <div class="quote">
+          <div class="qh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H8.5L4 22.5V17A8 8 0 0 1 12 4a8 8 0 0 1 8 8z"/><path d="M9 10h6M9 14h4"/></svg><span>Asked what makes a partnership worth doing</span></div>
+          <p class="qt"><q>It really just depends. We have a decent market share and high public trust, so we would want to ensure anyone we work with is similarly well-placed and trusted. That being said, if someone small has a really great opportunity, I wouldn't say no. It would just have to be financially beneficial for us. As a general rule, let's just say that we probably wouldn't do anything that didn't provide a minimum of $250K/year.</q></p>
+          <p class="qa">Sarah Thaler, Senior Strategic Partnerships Manager</p>
+        </div>
+        <ul class="fl">
+          <li><span class="n" aria-hidden="true">1</span><b>Standing.</b> Is the partner similarly well-placed and trusted?</li>
+          <li><span class="n" aria-hidden="true">2</span><b>Financial benefit.</b> Does what arrives make this worth doing? Her general rule is a minimum of $250K a year.</li>
+        </ul>
+        <p class="hedge">She says <b>as a general rule</b>, <b>let's just say</b> and <b>probably</b>, and the sentence before the number says she would not say no to someone small with a really great opportunity. The $250K is a general rule with hedges on it, <b>not a hard cut-off.</b></p>
       </div>
     </div>
   </div>
@@ -496,14 +535,12 @@
   <!-- This style block has to live INSIDE the noscript element, which puts
        it after the head stylesheet and lets it win on source order. An
        override placed in <head> before the main sheet loses and the
-       fallback silently fails. Three things must happen, and all three
-       have been shipped broken in this program before: the dead canvas
-       has to be hidden so nobody is offered buttons that cannot work, the
-       flex-centred body has to go back to block flow (otherwise this text
-       lays out as a narrow column beside a 960px sibling and is pushed
-       off the centred overflow, which cannot be scrolled back to), and
-       links have to be pinned to the palette so the browser default blue
-       never appears as a sixth colour. -->
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to. -->
   <style>
     #stage{display:none!important}
     html,body{height:auto}
@@ -511,334 +548,233 @@
       display:block!important;align-items:initial!important;justify-content:initial!important;
       overflow-x:hidden;
     }
-    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
-    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
     .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
-    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:14px 0 5px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:15px 0 5px}
     .nsf p{margin-bottom:11px}
     .nsf ul,.nsf ol{margin:0 0 12px 22px}
     .nsf li{margin-bottom:7px}
     .nsf strong{color:#1C1B1B}
-    .nsf a{color:#001D69}
-    .nsf blockquote{margin:0 0 11px 0;padding:9px 12px;background:#DCE1FF;border-radius:9px}
-    .nsf .bar2{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+    .nsf blockquote{margin:0 0 11px 0;padding:10px 13px;background:#DCE1FF;border-radius:9px}
+    .nsf .hedge2{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
   </style>
   <div class="nsf">
-    <h1>Run three candidates through the rails and the bar</h1>
-    <p>The interactive version asks you to commit to a verdict on each candidate and then explains why the other three verdicts do not fit. With scripts blocked, here is the same content as a document: the two filters, the four judgments with their verdicts and the one sentence that settles each, and the two facts that resolve the hard one.</p>
+    <h1>Three pitches, two filters</h1>
+    <p>With scripts blocked, here is the same content as a document: Sarah's two filters in her own words, the three hypothetical inbound pitches in full, the verdict each one gets, the one fact that settles the third, and the verdict that fits none of them.</p>
 
-    <h2>The two filters, and only one of them is Khan Academy's</h2>
-
-    <h3>Filter one, the rails. The team's.</h3>
-    <ul>
-      <li>No competing college-admissions assessment.</li>
-      <li>Not a district sale. Selling into a named school is the sales team's job.</li>
-      <li>No reach that only pays off if the partner's users change what they do.</li>
-      <li>Nothing that leaves us empty if the partner names a different vendor.</li>
-    </ul>
-    <p><strong>One relay marker.</strong> The third entry, about reach, is not published anywhere. It comes from what Sarah told the team, not from a public source.</p>
-
-    <h3>Filter two, the size bar. Wes's, and only Wes's.</h3>
-    <div class="bar2">
-      <p><strong>Wes's rule of thumb.</strong> He does not take anything under about $250,000 a year to Sarah. Not greed, arithmetic: a deal eats the same nine to eighteen months of the same small team whether it is worth $60,000 or $600,000, so saying yes to the small one costs you the big one you could have chased instead.</p>
-      <p style="margin-bottom:0"><strong>This number is Wes's, and only Wes's.</strong> Khan Academy has never published a deal size it will or will not consider, and this is not one. It is one manager's read on what is worth his own time, not an organisational threshold and not a procurement floor.</p>
+    <h2>The two filters, in Sarah's words</h2>
+    <blockquote>
+      <p style="margin-bottom:0">"It really just depends. We have a decent market share and high public trust, so we would want to ensure anyone we work with is similarly well-placed and trusted. That being said, if someone small has a really great opportunity, I wouldn't say no. It would just have to be financially beneficial for us. As a general rule, let's just say that we probably wouldn't do anything that didn't provide a minimum of $250K/year."</p>
+    </blockquote>
+    <p>Sarah Thaler, Senior Strategic Partnerships Manager.</p>
+    <ol>
+      <li><strong>Standing.</strong> Is the partner similarly well-placed and trusted?</li>
+      <li><strong>Financial benefit.</strong> Does what arrives make this worth doing? Her general rule is a minimum of $250K a year.</li>
+    </ol>
+    <div class="hedge2">
+      <p style="margin-bottom:0"><strong>Read the hedges on that number.</strong> She says "as a general rule", "let's just say" and "probably", and the sentence before the number says she would not say no to someone small with a really great opportunity. The $250K is a general rule with hedges on it, not a hard cut-off. It is where the conversation starts, not where it ends.</p>
     </div>
 
-    <h2>The four judgments</h2>
+    <h2>The three pitches</h2>
+    <p>All three are invented, hypothetical inbound offers. No real partner is named or implied in any of them.</p>
 
-    <h3>Candidate 1, the rival admissions test. Killed by a rail.</h3>
-    <blockquote>Big one. A test-prep company got in touch. They want us to co-build a free, official practice tool for a rival college-admissions test. Same shape as the SAT Suite work: free to students, official, built together. They have budget and they want to move this quarter.</blockquote>
-    <p><strong>Killed by a rail.</strong> Khan Academy's own help centre calls it the official partner of College Board, and the free digital SAT practice course is built with College Board's own questions. A matching free-practice deal for a rival college-admissions test is not available at any price. The discriminating sentence: <strong>the money is irrelevant, and that irrelevance is what makes this a rail rather than a preference.</strong> A preference bends to a good enough offer. A rail does not have a price.</p>
-    <p>Note on the pitch: no public source says which way money moves in the College Board partnership. Read "same shape" as shape only.</p>
+    <h3>Pitch 1, the literacy nonprofit. Worth pursuing.</h3>
+    <p><strong>Who they are.</strong> A regional literacy nonprofit running after-school reading programs across about forty sites. Twelve years old, well regarded, and their director taught for eleven years.</p>
+    <p><strong>What they want.</strong> 200 of our existing videos dubbed into Spanish and Haitian Creole, published as a co-branded collection.</p>
+    <p><strong>What Khan Academy gets.</strong> $120,000 a year. They pay for and deliver the professional dubbing, and we keep those audio tracks and can publish them free to everyone, not just their sites. They also promote the collection across all forty sites and to their family mailing list.</p>
+    <p><strong>The verdict: worth pursuing.</strong> The cash is under her general rule of $250,000, and this is still the strongest deal in the set. Count what actually arrives: dubbing Khan Academy would otherwise have paid to produce, ours to keep and give away free, plus distribution we did not have before. This is the case Sarah names directly, someone small with a really great opportunity, and she says she would not say no. Her hedges are doing real work. The floor is where the conversation starts, not where it ends.</p>
 
-    <h3>Candidate 2 at $80,000. Killed by the size bar.</h3>
-    <blockquote>A regional literacy nonprofit runs after-school reading programs across about forty sites. They want 200 of our videos professionally dubbed into Spanish and Haitian Creole, plus printable family guides, published as a co-branded collection on Khan Academy so families can find it in one place. They are offering $80,000 a year, renewable.</blockquote>
-    <p><strong>Killed by the size bar, which is Wes's bar and not Khan Academy's.</strong> Walk the rails first, because that is the cheaper check, and none of them fires. No competing assessment. Not a district sale, because no named school is buying anything. The reach is not borrowed, because the collection ships on Khan Academy. The partner has no product of its own to hand to a different vendor later. The discriminating sentence: <strong>the reason to say no is not that the offer is bad, it is that saying yes to this one costs you the bigger one you could have chased instead.</strong></p>
+    <h3>Pitch 2, the AI tutoring startup. Partner is not well-placed enough.</h3>
+    <p><strong>Who they are.</strong> Eighteen months old, well funded and growing fast. Their marketing promises grade jumps we could not stand behind, and two state consumer-protection offices have opened enquiries into those claims.</p>
+    <p><strong>What they want.</strong> To co-brand a homework-help product with us.</p>
+    <p><strong>What Khan Academy gets.</strong> $600,000 a year, the most money in this set, and access to their user base.</p>
+    <p><strong>The verdict: partner is not well-placed enough.</strong> This is the filter Sarah puts first, before money comes up at all. Khan Academy has decent market share and high public trust, and she wants anyone we work with to be similarly well-placed and trusted. Our name would sit next to claims we could not defend. The $600,000 is the largest number in the exercise and it changes nothing, because standing is not the second question.</p>
 
-    <h3>Candidate 2 at $300,000, three weeks later. Survives.</h3>
-    <blockquote>Update on the literacy nonprofit. Same 200 videos, same two languages, same family guides. A foundation has come in behind them, so the offer is now $300,000 a year on a five-year commitment. Nothing else about it has changed.</blockquote>
-    <p><strong>It survives.</strong> Nothing about the deal changed except the number, and the number is the whole thing. The five-year term makes it better still, because the same nine to eighteen months of setup now buys five years of return instead of one, which is the arithmetic the bar is made of. The discriminating sentence: <strong>"survives" is not approval and not a yes, it means the idea has earned a real conversation with the person who decides.</strong> This is also the cleanest evidence you will get that the bar is a size rule and not a quality judgment, because the deal you liked three weeks ago is the deal you are recommending now.</p>
+    <h3>Pitch 3, the platform. Judgment call, one fact missing.</h3>
+    <p><strong>Who they are.</strong> A large, well-established education platform used daily in thousands of districts. Their standing is not in question.</p>
+    <p><strong>What they want.</strong> To put Khan Academy practice inside their own product.</p>
+    <p><strong>What Khan Academy gets.</strong> $400,000 a year, and our practice in front of their teachers. The term sheet does not say who owns the practice built for this, or what happens to it when the term ends.</p>
+    <p><strong>The verdict: judgment call, one fact missing.</strong> Both filters pass. The partner is well-placed, and $400,000 clears her general rule. Two of the deals in Sarah's own note should be nagging at you: the Canvas integration, where the partner's usage was high and usage of our tools inside it was not, and Praxis, where the partner ended up owning the practice materials. Neither of those is a reason to say no here. They are the reason to ask one more question before you answer.</p>
 
-    <h3>Candidate 3, the state deal. A genuine judgment call, no clean answer.</h3>
-    <blockquote>A state department of education wants to pay $400,000 a year for statewide Khanmigo access. They would fund it centrally out of a state literacy and AI line, and districts would opt in as they are ready. The person who emailed is a deputy commissioner and she wants to start in the next school year.</blockquote>
-    <p><strong>A genuine judgment call.</strong> It clears the bar comfortably at $400,000, and no rail names it outright. Then the district-sales entry gets in the way: district selling belongs to the sales team, and a statewide deal where districts opt in one at a time sits directly on top of districts that team may already be working. Is this a partnership, or the sales pipeline with a state logo on the invoice? The discriminating sentence: <strong>both readings are defensible from what is in the note, which is exactly what makes this a judgment call rather than a puzzle with a hidden answer.</strong></p>
-
-    <h2>Candidate 3, the two facts that would settle it</h2>
-    <p>Of these four, two would change the answer and two would not.</p>
-    <ol>
-      <li><strong>Which of that state's districts are already in the sales team's pipeline, and at what stage. This one moves it.</strong> If sales is already deep with a dozen districts in that state, the state deal sits on top of their pipeline and the district-sales rail is live. If sales has nothing there, the state is opening a door rather than standing in one. Same pitch, opposite answer, one fact.</li>
-      <li><strong>Who at the state has authority to sign, and whether the budget is the state's or the districts'. This one moves it, and it is the one people forget.</strong> A deputy commissioner sending an email is not the same as procurement authority or a board vote. And if the money turns out to be the districts' rather than the state's, then the state is not buying anything, it is introducing you to three hundred buyers, which is the sales team's job with extra steps.</li>
-      <li><strong>Whether any other state has done a deal shaped like this one. This one does not move it.</strong> Precedent tells you the shape exists somewhere. It tells you nothing about whether this particular deal is your team's or the sales team's, which is the only thing unresolved. Useful when you are writing the pitch. Useless when you are making the call.</li>
-      <li><strong>Whether $400,000 is a fair price for statewide access. This one does not move it.</strong> It already clears the bar, so price cannot change the verdict. Price is what you negotiate once you know whose deal it is. Asking it now feels productive and reorders nothing.</li>
-    </ol>
-    <p>Two facts, and neither one is in the note. Most real candidates look like this. So the habit worth building is not resolving them on the spot. It is telling the difference between the fact that changes your answer and the fact that is merely interesting, and then going and getting the first kind.</p>
-
-    <h2>What you take with you</h2>
-    <p>One rail, one deal that died on Wes's bar, the same deal surviving at a bigger number, and one that no filter settles. That distribution is roughly what a real intake week looks like. Hold on to both lists. Project 3 hands them straight back to you, with your own candidates on the table instead of someone else's.</p>
-
-    <h2>Sources for the checkable claims</h2>
+    <h2>The platform, the one fact</h2>
+    <p>So what is the one fact you would ask for before answering? Of these three, one moves it.</p>
     <ul>
-      <li>Khan Academy help centre, "Helping your students prepare for the Digital SAT on Khan Academy", updated 11 August 2026: <a href="https://support.khanacademy.org/hc/en-us/articles/23298985511821-Helping-your-students-prepare-for-the-Digital-SAT-on-Khan-Academy">support.khanacademy.org</a></li>
-      <li>College Board on the practice course being developed in partnership with College Board: <a href="https://satsuite.collegeboard.org/practice/khan-academy">satsuite.collegeboard.org/practice/khan-academy</a></li>
-      <li>College Board Newsroom, 2 June 2015, the launch: <a href="https://newsroom.collegeboard.org/free-personalized-practice-redesigned-satr-now-available-all-students-khanacademyorg">newsroom.collegeboard.org</a></li>
-      <li>Khan Academy Districts on College Board's site: <a href="https://satsuite.collegeboard.org/k12-educators/khan-academy-districts">satsuite.collegeboard.org/k12-educators/khan-academy-districts</a></li>
+      <li><strong>Who owns the practice at the end of the term. This one moves it.</strong> This is the whole verdict. If the practice is ours, we keep an asset whatever happens next. If it is theirs, we are building somebody else's product and can be replaced on it, which is what happened with Praxis in Sarah's note. Same pitch, opposite answer, one fact.</li>
+      <li><strong>How many districts use their product every day. This one does not move it.</strong> That is their usage, not ours. Sarah's Canvas entry is exactly this: their usage was high and usage of our tools inside it was not. A bigger number on their side does not tell you anything about the side that decides it.</li>
+      <li><strong>Whether $400,000 is a fair price for this kind of access. This one does not move it.</strong> It already clears her general rule, so price cannot change the verdict. Price is what you negotiate once you know whose asset you are building. Asking it now feels productive and reorders nothing.</li>
     </ul>
-    <p>Neither organisation has published which direction any money moves in the College Board partnership, or whether any does at all. Nothing in this exercise tells you.</p>
+
+    <h2>Three pitches, and the verdict that was never right</h2>
+    <p>Two filters, in Sarah's order. Standing first: is this partner similarly well-placed and trusted? Then financial benefit: does what actually arrives make it worth doing?</p>
+    <ul>
+      <li><strong>The literacy nonprofit.</strong> Worth pursuing. Under her $250,000 rule and still the best deal here, because of what arrives alongside the cash.</li>
+      <li><strong>The AI tutoring startup.</strong> Partner is not well-placed enough. The most money in the set, and it never got as far as the money.</li>
+      <li><strong>The platform.</strong> Judgment call. Both filters pass, so the thing the term sheet leaves out decides it.</li>
+    </ul>
+    <div class="hedge2">
+      <p style="margin-bottom:0"><strong>One verdict was never the right answer.</strong> "Not financially beneficial enough" fits none of these three, and it is here because reading her $250K as a hard cut-off is the most common way to get deal 1 wrong. Her words are "as a general rule", "let's just say" and "probably", and the sentence before the number says she would not say no to someone small with a really great opportunity. Treat it as the point where the conversation starts, not the point where it ends.</p>
+    </div>
   </div>
 </noscript>
 
 <script>
 (function(){
   "use strict";
+
+  var GLYPH = {ok:"✓", miss:"?", no:"×"};
+
   /* =================================================================
-     The four verdict options. Order is fixed and is also the 1 to 4
-     key order on a candidate screen.
+     The four verdicts. Fixed order, identical on all three pitches,
+     and the same order as keys 1 to 4. "Not financially beneficial
+     enough" is correct on none of the three. That is deliberate: it
+     is the most tempting wrong answer on pitch 1, where a student who
+     applies the $250K mechanically reaches for it. The closing frame
+     says so outright. Do not reassign it and do not remove it.
      ================================================================= */
   var VERDICTS = [
-    {id:"rail",  label:"Killed by a rail",                        short:"Killed by a rail",     lower:"killed by a rail"},
-    {id:"size",  label:"Killed by the size bar",                  short:"Killed by Wes's bar",  lower:"killed by Wes's bar"},
-    {id:"live",  label:"Survives",                                short:"Survives",             lower:"it survives"},
-    {id:"judge", label:"Genuine judgment call, no clean answer",   short:"Genuine judgment call",lower:"a genuine judgment call"}
+    {id:"pursue",   label:"Worth pursuing"},
+    {id:"money",    label:"Not financially beneficial enough"},
+    {id:"standing", label:"Partner is not well-placed enough"},
+    {id:"judge",    label:"Judgment call, one fact missing"}
   ];
   var VD = {};
   VERDICTS.forEach(function(v){ VD[v.id] = v; });
 
-  var GLYPH = {ok:"✓", miss:"?"};
-
   /* =================================================================
-     Four judgments across three candidates. Candidate 2 is judged
-     twice, at $80,000 and then at $300,000 three weeks later, because
-     the build spec requires that one candidate survives and reusing
-     the same deal at a different number is what proves the bar is a
-     size rule rather than a quality judgment.
-
-     Every one of the four verdict options on every judgment has its
-     own feedback. Sixteen states, all written, none shared. A student
-     who picks wrongly is told why that option does not fit before
-     being told what the call is.
+     Three invented inbound pitches. Same three labelled parts on each,
+     in the same order. The student commits to a verdict before any
+     reasoning appears; a wrong pick returns that verdict's own
+     refutation and the pitch stays open for another pick.
      ================================================================= */
   var J = [
     {
-      id:"c1", step:2,
-      qlab:"Candidate 1 of 3", rlab:"Candidate 1, the verdict",
-      h:"Does a rail or the bar kill this one?",
-      plab:"Candidate 1, as it came in", tag:"",
-      pitch:"<p>Big one. A test-prep company got in touch. They want us to co-build a free, official practice tool for a rival college-admissions test. Same shape as the SAT Suite work: free to students, official, built together. They have budget and they want to move this quarter. The reach is enormous and it is the kind of thing that gets written up.</p>",
-      cap:"<b>Note on the pitch.</b> No public source says which way money moves in the College Board partnership. Read \"same shape\" as shape only.",
-      note:"<b>Candidate 1.</b> A rival college-admissions test, free and official, and they have budget.",
-      recname:"Candidate 1, the rival admissions test",
-      right:"rail",
-      next:"Next: candidate 2",
-      fb:{
-        rail:{
-          lead:"Killed by a rail. It is the first entry in the document.",
-          body:"<p>Khan Academy's own help centre calls it the official partner of College Board, and the free digital SAT practice course is built with College Board's own questions. A matching free-practice deal for a rival college-admissions test is not available at any price.</p>" +
-               "<p><b>Notice what did not matter:</b> they have budget. The size of the cheque is irrelevant here, and that irrelevance is what makes this a rail rather than a preference. A preference bends to a good enough offer. A rail does not have a price.</p>" +
-               "<p>Notice also how little you had to know. One line in the document settled the whole thing. That is why the rails are the first check you run and not the last.</p>"
-        },
-        size:{
-          lead:"You reached for the second filter, and this one never gets that far.",
-          body:"<p>The bar answers one question: is this deal big enough to be worth nine to eighteen months of a small team? That question only makes sense for deals that are available. This one is not available, so its size is not a fact about it.</p>" +
-               "<p>Run the filters in order. The rails are the cheaper check, they are four lines long, and when one of them fires you are done. <b>The verdict here is a rail,</b> the competing-assessment entry.</p>"
-        },
-        live:{
-          lead:"You weighed the money, which is the right instinct almost everywhere else and the wrong one here.",
-          body:"<p>On most candidates the budget is the fact that decides it. That is what makes this one instructive. Khan Academy is College Board's official partner and the SAT practice course is built with them. A competing college-admissions test is closed, and it stays closed whether the offer is $80,000 or $8 million.</p>" +
-               "<p>That is the whole definition of a rail: <b>a no that a better offer cannot move.</b> Being able to say it on the same day is the point.</p>"
-        },
-        judge:{
-          lead:"A judgment call is a candidate where a fact you do not have could flip the answer. Name the fact here.",
-          body:"<p>There isn't one. You know the partner, the ask, the shape and the money, and none of it changes the outcome, because the competing-assessment entry closes this one outright. Learning more would not help you.</p>" +
-               "<p>That absence is the test. <b>If you can name the missing fact, you have a judgment call. If you cannot, you have a rail and you are hesitating.</b></p>"
-        }
-      }
+      id:"d1", step:2, right:"pursue",
+      qlab:"Pitch 1 of 3", rlab:"Pitch 1, the reasoning",
+      plab:"Pitch 1, the literacy nonprofit",
+      recname:"The literacy nonprofit",
+      note:"<b>The literacy nonprofit.</b> $120,000 a year, plus dubbing we keep and forty sites promoting it.",
+      fields:[
+        ["Who they are.","A regional literacy nonprofit running after-school reading programs across about forty sites. Twelve years old, well regarded, and their director taught for eleven years."],
+        ["What they want.","200 of our existing videos dubbed into Spanish and Haitian Creole, published as a co-branded collection."],
+        ["What Khan Academy gets.","$120,000 a year. They pay for and deliver the professional dubbing, and we keep those audio tracks and can publish them free to everyone, not just their sites. They also promote the collection across all forty sites and to their family mailing list."]
+      ],
+      why:"The cash is under her general rule of $250,000, and this is still the strongest deal in the set. Count what actually arrives: dubbing Khan Academy would otherwise have paid to produce, ours to keep and give away free, plus distribution we did not have before. This is the case Sarah names directly, someone small with a really great opportunity, and she says she would not say no. Her hedges are doing real work. The floor is where the conversation starts, not where it ends.",
+      wrong:{
+        money:"This is the trap, and it is the most common way to get this wrong. You compared $120,000 against $250,000 and stopped. Count what arrives instead: audio tracks we keep and can give away, and forty sites plus a mailing list promoting them. Her sentence before the number says she would not say no to someone small with a really great opportunity.",
+        standing:"Twelve years old and well regarded is well-placed. Small is not the same as untrusted, and Sarah's sentence separates the two deliberately.",
+        judge:"Nothing is missing. You know who they are, what they want, what arrives and what it is worth."
+      },
+      next:"Next: pitch 2"
     },
     {
-      id:"c2a", step:3,
-      qlab:"Candidate 2 of 3", rlab:"Candidate 2, the verdict",
-      h:"Does a rail or the bar kill this one?",
-      plab:"Candidate 2, as it came in", tag:"",
-      pitch:"<p>A regional literacy nonprofit runs after-school reading programs across about forty sites. They want 200 of our videos professionally dubbed into Spanish and Haitian Creole, plus printable family guides, published as a co-branded collection on Khan Academy so families can find it in one place. They are offering $80,000 a year, renewable. Their director taught for eleven years and she is genuinely great. This is exactly the mission.</p>",
-      cap:"",
-      note:"<b>Candidate 2.</b> Dubbing, family guides and a co-branded collection, at $80,000 a year, renewable.",
-      recname:"Candidate 2 at $80,000",
-      right:"size",
-      next:"Next: three weeks later",
-      fb:{
-        size:{
-          lead:"Killed by the size bar. Wes's bar, not Khan Academy's.",
-          body:"<p>Go looking for a rail first, because that is the cheaper check, and you will not find one. No competing assessment, not a district sale, the reach on offer does not depend on anyone changing what they already do, and the partner has no product of its own to hand to a different vendor later.</p>" +
-               "<p>It is $80,000. Under Wes's own rule of thumb it does not go to Sarah, because dubbing 200 videos into two languages and building family guides eats the same nine to eighteen months of the same small team as a deal worth five times more.</p>" +
-               "<p>That is the uncomfortable part of the job. <b>The reason to say no is not that the offer is bad.</b> It is that saying yes to this one costs you the bigger one you could have chased instead.</p>"
-        },
-        rail:{
-          lead:"Name the rail.",
-          body:"<p>Walk them. Not a competing assessment. Not a district sale, because no named school is buying anything. The reach is not borrowed, because the collection ships on Khan Academy. And the partner has no test or product of its own that it could take to another vendor. None of them fires.</p>" +
-               "<p>This is the most common way \"rail\" gets misused: to mean \"I do not think we should do this.\" A rail is a specific closed door with a specific reason behind it, and you should be able to point at the entry. When you cannot, <b>the honest answer is that the deal clears the rails and dies somewhere else.</b> It dies on the bar, at $80,000.</p>"
-        },
-        live:{
-          lead:"You are right that it clears the rails, and that is the harder half.",
-          body:"<p>Where it stops is the second filter. \"Survives\" means it goes to Sarah. At $80,000 it does not, because Wes does not take anything under about $250,000 a year to her, and this is his call to make about his own time.</p>" +
-               "<p>Worth being precise about what you were and were not asked. <b>You were not asked whether this is a good thing to do in the world.</b> It probably is. You were asked whether either filter kills it, and the second one does.</p>"
-        },
-        judge:{
-          lead:"Nothing is missing here, so this is a hard call rather than an open one.",
-          body:"<p>You know the size, $80,000. You know the term, renewable annually. You know the work, 200 videos into two languages plus guides. You know the partner. There is no fact you could go and get that would change the answer.</p>" +
-               "<p><b>Uncomfortable and underdetermined are different things.</b> This one is uncomfortable, because a good partner gets a no. That is not the same as unresolvable. It is killed by the bar.</p>"
-        }
-      }
+      id:"d2", step:3, right:"standing",
+      qlab:"Pitch 2 of 3", rlab:"Pitch 2, the reasoning",
+      plab:"Pitch 2, the AI tutoring startup",
+      recname:"The AI tutoring startup",
+      note:"<b>The AI tutoring startup.</b> $600,000 a year, the most money in this set, and open enquiries into their claims.",
+      fields:[
+        ["Who they are.","Eighteen months old, well funded and growing fast. Their marketing promises grade jumps we could not stand behind, and two state consumer-protection offices have opened enquiries into those claims."],
+        ["What they want.","To co-brand a homework-help product with us."],
+        ["What Khan Academy gets.","$600,000 a year, the most money in this set, and access to their user base."]
+      ],
+      why:"This is the filter Sarah puts first, before money comes up at all. Khan Academy has decent market share and high public trust, and she wants anyone we work with to be similarly well-placed and trusted. Our name would sit next to claims we could not defend. The $600,000 is the largest number in the exercise and it changes nothing, because standing is not the second question.",
+      wrong:{
+        pursue:"The money clears easily. The standing does not, and that is the filter she names first.",
+        money:"$600,000 is more than twice her general rule. Money is not what is wrong here.",
+        judge:"Open enquiries into claims Khan Academy could not stand behind is the answer, not a gap in it."
+      },
+      next:"Next: pitch 3"
     },
     {
-      id:"c2b", step:4,
-      qlab:"Candidate 2, three weeks later", rlab:"Candidate 2 again, the verdict",
-      h:"Same deal, new number. Run it again.",
-      plab:"Candidate 2, three weeks later", tag:"Update",
-      pitch:"<p>Update on the literacy nonprofit. Same 200 videos, same two languages, same family guides. A foundation has come in behind them, so the offer is now $300,000 a year on a five-year commitment. Nothing else about it has changed.</p>",
-      cap:"<b>What changed:</b> the number and the term. Nothing else, which is why this one is worth judging twice.",
-      note:"<b>Candidate 2 again.</b> Identical work, now $300,000 a year on a five-year commitment.",
-      recname:"Candidate 2 at $300,000",
-      right:"live",
-      next:"Next: candidate 3",
-      fb:{
-        live:{
-          lead:"It survives. This is the one you take to Sarah.",
-          body:"<p>Nothing about the deal changed except the number, and the number is the whole thing. $300,000 a year clears Wes's bar. The five-year term makes it better still, because the same nine to eighteen months of setup now buys five years of return instead of one, which is the arithmetic the bar is made of.</p>" +
-               "<p>Be clear what \"survives\" means. <b>Not approved. Not a yes.</b> It means the idea has earned a real conversation with the person who decides, which is the only thing you were ever being asked to judge.</p>" +
-               "<p>This is also the cleanest evidence you will get that the bar is a size rule and not a quality judgment. The deal you liked three weeks ago is the deal you are recommending now.</p>"
-        },
-        rail:{
-          lead:"Look at what you just said twice.",
-          body:"<p>If you called this a rail now and the bar last time, you have given two different reasons for the same deal, and one of them was not a reason. Nothing changed except the number, and <b>rails do not have prices.</b> A rail that fires at $300,000 fires at $80,000 too.</p>" +
-               "<p>That is worth keeping. When a verdict moves because the money moved, the filter that decided it was the bar. This one now clears the bar and it survives.</p>"
-        },
-        size:{
-          lead:"Check the number against the bar.",
-          body:"<p>Wes's rule of thumb is about $250,000 a year. This is $300,000 a year, and the bar is an annual test because the thing it is rationing is a year of a small team's attention.</p>" +
-               "<p>The five-year term pushes the same way, not against it. The setup cost is paid once and the return arrives five times. <b>If anything this is the strongest version of the deal you have seen.</b> It survives.</p>"
-        },
-        judge:{
-          lead:"You have every fact this decision needs.",
-          body:"<p>The size, the term, the work, the partner, and a three-week history with them. A judgment call is a candidate where something you cannot see could flip the answer. Nothing here is out of view.</p>" +
-               "<p>If the hesitation is that $300,000 does not feel like enough certainty to say yes, that is the right instinct pointed at the wrong verdict. <b>\"Survives\" is not a yes.</b> It means this goes to Sarah and she decides.</p>"
-        }
-      }
-    },
-    {
-      id:"c3", step:5,
-      qlab:"Candidate 3 of 3", rlab:"Candidate 3, the verdict",
-      h:"Does a rail or the bar kill this one?",
-      plab:"Candidate 3, as it came in", tag:"",
-      pitch:"<p>A state department of education wants to pay $400,000 a year for statewide Khanmigo access. They would fund it centrally out of a state literacy and AI line, and districts would opt in as they are ready. The person who emailed is a deputy commissioner and she wants to start in the next school year. It is four hundred thousand dollars and it is one contract instead of three hundred.</p>",
-      cap:"",
-      note:"<b>Candidate 3.</b> $400,000 a year from a state, funded centrally, with districts opting in one at a time.",
-      recname:"Candidate 3, the state deal",
-      right:"judge",
-      next:"What would you go and get?",
-      fb:{
-        judge:{
-          lead:"Genuine judgment call. No clean answer, and that is the answer.",
-          body:"<p>It clears the bar comfortably at $400,000. No competing assessment, and Khanmigo is Khan Academy's own product, so no partner here is in a position to name a different vendor for it. On that reading it is a yes.</p>" +
-               "<p>Then the district-sales entry gets in the way. District selling belongs to the sales team, and a statewide deal where districts opt in one at a time sits directly on top of districts that team may already be working. Is this a partnership, or the sales pipeline with a state logo on the invoice? <b>Both readings are defensible from what is in the note,</b> which is exactly what makes this a judgment call and not a puzzle with a hidden answer.</p>" +
-               "<p>Holding your nerve on that is the hard part. There is a real pull toward one of the tidy three so it feels finished. Resisting it is the skill.</p>"
-        },
-        rail:{
-          lead:"You found the real tension, which most people miss. Then you resolved it faster than the facts allow.",
-          body:"<p>The district-sales entry is about selling Khan Academy Districts into a specific, named school. This is a state funding central access for districts that have not been named yet, on a budget line that is the state's rather than any district's. Whether that collides with the rail or sits above it depends on a fact that is not in the note.</p>" +
-               "<p>Escalating a live tension into a rail is how a team says no to something it should have asked two questions about first, and <b>a no you cannot defend costs you more than a slow yes.</b></p>"
-        },
-        size:{
-          lead:"The arithmetic first: $400,000 is above about $250,000, so the bar does not fire.",
-          body:"<p>Then the more useful correction. <b>The bar is a floor, not a target.</b> Clearing it does not make a deal good and it does not make it yours. It buys the deal a real conversation and nothing else.</p>" +
-               "<p>Watch for the reflex you just used. This candidate is the most complicated one you have seen, and the bar is the tidiest tool on the desk. Complexity is not size. What settles this one sits in the rails, not in the money.</p>"
-        },
-        live:{
-          lead:"“Survives” is a claim that you checked the rails and they are clear. One of them is not.",
-          body:"<p>Say this survives and you are taking Sarah a deal that might be the sales team's pipeline with a state logo on the invoice, and you will find that out in the room, in front of her. The district-sales entry puts selling into named schools with the sales team, and a state where districts opt in one at a time is uncomfortably close to that.</p>" +
-               "<p>You do not have enough to call it a rail either. That is the point. <b>The next move is not to decide it.</b></p>"
-        }
-      }
+      id:"d3", step:4, right:"judge",
+      qlab:"Pitch 3 of 3", rlab:"Pitch 3, the reasoning",
+      plab:"Pitch 3, the platform",
+      recname:"The platform",
+      note:"<b>The platform.</b> $400,000 a year, standing not in question, and a term sheet that is silent on ownership.",
+      fields:[
+        ["Who they are.","A large, well-established education platform used daily in thousands of districts. Their standing is not in question."],
+        ["What they want.","To put Khan Academy practice inside their own product."],
+        ["What Khan Academy gets.","$400,000 a year, and our practice in front of their teachers. The term sheet does not say who owns the practice built for this, or what happens to it when the term ends."]
+      ],
+      why:"Both filters pass. The partner is well-placed, and $400,000 clears her general rule. Two of the deals in Sarah's own note should be nagging at you: the Canvas integration, where the partner's usage was high and usage of our tools inside it was not, and Praxis, where the partner ended up owning the practice materials. Neither of those is a reason to say no here. They are the reason to ask one more question before you answer.",
+      wrong:{
+        pursue:"Close, and premature. Both filters pass, which is exactly why the thing the term sheet leaves out decides this.",
+        money:"$400,000 clears her general rule, and the reach is real.",
+        standing:"Large, well established, in thousands of districts daily. Standing is the one thing this pitch is not short of."
+      },
+      next:"Next: the one fact"
     }
   ];
 
   /* =================================================================
-     Screen 10. Every student reaches this screen, whatever they
-     answered on candidate 3, so the second half of the ask is taught
-     rather than handed to whoever guessed right.
+     The follow-on. Every student reaches it, whatever they answered on
+     pitch 3, so the second half of the ask is taught rather than handed
+     to whoever guessed right. The one that moves it sits second, so the
+     answer is never simply the first thing on the list.
      ================================================================= */
   var FACTS = [
     {
-      id:"a", moves:true,
-      label:"Which of that state's districts are already in the sales team's pipeline, and at what stage",
-      lead:"Yes. This is the fact the whole verdict turns on.",
-      body:"If sales is already deep with a dozen districts in that state, the state deal is sitting on top of their pipeline and the district-sales entry is live. If sales has nothing there, the state is opening a door rather than standing in one. Same pitch, opposite answer, one fact."
+      id:"usage", moves:false,
+      label:"How many districts use their product every day.",
+      body:"That is their usage, not ours. Sarah's Canvas entry is exactly this: their usage was high and usage of our tools inside it was not. A bigger number on their side does not tell you anything about the side that decides it."
     },
     {
-      id:"b", moves:true,
-      label:"Who at the state has authority to sign, and whether the budget is the state's or the districts'",
-      lead:"Yes, and it is the one people forget.",
-      body:"A deputy commissioner sending an email is not the same as procurement authority or a board vote. And if the money turns out to be the districts' rather than the state's, then the state is not buying anything, it is introducing you to three hundred buyers, which is the sales team's job with extra steps."
+      id:"owns", moves:true,
+      label:"Who owns the practice at the end of the term.",
+      body:"Yes. This is the whole verdict. If the practice is ours, we keep an asset whatever happens next. If it is theirs, we are building somebody else's product and can be replaced on it, which is what happened with Praxis in Sarah's note. Same pitch, opposite answer, one fact."
     },
     {
-      id:"c", moves:false,
-      label:"Whether any other state has done a deal shaped like this one",
-      lead:"Interesting, and it does not move this.",
-      body:"Precedent tells you the shape exists somewhere. It tells you nothing about whether this particular deal is your team's or the sales team's, which is the only thing unresolved. Useful when you are writing the pitch. Useless when you are making the call."
-    },
-    {
-      id:"d", moves:false,
-      label:"Whether $400,000 is a fair price for statewide access",
-      lead:"It already clears the bar, so this cannot change the verdict.",
-      body:"Price is what you negotiate once you know whose deal it is. Asking it now feels productive and reorders nothing. Watch for that: the question you know how to answer is not always the question that is blocking you."
+      id:"price", moves:false,
+      label:"Whether $400,000 is a fair price for this kind of access.",
+      body:"It already clears her general rule, so price cannot change the verdict. Price is what you negotiate once you know whose asset you are building. Asking it now feels productive and reorders nothing."
     }
   ];
 
-  var FACTS_CLOSE = "<p>Two facts, and neither one is in the note. Most real candidates look like this. So the habit worth building is not resolving them on the spot. It is telling the difference between the fact that changes your answer and the fact that is merely interesting, and then going and getting the first kind.</p>";
+  var ROWS = [
+    ["The literacy nonprofit","Worth pursuing. Under her $250,000 rule and still the best deal here, because of what arrives alongside the cash."],
+    ["The AI tutoring startup","Partner is not well-placed enough. The most money in the set, and it never got as far as the money."],
+    ["The platform","Judgment call. Both filters pass, so the thing the term sheet leaves out decides it."]
+  ];
 
-  var CLOSE_COPY =
-    "<p>One rail, one deal that died on Wes's bar, the same deal surviving at a bigger number, and one that no filter settles. That distribution is roughly what a real intake week looks like.</p>" +
-    "<p>Hold on to both lists. Project 3 hands them straight back to you, with your own candidates on the table instead of someone else's.</p>";
-
-  var TOTAL_STEPS = 6;
+  var TOTAL = 6;
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   var el = {};
-  ["p1","p2","p3","p4","p5","pips1","pips2","pips3","pips4","pips5",
-   "f1","f2","f3","f4","f5","overlay","ovclose","live",
-   "start","resume","more1","more2","more3","more4","more5",
-   "qh","qlab","qtag","qscroll","qpitch","qcap","choices","vlab","qback","qfilters","qnext","qhint",
-   "rh","rpanel","rscroll","rbody","rmine","rtrue","rnote","rchange","rfilters","rnext",
-   "fh","fsub","opts","fpanel","fscroll","fbl","fback","fredo","fcheck","fnext","fhint","fboard",
-   "rec","cclose","cscroll","cback","cfilters","creset"].forEach(function(k){
+  ["p1","p2","p3","p4","p5","segs1","segs2","segs3","segs4","segs5",
+   "f1","f2","f3","f4","f5","overlay","ovclose","live","start","resume",
+   "more2","more3","more4",
+   "qh","qlab","qtag","qscroll","qpitch","choices","vlab","qback","qwords","qnext","qhint",
+   "rh","rpanel","rscroll","rlead","rbody","rmine","rtrue","rtruerow","rnote","rback","rwords","rnext","rhint",
+   "fh","fsub","opts","fpanel","fscroll","fbl","fback","fredo","fnext","fhint",
+   "rows","cback","cwords","creset"].forEach(function(k){
     el[k] = document.getElementById(k);
   });
 
   /* ---------------------------------------------------------------
-     A small, failure-tolerant store, so "do the first candidate and
-     move on" is a true statement rather than a promise the build
-     breaks. Every read and write is wrapped: a browser with storage
-     disabled must lose the record, not the interactive.
+     A small, failure-tolerant store, so "do pitch 1 and come back"
+     is a true statement rather than a promise the build breaks.
+     Every read and write is wrapped: a browser with storage disabled
+     must lose the record, not the interactive.
      --------------------------------------------------------------- */
-  var KEY = "ka-p1-candidates-v1";
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; }
-  }
-  function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){}
-  }
+  var KEY = "ka-p1-pitches-v2";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
   var store = load();
-  store.v = store.v || {};              /* judgment id -> verdict id  */
-  store.facts = store.facts || null;    /* array of two fact ids      */
+  store.v = store.v || {};        /* pitch id -> the verdict they settled on */
+  store.out = store.out || {};    /* pitch id -> verdicts they ruled out      */
+  store.fact = store.fact || null;
 
-  var qi = 0;                           /* which judgment is on screen */
-  var picks = [];                       /* live selection on screen 10 */
-  var lastFocus = null;                 /* who opened the overlay      */
+  var qi = 0;
+  var shown = null;               /* which verdict the reasoning frame is showing */
+  var lastFocus = null;
 
   function announce(m){ el.live.textContent = m; }
 
-  function pips(node, lit){
+  function segs(node, at){
     var out = "";
-    for(var i=1;i<=TOTAL_STEPS;i++){
-      out += '<span class="pip' + (i <= lit ? " on" : "") + '"></span>';
+    for(var i=1;i<=TOTAL;i++){
+      out += '<i class="' + (i === at ? "here" : (i < at ? "on" : "")) + '"></i>';
     }
     node.innerHTML = out;
   }
@@ -847,22 +783,19 @@
      the panel edge with no affordance. Measured synchronously: reading
      scrollHeight forces layout, and an earlier version deferred this to
      requestAnimationFrame, which never fired under headless rendering, so
-     the flag stayed hidden on a panel with 525px below the fold.
-     The flag is hidden before the read so its own height is never counted
-     as part of the content it is reporting on. */
+     the flag stayed hidden on a panel with content below the fold. The
+     flag is hidden before the read so its own height is never counted as
+     part of the content it is reporting on. */
   function flag(scroller, flagEl){
     if(!scroller || !flagEl) return;
     flagEl.hidden = true;
     flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
   }
-  function flagSoon(scroller, flagEl){ flag(scroller, flagEl); }
 
   var FRAMES = ["f1","f2","f3","f4","f5"];
-  function show(which){
-    FRAMES.forEach(function(f){ el[f].hidden = (f !== which); });
-  }
+  function show(which){ FRAMES.forEach(function(f){ el[f].hidden = (f !== which); }); }
 
-  /* ---------------- screen 1 ---------------- */
+  /* ---------------- frame 1 ---------------- */
 
   function firstUnanswered(){
     for(var i=0;i<J.length;i++){ if(!store.v[J[i].id]) return i; }
@@ -870,274 +803,225 @@
   }
 
   function drawStart(){
-    el.p1.textContent = "1 of " + TOTAL_STEPS + " · The two filters";
-    pips(el.pips1, 1);
+    el.p1.textContent = "1 of " + TOTAL + " · The two filters";
+    segs(el.segs1, 1);
     var n = 0;
     J.forEach(function(j){ if(store.v[j.id]) n++; });
     var nx = firstUnanswered();
     if(n === 0){
-      el.start.textContent = "Start with candidate 1";
+      el.start.textContent = "Start with pitch 1";
       el.resume.textContent = "";
     } else if(nx === -1){
-      el.start.textContent = "Back to candidate 1";
-      el.resume.innerHTML = "<b>You have judged all four already.</b> Your calls are saved on this device.";
+      el.start.textContent = "Back to pitch 1";
+      el.resume.innerHTML = "<b>You have settled all three already.</b> Your verdicts are saved on this device.";
     } else {
-      el.start.textContent = "Pick up at " + J[nx].qlab.toLowerCase();
-      el.resume.innerHTML = "<b>You judged " + n + " of 4 last time.</b> Those calls are saved on this device.";
+      el.start.textContent = "Pick up at pitch " + (nx + 1);
+      el.resume.innerHTML = "<b>You settled " + n + " of 3 last time.</b> Those verdicts are saved on this device.";
     }
-    var s1 = el.f1.querySelectorAll(".scroll");
-    flagSoon(s1[1], el.more1);
   }
 
-  /* ---------------- a candidate screen ---------------- */
+  /* ---------------- a pitch frame ---------------- */
 
   function buildChoices(){
     var out = "";
-    VERDICTS.forEach(function(v, i){
+    VERDICTS.forEach(function(v){
       out += '<button class="ch" type="button" data-v="' + v.id + '" aria-pressed="false">' +
              '<span class="dot" aria-hidden="true"></span>' +
-             '<span>' + v.label + '</span></button>';
+             '<span class="txt">' + v.label + "</span></button>";
     });
     el.choices.innerHTML = out;
-    Array.prototype.slice.call(el.choices.querySelectorAll("button.ch")).forEach(function(b){
+    choiceButtons().forEach(function(b){
       b.addEventListener("click", function(){
         if(b.disabled) return;
         commit(b.getAttribute("data-v"));
       });
     });
   }
-
   function choiceButtons(){
     return Array.prototype.slice.call(el.choices.querySelectorAll("button.ch"));
   }
+  function ruledOut(j){ return store.out[j.id] || []; }
 
   function drawCand(){
-    var j = J[qi], done = store.v[j.id];
-    el.p2.textContent = j.step + " of " + TOTAL_STEPS + " · " + j.qlab;
-    pips(el.pips2, j.step);
-    el.qh.textContent = j.h;
+    var j = J[qi], done = store.v[j.id], out = ruledOut(j);
+    el.p2.textContent = j.step + " of " + TOTAL + " · " + j.qlab;
+    segs(el.segs2, j.step);
     el.qlab.textContent = j.plab;
-    el.qtag.hidden = !j.tag;
-    if(j.tag) el.qtag.textContent = j.tag;
-    el.qpitch.innerHTML = j.pitch;
-    el.qcap.innerHTML = j.cap;
-    el.qcap.hidden = !j.cap;
+    el.qpitch.innerHTML = j.fields.map(function(f){
+      return '<p class="fld"><b class="lab">' + f[0] + "</b> " + f[1] + "</p>";
+    }).join("");
     el.qscroll.scrollTop = 0;
 
     choiceButtons().forEach(function(b){
-      var mine = b.getAttribute("data-v") === done;
-      b.setAttribute("aria-pressed", mine ? "true" : "false");
-      b.disabled = !!done;
+      var id = b.getAttribute("data-v");
+      var isOut = out.indexOf(id) > -1;
+      b.classList.toggle("out", isOut && id !== done);
+      b.classList.toggle("done", !!done);
+      b.setAttribute("aria-pressed", id === done ? "true" : "false");
+      b.disabled = !!done || isOut;
+      b.querySelector(".dot").textContent = (isOut && id !== done) ? GLYPH.no : "";
     });
 
     el.qnext.hidden = !done;
-    if(done) el.qnext.textContent = "See the verdict again";
     el.qhint.innerHTML = done
-      ? "You already called this one <b>" + VD[done].short.toLowerCase() + "</b>. Reopen the verdict, or step back."
-      : "Pick one. You get the reasoning either way, including why the other three do not fit. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work.";
+      ? "You settled this one. Reopen the reasoning, or step back."
+      : (out.length
+          ? "That one is ruled out and the reasoning said why. Pick another. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work."
+          : "Pick one. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work.");
 
-    flagSoon(el.qscroll, el.more2);
+    flag(el.qscroll, el.more2);
   }
 
   function commit(vid){
-    var j = J[qi];
-    store.v[j.id] = vid;
+    var j = J[qi], ok = (vid === j.right);
+    if(ok){
+      store.v[j.id] = vid;
+    } else {
+      var o = store.out[j.id] || [];
+      if(o.indexOf(vid) < 0) o.push(vid);
+      store.out[j.id] = o;
+    }
     save();
-    choiceButtons().forEach(function(b){
-      var mine = b.getAttribute("data-v") === vid;
-      b.setAttribute("aria-pressed", mine ? "true" : "false");
-      b.disabled = true;
-    });
+    shown = vid;
     show("f3");
     drawReveal();
     /* the button that was activated is now inside a hidden frame, so focus
        moves deliberately to the panel that replaced it rather than falling
-       back to <body> and losing the keyboard student's place */
+       back to <body> and losing the keyboard student their place */
     el.rpanel.focus();
-    announce("You said " + VD[vid].label + ". The verdict screen is open.");
+    announce(ok
+      ? "You said " + VD[vid].label + ". That is the verdict. The reasoning is open."
+      : "You said " + VD[vid].label + ". Not this one. Why it does not fit is open.");
   }
 
-  /* ---------------- the reveal ---------------- */
+  /* ---------------- the reasoning ---------------- */
 
   function drawReveal(){
-    var j = J[qi], mine = store.v[j.id], ok = (mine === j.right);
-    var st = j.fb[mine];
+    var j = J[qi], mine = shown, ok = (mine === j.right);
 
-    el.p3.textContent = j.step + " of " + TOTAL_STEPS + " · " + j.rlab;
-    pips(el.pips3, j.step);
-    el.rh.textContent = (ok ? "You had it. " : "Not this one. ") + "The call: " + VD[j.right].lower + ".";
-
-    el.rbody.innerHTML = '<p class="lead">' + st.lead + "</p>" + st.body;
+    el.p3.textContent = j.step + " of " + TOTAL + " · " + j.rlab;
+    segs(el.segs3, j.step);
+    el.rh.textContent = ok ? "You had it." : "Not this one.";
+    el.rlead.textContent = ok ? "Why this is the verdict" : "Why this one does not fit";
+    el.rbody.innerHTML = "<p>" + (ok ? j.why : j.wrong[mine]) + "</p>";
     el.rscroll.scrollTop = 0;
 
     el.rmine.innerHTML = '<span class="g' + (ok ? " fill" : "") + '" aria-hidden="true">' +
-                         (ok ? GLYPH.ok : GLYPH.miss) + "</span>" + VD[mine].short;
-    el.rmine.setAttribute("aria-label", "Your call: " + VD[mine].short + (ok ? ", a match" : ", not the call"));
-    el.rtrue.innerHTML = '<span class="g fill" aria-hidden="true">' + GLYPH.ok + "</span>" + VD[j.right].short;
+                         (ok ? GLYPH.ok : GLYPH.no) + "</span>" + VD[mine].label;
+    el.rmine.setAttribute("aria-label", "Your verdict: " + VD[mine].label + (ok ? ", the verdict" : ", ruled out"));
+    /* the correct verdict is never printed on a wrong pick: the student
+       goes back and picks again with one option fewer */
+    el.rtruerow.hidden = !ok;
+    if(ok) el.rtrue.innerHTML = '<span class="g fill" aria-hidden="true">' + GLYPH.ok + "</span>" + VD[j.right].label;
     el.rnote.innerHTML = j.note;
 
-    el.rnext.textContent = j.next;
+    el.rback.textContent = ok ? "Back to the pitch" : "Pick again";
+    el.rnext.hidden = !ok;
+    if(ok) el.rnext.textContent = j.next;
+    el.rhint.innerHTML = ok
+      ? ""
+      : "Three verdicts left on this pitch. <b>Pick again</b> takes you back with this one struck off.";
 
-    if(reduce){
-      el.rpanel.classList.add("on");
-    } else {
+    if(!reduce){
       el.rpanel.classList.remove("on");
       void el.rpanel.offsetWidth;
-      el.rpanel.classList.add("on");
     }
-    flagSoon(el.rscroll, el.more3);
+    el.rpanel.classList.add("on");
+    flag(el.rscroll, el.more3);
   }
 
-  /* ---------------- screen 10, the two facts ---------------- */
+  /* ---------------- the one fact ---------------- */
 
   function buildOpts(){
     var out = "";
-    FACTS.forEach(function(f, i){
+    FACTS.forEach(function(f){
       out += '<button class="opt" type="button" data-f="' + f.id + '" aria-pressed="false">' +
              '<span class="box" aria-hidden="true"></span>' +
-             '<span>' + f.label + '</span></button>';
+             "<span>" + f.label + "</span></button>";
     });
     el.opts.innerHTML = out;
     Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
-      b.addEventListener("click", function(){ toggleFact(b); });
+      b.addEventListener("click", function(){
+        if(b.disabled) return;
+        pickFact(b.getAttribute("data-f"));
+      });
     });
-  }
-
-  function toggleFact(b){
-    if(b.disabled) return;
-    var id = b.getAttribute("data-f"), at = picks.indexOf(id);
-    if(at > -1){
-      picks.splice(at, 1);
-      b.setAttribute("aria-pressed", "false");
-    } else if(picks.length >= 2){
-      el.fhint.innerHTML = "<b>Two only.</b> Unpick one before you add another.";
-      if(!reduce){
-        b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake");
-      }
-      announce("Two picks only. Unpick one first.");
-      return;
-    } else {
-      picks.push(id);
-      b.setAttribute("aria-pressed", "true");
-    }
-    el.fcheck.disabled = picks.length !== 2;
-    if(picks.length !== 2){
-      el.fhint.innerHTML = "Two picks, then check. Nothing is graded until you do.";
-    } else {
-      el.fhint.innerHTML = "Two picked. <b>Check my two</b> when you are ready.";
-    }
-    announce(picks.length + " of 2 picked.");
   }
 
   function drawFacts(){
-    var j = J[3], mine = store.v[j.id];
-    el.p4.textContent = "5 of " + TOTAL_STEPS + " · Candidate 3, the two facts";
-    pips(el.pips4, 5);
-    var got = (mine === j.right);
-    el.fh.textContent = got
-      ? "You called it. So what would you go and get?"
-      : "So what would you go and get?";
-    el.fsub.innerHTML = got
-      ? "Pick the two that would actually change your answer. Two of these four would not."
-      : "You called candidate 3 something else, and this is still the part that moves it. Pick the two facts that would actually change the answer. Two of these four would not.";
-
-    if(store.facts && store.facts.length === 2){
-      picks = store.facts.slice();
-      Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
-        b.setAttribute("aria-pressed", picks.indexOf(b.getAttribute("data-f")) > -1 ? "true" : "false");
-      });
-      showFactResult();
-    } else {
-      picks = [];
-      Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
-        b.setAttribute("aria-pressed", "false"); b.disabled = false;
-      });
-      openFactPicking();
-    }
+    el.p4.textContent = "5 of " + TOTAL + " · The platform, the one fact";
+    segs(el.segs4, 5);
+    if(store.fact){ showFactResult(store.fact); } else { openFactPicking(); }
   }
 
-  /* symmetric with "Change my call" on a verdict: a checked answer can be
-     reopened without wiping the whole exercise */
   function openFactPicking(){
+    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+      b.setAttribute("aria-pressed","false"); b.disabled = false;
+    });
     el.opts.hidden = false;
     el.fpanel.hidden = true;
-    el.fcheck.hidden = false;
-    el.fcheck.disabled = picks.length !== 2;
     el.fnext.hidden = true;
     el.fredo.hidden = true;
-    el.fhint.innerHTML = "Two picks, then check. Nothing is graded until you do.";
+    el.fhint.textContent = "Pick one. Nothing is graded until you do.";
   }
 
-  function checkFacts(){
-    if(picks.length !== 2) return;
-    store.facts = picks.slice();
+  function pickFact(id){
+    store.fact = id;
     save();
-    showFactResult();
-    el.fpanel.setAttribute("tabindex", "-1");
+    showFactResult(id);
     el.fpanel.focus();
+    announce("You picked one fact. All three are explained.");
   }
 
-  function showFactResult(){
-    var right = 0, out = "";
+  function showFactResult(id){
+    var got = false, out = "";
     FACTS.forEach(function(f){
-      var chosen = picks.indexOf(f.id) > -1;
-      if(f.moves && chosen) right++;
-      var g = (f.moves === chosen) ? GLYPH.ok : GLYPH.miss;
-      var tag = f.moves ? "Moves the verdict" : "Does not move it";
-      var you = chosen ? "You picked this. " : "You left this out. ";
+      var chosen = (f.id === id);
+      if(f.moves && chosen) got = true;
+      /* the glyph reports the fact, not the pick: a tick on the one that
+         moves it, a cross on the two that do not. Which one they picked is
+         carried by the label underneath, so no glyph has two meanings. */
       out += '<div class="fb ' + (f.moves ? "yes" : "no") + '">' +
-               '<div class="fbh"><span class="g' + (f.moves === chosen ? " fill" : "") + '" aria-hidden="true">' + g + "</span>" +
-                 "<span>" + f.label + '</span></div>' +
-               '<div class="fbt">' + tag + "</div>" +
-               '<div class="fbb"><b>' + f.lead + "</b> " + you + f.body + "</div>" +
+               '<div class="fbh"><span class="g' + (f.moves ? " fill" : "") + '" aria-hidden="true">' +
+                 (f.moves ? GLYPH.ok : GLYPH.no) + "</span><span>" + f.label + "</span></div>" +
+               '<div class="fbt">' + (f.moves ? "Moves it" : "Does not move it") +
+                 (chosen ? " · you picked this" : "") + "</div>" +
+               '<div class="fbb">' + f.body + "</div>" +
              "</div>";
     });
-    out += '<div class="fbb wide" style="margin-top:2px">' + FACTS_CLOSE + "</div>";
     el.fbl.innerHTML = out;
-
+    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
+      b.setAttribute("aria-pressed", b.getAttribute("data-f") === id ? "true" : "false");
+      b.disabled = true;
+    });
     el.opts.hidden = true;
     el.fpanel.hidden = false;
     el.fscroll.scrollTop = 0;
-    el.fcheck.hidden = true;
     el.fnext.hidden = false;
     el.fredo.hidden = false;
-    el.fhint.innerHTML = right === 2
-      ? "<b>Both of the two that matter.</b> Read why the other two do not."
-      : "You found " + right + " of the two that matter. All four are explained below.";
-    announce("Checked. " + right + " of the two decision-changing facts found.");
-    flagSoon(el.fscroll, el.more4);
+    el.fhint.innerHTML = got
+      ? "<b>That is the one.</b> Read why the other two do not move it."
+      : "<b>That one does not move it.</b> The one that does is explained below.";
+    flag(el.fscroll, el.more4);
   }
 
-  /* ---------------- screen 11, the close ---------------- */
+  /* ---------------- the close ---------------- */
 
   function drawClose(){
-    el.p5.textContent = TOTAL_STEPS + " of " + TOTAL_STEPS + " · What you take with you";
-    pips(el.pips5, TOTAL_STEPS);
-
-    var out = '<div class="rrow head" aria-hidden="true"><span>Candidate</span><span>Your call</span><span>The call</span><span></span></div>';
-    J.forEach(function(j){
-      var mine = store.v[j.id], ok = mine === j.right;
-      out += '<div class="rrow">' +
-               '<span class="rc">' + j.recname + "</span>" +
-               '<span class="rm' + (ok ? " same" : "") + '" data-k="Your call">' + (mine ? VD[mine].short : "Not answered") + "</span>" +
-               '<span class="rm same" data-k="The call">' + VD[j.right].short + "</span>" +
-               '<span class="g' + (ok ? " fill" : "") + '" role="img" aria-label="' +
-                 (ok ? "match" : "not a match") + '">' + (ok ? GLYPH.ok : GLYPH.miss) + "</span>" +
-             "</div>";
-    });
-    el.rec.innerHTML = out;
-    el.cclose.innerHTML = CLOSE_COPY;
-    el.cscroll.scrollTop = 0;
-    flagSoon(el.cscroll, el.more5);
+    el.p5.textContent = TOTAL + " of " + TOTAL + " · What you take with you";
+    segs(el.segs5, TOTAL);
+    el.rows.innerHTML = ROWS.map(function(r){
+      return '<div class="row"><span class="nm">' + r[0] + '</span><span class="rr">' + r[1] + "</span></div>";
+    }).join("");
   }
 
-  /* ---------------- the filters overlay ---------------- */
+  /* ---------------- her words, on demand ---------------- */
 
   function openOverlay(opener){
     lastFocus = opener || document.activeElement;
     el.overlay.hidden = false;
     el.ovclose.focus();
-    announce("The two filters are open. Escape closes.");
+    announce("Sarah's words are open. Escape closes.");
   }
   function closeOverlay(){
     if(el.overlay.hidden) return;
@@ -1156,20 +1040,44 @@
     else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
   });
 
-  /* ---------------- navigation ---------------- */
+  /* ---------------- navigation ----------------
+     Every one of these lands focus on a real control or on a panel that
+     takes focus. Nothing here can leave focus on <body>. */
 
-  function goCand(i){
+  function goCand(i, prefer){
     qi = Math.max(0, Math.min(J.length - 1, i));
     /* show before draw. A hidden frame measures zero, so the overflow flag
        has to be computed on a frame that is actually laid out. */
     show("f2");
     drawCand();
-    if(store.v[J[qi].id]) el.qnext.focus();
-    else el.qscroll.focus();
+    if(store.v[J[qi].id]){ el.qnext.focus(); return; }
+    var live = choiceButtons().filter(function(b){ return !b.disabled; });
+    if(prefer){
+      /* after a wrong pick, land on the next live option and never on the
+         correct one */
+      var from = 0;
+      choiceButtons().forEach(function(b, k){ if(b.getAttribute("data-v") === prefer) from = k; });
+      var after = live.filter(function(b){
+        return choiceButtons().indexOf(b) > from && b.getAttribute("data-v") !== J[qi].right;
+      });
+      var notRight = live.filter(function(b){ return b.getAttribute("data-v") !== J[qi].right; });
+      var target = after[0] || notRight[0];
+      if(target){ target.focus(); return; }
+      /* only the correct verdict is left. Focus goes to the pitch rather
+         than onto the answer, so nothing is handed over by focus ring. */
+      el.qscroll.focus();
+      return;
+    }
+    /* arriving fresh, focus the pitch, not the first verdict. Tab order runs
+       pitch then verdicts, which is also the order to read them in, and the
+       first verdict in the fixed list is the answer on pitch 1. */
+    el.qscroll.focus();
   }
   function goReveal(i){
     qi = Math.max(0, Math.min(J.length - 1, i));
-    if(!store.v[J[qi].id]){ goCand(qi); return; }
+    var v = store.v[J[qi].id];
+    if(!v){ goCand(qi); return; }
+    shown = v;
     show("f3");
     drawReveal();
     el.rpanel.focus();
@@ -1177,14 +1085,14 @@
   function goFacts(){
     show("f4");
     drawFacts();
+    if(!el.fpanel.hidden){ el.fpanel.focus(); return; }
     var first = el.opts.querySelector("button.opt");
-    if(!el.fpanel.hidden){ el.fpanel.setAttribute("tabindex","-1"); el.fpanel.focus(); }
-    else if(first) first.focus();
+    if(first){ first.focus(); } else { el.fback.focus(); }
   }
   function goClose(){
     show("f5");
     drawClose();
-    el.cscroll.focus();
+    el.cback.focus();
   }
   function goStart(){
     show("f1");
@@ -1202,52 +1110,32 @@
   });
   el.qnext.addEventListener("click", function(){ goReveal(qi); });
 
-  el.rchange.addEventListener("click", function(){
-    var j = J[qi], had = store.v[j.id];
-    delete store.v[j.id];
-    save();
-    show("f2");
-    drawCand();
-    /* land on the option they had chosen, not at the top of the frame */
-    var b = el.choices.querySelector('button.ch[data-v="' + had + '"]');
-    if(b){ b.setAttribute("aria-pressed","true"); b.focus(); } else { el.qscroll.focus(); }
-    el.qhint.innerHTML = "Your call is open again. Pick one to commit it.";
-    announce("Your call is open again.");
-  });
-
+  el.rback.addEventListener("click", function(){ goCand(qi, shown); });
   el.rnext.addEventListener("click", function(){
-    if(qi < J.length - 1){ goCand(qi + 1); }
-    else { goFacts(); }
+    if(qi < J.length - 1){ goCand(qi + 1); } else { goFacts(); }
   });
 
   el.fback.addEventListener("click", function(){ goReveal(J.length - 1); });
   el.fredo.addEventListener("click", function(){
-    store.facts = null; picks = []; save();
-    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
-      b.setAttribute("aria-pressed", "false"); b.disabled = false;
-    });
+    store.fact = null; save();
     openFactPicking();
     var first = el.opts.querySelector("button.opt");
     if(first) first.focus();
-    announce("Your two picks are open again.");
+    announce("Your pick is open again.");
   });
-  el.fcheck.addEventListener("click", checkFacts);
   el.fnext.addEventListener("click", goClose);
 
   el.cback.addEventListener("click", goFacts);
   el.creset.addEventListener("click", function(){
-    store.v = {}; store.facts = null; picks = []; save();
-    Array.prototype.slice.call(el.opts.querySelectorAll("button.opt")).forEach(function(b){
-      b.setAttribute("aria-pressed","false"); b.disabled = false;
-    });
+    store.v = {}; store.out = {}; store.fact = null; save();
     openFactPicking();
     goStart();
-    announce("Cleared. Four judgments to make again.");
+    announce("Cleared. Three pitches to settle again.");
   });
 
-  el.qfilters.addEventListener("click", function(){ openOverlay(el.qfilters); });
-  el.rfilters.addEventListener("click", function(){ openOverlay(el.rfilters); });
-  el.cfilters.addEventListener("click", function(){ openOverlay(el.cfilters); });
+  el.qwords.addEventListener("click", function(){ openOverlay(el.qwords); });
+  el.rwords.addEventListener("click", function(){ openOverlay(el.rwords); });
+  el.cwords.addEventListener("click", function(){ openOverlay(el.cwords); });
   el.ovclose.addEventListener("click", closeOverlay);
 
   /* Plain Tab and Enter operate every control in this file. The two keys
@@ -1267,7 +1155,7 @@
       return;
     }
     if(e.key === "f" || e.key === "F"){
-      if(el.f1.hidden){ e.preventDefault(); openOverlay(document.activeElement); }
+      if(el.f1.hidden && el.f4.hidden){ e.preventDefault(); openOverlay(document.activeElement); }
       return;
     }
     if(!el.f2.hidden && e.key >= "1" && e.key <= "4"){
@@ -1288,7 +1176,6 @@
     flag(el.qscroll, el.more2);
     flag(el.rscroll, el.more3);
     flag(el.fscroll, el.more4);
-    flag(el.cscroll, el.more5);
   });
 
   buildChoices();
@@ -1297,14 +1184,13 @@
   drawStart();
   fit();
 
-  /* exposed for render QA only: lets a screenshot or assertion run force
+  /* exposed for render QA only: lets a screenshot or an assertion run force
      a state without hand-driving the UI */
   window.__ex = {
-    go:goCand, reveal:goReveal, facts:goFacts, close:goClose, start:goStart,
-    commit:function(i, v){ qi = i; drawCand(); show("f2"); commit(v); },
-    pick:function(id){ toggleFact(el.opts.querySelector('button.opt[data-f="' + id + '"]')); },
-    check:checkFacts,
-    state:function(){ return {qi:qi, v:store.v, facts:store.facts, picks:picks}; }
+    cand:goCand, reveal:goReveal, facts:goFacts, close:goClose, start:goStart,
+    commit:function(i, v){ qi = i; show("f2"); drawCand(); commit(v); },
+    pickFact:function(id){ show("f4"); drawFacts(); pickFact(id); },
+    state:function(){ return {qi:qi, v:store.v, out:store.out, fact:store.fact, shown:shown}; }
   };
 })();
 </script>
