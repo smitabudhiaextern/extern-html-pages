@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cohort board: the partner you would put on the table</title>
+<style>
+  /* ===============================================================
+     BUILD NOTES. Every note in this file sits inside a style or a
+     script comment, never an HTML comment, because an HTML comment
+     opener carries two hyphens and this program bans that sequence.
+     Two consecutive hyphens appear nowhere in this file, which is also
+     why there are no CSS custom properties, why dividers use the equals
+     sign, and why the script counts down with "i = i - 1" rather than
+     the decrement operator. A grep for the sequence returns nothing.
+
+     WHAT THIS IS. Substep 1.2.5. One optional question, and the first
+     build in this program where a student reads what other students
+     wrote. Left pane composes, right pane is the cohort feed.
+
+     HOW THE SHARING ACTUALLY WORKS, and its limits. This is option 2 of
+     three the owner was shown on 21 August 2026. GitHub Pages is static
+     hosting with no server behind it, so a page served from there can
+     save nothing that another browser can read. The shared state is
+     rented from Supabase instead: the page POSTs an answer to a REST
+     endpoint and GETs the whole table back on load. Everything the page
+     needs to talk to Supabase is in the browser, so it is public. What
+     that buys and what it costs:
+
+       buys  every student sees every answer, live, no login, and the
+             page keeps the house design
+       costs no identity, so a typed name proves nothing
+             no editing and no deleting by the student, ever
+             the answers are readable by anyone holding the URL
+             no replies, so it is a wall and not a thread
+
+     The write path is narrowed by database policy rather than by this
+     page, because anything this page enforces can be bypassed by
+     posting to the endpoint directly. See the SQL in the script's
+     configuration block. There is no update policy and no delete
+     policy, so the key shipped here cannot alter or remove a row even
+     though it can add one. Removing an unwanted row is a person in the
+     Supabase dashboard. That is the moderation plan and it needs an
+     owner.
+
+     UNTIL THE KEY IS DROPPED IN this build runs in local mode: the
+     student's own answer is kept in their browser, the feed holds only
+     their entry, and the header strip says in plain words that the
+     board is not connected. It never pretends to be a cohort. An
+     earlier interactive in this program was removed for showing
+     invented cohort percentages, so a fabricated feed is the one thing
+     this file must never do.
+
+     THE REVEAL GATE. The feed is covered until the student either posts
+     or chooses to read without posting. This is deliberate and it is
+     the pedagogy, not decoration: three visible answers set a pattern
+     and later answers cluster around them, which would cost exactly the
+     independent first thought Project 3 picks up. Flip REVEAL to
+     "always" in the configuration block if the owner would rather the
+     board be open on arrival.
+
+     PALETTE. The five value house standard from style guide section 7,
+     no exceptions, matching khan-academy-p1-prompt-builder.html. The
+     warm paper and green language approved for
+     khan-academy-p1-sample-deal-onepager.html is a sample only carve
+     out and none of it appears here.
+
+       #DCE1FF  highlight container: the student's own card, chip fills,
+                hairlines, feed card edges
+       #001D69  on highlight: borders, tags, the primary button, focus
+                rings, the ink on anything the student did
+       #FDF8F8  background: canvas, card surfaces, negative space
+       #484646  body copy, helper text, the held control, dashed edges
+       #1C1B1B  headings and the text the student typed
+
+     THE TWO KINDS OF ANSWER are distinguished the way fields 4 and 5 of
+     the prompt builder are, by line style and wording rather than by
+     colour, because the house palette carries one accent and cannot
+     spare a second: a named partner gets a solid filled chip set
+     upright, a kind of deal gets a hollow dashed chip set in italic.
+
+     HEIGHT BUDGET, set once, never inferred.
+        24   top padding
+        20   the header strip
+        14   gap
+       402   the body, both panes designed inside this
+        16   gap
+        44   the action bar
+        20   bottom padding
+       ===
+       540
+     Do not decide whether a string fits by counting characters. Reason
+     about laid out height. scrollHeight on an absolutely positioned
+     frame reports the canvas height in every state and says nothing
+     about overflow, so measure the deepest painted element bottom.
+
+     INTERNAL SCROLLING IS CORRECT IN EXACTLY ONE PLACE, the feed. A
+     cohort is an unbounded list and cannot be designed to a fixed
+     height. Everything else on the canvas is fixed and fits.
+     =============================================================== */
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  html{-webkit-text-size-adjust:100%}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:#FDF8F8;
+    color:#484646;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===== the 960 by 540 canvas, scaled down only, never up =====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     would lay out narrower than 960 and the transform would then shrink
+     the design a second time, so every line would rewrap at a width it
+     was never drawn for. The canvas always holds 960 in layout. */
+  #stage{width:960px;height:540px;flex:0 0 auto;position:relative;
+         transform-origin:center center;background:#FDF8F8;overflow:hidden;
+         padding:24px 56px 20px;display:flex;flex-direction:column}
+
+  .hd{height:20px;flex:0 0 auto;display:flex;align-items:baseline;gap:16px}
+  .idx{flex:0 0 auto;font-size:13px;font-weight:600;letter-spacing:.04em;color:#001D69}
+  .keep{flex:1 1 auto;min-width:0;text-align:right;font-size:11.5px;line-height:1.4;color:#484646;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .keep b{color:#001D69;font-weight:600}
+
+  .body{flex:0 0 auto;height:402px;margin-top:14px;display:flex;gap:30px;min-height:0}
+  .col{min-height:0;display:flex;flex-direction:column}
+  .col.left{flex:0 0 404px}
+  .col.right{flex:1 1 auto;min-width:0}
+
+  /* ========== type ==========
+     One system sans stack set on the body. Weight 600 carries every
+     heading and emphasis inside a heading is the accent ink rather than
+     an italic, because an editorial italic display face belongs to the
+     sample one pager and not to a program interactive. */
+  .kick{font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+        color:#001D69;line-height:1.4;flex:0 0 auto}
+  h1.dh{font-weight:600;color:#1C1B1B;font-size:24px;line-height:1.2;flex:0 0 auto;margin-top:8px}
+  h1.dh em{font-style:normal;color:#001D69}
+  h2.ph{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+        color:#001D69;line-height:1.4;flex:0 0 auto}
+  p.help{font-size:13px;line-height:1.5;color:#484646;flex:0 0 auto}
+  p.help b{color:#1C1B1B;font-weight:600}
+  .lbl{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+       color:#484646;line-height:1.4;flex:0 0 auto}
+
+  /* ========== the two paths ==========
+     Radio inputs, visually hidden, driving a styled label. The input
+     stays in the accessibility tree and keeps arrow key selection, so
+     the chips are a real radio group and not buttons pretending. */
+  .chips{display:flex;gap:8px;flex:0 0 auto;flex-wrap:wrap}
+  .chip{position:relative;display:inline-flex;align-items:center;
+        padding:8px 13px;border-radius:8px;cursor:pointer;
+        font-size:13.5px;font-weight:600;line-height:1.2;
+        border:1.5px dashed #484646;color:#484646;background:transparent;
+        transition:background 150ms cubic-bezier(.2,.7,.3,1),color 150ms cubic-bezier(.2,.7,.3,1)}
+  .chip input{position:absolute;width:1px;height:1px;opacity:0;margin:0}
+  .chip.sel{border:2px solid #001D69;background:#DCE1FF;color:#001D69}
+  .chip:hover{color:#001D69;border-color:#001D69}
+  .chip:focus-within{outline:3px solid #001D69;outline-offset:2px}
+  .chips.small .chip{font-size:12.5px;padding:6px 11px}
+
+  /* ========== fields ========== */
+  input.nf{
+    font-family:inherit;font-size:14px;line-height:1.4;color:#1C1B1B;
+    background:#FDF8F8;border:1.5px solid #484646;border-radius:8px;
+    padding:9px 12px;width:100%;flex:0 0 auto;
+  }
+  textarea.tf{
+    font-family:inherit;font-size:15px;line-height:1.5;color:#1C1B1B;
+    background:#FDF8F8;border:1.5px solid #001D69;border-radius:9px;
+    padding:11px 13px;resize:none;width:100%;flex:0 0 auto;height:92px;overflow-y:auto;
+  }
+  input.nf::placeholder,textarea.tf::placeholder{color:#484646;opacity:1;font-style:italic}
+  input.nf:focus-visible,textarea.tf:focus-visible{outline:3px solid #001D69;outline-offset:2px}
+  .count{font-size:11.5px;color:#484646;flex:0 0 auto;text-align:right;
+         font-variant-numeric:tabular-nums}
+  .count.over{color:#001D69;font-weight:600}
+
+  /* ========== posted state ==========
+     Replaces the form once the answer is away. It is not an editable
+     field made read only, because nothing here can be edited and a
+     greyed box invites the student to try. */
+  .done{flex:0 0 auto;background:#DCE1FF;border:2px solid #001D69;border-left:6px solid #001D69;
+        border-radius:11px;padding:14px 16px}
+  .done .who{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#001D69}
+  .done p.said{font-size:15px;line-height:1.5;color:#1C1B1B;margin-top:8px}
+
+  /* ========== the feed ========== */
+  .feedhd{flex:0 0 auto;display:flex;align-items:baseline;gap:10px}
+  .tally{font-size:11.5px;color:#484646;font-variant-numeric:tabular-nums}
+  .scroller{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:10px;
+            display:flex;flex-direction:column;gap:8px;padding-right:4px}
+  .card{flex:0 0 auto;border:1.5px solid #DCE1FF;border-radius:10px;padding:9px 12px 10px;
+        background:#FDF8F8}
+  .card.mine{background:#DCE1FF;border:2px solid #001D69}
+  .card .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card .who{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+             color:#001D69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  /* The two kinds, by line style and wording, never by colour. A named
+     partner is a solid filled chip set upright. A kind of deal is a
+     hollow dashed chip set in italic. */
+  .tag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+       padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .tag.named{background:#001D69;color:#FDF8F8;border:1.5px solid #001D69;font-style:normal}
+  .tag.kindof{background:transparent;color:#001D69;border:1.5px dashed #001D69;font-style:italic}
+  .card p.said{font-size:14px;line-height:1.5;color:#1C1B1B;margin-top:6px}
+
+  /* the covered feed */
+  .gate{flex:1 1 auto;min-height:0;margin-top:10px;border:1.5px dashed #484646;border-radius:11px;
+        padding:20px 22px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+  .gate h3{font-size:17px;font-weight:600;color:#1C1B1B;line-height:1.3}
+  .gate p{font-size:13.5px;line-height:1.55;color:#484646}
+  .empty{flex:1 1 auto;min-height:0;margin-top:10px;border:1.5px dashed #484646;border-radius:11px;
+         padding:20px 22px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+  .empty h3{font-size:16px;font-weight:600;color:#1C1B1B;line-height:1.3}
+  .empty p{font-size:13px;line-height:1.55;color:#484646}
+
+  /* ========== the action bar ========== */
+  .nav{flex:0 0 auto;height:44px;margin-top:16px;display:flex;align-items:center;gap:14px}
+  .status{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.4;color:#484646;
+          overflow:hidden;text-overflow:ellipsis}
+  .status b{color:#001D69;font-weight:600}
+  button.nb{
+    flex:0 0 auto;font-family:inherit;font-size:13.5px;font-weight:600;letter-spacing:.02em;
+    line-height:1.2;cursor:pointer;
+    padding:10px 18px;border-radius:8px;border:2px solid #001D69;background:transparent;color:#001D69;
+    transition:background 150ms cubic-bezier(.2,.7,.3,1),color 150ms cubic-bezier(.2,.7,.3,1);
+  }
+  button.nb.solid{background:#001D69;color:#FDF8F8;border-color:#001D69}
+  button.nb:hover{background:#001D69;color:#FDF8F8}
+  button.nb.solid:hover{background:#FDF8F8;color:#001D69}
+  button.nb:focus-visible{outline:3px solid #001D69;outline-offset:3px}
+  /* Held, not faded out. A held control goes dashed and drops to body
+     ink, which keeps real contrast and makes the state a line style
+     rather than a colour. */
+  button.nb[disabled]{cursor:default;background:transparent;color:#484646;
+       border-style:dashed;border-color:#484646}
+  button.nb[disabled]:hover{background:transparent;color:#484646}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ========== entry motion ==========
+     One short rise and fade, staggered, everything settled by 600ms.
+     Base opacity is 1 on every element, so switching motion off leaves
+     nothing half faded behind. */
+  @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .an{animation:rise 380ms cubic-bezier(.2,.7,.3,1) both}
+  .an2{animation-delay:70ms}
+  .an3{animation-delay:140ms}
+  .an4{animation-delay:210ms}
+
+  /* ===== under 700px: the canvas is released =====
+     No scaling to a third of legibility on a phone. The two panes stack
+     in reading order, compose first, and the feed grows to its content
+     instead of scrolling inside a box that is now the whole screen. */
+  @media (max-width:699px){
+    html,body{height:auto;overflow:visible}
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important;position:static;overflow:visible;
+           padding:22px 16px 28px;display:block}
+    .hd{height:auto;display:block}
+    .idx{display:block;font-size:13px}
+    .keep{display:block;text-align:left;white-space:normal;overflow:visible;margin-top:3px;font-size:13px}
+    .body{height:auto!important;min-height:0;display:block;margin-top:16px}
+    .col{display:block}
+    .col.left{flex:none}
+    .col.right{margin-top:26px}
+    h1.dh{font-size:22px}
+    textarea.tf{font-size:16px;height:auto;min-height:104px}
+    input.nf{font-size:16px}
+    .scroller{overflow-y:visible;display:block}
+    .card{margin-top:8px}
+    .gate,.empty{min-height:0;display:block;padding:16px 17px}
+    .nav{height:auto;display:block;margin-top:20px}
+    .status{margin-bottom:12px}
+    button.nb{width:100%;margin-top:8px;padding:13px 18px;font-size:15px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div class="hd">
+    <span class="idx">Cohort board</span>
+    <span class="keep" id="conn">Opening the board</span>
+  </div>
+
+  <div class="body">
+
+    <section class="col left" aria-label="Your answer">
+      <p class="kick an">Substep 1.2.5</p>
+      <h1 class="dh an an2">One line, then see what the rest of the cohort would <em>put on the table</em>.</h1>
+
+      <div id="form" style="display:flex;flex-direction:column;min-height:0;flex:1 1 auto">
+        <p class="lbl an an3" style="margin-top:14px">Which are you answering</p>
+        <div class="chips an an3" style="margin-top:7px" role="radiogroup" aria-label="Which are you answering">
+          <label class="chip sel" id="c-partner">
+            <input type="radio" name="path" value="partner" checked>
+            A partner I have in mind
+          </label>
+          <label class="chip" id="c-kind">
+            <input type="radio" name="path" value="kind">
+            A kind of deal
+          </label>
+        </div>
+
+        <div id="kindrow" hidden>
+          <p class="lbl" style="margin-top:11px">Which kind</p>
+          <div class="chips small" style="margin-top:6px" role="radiogroup" aria-label="Which kind of deal">
+            <label class="chip sel" id="k-licensing"><input type="radio" name="kind" value="licensing" checked>Licensing</label>
+            <label class="chip" id="k-inkind"><input type="radio" name="kind" value="in-kind">In-kind</label>
+            <label class="chip" id="k-sponsorship"><input type="radio" name="kind" value="sponsorship">Sponsorship</label>
+            <label class="chip" id="k-cocreation"><input type="radio" name="kind" value="co-creation">Co-creation</label>
+          </div>
+        </div>
+
+        <p class="lbl an an4" style="margin-top:12px">Your line</p>
+        <textarea class="tf an an4" id="answer" maxlength="400" style="margin-top:6px"
+          placeholder="Who, and why you think they would say yes."
+          aria-describedby="chelp"></textarea>
+        <p class="count" id="count" style="margin-top:5px">0 of 400</p>
+
+        <p class="help an an4" id="chelp" style="margin-top:5px">A first name or initials is optional.
+          Nothing here is marked. <b>Once it is posted you cannot edit or delete it</b>, so give it a
+          read first.</p>
+        <input class="nf an an4" id="who" type="text" maxlength="40" style="margin-top:8px"
+          placeholder="First name or initials, optional" aria-label="First name or initials, optional">
+      </div>
+
+      <div class="done" id="posted" hidden>
+        <p class="who" id="postedwho">Your answer</p>
+        <p class="said" id="postedsaid"></p>
+      </div>
+    </section>
+
+    <section class="col right" aria-label="What the cohort said">
+      <div class="feedhd">
+        <h2 class="ph">What the cohort said</h2>
+        <span class="tally" id="tally"></span>
+      </div>
+
+      <div class="gate" id="gate">
+        <h3>Yours first.</h3>
+        <p>The board opens the moment you post. That order is on purpose: read three answers before you
+          write your own and you will end up somewhere near them, which costs you the one thought
+          Project 3 asks you to build on.</p>
+        <p>If you have nothing you want to put down, that is a normal week one answer. Read without
+          posting instead.</p>
+      </div>
+
+      <div class="empty" id="empty" hidden>
+        <h3 id="emptyh">Nobody has posted yet.</h3>
+        <p id="emptyp">Yours will be the first one on the board.</p>
+      </div>
+
+      <div class="scroller" id="scroller" hidden></div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <p class="status" id="status" role="status" aria-live="polite">One line is plenty, and this one is optional.</p>
+    <button class="nb" type="button" id="skip">Read without posting</button>
+    <button class="nb solid" type="button" id="post" disabled>Post it</button>
+  </div>
+
+</div>
+
+<p class="sr" id="say" role="status" aria-live="polite"></p>
+
+<noscript>
+  <style>
+    /* This block sits inside noscript so it lands after the main sheet
+       and wins on source order. The board cannot work without script,
+       so the canvas goes and what is left is the question in plain
+       markup, answerable in the platform submission field instead. The
+       two tags keep the deck's own distinction rather than a colour one:
+       named is a solid filled chip, a kind of deal is a hollow dashed
+       chip set in italic. */
+    #stage{display:none!important}
+    html,body{height:auto;overflow:visible}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;
+         background:#FDF8F8;color:#484646;padding:26px 18px 34px}
+    .ns{max-width:66ch;margin:0 auto}
+    .ns p.k{font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#001D69}
+    .ns h1{font-size:24px;font-weight:600;color:#1C1B1B;line-height:1.25;margin-top:9px}
+    .ns p{font-size:15.5px;line-height:1.6;color:#484646;margin-top:11px}
+    .ns p b{color:#1C1B1B;font-weight:600}
+    .ns ul{margin-top:11px;padding-left:20px}
+    .ns li{font-size:15.5px;line-height:1.6;color:#484646;margin-top:5px}
+    .ns li b{color:#1C1B1B;font-weight:600}
+    .ns hr{height:1px;background:#DCE1FF;border:0;margin:20px 0}
+  </style>
+  <div class="ns">
+    <p class="k">Substep 1.2.5</p>
+    <h1>The cohort board needs JavaScript, so here is the question on its own.</h1>
+    <p>Answer either version in the submission field on this page. One line is plenty, nothing here is
+      marked, and you can skip it.</p>
+    <ul>
+      <li><b>A partner you have in mind.</b> Any company or organization. Say who, and why you think
+        they would say yes.</li>
+      <li><b>Or a kind of deal.</b> Licensing, in-kind, sponsorship, or co-creation. Say which one you
+        think would suit Khan Academy best, and why.</li>
+    </ul>
+    <hr>
+    <p>You will do this properly in Project 3, with three weeks to spend on it. This is the first
+      version of the thought, not the finished one.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ==================================================================
+     CONFIGURATION. This is the only block anyone needs to touch to put
+     the board live. Nothing below it is Supabase specific except the
+     two functions named in the adapter comment.
+     ================================================================== */
+
+  var STORE = {
+
+    /* "local"  every answer stays in this browser. The feed holds the
+                student's own entry only and the header strip says so.
+        "shared" the answers go to the endpoint below and the feed is
+                the whole cohort. */
+    mode: "local",
+
+    /* Supabase project URL, no trailing slash.
+       Looks like https://abcdefghijklm.supabase.co */
+    endpoint: "",
+
+    /* The project's anon public key. This ships to the browser and is
+       meant to. It is not a secret and must never be the service role
+       key, which can read and write everything and would be handing the
+       whole project to anyone who views source. */
+    key: "",
+
+    /* The table name. */
+    table: "cohort_suggestions"
+  };
+
+  /* "after-post"  the feed is covered until the student posts or asks
+                   to read without posting. The default, and the reason
+                   is pedagogical: see the reveal gate note at the top
+                   of the stylesheet.
+     "always"      the board is open on arrival. */
+  var REVEAL = "after-post";
+
+  /* ==================================================================
+     TO PUT THIS LIVE, about ten minutes.
+
+     1  Make a free project at supabase.com.
+     2  Open the SQL editor and run the statements below. They create
+        the table and, more importantly, the policies. The policies are
+        the security, not this page: anything this page checks can be
+        bypassed by posting to the endpoint directly with the same key.
+
+          create table cohort_suggestions (
+            id bigint generated always as identity primary key,
+            created_at timestamptz not null default now(),
+            display_name text,
+            kind text not null,
+            answer text not null
+          );
+
+          alter table cohort_suggestions enable row level security;
+
+          create policy "anyone may read" on cohort_suggestions
+            for select to anon using (true);
+
+          create policy "anyone may add" on cohort_suggestions
+            for insert to anon with check (
+              char_length(answer) between 1 and 400
+              and char_length(coalesce(display_name, '')) <= 40
+              and kind in ('partner','licensing','in-kind','sponsorship','co-creation')
+            );
+
+        There is deliberately no update policy and no delete policy, so
+        the key below cannot change or remove a row even though it can
+        add one. Do not add one to "let students fix typos". Without
+        identity the page cannot tell whose row is whose, so an update
+        policy lets any student rewrite any other student's answer.
+
+     3  Settings, then API. Copy the project URL and the anon public
+        key into STORE above and set mode to "shared".
+     4  Load the page, post a test answer, then delete that row in the
+        Supabase table editor to confirm you can moderate.
+
+     WHAT IS STILL TRUE AFTER ALL THAT. No identity, so a typed name
+     proves nothing. The answers are readable by anyone holding the URL,
+     including outside the cohort. No replies. Removing something
+     unwanted is a person in a dashboard, which means the board needs a
+     named owner before it goes in front of students.
+
+     TO USE AIRTABLE INSTEAD, replace loadAll and pushOne. Everything
+     else in this file is storage agnostic. Note that an Airtable
+     personal access token in a public page can read and write every
+     table the token is scoped to, so scope it to this one base and this
+     one table and nothing else.
+     ================================================================== */
+
+  var LOCAL_MINE = "ka-p1-125-board-mine";
+  var LOCAL_FEED = "ka-p1-125-board-local";
+  var MAX = 400;
+
+  var KINDLABEL = {
+    "partner":     "Named partner",
+    "licensing":   "Licensing",
+    "in-kind":     "In-kind",
+    "sponsorship": "Sponsorship",
+    "co-creation": "Co-creation"
+  };
+
+  function $(id){ return document.getElementById(id); }
+
+  var el = {
+    conn: $("conn"), form: $("form"), kindrow: $("kindrow"),
+    answer: $("answer"), who: $("who"), count: $("count"),
+    posted: $("posted"), postedwho: $("postedwho"), postedsaid: $("postedsaid"),
+    gate: $("gate"), empty: $("empty"), emptyh: $("emptyh"), emptyp: $("emptyp"),
+    scroller: $("scroller"), tally: $("tally"), status: $("status"),
+    skip: $("skip"), post: $("post"), say: $("say")
+  };
+
+  var state = {
+    revealed: REVEAL === "always",
+    mine: null,
+    rows: [],
+    sending: false
+  };
+
+  /* ===== storage: the two functions any other backend replaces ===== */
+
+  function shared(){
+    return STORE.mode === "shared" && STORE.endpoint && STORE.key;
+  }
+
+  function restURL(query){
+    return STORE.endpoint.replace(/\/+$/, "") + "/rest/v1/" + STORE.table + (query || "");
+  }
+
+  function restHeaders(extra){
+    var h = {
+      "apikey": STORE.key,
+      "Authorization": "Bearer " + STORE.key
+    };
+    if(extra){ for(var k in extra){ if(extra.hasOwnProperty(k)){ h[k] = extra[k]; } } }
+    return h;
+  }
+
+  function loadAll(done, fail){
+    if(!shared()){
+      var raw = readLocal(LOCAL_FEED);
+      done(raw ? raw : []);
+      return;
+    }
+    fetch(restURL("?select=display_name,kind,answer,created_at&order=created_at.desc&limit=300"), {
+      method: "GET",
+      headers: restHeaders(),
+      cache: "no-store"
+    }).then(function(r){
+      if(!r.ok){ throw new Error("read failed, status " + r.status); }
+      return r.json();
+    }).then(function(rows){
+      done(Array.isArray(rows) ? rows : []);
+    })["catch"](fail);
+  }
+
+  function pushOne(row, done, fail){
+    if(!shared()){
+      var feed = readLocal(LOCAL_FEED) || [];
+      feed.unshift(row);
+      writeLocal(LOCAL_FEED, feed);
+      done();
+      return;
+    }
+    fetch(restURL(), {
+      method: "POST",
+      headers: restHeaders({
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      }),
+      body: JSON.stringify(row)
+    }).then(function(r){
+      if(!r.ok){ throw new Error("write failed, status " + r.status); }
+      done();
+    })["catch"](fail);
+  }
+
+  /* ===== localStorage, guarded. Private browsing throws on write. ===== */
+
+  function readLocal(k){
+    try{
+      var s = window.localStorage.getItem(k);
+      return s ? JSON.parse(s) : null;
+    }catch(e){ return null; }
+  }
+
+  function writeLocal(k, v){
+    try{ window.localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch(e){ return false; }
+  }
+
+  /* ===== the form ===== */
+
+  function path(){
+    var r = document.querySelector('input[name="path"]:checked');
+    return r ? r.value : "partner";
+  }
+
+  function kindPicked(){
+    var r = document.querySelector('input[name="kind"]:checked');
+    return r ? r.value : "licensing";
+  }
+
+  function chosenKind(){
+    return path() === "partner" ? "partner" : kindPicked();
+  }
+
+  function syncChips(name){
+    var set = document.querySelectorAll('input[name="' + name + '"]');
+    for(var i = 0; i < set.length; i++){
+      var lab = set[i].closest("label");
+      if(!lab){ continue; }
+      if(set[i].checked){ lab.className = lab.className.replace(/\s*\bsel\b/g, "") + " sel"; }
+      else { lab.className = lab.className.replace(/\s*\bsel\b/g, ""); }
+    }
+  }
+
+  function onPathChange(){
+    syncChips("path");
+    var isKind = path() === "kind";
+    el.kindrow.hidden = !isKind;
+    el.answer.placeholder = isKind
+      ? "Which kind, and why you think it fits this team."
+      : "Who, and why you think they would say yes.";
+    refresh();
+  }
+
+  function refresh(){
+    var n = el.answer.value.trim().length;
+    el.count.textContent = n + " of " + MAX;
+    el.count.className = n > MAX - 40 ? "count over" : "count";
+    el.post.disabled = state.sending || n === 0 || !!state.mine;
+  }
+
+  /* ===== rendering ===== */
+
+  function esc(s){
+    return String(s === null || s === undefined ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function cardHTML(row, isMine){
+    var kind = row.kind || "partner";
+    var named = kind === "partner";
+    var who = String(row.display_name || "").trim();
+    return '<article class="card' + (isMine ? " mine" : "") + '">' +
+             '<div class="top">' +
+               '<span class="who">' + esc(who || "Anonymous") + '</span>' +
+               '<span class="tag ' + (named ? "named" : "kindof") + '">' +
+                 esc(KINDLABEL[kind] || kind) +
+               '</span>' +
+             '</div>' +
+             '<p class="said">' + esc(row.answer) + '</p>' +
+           '</article>';
+  }
+
+  function sameRow(a, b){
+    if(!a || !b){ return false; }
+    return a.answer === b.answer && a.kind === b.kind &&
+           String(a.display_name || "") === String(b.display_name || "");
+  }
+
+  function renderFeed(){
+    var rows = state.rows;
+    el.tally.textContent = rows.length === 0 ? ""
+      : rows.length === 1 ? "1 answer" : rows.length + " answers";
+
+    if(!state.revealed){
+      el.gate.hidden = false;
+      el.empty.hidden = true;
+      el.scroller.hidden = true;
+      return;
+    }
+    el.gate.hidden = true;
+
+    if(rows.length === 0){
+      el.scroller.hidden = true;
+      el.empty.hidden = false;
+      if(state.mine){
+        el.emptyh.textContent = "Just yours so far.";
+        el.emptyp.textContent = "Come back later in the week and there will be more.";
+      }
+      return;
+    }
+
+    el.empty.hidden = true;
+    el.scroller.hidden = false;
+    var html = "";
+    var mineDrawn = false;
+    for(var i = 0; i < rows.length; i++){
+      var isMine = !mineDrawn && sameRow(rows[i], state.mine);
+      if(isMine){ mineDrawn = true; }
+      html += cardHTML(rows[i], isMine);
+    }
+    el.scroller.innerHTML = html;
+    el.scroller.scrollTop = 0;
+  }
+
+  function renderMine(){
+    if(!state.mine){
+      el.form.hidden = false;
+      el.posted.hidden = true;
+      return;
+    }
+    el.form.hidden = true;
+    el.posted.hidden = false;
+    var who = String(state.mine.display_name || "").trim();
+    el.postedwho.textContent = "Posted" + (who ? " as " + who : "") +
+      ", " + (KINDLABEL[state.mine.kind] || state.mine.kind).toLowerCase();
+    el.postedsaid.textContent = state.mine.answer;
+  }
+
+  function connLine(){
+    if(!shared()){
+      el.conn.innerHTML = "<b>Not connected yet.</b> Your answer is saved in this browser only.";
+      return;
+    }
+    el.conn.innerHTML = "Live board. <b>Anyone with this link can read it</b>, so post nothing private.";
+  }
+
+  function announce(msg){
+    el.say.textContent = "";
+    window.setTimeout(function(){ el.say.textContent = msg; }, 40);
+  }
+
+  function setStatus(html){ el.status.innerHTML = html; }
+
+  /* ===== actions ===== */
+
+  function reveal(reason){
+    state.revealed = true;
+    el.skip.disabled = true;
+    renderFeed();
+    if(reason){ announce(reason); }
+  }
+
+  function doPost(){
+    var text = el.answer.value.trim();
+    if(!text || state.sending || state.mine){ return; }
+    if(text.length > MAX){ text = text.slice(0, MAX); }
+
+    var row = {
+      display_name: el.who.value.trim().slice(0, 40) || null,
+      kind: chosenKind(),
+      answer: text
+    };
+
+    state.sending = true;
+    refresh();
+    el.post.textContent = "Posting";
+    setStatus("Posting your answer.");
+
+    pushOne(row, function(){
+      state.sending = false;
+      state.mine = row;
+      writeLocal(LOCAL_MINE, row);
+      el.post.textContent = "Posted";
+      renderMine();
+      refresh();
+      setStatus(shared()
+        ? "Posted. That is the whole task, and it cannot be edited now."
+        : "Saved in this browser. It is not on a shared board yet.");
+      announce("Your answer is posted. The board is now open.");
+      pull(true);
+      reveal(null);
+    }, function(err){
+      state.sending = false;
+      el.post.textContent = "Post it";
+      refresh();
+      setStatus("<b>That did not send.</b> Check your connection and try again. " +
+                "If it keeps failing, put your answer in the submission field on this page instead.");
+      announce("Posting failed. Your answer was not sent.");
+      if(window.console && window.console.warn){ window.console.warn(err); }
+    });
+  }
+
+  function pull(quiet){
+    loadAll(function(rows){
+      state.rows = rows;
+      if(state.mine){
+        var found = false;
+        for(var i = 0; i < rows.length; i++){
+          if(sameRow(rows[i], state.mine)){ found = true; break; }
+        }
+        /* In shared mode the POST returns nothing, so the row is only
+           confirmed by the next read. If the read has not caught up
+           yet, show the student their own answer rather than an empty
+           board, because "it vanished" is the worst thing this page
+           could tell them. */
+        if(!found){ state.rows = [state.mine].concat(rows); }
+      }
+      renderFeed();
+    }, function(err){
+      if(!quiet){
+        setStatus("<b>Could not load the board.</b> Everything else on this page still works.");
+      }
+      if(window.console && window.console.warn){ window.console.warn(err); }
+      state.rows = state.mine ? [state.mine] : [];
+      renderFeed();
+    });
+  }
+
+  /* ===== wiring ===== */
+
+  var paths = document.querySelectorAll('input[name="path"]');
+  for(var a = 0; a < paths.length; a++){ paths[a].addEventListener("change", onPathChange); }
+
+  var kinds = document.querySelectorAll('input[name="kind"]');
+  for(var b = 0; b < kinds.length; b++){
+    kinds[b].addEventListener("change", function(){ syncChips("kind"); refresh(); });
+  }
+
+  el.answer.addEventListener("input", refresh);
+  el.post.addEventListener("click", doPost);
+
+  el.skip.addEventListener("click", function(){
+    reveal("The board is open. You can still post afterwards.");
+    setStatus("Reading only. You can still post yours at any point.");
+  });
+
+  /* Command or control plus Enter posts, because Enter inside a
+     textarea has to keep making a new line. */
+  el.answer.addEventListener("keydown", function(e){
+    if((e.metaKey || e.ctrlKey) && e.key === "Enter"){
+      e.preventDefault();
+      doPost();
+    }
+  });
+
+  /* ===== start ===== */
+
+  var savedMine = readLocal(LOCAL_MINE);
+  if(savedMine && savedMine.answer){
+    state.mine = savedMine;
+    state.revealed = true;
+    el.skip.disabled = true;
+    el.post.disabled = true;
+    el.post.textContent = "Posted";
+    setStatus("You have already answered this one.");
+  }
+
+  connLine();
+  syncChips("path");
+  syncChips("kind");
+  onPathChange();
+  renderMine();
+  renderFeed();
+  pull(true);
+
+  /* ===== scale the fixed canvas down to fit, never up ===== */
+  function phone(){ return window.innerWidth < 700; }
+
+  function fit(){
+    var stage = $("stage");
+    if(phone()){ stage.style.transform = ""; return; }
+    stage.style.transform = "scale(" +
+      Math.min(window.innerWidth / 960, window.innerHeight / 540, 1) + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot run force a state
+     without typing through the form. */
+  window.__board = {
+    state: state,
+    seed: function(rows){ state.rows = rows; state.revealed = true; renderFeed(); },
+    open: function(){ reveal(null); }
+  };
+})();
+</script>
+</body>
+</html>
