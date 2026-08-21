@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt builder: turn your findings into one prompt</title>
+<style>
+  /* ===============================================================
+     BUILD NOTES. Every note in this file sits inside a style or a
+     script comment, never an HTML comment, because an HTML comment
+     opener carries two hyphens and this program bans that sequence.
+     Two hyphens in a row appear nowhere in this file, which is why
+     there are no CSS custom properties either: a grep for the
+     sequence should return nothing at all.
+
+     WHAT THIS IS. Substep 1.2.4, step 4. The student has just run
+     two research prompts in ChatGPT. They type what they found into
+     seven labelled fields here, the page assembles one complete
+     prompt around those findings, and one button puts the whole
+     thing on the clipboard. They then paste it into Claude and
+     Claude builds their HTML.
+
+     WHAT THIS IS NOT. It does not build, preview or render the
+     student page. An earlier interactive in this program was
+     deleted for making the student type their findings twice, so
+     the copy button is the whole reason this build exists.
+
+     PALETTE, inherited from khan-academy-p1-sample-deal-onepager
+     at the program owner's instruction, which overrides the style
+     guide table for this pair of files.
+
+       #FAF9F5  paper
+       #1A1A18  display headings and hard titles
+       #3D3D3A  body copy
+       #6E6E68  muted uppercase labels, the lightest grey that
+                still clears 4.5:1 on this paper
+       #2F5C42  deep green, sourced tag, copy button, focus ring
+       #6B9B7A  mid green, hairline stroke on neutral panels
+       #C9D9BC  pale sage, the sourced panel edge
+       #E6EEDF  pale sage tint, the sourced panel fill
+       #D9A94C  warm gold, used once, on the copy confirmation mark
+       #8A6A20  gold ink, the inference tag and its dashed outline
+       #D5D3CC  hairlines
+
+     FIELD 4 AGAINST FIELD 5. The sourced statement and the
+     student's own read are told apart by six things at once, never
+     by colour: a written tag (ON THE RECORD against MY READ), an
+     icon (quote marks against a pencil), a filled panel against
+     bare paper, a solid edge against a dashed one, a solid left
+     spine against none, and helper text that names which is which.
+
+     LAYOUT. Fixed 960 by 540 canvas, scaled to fit, because the
+     substep embeds it as a Notion embed block at that size. Seven
+     fields cannot fit in 540px, so the fields column scrolls and
+     the prompt pane scrolls, each on its own. The copy button sits
+     outside both scrollers and is therefore always on screen.
+     Below 600px the canvas is abandoned for an ordinary stacked
+     page rather than scaled into illegibility.
+     =============================================================== */
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  html,body{height:100%}
+  body{
+    background:#FAF9F5;
+    color:#3D3D3A;
+    font-family:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,"Times New Roman",serif;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  /* flex:0 0 auto is load bearing. As a shrinkable flex item the
+     canvas would be laid out narrow and then transform scaled a
+     second time, so the design would shrink twice and every line
+     would rewrap at a width it was never drawn for. */
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:16px 26px 14px;display:flex;flex-direction:column}
+
+  /* ================= header ================= */
+  .lab{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+    color:#6E6E68;line-height:1.4;
+  }
+  h1{font-weight:400;color:#1A1A18;font-size:25px;line-height:1.14;letter-spacing:-.004em;margin-top:5px}
+  h1 em{font-style:italic}
+  .sub{font-size:13px;line-height:1.45;color:#3D3D3A;margin-top:5px;max-width:96ch}
+  header.hd{flex:0 0 auto;padding-bottom:10px;border-bottom:1px solid #D5D3CC}
+
+  /* ================= two columns ================= */
+  .cols{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1.02fr 1fr;gap:20px;padding-top:9px}
+  .pane{min-height:0;display:flex;flex-direction:column}
+  .panehead{flex:0 0 auto;display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .panehead .note{font-size:11px;color:#6E6E68;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+  /* the scrolling fields column */
+  .fields{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:8px}
+  .fields:focus-visible{outline:3px solid #2F5C42;outline-offset:2px}
+
+  .fld{margin-bottom:11px}
+  .fld:last-child{margin-bottom:2px}
+  .fl{display:block;font-size:12.5px;font-weight:700;color:#1A1A18;line-height:1.32}
+  .fl .n,legend .n{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:10.5px;font-weight:700;color:#6E6E68;letter-spacing:.06em;margin-right:5px;
+  }
+  .help{font-size:11.5px;line-height:1.4;color:#6E6E68;margin-top:2px}
+  .help b{color:#3D3D3A;font-weight:700}
+
+  input.tf,textarea.tf{
+    display:block;width:100%;font-family:inherit;font-size:13px;line-height:1.45;
+    color:#1A1A18;background:#FAF9F5;border:1.5px solid #6B9B7A;border-radius:5px;
+    padding:7px 9px;margin-top:5px;resize:none;
+  }
+  textarea.tf{overflow-y:auto}
+  input.tf::placeholder,textarea.tf::placeholder{color:#6E6E68;opacity:1;font-style:italic}
+  input.tf:focus-visible,textarea.tf:focus-visible{outline:3px solid #2F5C42;outline-offset:2px}
+
+  /* ===== the two kinds of thing, field 4 and field 5 =====
+     Never colour alone. Each carries a written tag, an icon, a fill
+     or the absence of one, a solid or dashed edge, a spine or none,
+     and helper text that says which kind it is. */
+  .kind{margin-top:6px;padding:8px 10px 9px;border-radius:5px}
+  .kind.rec{background:#E6EEDF;border:1.5px solid #C9D9BC;border-left:4px solid #2F5C42}
+  .kind.inf{background:transparent;border:1.5px dashed #8A6A20}
+  .tagrow{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .tagrow svg{display:block;flex:0 0 auto}
+  .tag{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  }
+  .tag.rec{color:#2F5C42}
+  .tag.inf{color:#8A6A20;font-style:italic;letter-spacing:.1em}
+  .kind .fl{font-size:12.5px}
+  .kind .help{color:#3D3D3A}
+  .kind.rec textarea.tf{background:#FAF9F5;border-color:#2F5C42}
+  .kind.inf textarea.tf{background:#FAF9F5;border:1.5px dashed #8A6A20}
+
+  /* ===== field 6, the four shapes ===== */
+  fieldset{border:0}
+  legend{padding:0;font-size:12.5px;font-weight:700;color:#1A1A18;line-height:1.32}
+  .shapes{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .shapes label{position:relative;display:inline-block}
+  .shapes input{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+  .shapes .t{
+    display:inline-block;pointer-events:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:11.5px;font-weight:700;letter-spacing:.06em;color:#1A1A18;
+    padding:7px 13px;border:1.5px solid #6B9B7A;border-radius:999px;background:#FAF9F5;
+    transition:background 160ms cubic-bezier(.2,.7,.3,1);
+  }
+  .shapes input:checked+.t{background:#D9A94C;border-color:#8A6A20;color:#1A1A18}
+  .shapes input:checked+.t:before{content:"\2713\00a0\00a0";font-weight:700}
+  .shapes input:focus-visible+.t{outline:3px solid #2F5C42;outline-offset:2px}
+
+  /* ===== the prompt pane ===== */
+  .out{
+    flex:1 1 auto;min-height:0;width:100%;display:block;resize:none;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:10.5px;line-height:1.52;color:#1A1A18;background:#FAF9F5;
+    border:1.5px solid #6B9B7A;border-radius:5px;padding:9px 10px;overflow-y:auto;
+  }
+  .out:focus-visible{outline:3px solid #2F5C42;outline-offset:2px}
+
+  .bar{flex:0 0 auto;margin-top:8px}
+  button.copy{
+    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;font-weight:700;letter-spacing:.02em;
+    color:#FAF9F5;background:#2F5C42;border:1.5px solid #2F5C42;border-radius:6px;
+    padding:10px 14px;cursor:pointer;
+    transition:background 160ms cubic-bezier(.2,.7,.3,1);
+  }
+  button.copy:hover{background:#264B36}
+  button.copy:focus-visible{outline:3px solid #2F5C42;outline-offset:3px}
+  button.copy svg{display:block;flex:0 0 auto}
+  button.copy .tick{display:none}
+  button.copy.done .tick{display:block}
+  button.copy.done .clip{display:none}
+
+  .status{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:11.5px;line-height:1.4;color:#3D3D3A;margin-top:5px;min-height:16px;
+  }
+  .status b{color:#1A1A18}
+  button.selall{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:11.5px;font-weight:700;color:#2F5C42;background:transparent;
+    border:1.5px solid #2F5C42;border-radius:5px;padding:3px 9px;cursor:pointer;
+    margin-top:5px;display:none;
+  }
+  button.selall.show{display:inline-block}
+  button.selall:focus-visible{outline:3px solid #2F5C42;outline-offset:2px}
+
+  /* ================= below 600px, an ordinary page ================= */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;height:auto}
+    html{height:auto}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 15px 28px}
+    h1{font-size:21px}
+    .sub{font-size:14px}
+    .cols{display:block;padding-top:14px}
+    .pane+.pane{margin-top:20px}
+    .fields{overflow:visible;padding-right:0}
+    .fl,legend{font-size:14px}
+    .help{font-size:12.5px}
+    input.tf,textarea.tf{font-size:16px}
+    textarea.tf{height:auto;min-height:96px}
+    .out{font-size:12px;height:300px;min-height:300px}
+    /* On a phone the button simply follows the prompt it copies. It was
+       briefly sticky here, which measured as doing nothing: the bar is
+       the last child of its pane, so a sticky bottom offset has no
+       travel inside its containing block. Normal flow is honest. */
+    .bar{padding-top:2px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+<div class="frame">
+
+  <header class="hd">
+    <div class="lab">Substep 1.2.4 &middot; step 4 &middot; prompt builder</div>
+    <h1>Fill in what you found. This assembles <em>one prompt</em> to paste into Claude.</h1>
+    <p class="sub">Everything you type here goes into the prompt on the right, in the right place, along with the instructions Claude needs. When it looks right, copy the whole thing in one go. You type your research once, not twice. Your answers are saved in this browser, so a refresh will not lose them.</p>
+  </header>
+
+  <div class="cols">
+
+    <section class="pane" aria-labelledby="fh">
+      <div class="panehead">
+        <div class="lab" id="fh">What you found</div>
+        <div class="note">Seven fields. Scroll for the rest.</div>
+      </div>
+
+      <div class="fields" id="fields" tabindex="0" role="group" aria-labelledby="fh">
+
+        <div class="fld">
+          <label class="fl" for="q1"><span class="n">1</span>The two organisations, and what the deal was in one sentence</label>
+          <div class="help">Add the date if you have it.</div>
+          <textarea class="tf" id="q1" rows="2" spellcheck="true"
+            placeholder="[first organisation] and [second organisation] agreed to [what happened], announced [month, year]"></textarea>
+        </div>
+
+        <div class="fld">
+          <label class="fl" for="q2"><span class="n">2</span>What the first organisation gave</label>
+          <div class="help">One item per line. Use the announcement's own wording where you can.</div>
+          <textarea class="tf" id="q2" rows="3" spellcheck="true"
+            placeholder="[the thing only it owned]&#10;[the work it put in]&#10;[anything else it handed over]"></textarea>
+        </div>
+
+        <div class="fld">
+          <label class="fl" for="q3"><span class="n">3</span>What the second organisation gave</label>
+          <div class="help">Same again, one item per line.</div>
+          <textarea class="tf" id="q3" rows="3" spellcheck="true"
+            placeholder="[what it brought that the other side could not build]&#10;[the work it put in]&#10;[what it gave up]"></textarea>
+        </div>
+
+        <div class="fld kind rec">
+          <div class="tagrow">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+              <path d="M1.6 8.4c0 1.6 1.1 2.7 2.5 2.7 1.3 0 2.3-1 2.3-2.3 0-1.3-.9-2.2-2.1-2.2-.3 0-.6 0-.8.1.2-1.5 1.4-2.8 2.9-3.2M7.7 8.4c0 1.6 1.1 2.7 2.5 2.7 1.3 0 2.3-1 2.3-2.3 0-1.3-.9-2.2-2.1-2.2-.3 0-.6 0-.8.1.2-1.5 1.4-2.8 2.9-3.2"
+                fill="none" stroke="#2F5C42" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="tag rec">On the record</span>
+          </div>
+          <label class="fl" for="q4"><span class="n">4</span>What either side said publicly about why they did it</label>
+          <div class="help">The quote word for word, the person's name and title, and where and when they said it. <b>If nobody said anything, write: no public statement found.</b> That is a complete answer and a real finding, not a failure to search.</div>
+          <textarea class="tf" id="q4" rows="3" spellcheck="true"
+            placeholder="&ldquo;[the quote, word for word]&rdquo;&#10;[name], [title], [where they said it], [date]"></textarea>
+        </div>
+
+        <div class="fld kind inf">
+          <div class="tagrow">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+              <path d="M2 12l.7-2.6 6.4-6.4 1.9 1.9-6.4 6.4z" fill="none" stroke="#8A6A20" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9.1 3l1.3-1.3 1.9 1.9L11 4.9" fill="none" stroke="#8A6A20" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="tag inf">My read</span>
+          </div>
+          <label class="fl" for="q5"><span class="n">5</span>Your own read on why the partner said yes</label>
+          <div class="help">This one is your inference, not a quote. Nobody said it, and the prompt will tell Claude to label it as yours.</div>
+          <textarea class="tf" id="q5" rows="3" spellcheck="true"
+            placeholder="I think they said yes because [your reasoning]"></textarea>
+        </div>
+
+        <div class="fld">
+          <fieldset>
+            <legend><span class="n">6</span>What kind of deal it is</legend>
+            <div class="help">Pick the one that fits best. Nothing to type.</div>
+            <div class="shapes" id="shapes">
+              <label><input type="radio" name="shape" value="Licensing"><span class="t">Licensing</span></label>
+              <label><input type="radio" name="shape" value="In-kind"><span class="t">In-kind</span></label>
+              <label><input type="radio" name="shape" value="Sponsorship"><span class="t">Sponsorship</span></label>
+              <label><input type="radio" name="shape" value="Co-creation"><span class="t">Co-creation</span></label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="fld">
+          <label class="fl" for="q7"><span class="n">7</span>Your call, in one line</label>
+          <div class="help">The one thing you want a reader to take away.</div>
+          <textarea class="tf" id="q7" rows="2" spellcheck="true"
+            placeholder="The strongest thing in this deal is [what], because [why]"></textarea>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="pane" aria-labelledby="oh">
+      <div class="panehead">
+        <label class="lab" id="oh" for="out">The prompt you will paste</label>
+        <div class="note">Builds as you type</div>
+      </div>
+      <textarea class="out" id="out" readonly spellcheck="false" aria-describedby="ohnote"></textarea>
+      <div class="bar">
+        <button class="copy" id="copy" type="button">
+          <svg class="clip" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <rect x="5" y="1.9" width="8.2" height="10.2" rx="1.6" fill="none" stroke="#FAF9F5" stroke-width="1.5"/>
+            <path d="M10.4 13.4v.7a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6V5.5a1.6 1.6 0 0 1 1.6-1.6h.6"
+              fill="none" stroke="#FAF9F5" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <svg class="tick" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <circle cx="8" cy="8" r="6.6" fill="none" stroke="#D9A94C" stroke-width="1.5"/>
+            <path d="M4.8 8.3l2.3 2.3 4.1-5" fill="none" stroke="#D9A94C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="copytxt">Copy the whole prompt</span>
+        </button>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+        <p id="ohnote" class="status" style="margin-top:0">Read only. Edit your seven answers to change what it says.</p>
+        <button class="selall" id="selall" type="button">Select all of the prompt</button>
+      </div>
+    </section>
+
+  </div>
+
+</div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+  </style>
+  <div style="max-width:720px;margin:0 auto;padding:28px 20px 40px;font-size:15px;line-height:1.55;color:#3D3D3A">
+    <h1 style="font-size:24px;color:#1A1A18;margin-bottom:8px">Script is switched off, so write the prompt out by hand.</h1>
+    <p style="margin-bottom:14px">Nothing is lost. Below are the seven things to write down, then the exact instructions to put underneath them. Paste the whole lot into Claude as one message.</p>
+    <h2 style="font-size:16px;color:#1A1A18;margin-bottom:6px">The seven things to write down</h2>
+    <ol style="margin:0 0 18px 20px">
+      <li style="margin-bottom:7px"><strong>The two organisations, and what the deal was in one sentence.</strong> Add the date if you have it.</li>
+      <li style="margin-bottom:7px"><strong>What the first organisation gave.</strong> One item per line, in the announcement's own wording where you can.</li>
+      <li style="margin-bottom:7px"><strong>What the second organisation gave.</strong> Same again.</li>
+      <li style="margin-bottom:7px"><strong>What either side said publicly about why they did it.</strong> The quote word for word, the person's name and title, and where and when they said it. If nobody said anything, write "no public statement found". That is a complete answer and a real finding.</li>
+      <li style="margin-bottom:7px"><strong>Your own read on why the partner said yes.</strong> Your inference, not a quote.</li>
+      <li style="margin-bottom:7px"><strong>What kind of deal it is.</strong> One of: licensing, in-kind, sponsorship, co-creation.</li>
+      <li><strong>Your call, in one line.</strong></li>
+    </ol>
+    <h2 style="font-size:16px;color:#1A1A18;margin-bottom:6px">Then tell Claude this, word for word</h2>
+    <p style="margin-bottom:10px">Build a single scrolling responsive HTML page about this one partnership, in the style of a clean editorial one pager. One file, plain HTML and CSS, no libraries.</p>
+    <p style="margin-bottom:6px">Give it four sections and no others:</p>
+    <ol style="margin:0 0 12px 20px">
+      <li style="margin-bottom:4px">The deal, from item 1, with the headline as the biggest thing on the page.</li>
+      <li style="margin-bottom:4px">What each side gave and why each side said yes, from items 2, 3, 4 and 5.</li>
+      <li style="margin-bottom:4px">What kind of deal it is, from item 6.</li>
+      <li>My call, from item 7.</li>
+    </ol>
+    <p style="margin-bottom:6px">Follow these rules:</p>
+    <ul style="margin:0 0 12px 20px">
+      <li style="margin-bottom:4px">Use only the facts I have given you. Do not add any number, quote, source, link or claim that is not in this message. If you need something I have not given you, ask me for it instead of filling the gap.</li>
+      <li style="margin-bottom:4px">Keep the sourced quote in item 4 and my own read in item 5 visually distinct, so a reader can tell them apart at a glance. Label item 5 clearly as my inference, so nobody can mistake it for something either organisation said.</li>
+      <li style="margin-bottom:4px">Do not invent a source URL. If I have not given you a link, do not put one on the page.</li>
+      <li>If item 4 says no public statement was found, say that on the page as the finding. Do not leave the section blank and do not quietly drop it.</li>
+    </ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var ids = ["q1","q2","q3","q4","q5","q7"];
+  var el = {};
+  for(var i = 0; i < ids.length; i++){ el[ids[i]] = document.getElementById(ids[i]); }
+  var out = document.getElementById("out");
+  var copyBtn = document.getElementById("copy");
+  var copyTxt = document.getElementById("copytxt");
+  var status = document.getElementById("status");
+  var selall = document.getElementById("selall");
+  var radios = document.querySelectorAll("input[name=shape]");
+
+  /* ========== storage that fails quietly ==========
+     Safari with cookies blocked, a private window, an iframe with
+     storage partitioned off: every one of these throws on the first
+     touch of localStorage. Losing seven fields of research to a
+     refresh is the worst failure this build has available to it, so
+     the read and the write are both wrapped and a dead store simply
+     means the page does not remember. Nothing else changes. */
+  var KEY = "ka.p1.promptbuilder.v1";
+  var store = (function(){
+    try{
+      var t = "__t" + Date.now();
+      window.localStorage.setItem(t, "1");
+      window.localStorage.removeItem(t);
+      return window.localStorage;
+    }catch(e){ return null; }
+  })();
+  function load(){
+    if(!store) return null;
+    try{ var raw = store.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+    catch(e){ return null; }
+  }
+  function save(){
+    if(!store) return;
+    var d = {};
+    for(var k = 0; k < ids.length; k++){ d[ids[k]] = el[ids[k]].value; }
+    d.shape = shapeValue();
+    try{ store.setItem(KEY, JSON.stringify(d)); }catch(e){}
+  }
+
+  function shapeValue(){
+    for(var r = 0; r < radios.length; r++){ if(radios[r].checked) return radios[r].value; }
+    return "";
+  }
+
+  /* ========== the assembled prompt ==========
+     One block of text: the student's findings, then the instructions
+     Claude needs. An empty field never emits a bare label and never
+     emits the word undefined. It emits a bracketed line that tells
+     Claude to come back and ask, which is the behaviour the rest of
+     the prompt asks for anyway. Field 4 is the exception: an empty
+     field 4 is a real finding, so it reads as one. */
+  function val(id){
+    var v = el[id].value;
+    return v ? v.replace(/\s+$/, "") : "";
+  }
+  var GAP = "[I have not filled this in. Ask me for it before you write this section.]";
+
+  function looksLikeNothingFound(s){
+    var t = s.toLowerCase();
+    return t.indexOf("no public statement") !== -1 ||
+           t.indexOf("nothing found") !== -1 ||
+           t.indexOf("no statement") !== -1 ||
+           t.indexOf("none found") !== -1;
+  }
+
+  function build(){
+    var f1 = val("q1"), f2 = val("q2"), f3 = val("q3");
+    var f4 = val("q4"), f5 = val("q5"), f7 = val("q7");
+    var f6 = shapeValue();
+
+    var quoted = f4 && !looksLikeNothingFound(f4);
+    var stated = quoted ? f4 : "No public statement found.";
+
+    var p = [];
+    p.push("I have researched one real partnership and I want you to build a single HTML page about it.");
+    p.push("");
+    p.push("Here is everything I found. Use only this.");
+    p.push("");
+    p.push("1. THE DEAL, AND THE TWO ORGANISATIONS");
+    p.push(f1 || GAP);
+    p.push("");
+    p.push("2. WHAT THE FIRST ORGANISATION GAVE");
+    p.push(f2 || GAP);
+    p.push("");
+    p.push("3. WHAT THE SECOND ORGANISATION GAVE");
+    p.push(f3 || GAP);
+    p.push("");
+    p.push("4. ON THE RECORD: WHAT WAS SAID PUBLICLY ABOUT WHY THEY DID IT");
+    p.push(stated);
+    if(!quoted){
+      p.push("Treat that as the finding, not as a gap. Say on the page that no public statement was found.");
+    }
+    p.push("");
+    p.push("5. MY READ ON WHY THE PARTNER SAID YES. This is my own inference. Nobody has said it publicly and there is nothing to quote.");
+    p.push(f5 || GAP);
+    p.push("");
+    p.push("6. WHAT KIND OF DEAL THIS IS");
+    p.push(f6 || "[I have not decided yet. Ask me whether it is licensing, in-kind, sponsorship or co-creation before you write this section.]");
+    p.push("");
+    p.push("7. MY CALL");
+    p.push(f7 || GAP);
+    p.push("");
+    p.push("NOW BUILD IT");
+    p.push("");
+    p.push("Build a single scrolling responsive HTML page about this one partnership, in the style of a clean editorial one pager. One file, plain HTML and CSS, no libraries.");
+    p.push("");
+    p.push("Give it four sections and no others:");
+    p.push("1. The deal, from item 1 above. Make the headline the biggest thing on the page.");
+    p.push("2. What each side gave and why each side said yes, from items 2, 3, 4 and 5.");
+    p.push("3. What kind of deal it is, from item 6.");
+    p.push("4. My call, from item 7.");
+    p.push("");
+    p.push("Follow these rules:");
+    p.push("");
+    p.push("Use only the facts I have given you above. Do not add any number, quote, source, link or claim that is not in this prompt. If something is missing and you need it, ask me for it rather than filling the gap.");
+    p.push("");
+    p.push("Keep the sourced quote in item 4 and my own read in item 5 visually distinct, so a reader can tell the two apart at a glance. Label item 5 clearly as my inference, so nobody can mistake it for something either organisation said.");
+    p.push("");
+    p.push("Do not invent a source URL. If I have not given you a link, do not put one on the page.");
+    p.push("");
+    p.push("If item 4 says no public statement was found, present that as the finding. Say so on the page rather than leaving the section blank or quietly dropping it.");
+
+    return p.join("\n");
+  }
+
+  function refresh(){
+    out.value = build();
+    /* the confirmation belongs to the text that was copied, so a new
+       keystroke retires it rather than leaving a stale tick sitting
+       over a prompt that has since changed */
+    if(copyBtn.className.indexOf("done") !== -1){
+      copyBtn.className = "copy";
+      copyTxt.textContent = "Copy the whole prompt";
+      status.textContent = "";
+      selall.className = "selall";
+    }
+    save();
+  }
+
+  /* ========== copy, and the fallback ========== */
+  function confirmed(){
+    copyBtn.className = "copy done";
+    copyTxt.textContent = "Copied. Now paste it into Claude.";
+    status.innerHTML = "<b>The whole prompt is on your clipboard.</b> Open claude.ai, start a new chat, and paste it as one message.";
+    selall.className = "selall";
+  }
+  function failed(){
+    copyBtn.className = "copy";
+    copyTxt.textContent = "Copy the whole prompt";
+    status.innerHTML = "<b>Your browser would not let the page copy for you.</b> Select the prompt, then press Cmd C, or Ctrl C on Windows.";
+    selall.className = "selall show";
+  }
+  function legacyCopy(){
+    out.focus();
+    out.setSelectionRange(0, out.value.length);
+    var ok = false;
+    try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+    if(ok){ confirmed(); } else { failed(); }
+  }
+  copyBtn.addEventListener("click", function(){
+    var text = out.value;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(confirmed, legacyCopy);
+    } else {
+      legacyCopy();
+    }
+  });
+  selall.addEventListener("click", function(){
+    out.focus();
+    out.setSelectionRange(0, out.value.length);
+  });
+
+  /* ========== wire up ========== */
+  var saved = load();
+  if(saved){
+    for(var s = 0; s < ids.length; s++){
+      if(typeof saved[ids[s]] === "string"){ el[ids[s]].value = saved[ids[s]]; }
+    }
+    if(saved.shape){
+      for(var q = 0; q < radios.length; q++){
+        if(radios[q].value === saved.shape){ radios[q].checked = true; }
+      }
+    }
+  }
+  for(var w = 0; w < ids.length; w++){
+    el[ids[w]].addEventListener("input", refresh);
+  }
+  for(var v = 0; v < radios.length; v++){
+    radios[v].addEventListener("change", refresh);
+  }
+  refresh();
+
+  /* ========== scale the fixed canvas down to fit, never up ========== */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var k = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + k + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+})();
+</script>
+</body>
+</html>
