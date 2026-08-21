@@ -94,6 +94,11 @@
      frame reports the canvas height in every state and says nothing
      about overflow, so measure the deepest painted element bottom.
 
+     The left pane holds no fixed heights except the name field. Every
+     other element is auto and the answer box flexes, which is what keeps
+     both paths inside 402px when the kind of deal path adds a row of
+     four chips that the partner path does not have.
+
      INTERNAL SCROLLING IS CORRECT IN EXACTLY ONE PLACE, the feed. A
      cohort is an unbounded list and cannot be designed to a fixed
      height. Everything else on the canvas is fixed and fits.
@@ -129,7 +134,13 @@
   .body{flex:0 0 auto;height:402px;margin-top:14px;display:flex;gap:30px;min-height:0}
   .col{min-height:0;display:flex;flex-direction:column}
   .col.left{flex:0 0 404px}
-  .col.right{flex:1 1 auto;min-width:0}
+  .col.right{flex:1 1 auto;min-width:0;position:relative}
+  .col.right::after{
+    content:"";position:absolute;left:0;right:4px;bottom:0;height:34px;pointer-events:none;
+    opacity:0;transition:opacity 180ms cubic-bezier(.2,.7,.3,1);
+    background:linear-gradient(to bottom, rgba(253,248,248,0), #FDF8F8);
+  }
+  .col.right.more::after{opacity:1}
 
   /* ========== type ==========
      One system sans stack set on the body. Weight 600 carries every
@@ -161,7 +172,6 @@
   .chip.sel{border:2px solid #001D69;background:#DCE1FF;color:#001D69}
   .chip:hover{color:#001D69;border-color:#001D69}
   .chip:focus-within{outline:3px solid #001D69;outline-offset:2px}
-  .chips.small .chip{font-size:12.5px;padding:6px 11px}
 
   /* ========== fields ========== */
   input.nf{
@@ -169,15 +179,25 @@
     background:#FDF8F8;border:1.5px solid #484646;border-radius:8px;
     padding:9px 12px;width:100%;flex:0 0 auto;
   }
+  /* The answer box is the one flexible item in the left column, so the
+     column always fits 402px and the box absorbs the difference. It was
+     a fixed 92px, which held on the partner path and overflowed by 52px
+     on the kind of deal path once the four kind chips appeared. Found by
+     render on 21 August 2026. Do not put a fixed height back. */
   textarea.tf{
     font-family:inherit;font-size:15px;line-height:1.5;color:#1C1B1B;
     background:#FDF8F8;border:1.5px solid #001D69;border-radius:9px;
-    padding:11px 13px;resize:none;width:100%;flex:0 0 auto;height:92px;overflow-y:auto;
+    padding:11px 13px;resize:none;width:100%;flex:1 1 auto;min-height:66px;overflow-y:auto;
   }
   input.nf::placeholder,textarea.tf::placeholder{color:#484646;opacity:1;font-style:italic}
   input.nf:focus-visible,textarea.tf:focus-visible{outline:3px solid #001D69;outline-offset:2px}
+  /* helper text and the counter share one row, because two stacked rows
+     of 12px type cost 21px the left column does not have on the longest
+     path. */
+  .helprow{flex:0 0 auto;display:flex;align-items:baseline;gap:12px}
+  .helprow p.help{flex:1 1 auto;min-width:0}
   .count{font-size:11.5px;color:#484646;flex:0 0 auto;text-align:right;
-         font-variant-numeric:tabular-nums}
+         white-space:nowrap;font-variant-numeric:tabular-nums}
   .count.over{color:#001D69;font-weight:600}
 
   /* ========== posted state ==========
@@ -211,7 +231,7 @@
 
   /* the covered feed */
   .gate{flex:1 1 auto;min-height:0;margin-top:10px;border:1.5px dashed #484646;border-radius:11px;
-        padding:20px 22px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+        padding:22px 22px;display:flex;flex-direction:column;justify-content:flex-start;gap:11px}
   .gate h3{font-size:17px;font-weight:600;color:#1C1B1B;line-height:1.3}
   .gate p{font-size:13.5px;line-height:1.55;color:#484646}
   .empty{flex:1 1 auto;min-height:0;margin-top:10px;border:1.5px dashed #484646;border-radius:11px;
@@ -240,6 +260,13 @@
   button.nb[disabled]{cursor:default;background:transparent;color:#484646;
        border-style:dashed;border-color:#484646}
   button.nb[disabled]:hover{background:transparent;color:#484646}
+  /* Reading without posting is a real choice and stays reachable, but it
+     is not the action this screen is asking for. Outlined, it read as the
+     primary in the empty state, where the actual primary is correctly
+     held because nothing has been typed yet. */
+  button.nb.quiet{border-color:transparent;background:transparent;color:#484646;
+       padding:10px 6px;text-decoration:underline;text-underline-offset:3px}
+  button.nb.quiet:hover{background:transparent;color:#001D69}
 
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
@@ -298,40 +325,27 @@
 
     <section class="col left" aria-label="Your answer">
       <p class="kick an">Substep 1.2.5</p>
-      <h1 class="dh an an2">One line, then see what the rest of the cohort would <em>put on the table</em>.</h1>
+      <h1 class="dh an an2">One line, then read what the rest of the cohort would <em>put on the table</em>.</h1>
 
       <div id="form" style="display:flex;flex-direction:column;min-height:0;flex:1 1 auto">
-        <p class="lbl an an3" style="margin-top:14px">Which are you answering</p>
-        <div class="chips an an3" style="margin-top:7px" role="radiogroup" aria-label="Which are you answering">
-          <label class="chip sel" id="c-partner">
-            <input type="radio" name="path" value="partner" checked>
-            A partner I have in mind
-          </label>
-          <label class="chip" id="c-kind">
-            <input type="radio" name="path" value="kind">
-            A kind of deal
-          </label>
+        <p class="lbl an an3" style="margin-top:13px">Pick one, then write your line</p>
+        <div class="chips an an3" style="margin-top:7px" role="radiogroup" aria-label="What you are answering">
+          <label class="chip sel"><input type="radio" name="pick" value="partner" checked>A partner I have in mind</label>
+          <label class="chip"><input type="radio" name="pick" value="licensing">Licensing</label>
+          <label class="chip"><input type="radio" name="pick" value="in-kind">In-kind</label>
+          <label class="chip"><input type="radio" name="pick" value="sponsorship">Sponsorship</label>
+          <label class="chip"><input type="radio" name="pick" value="co-creation">Co-creation</label>
         </div>
 
-        <div id="kindrow" hidden>
-          <p class="lbl" style="margin-top:11px">Which kind</p>
-          <div class="chips small" style="margin-top:6px" role="radiogroup" aria-label="Which kind of deal">
-            <label class="chip sel" id="k-licensing"><input type="radio" name="kind" value="licensing" checked>Licensing</label>
-            <label class="chip" id="k-inkind"><input type="radio" name="kind" value="in-kind">In-kind</label>
-            <label class="chip" id="k-sponsorship"><input type="radio" name="kind" value="sponsorship">Sponsorship</label>
-            <label class="chip" id="k-cocreation"><input type="radio" name="kind" value="co-creation">Co-creation</label>
-          </div>
-        </div>
-
-        <p class="lbl an an4" style="margin-top:12px">Your line</p>
-        <textarea class="tf an an4" id="answer" maxlength="400" style="margin-top:6px"
+        <textarea class="tf an an4" id="answer" maxlength="400" style="margin-top:11px"
           placeholder="Who, and why you think they would say yes."
-          aria-describedby="chelp"></textarea>
-        <p class="count" id="count" style="margin-top:5px">0 of 400</p>
+          aria-label="Your line" aria-describedby="chelp"></textarea>
 
-        <p class="help an an4" id="chelp" style="margin-top:5px">A first name or initials is optional.
-          Nothing here is marked. <b>Once it is posted you cannot edit or delete it</b>, so give it a
-          read first.</p>
+        <div class="helprow an an4" style="margin-top:6px">
+          <p class="help" id="chelp">Nothing here is marked, and
+            <b>a posted line cannot be edited or deleted</b>.</p>
+          <span class="count" id="count">0 of 400</span>
+        </div>
         <input class="nf an an4" id="who" type="text" maxlength="40" style="margin-top:8px"
           placeholder="First name or initials, optional" aria-label="First name or initials, optional">
       </div>
@@ -369,7 +383,7 @@
 
   <div class="nav">
     <p class="status" id="status" role="status" aria-live="polite">One line is plenty, and this one is optional.</p>
-    <button class="nb" type="button" id="skip">Read without posting</button>
+    <button class="nb quiet" type="button" id="skip">Read without posting</button>
     <button class="nb solid" type="button" id="post" disabled>Post it</button>
   </div>
 
@@ -524,7 +538,7 @@
   function $(id){ return document.getElementById(id); }
 
   var el = {
-    conn: $("conn"), form: $("form"), kindrow: $("kindrow"),
+    conn: $("conn"), form: $("form"),
     answer: $("answer"), who: $("who"), count: $("count"),
     posted: $("posted"), postedwho: $("postedwho"), postedsaid: $("postedsaid"),
     gate: $("gate"), empty: $("empty"), emptyh: $("emptyh"), emptyp: $("emptyp"),
@@ -613,18 +627,14 @@
 
   /* ===== the form ===== */
 
-  function path(){
-    var r = document.querySelector('input[name="path"]:checked');
-    return r ? r.value : "partner";
-  }
-
-  function kindPicked(){
-    var r = document.querySelector('input[name="kind"]:checked');
-    return r ? r.value : "licensing";
-  }
-
+  /* One flat radio group of five, not a path choice followed by a kind
+     choice. Two groups needed a second label and a second wrapping chip
+     row, which put the left column 26px over its 402px on the kind of
+     deal path. Found by render on 21 August 2026. It is also the simpler
+     thing to answer: five options, pick one. */
   function chosenKind(){
-    return path() === "partner" ? "partner" : kindPicked();
+    var r = document.querySelector('input[name="pick"]:checked');
+    return r ? r.value : "partner";
   }
 
   function syncChips(name){
@@ -637,19 +647,17 @@
     }
   }
 
-  function onPathChange(){
-    syncChips("path");
-    var isKind = path() === "kind";
-    el.kindrow.hidden = !isKind;
-    el.answer.placeholder = isKind
-      ? "Which kind, and why you think it fits this team."
-      : "Who, and why you think they would say yes.";
+  function onPickChange(){
+    syncChips("pick");
+    el.answer.placeholder = chosenKind() === "partner"
+      ? "Who, and why you think they would say yes."
+      : "Why you think that kind of deal fits this team.";
     refresh();
   }
 
   function refresh(){
     var n = el.answer.value.trim().length;
-    el.count.textContent = n + " of " + MAX;
+    el.count.textContent = n === 0 ? "" : n + " of " + MAX;
     el.count.className = n > MAX - 40 ? "count over" : "count";
     el.post.disabled = state.sending || n === 0 || !!state.mine;
   }
@@ -709,6 +717,7 @@
     el.empty.hidden = true;
     el.scroller.hidden = false;
     var html = "";
+    window.setTimeout(fadeCue, 0);
     var mineDrawn = false;
     for(var i = 0; i < rows.length; i++){
       var isMine = !mineDrawn && sameRow(rows[i], state.mine);
@@ -717,6 +726,16 @@
     }
     el.scroller.innerHTML = html;
     el.scroller.scrollTop = 0;
+  }
+
+  function fadeCue(){
+    var right = document.querySelector(".col.right");
+    if(!right){ return; }
+    var sc = el.scroller;
+    var more = !sc.hidden &&
+               sc.scrollHeight > sc.clientHeight + 1 &&
+               sc.scrollTop + sc.clientHeight < sc.scrollHeight - 2;
+    right.className = more ? "col right more" : "col right";
   }
 
   function renderMine(){
@@ -752,7 +771,7 @@
 
   function reveal(reason){
     state.revealed = true;
-    el.skip.disabled = true;
+    el.skip.hidden = true;
     renderFeed();
     if(reason){ announce(reason); }
   }
@@ -825,15 +844,12 @@
 
   /* ===== wiring ===== */
 
-  var paths = document.querySelectorAll('input[name="path"]');
-  for(var a = 0; a < paths.length; a++){ paths[a].addEventListener("change", onPathChange); }
-
-  var kinds = document.querySelectorAll('input[name="kind"]');
-  for(var b = 0; b < kinds.length; b++){
-    kinds[b].addEventListener("change", function(){ syncChips("kind"); refresh(); });
-  }
+  var picks = document.querySelectorAll('input[name="pick"]');
+  for(var a = 0; a < picks.length; a++){ picks[a].addEventListener("change", onPickChange); }
 
   el.answer.addEventListener("input", refresh);
+  el.scroller.addEventListener("scroll", fadeCue);
+  window.addEventListener("resize", fadeCue);
   el.post.addEventListener("click", doPost);
 
   el.skip.addEventListener("click", function(){
@@ -856,16 +872,18 @@
   if(savedMine && savedMine.answer){
     state.mine = savedMine;
     state.revealed = true;
-    el.skip.disabled = true;
+    el.skip.hidden = true;
     el.post.disabled = true;
     el.post.textContent = "Posted";
     setStatus("You have already answered this one.");
   }
 
+  /* REVEAL "always" opens the board on arrival, so the button offering to
+     open it has nothing left to do. */
+  if(state.revealed){ el.skip.hidden = true; }
+
   connLine();
-  syncChips("path");
-  syncChips("kind");
-  onPathChange();
+  onPickChange();
   renderMine();
   renderFeed();
   pull(true);
