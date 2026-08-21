@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Can They Prove It?</title>
+<style>
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #FDF8F8;
+  color: #484646;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+main {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 28px 18px 48px;
+}
+.prompt {
+  color: #1C1B1B;
+  font-size: 1.22rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0 0 22px;
+}
+.banner {
+  background: #DCE1FF;
+  color: #001D69;
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 16px 18px;
+  border-radius: 10px;
+  margin: 0 0 22px;
+}
+.banner:empty { display: none; }
+.banner:focus-visible { outline: 3px solid #001D69; outline-offset: 3px; }
+.group { display: flex; flex-direction: column; gap: 12px; }
+.card {
+  background: #FDF8F8;
+  border: 1px solid #484646;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 120ms linear, box-shadow 120ms linear;
+}
+.card[role="radio"]:focus-visible { outline: 3px solid #001D69; outline-offset: 3px; }
+.card.sel {
+  background: #DCE1FF;
+  box-shadow: inset 0 0 0 2px #001D69;
+}
+.card.done { cursor: default; }
+.card.trap {
+  background: #DCE1FF;
+  box-shadow: inset 7px 0 0 0 #001D69;
+  padding-left: 22px;
+}
+.row { display: flex; align-items: flex-start; gap: 10px; }
+.ind { flex: 0 0 auto; line-height: 0; padding-top: 3px; }
+.num {
+  flex: 0 0 auto;
+  color: #001D69;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 1.1em;
+}
+.claim { color: #1C1B1B; font-weight: 500; }
+.card.sel .claim, .card.trap .claim { color: #001D69; }
+svg.ic {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: none;
+  stroke: #001D69;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ann {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 30px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #001D69;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: 1px solid #001D69;
+  border-radius: 999px;
+  padding: 2px 11px 2px 8px;
+}
+.rest { color: #484646; }
+.card.trap .rest { color: #001D69; }
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #001D69;
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin: 10px 0 0;
+  padding-left: 30px;
+}
+button {
+  font: inherit;
+  font-weight: 600;
+  color: #FDF8F8;
+  background: #001D69;
+  border: 2px solid #001D69;
+  border-radius: 8px;
+  padding: 11px 26px;
+  margin-top: 22px;
+  cursor: pointer;
+}
+button:disabled {
+  color: #484646;
+  background: #FDF8F8;
+  border-color: #484646;
+  cursor: default;
+}
+button:focus-visible { outline: 3px solid #001D69; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+@media (max-width: 420px) {
+  body { font-size: 16px; }
+  main { padding: 20px 14px 40px; }
+  .ann, .pick { padding-left: 0; }
+}
+</style>
+</head>
+<body>
+<main>
+  <p class="prompt" id="prompt">Five things Cumberland Claims Services says about itself. Which one could they prove?</p>
+
+  <div class="banner" id="banner" role="status" aria-live="polite" tabindex="-1"></div>
+
+  <div class="group" id="group" role="radiogroup" aria-labelledby="prompt"></div>
+
+  <button id="check" type="button" disabled>Check</button>
+</main>
+
+<script>
+(function () {
+  var CLAIMS = [
+    "“We know what systems we run.”",
+    "“We patch our systems regularly.”",
+    "“We review our firewall settings every quarter.”",
+    "“Only authorized staff can reach patient data.”",
+    "“Our staff are trained on security.”"
+  ];
+
+  var ANN = [
+    { chip: "Not provable", rest: "Two records exist, they disagree, and neither is complete." },
+    { chip: "Not provable", rest: "One scan, run by an outside provider, four months old." },
+    { chip: "True. Still not provable", rest: "It happened twice in 2024, and nothing was written down." },
+    { chip: "Not provable", rest: "There is no access list to check anyone against." },
+    { chip: "Not provable", rest: "A deck sits on the intranet. No record of anyone opening it." }
+  ];
+
+  var TRAP = 2;
+
+  var ICON = {
+    off: '<circle cx="12" cy="12" r="8"/>',
+    on: '<circle cx="12" cy="12" r="9"/><polyline points="8 12.3 11 15.2 16.3 9"/>',
+    no: '<circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/>',
+    flag: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="7.2" x2="12" y2="12.8"/><line x1="12" y1="16.2" x2="12" y2="16.4"/>',
+    pick: '<line x1="4" y1="12" x2="19" y2="12"/><polyline points="13.5 6.5 19 12 13.5 17.5"/>'
+  };
+
+  function svg(paths) {
+    return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + paths + '</svg>';
+  }
+
+  var group = document.getElementById("group");
+  var banner = document.getElementById("banner");
+  var check = document.getElementById("check");
+  var cards = [];
+  var picked = null;
+  var revealed = false;
+
+  CLAIMS.forEach(function (text, i) {
+    var card = document.createElement("div");
+    card.className = "card";
+    card.setAttribute("role", "radio");
+    card.setAttribute("aria-checked", "false");
+    card.setAttribute("tabindex", i === 0 ? "0" : "-1");
+    card.innerHTML =
+      '<div class="row">' +
+        '<span class="ind">' + svg(ICON.off) + "</span>" +
+        '<span class="num">' + (i + 1) + "</span>" +
+        '<span class="claim">' + text + "</span>" +
+      "</div>";
+    group.appendChild(card);
+    cards.push(card);
+
+    card.addEventListener("click", function () { select(i); });
+    card.addEventListener("keydown", function (e) { onKey(e, i); });
+  });
+
+  function select(i) {
+    if (revealed) { return; }
+    picked = i;
+    cards.forEach(function (c, n) {
+      var on = n === i;
+      c.classList.toggle("sel", on);
+      c.setAttribute("aria-checked", on ? "true" : "false");
+      c.setAttribute("tabindex", on ? "0" : "-1");
+      c.querySelector(".ind").innerHTML = svg(on ? ICON.on : ICON.off);
+    });
+    check.disabled = false;
+  }
+
+  function move(i) {
+    select(i);
+    cards[i].focus();
+  }
+
+  function onKey(e, i) {
+    if (revealed) { return; }
+    var k = e.key;
+    if (k === " " || k === "Enter" || k === "Spacebar") {
+      e.preventDefault();
+      select(i);
+      return;
+    }
+    var next = null;
+    if (k === "ArrowDown" || k === "ArrowRight") { next = (i + 1) % cards.length; }
+    if (k === "ArrowUp" || k === "ArrowLeft") { next = (i - 1 + cards.length) % cards.length; }
+    if (k === "Home") { next = 0; }
+    if (k === "End") { next = cards.length - 1; }
+    if (next !== null) {
+      e.preventDefault();
+      move(next);
+    }
+  }
+
+  check.addEventListener("click", function () {
+    if (revealed || picked === null) { return; }
+    revealed = true;
+
+    group.removeAttribute("role");
+    group.removeAttribute("aria-labelledby");
+
+    cards.forEach(function (c, i) {
+      c.removeAttribute("role");
+      c.removeAttribute("aria-checked");
+      c.removeAttribute("tabindex");
+      c.classList.remove("sel");
+      c.classList.add("done");
+      c.querySelector(".ind").remove();
+      if (i === TRAP) { c.classList.add("trap"); }
+
+      var ann = document.createElement("p");
+      ann.className = "ann";
+      ann.innerHTML =
+        '<span class="chip">' + svg(i === TRAP ? ICON.flag : ICON.no) + ANN[i].chip + "</span>" +
+        '<span class="rest">' + ANN[i].rest + "</span>";
+      c.appendChild(ann);
+
+      if (i === picked) {
+        var p = document.createElement("p");
+        p.className = "pick";
+        p.innerHTML = svg(ICON.pick) + "You picked this";
+        c.appendChild(p);
+      }
+    });
+
+    banner.textContent = "None of them. And nobody lied.";
+    check.remove();
+    banner.focus();
+  });
+}());
+</script>
+</body>
+</html>
