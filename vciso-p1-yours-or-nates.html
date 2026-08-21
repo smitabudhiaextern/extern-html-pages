@@ -121,6 +121,17 @@ svg.ic {
   padding: 2px 11px 2px 8px;
 }
 .rev p.why { margin: 8px 0 0; color: #484646; font-size: 0.95rem; }
+/* A card the student put in the wrong column moves to the right one on
+   reveal. The correction carries the fill, the icon and the column name.
+   Their own placement is words only: no fill, no tick. */
+.mk.fix {
+  background: #001D69;
+  color: #DCE1FF;
+  font-size: 0.95rem;
+  padding: 4px 12px 4px 9px;
+}
+.mk.fix svg.ic { stroke: #DCE1FF; }
+.rev p.mypick { margin: 8px 0 0; color: #484646; font-size: 0.86rem; }
 .held {
   display: inline-flex;
   align-items: center;
@@ -256,9 +267,11 @@ svg.ic {
   var ICON = {
     tick: '<polyline points="5 12.6 9.4 17 19 6.6"/>',
     ok: '<circle cx="12" cy="12" r="9"/><polyline points="8 12.3 11 15.2 16.3 9"/>',
-    back: '<path d="M12 4a8 8 0 1 1-8 8"/><polyline points="8 8 4 12 8 16"/>',
+    alert: '<path d="M12 4.4 21.2 19.6 2.8 19.6Z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="16.5" x2="12" y2="16.7"/>',
     held: '<circle cx="12" cy="12" r="9"/><polyline points="12 7.5 12 12 15.4 14"/>'
   };
+
+  var COLNAME = { yours: "Yours", nates: "Nate&rsquo;s" };
 
   function svg(paths) {
     return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + paths + "</svg>";
@@ -298,6 +311,8 @@ svg.ic {
     placed = [];
     cards = [];
     tray.innerHTML = "";
+    tray.hidden = false;
+    count.hidden = false;
     zones.yours.innerHTML = "";
     zones.nates.innerHTML = "";
     sum.hidden = true;
@@ -400,17 +415,27 @@ svg.ic {
       rev.hidden = false;
 
       if (i === SIXTH) {
-        rev.innerHTML = '<span class="held">' + svg(ICON.held) + "Held back</span>";
+        rev.innerHTML = '<span class="held">' + svg(ICON.held) + "Held back on purpose</span>";
         return;
       }
-      var right = placed[i] === ITEMS[i].answer;
+      var mine = placed[i];
+      var right = mine === ITEMS[i].answer;
+      if (!right) { zones[ITEMS[i].answer].appendChild(card); }
       rev.innerHTML =
-        '<span class="mk">' + svg(right ? ICON.ok : ICON.back) + (right ? "Correct" : "Reconsider") + "</span>" +
-        '<p class="why">' + ITEMS[i].why + "</p>";
+        (right
+          ? '<span class="mk">' + svg(ICON.ok) + "Correct</span>"
+          : '<span class="mk fix">' + svg(ICON.alert) + "Moved to " + COLNAME[ITEMS[i].answer] + "</span>") +
+        '<p class="why">' + ITEMS[i].why + "</p>" +
+        (right ? "" : '<p class="mypick">You put it under ' + COLNAME[mine] + ".</p>");
     });
 
+    /* The empty tray and its stale number go. What is left on screen is the
+       reveal and the one step still to come. */
+    tray.hidden = true;
+    count.hidden = true;
+
     sum.hidden = false;
-    sum.textContent = "Five tasks, two columns. One left.";
+    sum.textContent = "One more step.";
     revealBtn.hidden = true;
     sixthBtn.hidden = false;
     sixthBtn.focus();
@@ -424,7 +449,7 @@ svg.ic {
     var from = card.getBoundingClientRect();
     card.remove();
 
-    // Item 6 carries no Correct or Reconsider marker. Suppressed here on purpose.
+    // Item 6 carries no correctness marker at all. Suppressed here on purpose.
     var a = document.createElement("div");
     a.className = "half";
     a.innerHTML = "<p>Doing the renewal.</p>";
