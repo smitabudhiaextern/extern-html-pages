@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- BUILD NOTE, not student-facing.
+
+     SETTLED 24 August 2026. Read this before changing anything below. The
+     three items here were each verified directly against the filing and the
+     live URLs. They are not open questions and there is no dispute left in
+     this file.
+
+     1. SEC EDGAR IS THE SOURCE OF RECORD for every Coursera figure in this
+        program: Coursera, Form 10-K for the year ended 31 December 2025,
+        https://www.sec.gov/Archives/edgar/data/1651562/000165156226000015/cour-20251231.htm
+        That document was fetched and read. It returns HTTP 200 to any client
+        that sends a User-Agent identifying the requester, which is SEC's
+        stated access policy and which every real browser satisfies, so the
+        link works for a student. A fetcher using a generic User-Agent gets
+        403. A 403 from an automated fetch is therefore NOT evidence that the
+        URL is wrong, and must not be treated as such again.
+     2. THE INVESTOR RELATIONS URLS WERE REMOVED and must not be restored.
+        They return 403 to a real headless browser, so a student who clicks
+        one gets an error, and their contents could not be confirmed
+        independently. Cite the filing instead, with link text that names the
+        document.
+     3. NO AMOUNT AND NO COUNT IS PRINTED ON THIS BUILD. The embedding module,
+        06-content/project-02/step-01/substep-2.1.3-training-how-coursera-makes-money.md,
+        says "Before you do the arithmetic, put a number in your head. What
+        would you guess an organization pays Coursera in a year?" and then
+        reveals the reported figures and divides two of them. This build sits
+        one screen earlier, so any figure printed here hands over the answer
+        before the student can commit to a guess and the commit-before-reveal
+        mechanic fails. The two revenue amounts and the paid customer count
+        were taken off this build, along with the noscript copies and the
+        count-up animator that painted them. Do not put an amount, a customer
+        count, a growth rate or a derived per customer average back on this
+        screen. If a figure is ever genuinely wanted here, the module's guess
+        has to be removed first, in the module.
+
+     WHAT SURVIVES, and it has to. Half the reason this build exists is to
+     stop a reader taking the Enterprise segment for the company total. That
+     frame stays and carries the RELATIONSHIP rather than the amounts: two
+     bars on one shared scale, a full bar for total revenue and a shorter bar
+     for the Enterprise segment drawn at its true share of it, the label
+     "part of that total", and a note saying outright that Enterprise is one
+     part of a larger total. The share is drawn from the reported figures; no
+     figure is displayed.
+
+     UDEMY. The financial year 2025 figures predate the Udemy combination.
+     Coursera agreed that combination on 17 December 2025 and the filing
+     describes it as still pending. No completion date and no combined
+     customer count appear anywhere in this build: neither could be verified,
+     and the filing supports neither. Do not add either.
+
+     "MOST", NOT "MANY", corrected 24 August 2026 from the source itself:
+     "You have the option to audit or preview most courses on Coursera."
+     https://www.coursera.org/articles/what-is-coursera , updated 13 August 2026.
+     The build previously asserted the opposite, that Coursera "does not say
+     most". It does. Quote the publisher's word.
+
+     UNCHANGED and still governing: the palette is the five values plus low
+     alpha rgba of #001D69 only; no network request on load; every frame inside
+     540px of natural height under both font stacks; focus never lands on BODY
+     after a state change; the noscript fallback carries every beat, and beat 5
+     still refuses to answer its own question.
+-->
+<title>How Coursera started, and who pays now</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. Coursera's own brand blue appears nowhere.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, the whole of a bar      */
+    --on-highlight:#001D69; /* accents, arrows, the part of a bar     */
+    --bg:#FDF8F8;           /* canvas background, negative space      */
+    --body:#484646;         /* body copy, captions                    */
+    --title:#1C1B1B;        /* headings, primary text                 */
+
+    --line:rgba(0,29,105,.26);
+    --line-strong:rgba(0,29,105,.45);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ==== the 960x540 canvas, scaled down only, never up ====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the stage
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then shrinks it a second time. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:15px 44px 12px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ==== top row ==== */
+  .top{display:flex;align-items:baseline;gap:12px;flex:0 0 auto}
+  .count{font-size:12.5px;font-weight:600;color:var(--on-highlight);letter-spacing:.02em;white-space:nowrap}
+  .topnote{font-size:12px;color:var(--body);margin-left:auto;text-align:right}
+
+  /* ==== the rail ==== */
+  .rail{position:relative;display:flex;margin-top:7px;flex:0 0 auto;height:32px}
+  .rail::before{content:"";position:absolute;left:14px;right:14px;top:6px;height:2px;background:var(--line)}
+  .rbtn{
+    flex:1 1 0;min-width:0;background:transparent;border:0;padding:1px 2px 0;cursor:pointer;
+    font-family:inherit;color:var(--body);
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+  }
+  .rbtn:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:6px}
+  .dot{
+    width:11px;height:11px;border-radius:50%;position:relative;z-index:1;
+    border:2px solid var(--on-highlight);background:var(--bg);flex:0 0 auto;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out);
+  }
+  .rbtn[data-state="past"] .dot{background:var(--on-highlight)}
+  .rbtn[aria-current="step"] .dot{background:var(--on-highlight);box-shadow:0 0 0 4px var(--highlight)}
+  .rlab{font-size:11.5px;line-height:1.2;color:var(--body);white-space:nowrap}
+  .rbtn[aria-current="step"] .rlab{font-weight:600;color:var(--title)}
+  .rbtn:hover .rlab{color:var(--title)}
+
+  /* ==== headline ==== */
+  h1{font-size:24px;line-height:1.2;font-weight:600;color:var(--title);margin-top:7px;flex:0 0 auto}
+  .hstep{
+    display:inline-block;vertical-align:3px;margin-right:9px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:11.5px;font-weight:600;letter-spacing:.03em;
+    padding:3px 9px;border-radius:5px;white-space:nowrap;
+  }
+
+  /* ==== the diagram area. Fixed height so nothing below it moves
+         between beats. ==== */
+  .dia{margin-top:8px;flex:0 0 auto;height:158px;display:flex;align-items:center}
+
+  /* --- flow: boxes with labelled arrows between them --- */
+  .flow{display:flex;align-items:stretch;gap:8px;width:100%}
+  .fb{
+    flex:1 1 0;min-width:0;background:var(--highlight);border-radius:10px;padding:9px 11px;
+    display:flex;flex-direction:column;justify-content:center;gap:3px;
+  }
+  .fb.out{background:var(--bg);border:1.5px solid var(--line-strong)}
+  .fb.ask{background:var(--bg);border:1.5px dashed var(--line-strong)}
+  .fbt{font-size:14px;font-weight:600;line-height:1.25;color:var(--on-highlight)}
+  .fbc{font-size:12px;line-height:1.35;color:var(--body)}
+  .fa{
+    flex:0 0 106px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    text-align:center;
+  }
+  .fa svg{width:26px;height:16px;display:block;color:var(--on-highlight);flex:0 0 auto}
+  .fa.rev svg{transform:scaleX(-1)}
+  .fal{font-size:11.5px;line-height:1.28;color:var(--body)}
+
+  /* --- bars: the part inside the whole, on one shared scale --- */
+  .bars{width:100%;display:flex;gap:22px;align-items:center}
+  .barcol{flex:1 1 auto;min-width:0}
+  .brow{margin-bottom:9px}
+  .brow:last-child{margin-bottom:0}
+  .bhead{display:flex;align-items:baseline;gap:9px;margin-bottom:4px}
+  .bname{font-size:12.5px;font-weight:600;color:var(--title);line-height:1.2}
+  .btag{
+    font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);
+  }
+  .btrack{
+    height:22px;border-radius:6px;background:var(--bg);
+    border:1.5px solid var(--line-strong);position:relative;overflow:hidden;
+  }
+  .bfill{
+    height:100%;background:var(--on-highlight);width:0;border-radius:4px 0 0 4px;
+    transition:width var(--t-reveal) var(--ease-out);
+  }
+  .bfill.whole{background:var(--highlight);border-radius:4px}
+  .bnote{
+    margin-top:8px;font-size:12px;line-height:1.4;color:var(--title);
+    background:var(--highlight);border-radius:8px;padding:7px 10px;
+  }
+  .bnote b{font-weight:600;color:var(--on-highlight)}
+  .statcol{
+    flex:0 0 216px;background:var(--bg);border:1.5px solid var(--line-strong);border-radius:10px;
+    padding:9px 11px;
+  }
+  .statk{font-size:15px;font-weight:600;line-height:1.2;color:var(--on-highlight)}
+  .statlab{font-size:12px;line-height:1.35;color:var(--body);margin-top:2px}
+  .statstamp{
+    margin-top:6px;font-size:11px;line-height:1.3;font-weight:600;color:var(--on-highlight);
+    background:var(--highlight);border-radius:6px;padding:5px 7px;
+  }
+
+  /* --- the closing question, which is not answered --- */
+  .qbox{
+    width:100%;background:var(--highlight);border-radius:12px;padding:13px 16px;
+    display:flex;gap:12px;align-items:flex-start;
+  }
+  .qbox .qm{
+    flex:0 0 auto;width:30px;height:30px;border-radius:50%;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:17px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .qtext{font-size:19px;line-height:1.32;font-weight:600;color:var(--title)}
+  .qsub{font-size:12.5px;line-height:1.4;color:var(--body);margin-top:5px}
+
+  /* ==== supporting text ==== */
+  /* No fixed height here. A 104px box was clipping nothing but it did let the
+     note cell spill over the source line and the button row under a wider font
+     stack. The strip hugs its own copy instead, and the bar below stays pinned
+     by margin-top:auto, so the controls cannot be pushed off the canvas. */
+  .strip{
+    margin-top:9px;flex:0 0 auto;display:grid;grid-template-columns:1fr 372px;
+    gap:22px;align-items:start;
+  }
+  .cell{min-width:0}
+  .slab{
+    font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:4px;
+  }
+  .stext{font-size:13.5px;line-height:1.46;color:var(--body)}
+  .stext b{color:var(--title);font-weight:600}
+  .cell.note .stext{
+    background:var(--highlight);border-radius:9px;padding:8px 10px;color:var(--title);
+  }
+  .src{margin-top:6px;flex:0 0 auto;font-size:11.5px;line-height:1.35}
+  .src a{color:var(--on-highlight)}
+
+  @keyframes tin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .tfade{animation:tin var(--t-frame) var(--ease-io) both}
+  @keyframes din{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  .dfade > *{animation:din 340ms var(--ease-out) both}
+  .dfade > *:nth-child(2){animation-delay:110ms}
+  .dfade > *:nth-child(3){animation-delay:220ms}
+  .dfade > *:nth-child(4){animation-delay:330ms}
+  .dfade > *:nth-child(5){animation-delay:440ms}
+
+  /* ==== controls ==== */
+  .bar{margin-top:auto;padding-top:8px;flex:0 0 auto;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{font-size:12px;line-height:1.4;max-width:66ch}
+  .hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ==== under 600px: a portrait restack, not a shrunken slide ==== */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width. Block layout removes
+       that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .count{font-size:14px}
+    .topnote{display:none}
+    .rail{height:auto;flex-wrap:wrap;gap:6px;margin-top:12px}
+    .rail::before{display:none}
+    .rbtn{
+      flex:0 0 auto;flex-direction:row;gap:7px;border:1.5px solid var(--line-strong);
+      border-radius:999px;padding:7px 11px;
+    }
+    .rbtn[aria-current="step"]{border-color:var(--on-highlight);background:var(--highlight)}
+    .rlab{font-size:14px}
+    h1{font-size:22px;margin-top:14px}
+    .hstep{font-size:12.5px;vertical-align:2px}
+    .dia{height:auto;margin-top:14px;display:block}
+    .flow{flex-direction:column;gap:6px}
+    .fb{flex:0 0 auto;padding:12px 13px}
+    .fbt{font-size:16px}
+    .fbc{font-size:14px}
+    .fa{flex:0 0 auto;flex-direction:row;gap:8px;justify-content:flex-start;text-align:left;padding-left:6px}
+    .fa svg{transform:rotate(90deg)}
+    .fa.rev svg{transform:rotate(-90deg)}
+    .fal{font-size:13.5px}
+    .bars{flex-direction:column;align-items:stretch;gap:14px}
+    .statcol{flex:0 0 auto}
+    .bname{font-size:14.5px}
+    .btag{font-size:12px}
+    .bnote{font-size:14px}
+    .statk{font-size:17px}
+    .statlab{font-size:14px}
+    .statstamp{font-size:13px}
+    .qbox{padding:14px 15px}
+    .qtext{font-size:19px}
+    .qsub{font-size:14px}
+    .strip{display:block;height:auto;margin-top:16px}
+    .cell+.cell{margin-top:14px}
+    .slab{font-size:12px}
+    .stext{font-size:16px}
+    .src{font-size:13.5px;margin-top:12px}
+    .bar{margin-top:20px;padding-top:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    .hint{font-size:13.5px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="How Coursera started, and who pays now">
+
+    <div class="top">
+      <span class="count" id="count">1 of 5</span>
+      <span class="topnote">Five points, in order. The last one is a question.</span>
+    </div>
+
+    <div class="rail" id="rail" aria-label="Five points"></div>
+
+    <h1 id="head"></h1>
+
+    <div class="dia" id="dia"></div>
+
+    <div class="strip">
+      <div class="cell">
+        <div class="slab" id="lab1">What happened</div>
+        <div class="stext" id="body"></div>
+      </div>
+      <div class="cell note">
+        <div class="slab" id="lab2">Read this carefully</div>
+        <div class="stext" id="note"></div>
+      </div>
+    </div>
+
+    <p class="src" id="src"></p>
+
+    <div class="bar">
+      <button class="nav ghost" id="prev" type="button">&#8249; Back</button>
+      <button class="nav" id="next" type="button">Next &#8250;</button>
+      <span class="hint" id="hint"></span>
+    </div>
+
+    <p class="sr" id="live" role="status" aria-live="polite"></p>
+  </div>
+</div>
+
+<noscript>
+  <!-- This style block sits INSIDE noscript so it lands after the main sheet
+       and wins on source order. The dead canvas is hidden, the centred flex
+       body goes back to block flow, and links are pinned to the palette so
+       the browser default blue never appears as a sixth colour. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:12px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:24px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .keep{background:#DCE1FF;border-radius:9px;padding:11px 13px;margin:0 0 14px}
+    .nsf .keep strong{color:#001D69}
+    .nsf .ask{background:#DCE1FF;border-radius:9px;padding:14px 15px;margin:0 0 14px;font-size:19px;color:#1C1B1B}
+    .nsf .foot{font-size:14px}
+  </style>
+  <div class="nsf">
+    <h1>How Coursera started, and who pays now</h1>
+    <p>Five points, in order. The last one is a question, and it is left open on purpose.</p>
+
+    <h2>1. The origin, 2012</h2>
+    <p>Andrew Ng and Daphne Koller, two Stanford professors, founded Coursera in 2012 and put real university courses online for free. Anyone could sign up and take a course without paying for it.</p>
+    <p class="keep"><strong>Hold onto this.</strong> The learner paid nothing. That was the offer from the very first day.</p>
+
+    <h2>2. The scale</h2>
+    <p>Real university courses, free to take, turned out to be a very popular combination. Coursera grew from that first set of Stanford courses into a global catalogue, and into a company that now reports its financial results publicly every quarter.</p>
+    <p class="keep"><strong>No growth figure appears here.</strong> No number is quoted anywhere on this page, and no early growth number was verified in any case. So the growth is described rather than counted.</p>
+
+    <h2>3. The problem</h2>
+    <p>Servers, engineers, support, course production, and the arrangements with universities all cost money every month. None of those costs stop because the person taking the course is not paying. Free at that scale is expensive to run, so the money has to arrive from somewhere other than the learner.</p>
+    <p class="keep"><strong>The shape of it.</strong> If the learner is not paying and the costs are real, somebody else has to be paying.</p>
+
+    <h2>4. Who pays now</h2>
+    <p>Organisations buy access for their people. Coursera&rsquo;s Enterprise segment is the part of the business that sells to them.</p>
+    <p><strong>The Enterprise segment is one part of Coursera&rsquo;s total revenue, not the whole of it.</strong> It is a segment, and the company total is a larger number. Reading a segment figure as the company total understates the company by a wide margin, and that is the single most common error made with this business.</p>
+    <p>Source: <a href="https://www.sec.gov/Archives/edgar/data/1651562/000165156226000015/cour-20251231.htm">Coursera, Form 10-K for the year ended 31 December 2025</a>, filed with the SEC. The amounts themselves are in the reading, not on this screen.</p>
+
+    <h2>5. The question</h2>
+    <p>Most Coursera courses can still be audited or previewed free, by anyone. Nothing above changes that. Organisations are paying anyway.</p>
+    <p class="ask"><strong>So what is an organisation buying that a free learner is not?</strong></p>
+    <p>That question is not answered here. Work it out yourself first, then take your answer into the rest of the module.</p>
+
+    <p class="foot">No amount, customer count or derived average appears on this page, on purpose. They are all in the reading, each with the period it belongs to. Coursera says you have the option to audit or preview most courses, and no catalogue share figure is published, so none is claimed here.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Arrow glyph. One weight, one size, colour #001D69 by inheritance. */
+  var ARROW = '<svg viewBox="0 0 26 16" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+              'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+              '<path d="M1 8h22"/><path d="M18 3l5 5-5 5"/></svg>';
+
+  /* ===============================================================
+     THE FIVE BEATS.
+
+     FACT DISCIPLINE. The head of this file carries the settled record and
+     the reasons. The short version, so nobody has to scroll for it:
+     - NO AMOUNT AND NO COUNT IS PRINTED ANYWHERE ON THIS BUILD. The module
+       one screen later asks the student to guess what an organisation pays
+       in a year and then divides two reported figures by hand, so printing
+       either figure here is an answer leak. The revenue amounts, the paid
+       customer count and the count-up animator that painted them are gone.
+     - WHAT THE ENTERPRISE FRAME STILL TEACHES. The Enterprise segment is
+       ONE PART of a larger company total, never the total itself. That is
+       carried by the two bars on one shared scale, drawn to the real
+       share, plus the label "part of that total" and the note under them.
+       The share is drawn; the amounts are not displayed.
+     - The only source cited for that relationship is Coursera's Form 10-K
+       for the year ended 31 December 2025 on SEC EDGAR, the same document
+       the module cites. Investor relations URLs are not used here: they
+       403 to a real browser. Do not reintroduce one.
+     - No Udemy completion date and no combined customer count appear. The
+       filing describes that combination as pending as of 17 December 2025.
+     - Coursera says you have the option to audit or preview MOST courses.
+       Corrected 24 August 2026 from the source page itself, which the
+       earlier "never most" instruction contradicted.
+     - Beat 2 carries no growth figure because none was verified.
+     - Beat 5 asks the closing question and does NOT answer it. Do not add
+       what organisations are buying. That is the module's teaching point,
+       and stating it here is an answer leak.
+     =============================================================== */
+  var BEATS = [
+    {
+      rail:"2012", step:"Point 1, 2012",
+      head:"Two professors put real courses online, free",
+      dia:{kind:"flow", items:[
+        {t:"Andrew Ng and Daphne Koller", c:"Two professors at Stanford"},
+        {a:"founded Coursera, 2012, and put"},
+        {t:"Real university courses", c:"The actual course material, online"},
+        {a:"free to take, open to"},
+        {t:"Anyone who signs up", c:"No payment asked for", out:true}
+      ]},
+      lab1:"What happened",
+      body:"Andrew Ng and Daphne Koller, two Stanford professors, founded Coursera in <b>2012</b> and put real university courses online free. Anyone could sign up and take a course without paying for it.",
+      lab2:"Hold onto this",
+      note:"The learner paid nothing. That was the offer from the very first day, and it is where the rest of this screen comes from.",
+      src:{t:"Coursera was founded in 2012 by Andrew Ng and Daphne Koller, out of Stanford."},
+      say:"Two Stanford professors put real university courses online free in 2012."
+    },
+    {
+      rail:"The scale", step:"Point 2",
+      head:"It grew fast",
+      dia:{kind:"flow", items:[
+        {t:"2012", c:"A first set of courses, out of one university"},
+        {a:"more universities, more learners"},
+        {t:"The years after", c:"Courses from institutions around the world"},
+        {a:"and now"},
+        {t:"Today", c:"A global catalogue, and results reported publicly every quarter"}
+      ]},
+      lab1:"What happened",
+      body:"Real university courses, free to take, turned out to be a very popular combination. Coursera grew from that first set of Stanford courses into a <b>global catalogue</b>, and into a company that now reports its financial results publicly every quarter.",
+      lab2:"No number here, on purpose",
+      note:"This screen quotes no figure at all, and no early growth figure was verified in any case. So the growth is <b>described, not counted</b>. A number you cannot source is not better than a sentence you can.",
+      src:null,
+      say:"Coursera grew fast. No growth figure is shown, because none was verified for this build."
+    },
+    {
+      rail:"The problem", step:"Point 3",
+      head:"Free at that scale costs real money to run",
+      dia:{kind:"flow", items:[
+        {t:"The learner", c:"Takes the course, pays nothing", out:true},
+        {a:"so no money arrives from here"},
+        {t:"Running free courses at scale", c:"Servers, engineers, support, course production, arrangements with universities"},
+        {a:"so the money has to come from"},
+        {t:"Somebody else", c:"Who?", ask:true}
+      ]},
+      lab1:"What happened",
+      body:"Servers, engineers, support, course production, and the arrangements with universities all cost money every month. <b>None of those costs stop because the person taking the course is not paying.</b>",
+      lab2:"The shape of it",
+      note:"If the learner is not paying and the costs are real, somebody else has to be paying. That is not a business trick. It is arithmetic.",
+      src:null,
+      say:"Free courses at that scale cost real money to run, and the learner is not paying, so somebody else has to."
+    },
+    {
+      rail:"Who pays", step:"Point 4, financial year 2025",
+      head:"Organisations buy access for their people",
+      dia:{kind:"bars"},
+      lab1:"What the filing says",
+      body:"Organisations buy access for their people, and Coursera’s <b>Enterprise segment</b> is the part of the business that sells to them. Enterprise is <b>one part of the company’s total revenue</b>, not the whole of it, and the bars are drawn to the real proportion.",
+      lab2:"Two habits, from this frame",
+      note:"<b>Name the segment when you quote a segment figure.</b> Reading a segment as the company total understates the company badly. <b>Carry the period.</b> Every amount and every count belongs to a stated year.",
+      src:{t:"Coursera, Form 10-K for the year ended 31 December 2025",
+           n:"The amounts are in the reading, not on this screen.",
+           u:"https://www.sec.gov/Archives/edgar/data/1651562/000165156226000015/cour-20251231.htm"},
+      say:"Organisations buy access for their people. Coursera’s Enterprise segment is one part of the company’s total revenue and not the total itself. The bars show that proportion. The amounts are in the reading."
+    },
+    {
+      rail:"The question", step:"Point 5",
+      head:"So what is an organisation buying?",
+      dia:{kind:"ask"},
+      lab1:"Where that leaves you",
+      body:"Nothing on the last four points takes the free option away. So the gap between a learner who pays nothing and an organisation that pays is the thing worth explaining, and <b>this screen does not explain it</b>. That is deliberate.",
+      lab2:"This one stays open",
+      note:"No answer appears on this screen. Write down what you think it is before you go on, so you can check your own guess against what you find later.",
+      src:{t:"Coursera, 13 August 2026",
+           n:"Coursera says you have the option to audit or preview most courses. No catalogue share figure is published, so none is claimed here.",
+           u:"https://www.coursera.org/articles/what-is-coursera"},
+      say:"Most Coursera courses can still be audited or previewed free. So what is an organisation buying that a free learner is not? This question is left open."
+    }
+  ];
+
+  var CLOSER = "That is the end of this screen. The question stays open.";
+
+  var el = {};
+  ["frame","count","rail","head","dia","lab1","body","lab2","note","src","prev","next","hint","live"]
+    .forEach(function(k){ el[k] = document.getElementById(k); });
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cur = 0;
+  var wasPortrait = window.matchMedia("(max-width:599px)").matches;
+
+  /* ---------------- diagram builders ---------------- */
+
+  function flowHTML(items){
+    var out = '', i, it;
+    for(i = 0; i < items.length; i++){
+      it = items[i];
+      if(it.a){
+        out += '<div class="fa' + (it.rev ? ' rev' : '') + '">' + ARROW +
+               '<span class="fal">' + it.a + '</span></div>';
+      } else {
+        out += '<div class="fb' + (it.out ? ' out' : '') + (it.ask ? ' ask' : '') + '">' +
+               '<div class="fbt">' + it.t + '</div>' +
+               '<div class="fbc">' + it.c + '</div></div>';
+      }
+    }
+    return '<div class="flow">' + out + '</div>';
+  }
+
+  /* The bars share one scale, so the Enterprise segment is visibly a part
+     of the total rather than a second total sitting next to it. That is the
+     whole reason this frame is a bar pair and not two big numbers. */
+  function barsHTML(){
+    return '<div class="bars">' +
+      '<div class="barcol">' +
+        '<div class="brow">' +
+          '<div class="bhead"><span class="bname">Total revenue, financial year 2025</span>' +
+          '<span class="btag">the whole company</span></div>' +
+          '<div class="btrack"><div class="bfill whole" id="fTotal"></div></div>' +
+        '</div>' +
+        '<div class="brow">' +
+          '<div class="bhead"><span class="bname">Enterprise segment</span>' +
+          '<span class="btag">part of that total</span></div>' +
+          '<div class="btrack"><div class="bfill" id="fEnt"></div></div>' +
+        '</div>' +
+        '<p class="bnote"><b>Enterprise is a segment, not the company.</b> ' +
+          'The lower bar is the Enterprise segment drawn to its real share of total ' +
+          'revenue for the financial year 2025. No amount is shown here: the ' +
+          'figures are in the reading.</p>' +
+      '</div>' +
+      '<div class="statcol">' +
+        '<div class="statk">Who the payers are</div>' +
+        '<div class="statlab">Employers and institutions, buying seats for people they are answerable for.</div>' +
+        '<div class="statstamp">How many there are, and what each one pays in a year, is in the reading.</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function askHTML(){
+    return '<div class="qbox">' +
+      '<span class="qm" aria-hidden="true">?</span>' +
+      '<div><div class="qtext">So what is an organisation buying that a free learner is not?</div>' +
+      '<div class="qsub">Anyone can still audit or preview most Coursera courses free. ' +
+      'Organisations are paying anyway. Both of those are true at once.</div></div>' +
+    '</div>';
+  }
+
+  /* The count-up animator that used to paint the figures on the Enterprise
+     frame was deleted on 24 August 2026 along with the figures themselves.
+     Nothing on this build prints a number, so nothing counts up to one. If a
+     figure is ever wanted here again, the module's guess has to be removed
+     first, and the old rule still applies: never paint a value that was never
+     true on the way to one that was. */
+
+  function drawDia(b, animate){
+    var d = b.dia;
+    if(d.kind === "flow")      el.dia.innerHTML = flowHTML(d.items);
+    else if(d.kind === "bars") el.dia.innerHTML = barsHTML();
+    else                       el.dia.innerHTML = askHTML();
+
+    var host = el.dia.firstChild;
+    if(host){
+      host.classList.remove("dfade");
+      if(animate && !reduce){ void host.offsetWidth; host.classList.add("dfade"); }
+    }
+
+    if(d.kind === "bars"){
+      var fT = document.getElementById("fTotal");
+      var fE = document.getElementById("fEnt");
+      /* Enterprise segment as a share of total revenue for financial year
+         2025, worked out from the two figures reported in the Form 10-K and
+         stored here as the share alone. The amounts are deliberately not in
+         this file, so the bar can be drawn to the true proportion without
+         either figure being recoverable from it. */
+      var pct = 33.7;
+      if(reduce || !animate){
+        if(fT) fT.style.width = "100%";
+        if(fE) fE.style.width = pct.toFixed(1) + "%";
+      } else {
+        requestAnimationFrame(function(){
+          if(fT) fT.style.width = "100%";
+          if(fE) fE.style.width = pct.toFixed(1) + "%";
+        });
+      }
+    }
+  }
+
+  /* ---------------- rail ---------------- */
+
+  function renderRail(){
+    var out = "", i;
+    for(i = 0; i < BEATS.length; i++){
+      var state = i < cur ? "past" : (i === cur ? "now" : "ahead");
+      out += '<button class="rbtn" type="button" data-i="' + i + '" data-state="' + state + '"' +
+             (i === cur ? ' aria-current="step"' : '') +
+             ' aria-label="Point ' + (i + 1) + ' of ' + BEATS.length + ', ' + BEATS[i].head + '">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span class="rlab">' + BEATS[i].rail + '</span></button>';
+    }
+    /* The rail is rebuilt wholesale, which destroys the focused button.
+       If focus was inside it, put focus back on the button for the point
+       we just moved to, so a state change never drops focus to BODY. */
+    var hadFocus = el.rail.contains(document.activeElement);
+    el.rail.innerHTML = out;
+    if(hadFocus){
+      var b = el.rail.querySelector('.rbtn[data-i="' + cur + '"]');
+      if(b) b.focus();
+    }
+  }
+
+  /* src.n is a plain sentence that must sit OUTSIDE the anchor, so a link
+     never carries prose that is not part of the citation. */
+  function srcHTML(src){
+    if(!src) return '';
+    var tail = src.n ? ' ' + src.n : '';
+    if(src.u) return 'Source: <a href="' + src.u + '" target="_blank" rel="noopener">' + src.t + '</a>.' + tail;
+    return 'Source: ' + src.t + tail;
+  }
+
+  /* ---------------- render one beat ---------------- */
+
+  function show(i, animate){
+    if(i < 0 || i >= BEATS.length) return;
+    cur = i;
+    var b = BEATS[i];
+
+    el.count.textContent = (i + 1) + " of " + BEATS.length;
+    el.head.innerHTML = '<span class="hstep">' + b.step + '</span>' + b.head;
+    el.lab1.textContent = b.lab1;
+    el.lab2.textContent = b.lab2;
+    el.body.innerHTML = b.body;
+    el.note.innerHTML = b.note;
+    el.src.innerHTML = srcHTML(b.src);
+
+    drawDia(b, animate);
+    renderRail();
+
+    if(animate && !reduce){
+      ["head","body","note","src"].forEach(function(k){
+        el[k].classList.remove("tfade");
+        void el[k].offsetWidth;
+        el[k].classList.add("tfade");
+      });
+    }
+
+    /* A dead end button is hidden, not faded. Two reasons: a disabled
+       button that still holds focus drops activeElement to BODY, and a
+       faded label cannot hold 4.5:1 against the background. */
+    var last = (i === BEATS.length - 1);
+    var first = (i === 0);
+    if(last && document.activeElement === el.next){ try{ el.prev.focus(); }catch(e){} }
+    if(first && document.activeElement === el.prev){ try{ el.next.focus(); }catch(e){} }
+    el.prev.disabled = first;
+    el.prev.hidden = first;
+    el.next.disabled = last;
+    el.next.hidden = last;
+    el.hint.innerHTML = last
+      ? "<b>" + CLOSER + "</b>"
+      : "Arrow keys move through the five points, or pick any point on the rail above.";
+
+    el.live.textContent = "Point " + (i + 1) + " of " + BEATS.length + ". " + b.head + ". " + b.say;
+    settleFocus();
+  }
+
+  /* No state change may end with focus on BODY. If nothing sensible holds
+     it, the frame does. */
+  function settleFocus(){
+    var a = document.activeElement;
+    if(!a || a === document.body || a === document.documentElement ||
+       !document.contains(a) || a.disabled || a.hidden){
+      try{ el.frame.focus(); }catch(e){}
+    }
+  }
+
+  /* ---------------- navigation ---------------- */
+
+  el.prev.addEventListener("click", function(){ if(cur > 0) show(cur - 1, true); });
+  el.next.addEventListener("click", function(){ if(cur < BEATS.length - 1) show(cur + 1, true); });
+
+  el.rail.addEventListener("click", function(e){
+    var t = e.target && e.target.closest ? e.target.closest(".rbtn") : null;
+    if(!t) return;
+    var n = parseInt(t.getAttribute("data-i"), 10);
+    /* focus the rail button for the point we land on, not the one clicked */
+    show(n, true);
+    var b = el.rail.querySelector('.rbtn[data-i="' + n + '"]');
+    if(b) b.focus();
+  });
+
+  document.addEventListener("keydown", function(e){
+    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault(); if(cur < BEATS.length - 1) show(cur + 1, true); else settleFocus();
+    } else if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      e.preventDefault(); if(cur > 0) show(cur - 1, true); else settleFocus();
+    } else if(e.key === "Home"){
+      e.preventDefault(); show(0, true);
+    } else if(e.key === "End"){
+      e.preventDefault(); show(BEATS.length - 1, true);
+    }
+  });
+
+  var tx = 0, ty = 0, tracking = false;
+  document.addEventListener("touchstart", function(e){
+    if(e.touches.length !== 1){ tracking = false; return; }
+    tracking = true; tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(!tracking || !e.changedTouches.length) return;
+    tracking = false;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if(dx < 0 && cur < BEATS.length - 1) show(cur + 1, true);
+    if(dx > 0 && cur > 0) show(cur - 1, true);
+  }, {passive:true});
+
+  /* ---------------- scale the canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    var portrait = window.matchMedia("(max-width:599px)").matches;
+    if(portrait){ stage.style.transform = ""; }
+    else {
+      var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + s + ")";
+    }
+    /* a layout flip is not a beat change, so it must not replay motion */
+    if(portrait !== wasPortrait){ wasPortrait = portrait; show(cur, false); }
+  }
+  window.addEventListener("resize", fit);
+
+  show(0, false);
+  fit();
+
+  /* exposed for render QA only: lets a headless run force a state */
+  window.__cs = {
+    go:function(i){ show(i, true); },
+    jump:function(i){ show(i, false); },
+    count:BEATS.length,
+    state:function(){ return {i:cur}; }
+  };
+})();
+</script>
+</body>
+</html>
