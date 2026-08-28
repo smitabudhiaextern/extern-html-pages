@@ -526,7 +526,14 @@
     revealed: REVEAL === "always",
     mine: null,
     rows: [],
-    sending: false
+    sending: false,
+    /* False until the first read of the board has come back, succeeded or
+       failed. Without this the empty panel says "Nobody has posted yet"
+       while the request is still in the air, which on a slow connection
+       is a page telling a student something untrue about their cohort.
+       An Apps Script read measured 2 to 12 seconds against the real
+       deployment, so this window is wide enough to be seen. */
+    loaded: !shared()
   };
 
   /* ===== storage: the two functions any other backend replaces ===== */
@@ -683,9 +690,15 @@
     if(rows.length === 0){
       el.scroller.hidden = true;
       el.empty.hidden = false;
-      if(state.mine){
+      if(!state.loaded){
+        el.emptyh.textContent = "Opening the board.";
+        el.emptyp.textContent = "Fetching what the cohort has written. This can take a few seconds.";
+      } else if(state.mine){
         el.emptyh.textContent = "Just yours so far.";
         el.emptyp.textContent = "Come back later in the week and there will be more.";
+      } else {
+        el.emptyh.textContent = "Nobody has posted yet.";
+        el.emptyp.textContent = "Yours will be the first one on the board.";
       }
       return;
     }
@@ -860,8 +873,10 @@
            could tell them. */
         if(!found){ state.rows = [state.mine].concat(rows); }
       }
+      state.loaded = true;
       renderFeed();
     }, function(err){
+      state.loaded = true;
       if(!quiet){
         setStatus("<b>Could not load the board.</b> Everything else on this page still works.");
       }
@@ -933,6 +948,7 @@
      without typing through the form. */
   window.__board = {
     state: state,
+    loaded: function(){ return state.loaded; },
     seed: function(rows){ state.rows = rows; state.revealed = true; renderFeed(); },
     open: function(){ reveal(null); }
   };
