@@ -21,27 +21,29 @@
      HOW THE SHARING ACTUALLY WORKS, and its limits. This is option 2 of
      three the owner was shown on 21 August 2026. GitHub Pages is static
      hosting with no server behind it, so a page served from there can
-     save nothing that another browser can read. The shared state is
-     rented from Supabase instead: the page POSTs an answer to a REST
-     endpoint and GETs the whole table back on load. Everything the page
-     needs to talk to Supabase is in the browser, so it is public. What
-     that buys and what it costs:
+     save nothing that another browser can read. The shared state lives
+     in a Google Sheet instead, reached through an Apps Script web app:
+     the page POSTs an answer to the script and GETs the answers back on
+     load. The script is checked in beside this file as
+     khan-academy-p1-cohort-board.gs. What that buys and what it costs:
 
-       buys  every student sees every answer, live, no login, and the
-             page keeps the house design
+       buys  every student sees every answer, no login, the page keeps
+             the house design, the sheet stays private rather than
+             being a public document, validation runs on Google's side
+             where a student cannot reach it, and moderation is a
+             spreadsheet rather than a database dashboard
        costs no identity, so a typed name proves nothing
              no editing and no deleting by the student, ever
-             the answers are readable by anyone holding the URL
+             the deployment URL is public, so anyone holding it can post
              no replies, so it is a wall and not a thread
 
-     The write path is narrowed by database policy rather than by this
-     page, because anything this page enforces can be bypassed by
-     posting to the endpoint directly. See the SQL in the script's
-     configuration block. There is no update policy and no delete
-     policy, so the key shipped here cannot alter or remove a row even
-     though it can add one. Removing an unwanted row is a person in the
-     Supabase dashboard. That is the moderation plan and it needs an
-     owner.
+     Changed from Supabase on 22 August 2026, owner decision. The two
+     storage functions were swapped and nothing else in this file moved,
+     which is what the adapter boundary existed for.
+
+     MODERATION. Put anything at all in the sheet's "hidden" column and
+     the script stops returning that row, without destroying it. That is
+     the plan, and it still needs a named person.
 
      UNTIL THE KEY IS DROPPED IN this build runs in local mode: the
      student's own answer is kept in their browser, the feed holds only
@@ -436,31 +438,21 @@
   "use strict";
 
   /* ==================================================================
-     CONFIGURATION. This is the only block anyone needs to touch to put
-     the board live. Nothing below it is Supabase specific except the
-     two functions named in the adapter comment.
+     CONFIGURATION. Two lines. Nothing else in this file needs touching
+     to put the board live.
      ================================================================== */
 
   var STORE = {
 
-    /* "local"  every answer stays in this browser. The feed holds the
-                student's own entry only and the header strip says so.
-        "shared" the answers go to the endpoint below and the feed is
-                the whole cohort. */
+    /* "local"   every answer stays in this browser. The feed holds the
+                 student's own entry only, and the header strip says so
+                 in plain words rather than pretending to be a cohort.
+       "shared"  the answers go to the Apps Script web app below and the
+                 feed is the whole cohort. */
     mode: "local",
 
-    /* Supabase project URL, no trailing slash.
-       Looks like https://abcdefghijklm.supabase.co */
-    endpoint: "",
-
-    /* The project's anon public key. This ships to the browser and is
-       meant to. It is not a secret and must never be the service role
-       key, which can read and write everything and would be handing the
-       whole project to anyone who views source. */
-    key: "",
-
-    /* The table name. */
-    table: "cohort_suggestions"
+    /* The Apps Script deployment URL. It ends in /exec. */
+    endpoint: ""
   };
 
   /* "after-post"  the feed is covered until the student posts or asks
@@ -471,56 +463,35 @@
   var REVEAL = "after-post";
 
   /* ==================================================================
-     TO PUT THIS LIVE, about ten minutes.
+     THE BACKEND is a Google Apps Script web app attached to a Google
+     Sheet. The script is checked in beside this file as
+     khan-academy-p1-cohort-board.gs and carries its own install steps.
+     In short: paste it into the sheet under Extensions, Apps Script,
+     deploy it as a web app that executes as you and is reachable by
+     anyone, then put the deployment URL in STORE.endpoint above and set
+     mode to "shared".
 
-     1  Make a free project at supabase.com.
-     2  Open the SQL editor and run the statements below. They create
-        the table and, more importantly, the policies. The policies are
-        the security, not this page: anything this page checks can be
-        bypassed by posting to the endpoint directly with the same key.
+     WHY A SHEET RATHER THAN A DATABASE. The sheet stays private, so the
+     answers are not a public document. Validation runs inside the
+     script, on Google's side, where a student cannot see it or get
+     round it. Moderation is a spreadsheet rather than a database
+     dashboard: put anything in the "hidden" column and the row stops
+     being returned, without being destroyed.
 
-          create table cohort_suggestions (
-            id bigint generated always as identity primary key,
-            created_at timestamptz not null default now(),
-            display_name text,
-            kind text not null,
-            answer text not null
-          );
+     WHAT IS STILL TRUE. The deployment URL is public, so anyone holding
+     it can post. No login, so a typed name proves nothing. No replies,
+     so this is a wall and not a thread. Moderation still needs a named
+     person, it is just an easier job now.
 
-          alter table cohort_suggestions enable row level security;
+     ONE IMPLEMENTATION DETAIL THAT LOOKS WRONG AND IS NOT. The POST
+     below sends JSON with a text/plain content type. An application/json
+     body would make the browser send a CORS preflight, and Apps Script
+     web apps do not answer OPTIONS, so the write would fail before it
+     was sent. text/plain is a simple request and skips the preflight.
+     The script parses the body as JSON regardless. Do not "fix" this.
 
-          create policy "anyone may read" on cohort_suggestions
-            for select to anon using (true);
-
-          create policy "anyone may add" on cohort_suggestions
-            for insert to anon with check (
-              char_length(answer) between 1 and 400
-              and char_length(coalesce(display_name, '')) <= 40
-              and kind in ('partner','licensing','in-kind','sponsorship','co-creation')
-            );
-
-        There is deliberately no update policy and no delete policy, so
-        the key below cannot change or remove a row even though it can
-        add one. Do not add one to "let students fix typos". Without
-        identity the page cannot tell whose row is whose, so an update
-        policy lets any student rewrite any other student's answer.
-
-     3  Settings, then API. Copy the project URL and the anon public
-        key into STORE above and set mode to "shared".
-     4  Load the page, post a test answer, then delete that row in the
-        Supabase table editor to confirm you can moderate.
-
-     WHAT IS STILL TRUE AFTER ALL THAT. No identity, so a typed name
-     proves nothing. The answers are readable by anyone holding the URL,
-     including outside the cohort. No replies. Removing something
-     unwanted is a person in a dashboard, which means the board needs a
-     named owner before it goes in front of students.
-
-     TO USE AIRTABLE INSTEAD, replace loadAll and pushOne. Everything
-     else in this file is storage agnostic. Note that an Airtable
-     personal access token in a public page can read and write every
-     table the token is scoped to, so scope it to this one base and this
-     one table and nothing else.
+     TO USE SOMETHING ELSE ENTIRELY, replace loadAll and pushOne. Every
+     other line in this file is storage agnostic.
      ================================================================== */
 
   var LOCAL_MINE = "ka-p1-125-board-mine";
@@ -556,20 +527,7 @@
   /* ===== storage: the two functions any other backend replaces ===== */
 
   function shared(){
-    return STORE.mode === "shared" && STORE.endpoint && STORE.key;
-  }
-
-  function restURL(query){
-    return STORE.endpoint.replace(/\/+$/, "") + "/rest/v1/" + STORE.table + (query || "");
-  }
-
-  function restHeaders(extra){
-    var h = {
-      "apikey": STORE.key,
-      "Authorization": "Bearer " + STORE.key
-    };
-    if(extra){ for(var k in extra){ if(extra.hasOwnProperty(k)){ h[k] = extra[k]; } } }
-    return h;
+    return STORE.mode === "shared" && !!STORE.endpoint;
   }
 
   function loadAll(done, fail){
@@ -578,15 +536,21 @@
       done(raw ? raw : []);
       return;
     }
-    fetch(restURL("?select=display_name,kind,answer,created_at&order=created_at.desc&limit=300"), {
+    /* Apps Script answers a GET with a redirect to googleusercontent.com,
+       and fetch follows it. The cache buster is because that host will
+       otherwise serve a stale copy to a student who reloads. */
+    fetch(STORE.endpoint + "?t=" + (new Date()).getTime(), {
       method: "GET",
-      headers: restHeaders(),
-      cache: "no-store"
+      cache: "no-store",
+      redirect: "follow"
     }).then(function(r){
       if(!r.ok){ throw new Error("read failed, status " + r.status); }
       return r.json();
-    }).then(function(rows){
-      done(Array.isArray(rows) ? rows : []);
+    }).then(function(data){
+      if(!data || data.ok !== true){
+        throw new Error("read refused: " + ((data && data.error) || "no reason given"));
+      }
+      done(Array.isArray(data.rows) ? data.rows : []);
     })["catch"](fail);
   }
 
@@ -598,15 +562,22 @@
       done();
       return;
     }
-    fetch(restURL(), {
+    fetch(STORE.endpoint, {
       method: "POST",
-      headers: restHeaders({
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-      }),
-      body: JSON.stringify(row)
+      /* text/plain on purpose. See the note in the configuration block. */
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(row),
+      redirect: "follow"
     }).then(function(r){
       if(!r.ok){ throw new Error("write failed, status " + r.status); }
+      return r.json();
+    }).then(function(data){
+      /* The script reports its own refusals in the body with a 200, so a
+         200 alone is not success. Checking only the status would tell a
+         student their answer was posted when it was rejected. */
+      if(!data || data.ok !== true){
+        throw new Error("write refused: " + ((data && data.error) || "no reason given"));
+      }
       done();
     })["catch"](fail);
   }
