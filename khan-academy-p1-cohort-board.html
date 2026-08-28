@@ -752,6 +752,24 @@
     if(reason){ announce(reason); }
   }
 
+  /* A word about how long this takes. An Apps Script round trip measured
+     between 2 and 12 seconds against the real deployment on 28 August
+     2026, and a cold start can be slower still. Two consequences, and
+     both are handled below rather than left to chance.
+
+     One, a student staring at an unchanged screen for eight seconds
+     concludes it is broken and clicks again. So the wait says out loud
+     that it is still going, once it has been going a while.
+
+     Two, and this is the one that matters: a slow write that eventually
+     succeeds must never be reported as a failure. There is no delete on
+     this board, so a student told "that did not send" posts a second
+     time and the cohort sees the same answer twice with no way to remove
+     either. The timeout therefore does not fail. It reads the board back
+     and looks for the row before it decides anything. */
+  var SLOW_MS = 4500;
+  var GIVEUP_MS = 25000;
+
   function doPost(){
     var text = el.answer.value.trim();
     if(!text || state.sending || state.mine){ return; }
@@ -768,8 +786,38 @@
     el.post.textContent = "Posting";
     setStatus("Posting your answer.");
 
-    pushOne(row, function(){
+    var settled = false;
+    var slowTimer = window.setTimeout(function(){
+      if(!settled){ setStatus("Still posting. This can take a few seconds, so hold on rather than pressing again."); }
+    }, SLOW_MS);
+    var giveUpTimer = window.setTimeout(function(){
+      if(settled){ return; }
+      /* Do not call this a failure yet. Ask the board whether the row is
+         there, because a slow success and a real failure look identical
+         from here. */
+      setStatus("Taking longer than usual. Checking whether it arrived.");
+      loadAll(function(rows){
+        if(settled){ return; }
+        for(var i = 0; i < rows.length; i++){
+          if(sameRow(rows[i], row)){ succeeded(); return; }
+        }
+        failed(new Error("timed out and the row is not on the board"));
+      }, function(){
+        if(settled){ return; }
+        failed(new Error("timed out and the board could not be read"));
+      });
+    }, GIVEUP_MS);
+
+    function stop(){
+      settled = true;
+      window.clearTimeout(slowTimer);
+      window.clearTimeout(giveUpTimer);
       state.sending = false;
+    }
+
+    function succeeded(){
+      if(settled){ return; }
+      stop();
       state.mine = row;
       writeLocal(LOCAL_MINE, row);
       el.post.textContent = "Posted";
@@ -781,15 +829,20 @@
       announce("Your answer is posted. The board is now open.");
       pull(true);
       reveal(null);
-    }, function(err){
-      state.sending = false;
+    }
+
+    function failed(err){
+      if(settled){ return; }
+      stop();
       el.post.textContent = "Post it";
       refresh();
       setStatus("<b>That did not send.</b> Check your connection and try again. " +
                 "If it keeps failing, put your answer in the submission field on this page instead.");
       announce("Posting failed. Your answer was not sent.");
       if(window.console && window.console.warn){ window.console.warn(err); }
-    });
+    }
+
+    pushOne(row, succeeded, failed);
   }
 
   function pull(quiet){
