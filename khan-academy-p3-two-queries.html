@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two queries</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     flag also carries a glyph and a written label.
+     Sibling builds: khan-academy-p3-starter-pool.html and
+     khan-academy-p3-four-checks.html, both of which take their canvas
+     scaling, progress header, noscript override and reduced-motion
+     collapse from khan-academy-p1-run-the-candidates.html. This file
+     matches all three so the four P3 builds read as one product.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback                    */
+    --t-frame:300ms;   /* a query unfolding              */
+    --t-reveal:560ms;  /* the closing read settling in   */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:12px 32px 10px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header: how many of the two queries are open, readable from
+         first paint, plus the run date. The date is a maintenance
+         requirement rather than decoration: these figures and links go
+         stale fast and a reader has to be able to see how old they are. */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:3px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px;align-items:center}
+  .segs i{display:block;width:16px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .vfy{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:20px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  h1 .tag{vertical-align:3px;margin-left:8px}
+  .tag{
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:1px 5px;flex:0 0 auto;
+  }
+  .sub{flex:0 0 auto;font-size:13px;line-height:1.45;margin-bottom:6px}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- the board: two panels, one per query, equal width, so neither
+         one reads as the headline. Side by side on desktop, sequential
+         under 600px. ---- */
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:8px 10px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  .plab{
+    font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);flex:0 0 auto;display:flex;align-items:baseline;gap:7px;margin-bottom:4px;
+  }
+  .plab .qm{
+    font-size:9.5px;font-weight:700;letter-spacing:.05em;
+    border:1.5px solid var(--on-highlight);border-radius:5px;padding:0 5px;
+  }
+
+  /* ---- the tally. Two numbers per panel, same two labels on both
+         sides, so the comparison is a glance and not a count. This is
+         the value reveal in this build: the numbers are the size of the
+         gap between a question with no shape and the same question with
+         four constraints on it. ---- */
+  .tally{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:5px}
+  .tile{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:8px;
+    padding:3px 8px 4px;min-width:0;
+  }
+  .tile .n{
+    display:block;font-size:21px;line-height:1.05;font-weight:700;color:var(--on-highlight);
+  }
+  .tile .tl{
+    display:block;font-size:9.5px;line-height:1.25;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--body);margin-top:1px;
+  }
+  .cap{flex:0 0 auto;font-size:11.5px;line-height:1.35;margin-bottom:5px}
+  .cap b{color:var(--title);font-weight:600}
+
+  /* ---- the "show the query" control. A native button, so Tab plus
+         Enter or Space operates it with nothing added, and
+         aria-expanded carries the state to a screen reader. The query
+         block below it is hidden in the markup that ships, not hidden
+         by a script on load: the student is told to judge the two
+         result lists before reading the queries, so a build that paints
+         the queries and then folds them away has already inverted the
+         teaching, whether or not anybody sees the flash. ---- */
+  button.disc{
+    flex:0 0 auto;display:flex;align-items:center;gap:7px;width:100%;text-align:left;
+    font-family:inherit;font-size:12px;font-weight:600;color:var(--on-highlight);
+    background:transparent;border:1.5px dashed var(--on-highlight);border-radius:8px;
+    padding:4px 9px;cursor:pointer;
+    transition:background-color var(--t-fast) var(--ease-out);
+  }
+  button.disc .cv{
+    flex:0 0 auto;width:13px;text-align:center;font-size:11px;font-weight:700;line-height:1;
+  }
+  button.disc:hover{background:var(--tint)}
+  button.disc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.disc[aria-expanded="true"]{border-style:solid;background:var(--tint)}
+
+  .qbody{flex:0 0 auto;margin-top:6px}
+  .qtext{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:6px 9px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:10.5px;line-height:1.45;color:var(--title);white-space:pre-wrap;
+  }
+  .qnote{font-size:11px;line-height:1.35;margin-top:4px}
+  .qnote b{color:var(--title);font-weight:600}
+  .qbody.on{animation:unfold var(--t-frame) var(--ease-io) both}
+  @keyframes unfold{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+
+  /* ---- the result list. It is in the shipped markup, visible, above
+         the fold and above nothing else: results first is the whole
+         design. ---- */
+  .rlab{
+    flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--body);margin:7px 0 4px;
+  }
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{font-size:11px;font-weight:600;color:var(--on-highlight);margin-top:4px;flex:0 0 auto}
+
+  .rw{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:8px;
+    padding:5px 8px;margin-bottom:5px;
+  }
+  .rw:last-child{margin-bottom:0}
+  .rn{
+    font-size:12.5px;line-height:1.25;font-weight:600;color:var(--title);
+    display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;
+  }
+  .rf{font-size:12px;line-height:1.35;margin-top:2px}
+  .rf b{color:var(--title);font-weight:600}
+  .rp{font-size:11px;line-height:1.35;margin-top:2px}
+  .rp b{color:var(--title);font-weight:600}
+
+  /* every flag is a glyph plus a written label, never a tint on its
+     own, and the glyph is inside aria-hidden so it is not read out as
+     punctuation */
+  .fl{
+    font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:0 5px;
+  }
+  .fl.dash{border-style:dashed}
+  /* a row that is not an organization at all: dashed all the way round,
+     so it can never be skimmed as one of the names */
+  .rw.notorg{border-style:dashed;background:transparent}
+  /* a row whose figure came back empty. The border is solid, because
+     "not found" is a finding and not a defect in the row. */
+  .rw.nf .rf b{color:var(--title)}
+
+  a.src{
+    font-size:11px;font-weight:600;color:var(--on-highlight);
+    text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:2px;
+  }
+  a.src:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:3px}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow
+         above scrolls inside its own region and can never displace this
+         row. The hint slot is where the closing read lands, so the
+         reveal costs no layout shift in either list. ---- */
+  .bar{margin-top:6px;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:34px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:12px;font-weight:600;padding:7px 12px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+  .hint.on{animation:rise var(--t-reveal) var(--ease-over) both}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide. The two
+         panels become sequential, both lists open out in full with no
+         scroll region of their own, and nothing drops below 16px. ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the board off screen. Block layout removes that
+       floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .vfy{margin-left:0;font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    /* the heading and its tag are one row at 960. At 320 the two
+       together are wider than the viewport, and a nowrap row does not
+       overflow its own box quietly: it widens the document and the page
+       scrolls sideways. Wrapping is the fix. */
+    h1 .tag{display:inline-block;margin-left:0;vertical-align:baseline}
+    .sub{font-size:16px}
+    /* align-content, not just align-items: a stretched one column grid
+       hands its leftover height to the auto rows, which opens a dead
+       band between the stacked panels on a tall phone. */
+    .board{grid-template-columns:1fr;gap:16px;flex:0 0 auto;align-items:start;align-content:start}
+    .panel{padding:12px 13px}
+    .plab{font-size:14px}
+    .plab .qm{font-size:12px}
+    .tally{gap:9px}
+    .tile{padding:6px 10px 7px}
+    .tile .n{font-size:26px}
+    .tile .tl{font-size:11px}
+    .cap{font-size:15px;margin-bottom:9px}
+    button.disc{font-size:16px;padding:11px 13px}
+    .qtext{font-size:14px;padding:10px 12px}
+    .qnote{font-size:15px;margin-top:7px}
+    .rlab{font-size:11px;margin:12px 0 7px}
+    .scroll{overflow:visible}
+    .more{display:none}
+    .rw{padding:10px 12px;margin-bottom:9px}
+    .rn{font-size:17px}
+    .rf{font-size:16px;margin-top:5px}
+    .rp{font-size:15px;margin-top:5px}
+    .fl{font-size:12px;padding:1px 6px;white-space:normal}
+    a.src{font-size:15px}
+    .bar{margin-top:18px;min-height:0}
+    button.nav{font-size:16px;padding:13px 18px}
+    .hint{font-size:15px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <!-- ==================================================================
+       ONE FRAME. Two panels, one per query.
+
+       The load-bearing property of this file: the two RESULT LISTS are
+       in the markup, visible, with no hidden attribute anywhere near
+       them, and both QUERY blocks carry hidden with aria-expanded set
+       to false on their buttons. That is the state the browser paints
+       before a single line of script runs, which is what the module
+       asks for. It tells the student to judge the two result lists
+       before reading the queries. A build that paints the queries and
+       then collapses them in a load handler is the same bug with a
+       shorter fuse.
+
+       Everything on screen comes from
+       08-reviews/p3-fact-verification-2026-09-03.md and nothing else.
+       Every organization is real. Every figure carries the period it
+       covers and a link to the page it came from. Where that file says
+       no aggregate is public, the row says "not found" and stays on the
+       list, because absence recorded as a finding is the habit this
+       whole project protects.
+       ================================================================== -->
+  <div class="frame" id="f1">
+
+    <div class="top">
+      <span class="prog" id="prog">Queries open: 0 of 2</span>
+      <span class="segs" id="segs" aria-hidden="true"><i></i><i></i></span>
+      <span class="vfy">Both run 3 September 2026</span>
+    </div>
+
+    <h1>The same question, asked twice<span class="tag">AI and cloud</span></h1>
+    <p class="sub">Same tool, same subject, same day. <b>Fully sourced</b> below means a figure, the period it covers, and a link.</p>
+
+    <div class="board">
+
+      <!-- ================= LEFT: the loose query ================= -->
+      <section class="panel" id="pa" aria-labelledby="laba" tabindex="-1">
+        <p class="plab" id="laba">Query A <span class="qm">Loose</span></p>
+
+        <div class="tally">
+          <div class="tile"><span class="n">3</span><span class="tl">organizations</span></div>
+          <div class="tile"><span class="n">0</span><span class="tl">rows fully sourced</span></div>
+        </div>
+        <p class="cap">One of the four results is not an organization at all. <b>Nothing here would survive being pasted into a shortlist.</b></p>
+
+        <button class="disc" id="ba" type="button" aria-expanded="false" aria-controls="qa">
+          <span class="cv" aria-hidden="true">&#9656;</span>
+          <span>Show the query</span>
+        </button>
+        <div class="qbody" id="qa" hidden>
+          <p class="qtext">Which AI companies work with schools?</p>
+          <p class="qnote"><b>One line.</b> It named a sector and stopped. No behavior, no size, no geography, and nothing at all about the shape of the answer.</p>
+        </div>
+
+        <p class="rlab">What came back: 4 results</p>
+        <div class="scroll" id="sa" tabindex="0" role="group" aria-labelledby="laba">
+
+          <div class="rw">
+            <p class="rn">Microsoft
+              <span class="fl"><span aria-hidden="true">&#9679;</span> Existing Khan Academy relationship</span></p>
+            <p class="rf">Returned as a name inside a paragraph of prose. No figure, no period, no link.</p>
+            <p class="rp"><b>The flag is ours, not the query's.</b> Microsoft is already Khan Academy's cloud and AI partner, so this is not a find. The search did not say so. <a class="src" href="https://www.khanmigo.ai/teachers" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw">
+            <p class="rn">Google and Google.org
+              <span class="fl"><span aria-hidden="true">&#9679;</span> Existing Khan Academy relationship</span></p>
+            <p class="rf">A name and a sentence about Gemini in classrooms. No figure, no period, no link.</p>
+            <p class="rp"><b>Ours again.</b> A live relationship, listed on Khan Academy's own supporters page. <a class="src" href="https://www.khanacademy.org/about/our-supporters" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw">
+            <p class="rn">OpenAI</p>
+            <p class="rf">A name and two sentences about ChatGPT in classrooms. No figure, no period, no link.</p>
+            <p class="rp">Nothing came back about what it funds, at what scale, or whether the seat is already taken. All three of those are still yours to go and find.</p>
+          </div>
+
+          <div class="rw notorg">
+            <p class="rn">A round-up article
+              <span class="fl dash"><span aria-hidden="true">&#182;</span> Not an organization</span></p>
+            <p class="rf">A ranked list of AI tools for teachers, on somebody else's site.</p>
+            <p class="rp"><b>No period and no link on this row, because there is nothing to source.</b> There is no organization behind it and no figure in it. The query never said what shape the answer should take, so a quarter of what came back is reading rather than names.</p>
+          </div>
+
+        </div>
+        <div class="more" id="ma" hidden>More below. Scroll inside this panel.</div>
+      </section>
+
+      <!-- ============ RIGHT: the same question, constrained ============ -->
+      <section class="panel" id="pb" aria-labelledby="labb" tabindex="-1">
+        <p class="plab" id="labb">Query B <span class="qm">With constraints</span></p>
+
+        <div class="tally">
+          <div class="tile"><span class="n">6</span><span class="tl">organizations</span></div>
+          <div class="tile"><span class="n">4</span><span class="tl">rows fully sourced</span></div>
+        </div>
+        <p class="cap">Two more rows come back with the figure <b>not found</b>, and both say so in those words. <b>Three of the six never appeared on the left.</b></p>
+
+        <button class="disc" id="bb" type="button" aria-expanded="false" aria-controls="qb">
+          <span class="cv" aria-hidden="true">&#9656;</span>
+          <span>Show the query</span>
+        </button>
+        <div class="qbody" id="qb" hidden>
+          <p class="qtext">List AI and cloud companies that already pay to put learning content in
+front of school-age students, on their own site or through an education
+partner. One row per organization: name, what they fund, the reach or
+dollar figure they publish, the period that figure covers, and the page
+you took it from. Return organizations, not articles. Where a figure is
+not published, write "not found" rather than estimating.</p>
+          <p class="qnote"><b>Four constraints, and the last one is not about the organizations at all.</b> Sector, then behavior (they already pay), then the shape of the answer, then what to do when a figure is missing.</p>
+        </div>
+
+        <p class="rlab">What came back: 6 results</p>
+        <div class="scroll" id="sb" tabindex="0" role="group" aria-labelledby="labb">
+
+          <div class="rw">
+            <p class="rn">Amazon Web Services
+              <span class="fl"><span aria-hidden="true">&#9671;</span> Open</span></p>
+            <p class="rf"><b>$100 million</b> committed to its Education Equity Initiative.</p>
+            <p class="rp">Current commitment, read 3 September 2026. Not in the left-hand list. <a class="src" href="https://press.aboutamazon.com/aws" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw">
+            <p class="rn">Anthropic
+              <span class="fl"><span aria-hidden="true">&times;</span> Claimed by a competitor</span></p>
+            <p class="rf">More than <b>100,000 teachers</b> reached through Teach For All, across <b>63 countries</b>.</p>
+            <p class="rp">2025 to 2026. Not in the left-hand list. Claude for Teachers names nine edtech partners and Khan Academy is not one of them. <a class="src" href="https://www.anthropic.com/news" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw nf">
+            <p class="rn">NVIDIA
+              <span class="fl dash"><span aria-hidden="true">?</span> Figure not found</span>
+              <span class="fl"><span aria-hidden="true">&times;</span> Claimed by a competitor</span></p>
+            <p class="rf">Reach figure: <b>not found</b>. NVIDIA publishes no aggregate for its education reach.</p>
+            <p class="rp">What is dated is one deal, not a scale figure: <b>$25 million</b> pledged to K-12 AI curriculum through CK-12 and Study Fetch, announced 4 September 2025. Not in the left-hand list. <a class="src" href="https://nvidianews.nvidia.com" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw">
+            <p class="rn">OpenAI
+              <span class="fl"><span aria-hidden="true">&times;</span> Claimed by a competitor</span></p>
+            <p class="rf">More than <b>300,000 educators</b>, across more than <b>100 K-12 organizations</b> in <b>30 states</b>.</p>
+            <p class="rp">2026, and expanding to 55 more systems, so the seat has somebody in it. Same name the left query returned, arriving here with a figure, a period and a link. <a class="src" href="https://openai.com" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw">
+            <p class="rn">Microsoft
+              <span class="fl"><span aria-hidden="true">&#9679;</span> Existing Khan Academy relationship</span></p>
+            <p class="rf">Covers the <b>$44 a year</b> per-teacher cost of Khanmigo for Teachers.</p>
+            <p class="rp">Current, checked 3 September 2026. Same name the left query returned. Here it arrives with the flag attached, which is the difference between deepening a relationship and announcing a discovery. <a class="src" href="https://www.khanmigo.ai/teachers" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+          <div class="rw nf">
+            <p class="rn">Google and Google.org
+              <span class="fl dash"><span aria-hidden="true">?</span> Figure not found</span>
+              <span class="fl"><span aria-hidden="true">&#9679;</span> Existing Khan Academy relationship</span></p>
+            <p class="rf">Dollar value: <b>not found</b>. Gemini access plus a grant, and neither has ever been given a public dollar value.</p>
+            <p class="rp">No period published, read 3 September 2026. Not found is the honest entry here. Estimating it would be inventing it. <a class="src" href="https://www.khanacademy.org/about/our-supporters" target="_blank" rel="noopener noreferrer">Source</a></p>
+          </div>
+
+        </div>
+        <div class="more" id="mb" hidden>More below. Scroll inside this panel.</div>
+      </section>
+
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" id="both" type="button">Show both queries</button>
+      <span class="hint" id="hint"><b>Read both lists first.</b> Then open a query. Keys <span class="key">A</span> and <span class="key">B</span> open one, <span class="key">Q</span> opens both.</span>
+    </div>
+
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to.
+
+       The fallback teaches the same thing, in the same order: both result
+       lists first, as plain readable tables, and both queries underneath
+       them. It does not fold the queries away, because a details element
+       that nobody opens would leave the cause of the gap unreadable, and
+       with no script there is no way to guarantee it opens. Order carries
+       the teaching here instead of state. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:720px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:24px 0 7px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:16px 0 5px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul,.nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf pre{
+      background:#DCE1FF;border-radius:9px;padding:12px 14px;margin-bottom:11px;
+      font-size:13px;line-height:1.5;color:#1C1B1B;white-space:pre-wrap;overflow-x:auto;
+    }
+    .nsf .flg{
+      display:inline-block;font-size:12px;font-weight:700;color:#001D69;
+      border:1.5px solid #001D69;border-radius:5px;padding:0 5px;white-space:nowrap;
+    }
+    .nsf .flg.dash{border-style:dashed}
+    .nsf .hedge{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:14px}
+    .nsf .hedge p:last-child{margin-bottom:0}
+  </style>
+  <div class="nsf">
+    <h1>Two queries</h1>
+    <p>With scripts blocked, here is the same content as a document. One subject, AI and cloud. One loose query and the same question written with constraints, both sent to the same search tool on the same day, <strong>3 September 2026</strong>. Both result lists come first, in full, and the two queries follow underneath, because what came back is the evidence and how the question was written is the explanation.</p>
+
+    <div class="hedge">
+      <p><strong>Read the two lists before you read the queries.</strong> Decide which of the two you could do something with, and only then look at what caused the difference.</p>
+      <p><strong>Fully sourced</strong> means a figure, the period that figure covers, and a link to the page it came from.</p>
+    </div>
+
+    <h2>Query A, loose: what came back</h2>
+    <p><strong>4 results. 3 organizations. 0 rows fully sourced.</strong> One of the four is not an organization at all.</p>
+    <ul>
+      <li><strong>Microsoft</strong> <span class="flg">&#9679; Existing Khan Academy relationship</span><br>
+        Returned as a name inside a paragraph of prose. No figure, no period, no link. The flag is ours, not the query's: Microsoft is already Khan Academy's cloud and AI partner, so this is not a find, and the search did not say so. <a href="https://www.khanmigo.ai/teachers">Source</a></li>
+      <li><strong>Google and Google.org</strong> <span class="flg">&#9679; Existing Khan Academy relationship</span><br>
+        A name and a sentence about Gemini in classrooms. No figure, no period, no link. Ours again: a live relationship, listed on Khan Academy's own supporters page. <a href="https://www.khanacademy.org/about/our-supporters">Source</a></li>
+      <li><strong>OpenAI</strong><br>
+        A name and two sentences about ChatGPT in classrooms. No figure, no period, no link. Nothing came back about what it funds, at what scale, or whether the seat is already taken. All three of those are still yours to go and find.</li>
+      <li><strong>A round-up article</strong> <span class="flg dash">&#182; Not an organization</span><br>
+        A ranked list of AI tools for teachers, on somebody else's site. No period and no link on this row, because there is nothing to source: no organization behind it and no figure in it. The query never said what shape the answer should take, so a quarter of what came back is reading rather than names.</li>
+    </ul>
+
+    <h2>Query B, with constraints: what came back</h2>
+    <p><strong>6 results. 6 organizations. 4 rows fully sourced.</strong> Two more come back with the figure not found, and both say so in those words. Three of the six never appeared in list A.</p>
+    <ul>
+      <li><strong>Amazon Web Services</strong> <span class="flg">&#9671; Open</span><br>
+        $100 million committed to its Education Equity Initiative. Current commitment, read 3 September 2026. Not in list A. <a href="https://press.aboutamazon.com/aws">Source</a></li>
+      <li><strong>Anthropic</strong> <span class="flg">&times; Claimed by a competitor</span><br>
+        More than 100,000 teachers reached through Teach For All, across 63 countries. 2025 to 2026. Not in list A. Claude for Teachers names nine edtech partners and Khan Academy is not one of them. <a href="https://www.anthropic.com/news">Source</a></li>
+      <li><strong>NVIDIA</strong> <span class="flg dash">? Figure not found</span> <span class="flg">&times; Claimed by a competitor</span><br>
+        Reach figure: <strong>not found</strong>. NVIDIA publishes no aggregate for its education reach. What is dated is one deal, not a scale figure: $25 million pledged to K-12 AI curriculum through CK-12 and Study Fetch, announced 4 September 2025. Not in list A. <a href="https://nvidianews.nvidia.com">Source</a></li>
+      <li><strong>OpenAI</strong> <span class="flg">&times; Claimed by a competitor</span><br>
+        More than 300,000 educators, across more than 100 K-12 organizations in 30 states. 2026, and expanding to 55 more systems, so the seat has somebody in it. Same name list A returned, arriving here with a figure, a period and a link. <a href="https://openai.com">Source</a></li>
+      <li><strong>Microsoft</strong> <span class="flg">&#9679; Existing Khan Academy relationship</span><br>
+        Covers the $44 a year per-teacher cost of Khanmigo for Teachers. Current, checked 3 September 2026. Same name list A returned. Here it arrives with the flag attached, which is the difference between deepening a relationship and announcing a discovery. <a href="https://www.khanmigo.ai/teachers">Source</a></li>
+      <li><strong>Google and Google.org</strong> <span class="flg dash">? Figure not found</span> <span class="flg">&#9679; Existing Khan Academy relationship</span><br>
+        Dollar value: <strong>not found</strong>. Gemini access plus a grant, and neither has ever been given a public dollar value. No period published, read 3 September 2026. Not found is the honest entry here. Estimating it would be inventing it. <a href="https://www.khanacademy.org/about/our-supporters">Source</a></li>
+    </ul>
+
+    <h2>Now the two queries</h2>
+    <h3>Query A, loose</h3>
+    <pre>Which AI companies work with schools?</pre>
+    <p>One line. It named a sector and stopped. No behavior, no size, no geography, and nothing at all about the shape of the answer.</p>
+
+    <h3>Query B, with constraints</h3>
+    <pre>List AI and cloud companies that already pay to put learning content in
+front of school-age students, on their own site or through an education
+partner. One row per organization: name, what they fund, the reach or
+dollar figure they publish, the period that figure covers, and the page
+you took it from. Return organizations, not articles. Where a figure is
+not published, write "not found" rather than estimating.</pre>
+    <p>Four constraints, and the last one is not about the organizations at all. Sector, then behavior (they already pay), then the shape of the answer, then what to do when a figure is missing.</p>
+
+    <div class="hedge">
+      <p><strong>Three of the six on the right were never on the left, and the two rows that came back empty still went on the list, in the words "not found".</strong></p>
+      <p>Go and run both of them yourself, at <a href="https://www.perplexity.ai">perplexity.ai</a> or in whichever search tool you are using, then open the pages the figures above came from and check them: <a href="https://press.aboutamazon.com/aws">press.aboutamazon.com/aws</a>, <a href="https://www.anthropic.com/news">anthropic.com/news</a>, <a href="https://nvidianews.nvidia.com">nvidianews.nvidia.com</a>, <a href="https://openai.com">openai.com</a>, <a href="https://www.khanmigo.ai/teachers">khanmigo.ai/teachers</a> and <a href="https://www.khanacademy.org/about/our-supporters">khanacademy.org/about/our-supporters</a>.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["prog","segs","pa","pb","ba","bb","qa","qb","sa","sb","ma","mb","both","hint","live"]
+    .forEach(function(k){ el[k] = document.getElementById(k); });
+
+  /* Two disclosures, one per panel. State lives here and nowhere else:
+     nothing is written to storage and nothing is sent anywhere.
+     "seen" is sticky. Once both queries have been opened the closing
+     read stays on screen, because folding a query away again is not a
+     reason to take back what the student already worked out. */
+  var open = {qa:false, qb:false};
+  var seen = false;
+
+  var PANELS = [
+    {b:"ba", q:"qa", label:"Query A, the loose one"},
+    {b:"bb", q:"qb", label:"Query B, the constrained one"}
+  ];
+
+  var HINT_START = '<b>Read both lists first.</b> Then open a query. Keys ' +
+    '<span class="key">A</span> and <span class="key">B</span> open one, ' +
+    '<span class="key">Q</span> opens both.';
+  var HINT_ONE = '<b>One open, one still folded.</b> Open the other one and the two questions sit side by side.';
+  /* The one line of synthesis this build is allowed. It must not repeat
+     the paragraph that follows the embed in substep 3.1.2, which says
+     the gap is not a gap in the tool. This says what the gap is made
+     of instead. */
+  var HINT_BOTH = '<b>Three of the six on the right were never on the left, and the two rows that came back empty still went on the list, in the words "not found".</b>';
+
+  function announce(m){ el.live.textContent = m; }
+
+  function countOpen(){ return (open.qa ? 1 : 0) + (open.qb ? 1 : 0); }
+
+  /* Progress is a count and two pips, both readable from first paint and
+     both correct before any script runs, because the markup ships with
+     "0 of 2" and two empty pips. */
+  function paintProgress(){
+    var n = countOpen();
+    el.prog.textContent = "Queries open: " + n + " of 2";
+    var pips = el.segs.querySelectorAll("i");
+    pips[0].className = open.qa ? "on" : "";
+    pips[1].className = open.qb ? "on" : "";
+    el.both.textContent = (n === 2) ? "Fold both away" : "Show both queries";
+  }
+
+  function paintHint(){
+    var n = countOpen();
+    if(n === 2) seen = true;
+    var next = seen ? HINT_BOTH : (n === 1 ? HINT_ONE : HINT_START);
+    if(el.hint.innerHTML === next) return;
+    el.hint.innerHTML = next;
+    if(seen && !reduce){
+      el.hint.classList.remove("on");
+      void el.hint.offsetWidth;
+      el.hint.classList.add("on");
+    }
+  }
+
+  /* Every scrolling region says so, rather than letting a sentence end
+     at the panel edge with no affordance. Measured synchronously:
+     reading scrollHeight forces layout, and deferring this to
+     requestAnimationFrame leaves the flag hidden under headless
+     rendering. The flag is hidden before the read so its own height is
+     never counted. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+  function flags(){
+    flag(el.sa, el.ma);
+    flag(el.sb, el.mb);
+  }
+
+  function setOpen(id, want, announceIt){
+    var p = (id === "qa") ? PANELS[0] : PANELS[1];
+    var btn = el[p.b], body = el[p.q];
+    open[id] = !!want;
+    btn.setAttribute("aria-expanded", open[id] ? "true" : "false");
+    btn.querySelector(".cv").innerHTML = open[id] ? "&#9662;" : "&#9656;";
+    btn.querySelector("span:last-child").textContent = open[id] ? "Hide the query" : "Show the query";
+    body.hidden = !open[id];
+    if(open[id] && !reduce){
+      body.classList.remove("on");
+      void body.offsetWidth;
+      body.classList.add("on");
+    }
+    paintProgress();
+    paintHint();
+    /* opening a query takes height from its own result list, so the
+       "more below" flag has to be re-measured on every toggle */
+    flags();
+    if(announceIt){
+      announce(open[id]
+        ? p.label + " is open. Its result list is still on screen and still scrollable."
+        : p.label + " is folded away again.");
+    }
+  }
+
+  function toggle(id){ setOpen(id, !open[id], true); }
+
+  el.ba.addEventListener("click", function(){ toggle("qa"); });
+  el.bb.addEventListener("click", function(){ toggle("qb"); });
+
+  el.both.addEventListener("click", function(){
+    var want = countOpen() !== 2;
+    setOpen("qa", want, false);
+    setOpen("qb", want, false);
+    announce(want
+      ? "Both queries are open. Both result lists are still on screen."
+      : "Both queries are folded away. Both result lists are unchanged.");
+  });
+
+  /* Plain Tab and Enter operate every control in this file: both
+     disclosures are native buttons and both panels and both scroll
+     regions take focus. The letter keys below are an addition, not a
+     protocol, and nothing here is reachable only by shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key ? e.key.toLowerCase() : "";
+    if(k === "a" || k === "1"){ e.preventDefault(); toggle("qa"); el.ba.focus(); return; }
+    if(k === "b" || k === "2"){ e.preventDefault(); toggle("qb"); el.bb.focus(); return; }
+    if(k === "q"){ e.preventDefault(); el.both.click(); el.both.focus(); return; }
+  });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){ fit(); flags(); });
+
+  /* No state is set on load beyond re-asserting what the markup already
+     says, so there is no frame in which a query is visible. */
+  paintProgress();
+  flags();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run
+     force a state without hand-driving the UI */
+  window.__ex = {
+    open:function(id, want){ setOpen(id, want, false); },
+    both:function(want){ setOpen("qa", want, false); setOpen("qb", want, false); },
+    state:function(){ return {open:{qa:open.qa, qb:open.qb}, seen:seen, count:countOpen()}; }
+  };
+})();
+</script>
+</body>
+</html>
