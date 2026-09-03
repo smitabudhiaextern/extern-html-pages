@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spot the invented partnership</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     coloured state also carries a glyph AND an uppercase word.
+     Shell copied from khan-academy-p1-run-the-candidates.html: same
+     canvas scaling, same progress header, same keyboard nav, same
+     noscript construction, same reduced-motion collapse.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-reveal:420ms;  /* a verdict resolving      */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design.
+     getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:14px 40px 10px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header: progress, visible from first paint ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:5px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:22px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  .sub{flex:0 0 auto;font-size:13px;line-height:1.44;max-width:96ch;margin-bottom:7px}
+  .sub b{color:var(--title);font-weight:600}
+
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;gap:14px}
+  .board.one{grid-template-columns:1fr}
+  .board.split{grid-template-columns:1fr 474px}
+  .pcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:9px 12px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus,.panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{font-size:11.5px;font-weight:600;color:var(--on-highlight);margin-top:5px;flex:0 0 auto}
+
+  .colhead{
+    flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:6px;
+  }
+
+  /* ---- the model's answer: five rows, one shape, one voice ----
+     The claim column runs long, matching the .row pattern already
+     shipped in the canonical shell. Prose blocks stay narrow; a
+     tabular claim cell does not, because breaking a claim into a
+     60ch column would stack these five rows past 540px. */
+  .claims{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
+  button.claim{
+    display:grid;grid-template-columns:22px 150px 1fr;gap:10px;align-items:start;text-align:left;
+    width:100%;font-family:inherit;background:var(--highlight);
+    border:2px solid transparent;border-radius:9px;padding:6px 11px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.claim:hover:not([aria-disabled="true"]){border-color:var(--on-highlight)}
+  button.claim:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.claim[aria-pressed="true"]{border-color:var(--on-highlight)}
+  button.claim[aria-disabled="true"]{cursor:default}
+  button.claim .dot{
+    width:16px;height:16px;border-radius:50%;margin-top:2px;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  button.claim[aria-pressed="true"] .dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--on-highlight)}
+  /* every label is its own line of the row. These are inline spans inside a
+     grid cell, so without display:block they run together on one line. */
+  button.claim .cw{display:block;min-width:0}
+  button.claim .who{display:block;font-size:12.5px;font-weight:600;color:var(--title);line-height:1.26}
+  button.claim .when{display:block;font-size:10.5px;line-height:1.3;color:var(--body);margin-top:1px}
+  button.claim .txt{display:block;font-size:12px;line-height:1.38;color:var(--title);font-weight:400}
+  /* overflow-wrap:anywhere breaks a long address only where it has to.
+     word-break:break-all would also chop "no announcement URL given". */
+  button.claim .link{display:block;font-size:10.5px;line-height:1.3;color:var(--on-highlight);font-weight:600;margin-top:2px;overflow-wrap:anywhere}
+  button.claim.done[aria-pressed="false"]{opacity:.72}
+
+  /* ---- the compact row list used on the two checking frames ---- */
+  .mini{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
+  button.m{
+    display:grid;grid-template-columns:20px 1fr;gap:9px;align-items:start;text-align:left;
+    width:100%;font-family:inherit;background:var(--highlight);
+    border:2px solid transparent;border-radius:9px;padding:6px 10px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.m:hover:not([aria-disabled="true"]){border-color:var(--on-highlight)}
+  button.m:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.m[aria-pressed="true"]{border-color:var(--on-highlight)}
+  button.m[aria-disabled="true"]{cursor:default}
+  button.m.out{background:transparent;border:2px dashed var(--line)}
+  button.m.out .mh{text-decoration:line-through;text-decoration-thickness:1px}
+  button.m .cw{display:block;min-width:0}
+  button.m .mh{display:block;font-size:12px;font-weight:600;color:var(--title);line-height:1.26}
+  button.m .ms{display:block;font-size:11px;line-height:1.32;color:var(--body);margin-top:1px}
+  button.m .mu{display:block;font-size:10px;line-height:1.3;color:var(--on-highlight);font-weight:700;letter-spacing:.03em;margin-top:2px;overflow-wrap:anywhere}
+  button.m.done[aria-pressed="false"]:not(.out){opacity:.72}
+  button.m.done.out[aria-pressed="false"]{opacity:.85}
+
+  /* ---- the glyph. Never alone: an uppercase word rides beside it
+         every single time it appears. ---- */
+  .g{
+    flex:0 0 auto;width:18px;height:18px;border-radius:50%;font-size:10.5px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;margin-top:1px;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+  }
+  .g.fill{background:var(--on-highlight);color:var(--bg);border-color:var(--on-highlight)}
+  .g.dash{border-style:dashed}
+  .g.sm{width:16px;height:16px;font-size:9.5px}
+
+  /* ---- the result of running the check on one row ---- */
+  .res{
+    flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;
+  }
+  .res:focus,.res:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .res.dashed{border-style:dashed}
+  .resbar{
+    flex:0 0 auto;display:flex;align-items:flex-start;gap:8px;
+    border-bottom:1.5px solid var(--line);padding-bottom:6px;margin-bottom:6px;
+  }
+  .resbar .st{font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--title);line-height:1.25}
+  .resbar .ad{font-size:10.5px;line-height:1.32;color:var(--body);font-weight:400}
+  .rb{font-size:11.5px;line-height:1.42}
+  .rb p{margin-bottom:6px}
+  .rb p:last-child{margin-bottom:0}
+  .rb b{color:var(--title);font-weight:600}
+  /* display:block, or the uppercase step label butts straight into the
+     sentence after it and margin-bottom is ignored on an inline span */
+  .step{
+    display:block;
+    font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:2px;
+  }
+  .empty{font-size:12px;line-height:1.45}
+  .empty b{color:var(--title);font-weight:600}
+  .res.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+
+  /* ---- the reveal ---- */
+  .reveal{
+    flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;
+  }
+  .reveal:focus,.reveal:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .lead{font-size:11.5px;line-height:1.3;font-weight:600;color:var(--on-highlight);margin-bottom:5px;flex:0 0 auto}
+  .lead b{color:var(--title);font-weight:700}
+  .reveal.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  .note{
+    border:2px dashed var(--on-highlight);border-radius:9px;padding:7px 9px;margin-top:7px;
+    font-size:11px;line-height:1.42;
+  }
+  .note b{color:var(--title);font-weight:700}
+
+  /* ---- the closing frame ---- */
+  .rows{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
+  .row{display:grid;grid-template-columns:186px 1fr;gap:13px;align-items:baseline;
+       background:var(--highlight);border-radius:9px;padding:7px 11px}
+  .row .nm{font-size:12px;font-weight:600;color:var(--title);line-height:1.26}
+  .row .rr{font-size:12px;line-height:1.4;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+  .srcs{font-size:10.5px;line-height:1.4}
+  .srcs li{margin-bottom:4px;list-style:none}
+  .srcs li:last-child{margin-bottom:0}
+  .srcs b{color:var(--title);font-weight:600}
+  /* the two plain statements lead this panel and are marked as the
+     disclosure rather than as one more citation */
+  .srcs li.say{border-left:3px solid var(--on-highlight);padding-left:8px;margin-bottom:6px}
+  a{color:var(--on-highlight);text-decoration:underline}
+  a:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row. ---- */
+  .bar{margin-top:7px;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:34px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:13px;font-weight:600;padding:8px 15px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:12px;padding:7px 12px}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .push{margin-left:auto}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.38}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 34px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .sub{font-size:16px}
+    /* align-content, not just align-items: a stretched one column grid
+       hands its leftover height to the auto rows, which opens a dead band
+       between the two stacked panels on a tall phone. */
+    .board,.board.one,.board.split{
+      grid-template-columns:1fr;gap:16px;flex:0 0 auto;align-items:start;align-content:start;
+    }
+    .scroll{overflow:visible}
+    .more{display:none}
+    /* the three column claim row is a table at 960. At 320 it restacks:
+       glyph beside the organization, claim and address underneath. */
+    /* two columns and three children, so the claim wrapper takes its own
+       full-width row underneath the organization rather than tucking under
+       the glyph. .cw is the grid child here, not .txt. */
+    button.claim{grid-template-columns:26px 1fr;gap:10px;padding:12px 13px}
+    button.claim .cw:last-child{grid-column:1 / -1;margin-top:6px}
+    button.claim .who{font-size:17px}
+    button.claim .when{font-size:14px}
+    button.claim .txt{font-size:16px}
+    button.claim .link{font-size:14px;margin-top:4px}
+    button.m{padding:12px 13px}
+    button.m .mh{font-size:16px}
+    button.m .ms{font-size:15px}
+    button.m .mu{font-size:14px}
+    /* micro labels get a mobile floor too. The 13px caption and the 10.5px
+       keycap are legible inside a 960 canvas and are not on a phone, so the
+       whole uppercase-label tier lifts to 14 and body copy stays at 15-16. */
+    .colhead{font-size:14px}
+    .key{font-size:14px;padding:1px 6px}
+    /* the outcome glyph grows with everything else. It is aria-hidden and
+       its uppercase word always sits beside it, but a 16px disc holding a
+       9.5px mark is an icon on a desktop canvas and a smudge on a phone. */
+    .g{width:24px;height:24px;font-size:14px}
+    .g.sm{width:22px;height:22px;font-size:14px}
+    button.claim .dot{width:22px;height:22px}
+    button.claim[aria-pressed="true"] .dot::after{width:11px;height:11px}
+    button.m{grid-template-columns:26px 1fr}
+    .res,.reveal{padding:13px 14px}
+    .resbar .st{font-size:16px}
+    .resbar .ad{font-size:14px}
+    .rb{font-size:16px}
+    .step{font-size:13px}
+    .lead{font-size:16px}
+    .note{font-size:15px;padding:11px 13px}
+    .empty{font-size:16px}
+    .row{grid-template-columns:1fr;gap:4px;padding:11px 13px}
+    .row .nm{font-size:16px}
+    .row .rr{font-size:15px}
+    .srcs{font-size:14px}
+    .srcs li.say{padding-left:10px}
+    .bar{margin-top:16px;min-height:0}
+    button.nav{font-size:16px;padding:13px 18px}
+    button.nav.small{font-size:14px;padding:10px 14px}
+    .hint{font-size:14px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    /* a reveal becomes a single cross fade, and nothing else moves */
+    .res.on,.reveal.on{animation:fadein 1ms linear both!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ==================== FRAME 1: THE ANSWER THAT CAME BACK ====================
+       Five rows in one voice. The student commits here, before anything has
+       been checked, and NO verdict follows. That is deliberate: the pick is
+       recorded so the last frame can set it beside the answer the student
+       reaches after running the check. Nothing on this frame can settle the
+       question and the build never pretends otherwise. -->
+  <div class="frame" id="f1">
+    <div class="top">
+      <span class="prog" id="p1">1 of 4 &middot; The answer that came back</span>
+      <span class="segs" id="segs1" aria-hidden="true"></span>
+    </div>
+
+    <h1>Five rows, one voice, and not all of them survive a check</h1>
+    <p class="sub">You pasted the sweep across your shortlist and this came back. Every row is formatted the same way and written with the same steady confidence, and nothing in the wording wobbles to warn you. <b>The claims here that do not hold up were written for this exercise, and the last frame names every one of them.</b> Before you open anything: which row would you refuse to carry into a deal card?</p>
+
+    <div class="board one">
+      <div class="pcol">
+        <div class="colhead" id="clab">The model's answer, five rows</div>
+        <div class="claims" id="claims" role="group" aria-labelledby="clab"></div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav small" id="n1" type="button" hidden>Next: run the check</button>
+      <span class="hint" id="h1">Pick one. Keys <span class="key">1</span> to <span class="key">5</span> also work.</span>
+    </div>
+  </div>
+
+  <!-- ==================== FRAME 2: RUN THE CHECK ====================
+       The check, done rather than described, and it returns three distinct
+       outcomes rather than a pass and a fail: SOURCED, UNSUPPORTED,
+       UNVERIFIED. Nothing is fetched. Every result below is static text in
+       this file, and the address on the invented row points at a path that
+       does not exist. -->
+  <div class="frame" id="f2" hidden>
+    <div class="top">
+      <span class="prog" id="p2">2 of 4 &middot; Run the check</span>
+      <span class="segs" id="segs2" aria-hidden="true"></span>
+    </div>
+
+    <h1>Open them yourself. Asking for a link is not checking it.</h1>
+    <p class="sub">Ask for the announcement on each organization's own site, then open it. <b>Three things can come back and they are not the same:</b> a page that states the partnership, a page that does not carry the claim, or no announcement anywhere on either side.</p>
+
+    <div class="board split">
+      <div class="pcol">
+        <div class="colhead" id="olab">Run the check on each row</div>
+        <div class="mini" id="opens" role="group" aria-labelledby="olab"></div>
+      </div>
+      <div class="pcol">
+        <div class="colhead">What came back</div>
+        <section class="res" id="res" tabindex="-1" role="group" aria-label="What came back">
+          <div class="rb" id="resempty">
+            <p class="empty"><b>Nothing checked yet.</b> Pick a row on the left. What came back appears here, and you need all five before any of it teaches you anything.</p>
+          </div>
+          <div class="resbar" id="resbar" hidden>
+            <span class="g" id="resg" aria-hidden="true"></span>
+            <span>
+              <span class="st" id="resst"></span><br>
+              <span class="ad" id="resad"></span>
+            </span>
+          </div>
+          <div class="scroll" id="resscroll" tabindex="0" role="group" aria-label="Result detail" hidden>
+            <div class="rb" id="resbody"></div>
+          </div>
+          <div class="more" id="more2" hidden>More below. Scroll inside this panel.</div>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="b2" type="button">Back</button>
+      <button class="nav small" id="n2" type="button" hidden>Next: name the fabrication</button>
+      <span class="hint" id="h2"></span>
+    </div>
+  </div>
+
+  <!-- ==================== FRAME 3: NAME THE FABRICATION ====================
+       The graded commit, with the evidence on screen. Three rows came back
+       flawed and only one of them is proof that something was invented. A
+       wrong pick prints that row's real outcome and never names the answer.
+       The reveal carries the plain statement that the row was written for
+       this exercise. -->
+  <div class="frame" id="f3" hidden>
+    <div class="top">
+      <span class="prog" id="p3">3 of 4 &middot; Name the fabrication</span>
+      <span class="segs" id="segs3" aria-hidden="true"></span>
+    </div>
+
+    <h1>Three rows came back flawed. Only one is a fabrication.</h1>
+    <p class="sub">Unsupported, unverified and invented are three different things, and only the third one means somebody made an organization up. <b>Which row is the fabrication?</b></p>
+
+    <div class="board split">
+      <div class="pcol">
+        <div class="colhead" id="plab">The five rows, checked</div>
+        <div class="mini" id="picks" role="group" aria-labelledby="plab"></div>
+      </div>
+      <div class="pcol">
+        <section class="reveal" id="reveal" tabindex="-1" role="group" aria-labelledby="rlead">
+          <p class="lead" id="rlead">Nothing named yet</p>
+          <div class="scroll" id="rvscroll" tabindex="0" role="group" aria-label="Reasoning">
+            <div class="rb" id="rvbody"></div>
+          </div>
+          <div class="more" id="more3" hidden>More below. Scroll inside this panel.</div>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="b3" type="button">Back to the check</button>
+      <button class="nav small" id="n3" type="button" hidden>Last frame</button>
+      <span class="hint" id="h3">Pick one. Keys <span class="key">1</span> to <span class="key">5</span> also work.</span>
+    </div>
+  </div>
+
+  <!-- ==================== FRAME 4: WHAT ACTUALLY CAUGHT IT ==================== -->
+  <div class="frame" id="f4" hidden>
+    <div class="top">
+      <span class="prog" id="p4">4 of 4 &middot; What actually caught it</span>
+      <span class="segs" id="segs4" aria-hidden="true"></span>
+    </div>
+
+    <h1>Your two answers, and the difference between them</h1>
+
+    <div class="board one">
+      <div class="pcol">
+        <div class="rows" id="crows"></div>
+        <div class="scroll" id="srcscroll" tabindex="0" role="group" aria-label="What was real, what was written for this exercise, and the sources" style="margin-top:8px">
+          <div class="colhead" style="margin-bottom:4px">What was written for this exercise, and where the real rows came from</div>
+          <ul class="srcs" id="srcs"></ul>
+        </div>
+        <div class="more" id="more4" hidden>More below. Scroll inside this panel.</div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="b4" type="button">Back</button>
+      <button class="nav ghost small" id="r4" type="button">Run it again</button>
+      <span class="hint push"><b>That is the end of this one.</b> Nothing further is required.</span>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf p{margin-bottom:11px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .box{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+    .nsf details{border:1.5px solid #001D69;border-radius:9px;padding:9px 13px;margin-bottom:14px;background:#DCE1FF}
+    .nsf summary{font-size:17px;font-weight:600;color:#1C1B1B;cursor:pointer}
+    .nsf details p:first-of-type{margin-top:11px}
+  </style>
+  <div class="nsf">
+    <h1>Spot the invented partnership</h1>
+    <p>With scripts blocked, here is the same exercise as a document. Below is what came back when the sweep was pasted across a shortlist: five rows, formatted the same way, written with the same steady confidence. <strong>The claims here that do not hold up were written for this exercise, and the collapsed heading underneath names every one of them.</strong></p>
+    <p>Read the five rows first and decide which one you would refuse to carry into a deal card. Then open the collapsed heading.</p>
+
+    <h2>The model's answer, five rows</h2>
+    <ol>
+      <li><strong>Anthropic, 14 July 2026.</strong> Launched Claude for Teachers with nine named edtech partners: ASSISTments, Brisk Teaching, Canva Education, Coteach, Diffit, Eedi, MagicSchool, Snorkl, TeachFX. Announcement given: anthropic.com/news/claude-for-teachers</li>
+      <li><strong>Sesame Workshop, 2025.</strong> Extended a $100 million partnership with the LEGO Foundation through 2028. Announcement given: none. The model said it could not find one on either organization's own site.</li>
+      <li><strong>NVIDIA, 4 September 2025.</strong> Pledged $25 million toward K-12 AI curriculum and educator training, delivered by CK-12 and StudyFetch. Announcement given: blogs.nvidia.com/blog/ai-education-k-12/</li>
+      <li><strong>NVIDIA, 11 March 2026.</strong> Committed $12 million and free access to its AI training curriculum to the Halvern Numeracy Consortium, a group of 340 school districts, to train 20,000 middle-school math teachers. Announcement given: blogs.nvidia.com/blog/halvern-numeracy-consortium-math/</li>
+      <li><strong>Anthropic, 14 July 2026.</strong> Named Khan Academy among the launch partners wired into Claude for Teachers. Announcement given: anthropic.com/news/claude-for-teachers</li>
+    </ol>
+
+    <details>
+      <summary>What the check returned, row by row, and which one is the fabrication</summary>
+      <p><strong>Row 4 is the fabrication, and it is the only one.</strong> Its address returns HTTP 404, so there is no sentence on it to read. No second address came back either. What takes it past unsupported and into invented is the other side of the pairing: there is no organization of that name anywhere. No site, no members list, no trace. A body said to bind 340 districts and train 20,000 teachers leaves a footprint, and this one leaves none. There is no announcement you failed to find, because there is no counterparty to announce anything.</p>
+      <div class="box">
+        <p><strong>Said plainly, because nobody should leave this exercise believing something untrue about a real organization.</strong> Row 4 was written for this exercise. The Halvern Numeracy Consortium is a name invented for it. NVIDIA announced no such partnership, no organization of that name is party to one, and the address in that row is not a real page.</p>
+        <p style="margin-bottom:0"><strong>Row 5 was also written for this exercise</strong>, as a claim the check refutes. Khan Academy is <strong>not</strong> one of the nine partners named on Anthropic's Claude for Teachers page, read live on 3 September 2026. The true fact is the absence.</p>
+      </div>
+      <p><strong>Row 1 is sourced.</strong> The page loads, carries the date 14 July 2026, and all nine partner names are on it. <a href="https://www.anthropic.com/news/claude-for-teachers">anthropic.com/news/claude-for-teachers</a>, read 3 September 2026.</p>
+      <p><strong>Row 2 is unverified, and unverified is not false.</strong> No address came back on either side, so there was nothing to open and nothing to check. What you write down is that you could not source it, not that it did not happen. Do not carry it into a deal card and do not strike it out either. This particular one is in fact real: this program's own fact verification pass of 3 September 2026 records the $100 million LEGO Foundation partnership with Sesame Workshop extended through 2028, for 2025. Your check simply could not reach it, which is exactly why the third outcome exists.</p>
+      <p><strong>Row 3 is sourced, and it was announced by one side only.</strong> NVIDIA's own post carries the $25 million figure and both delivery organizations. No announcement came back from CK-12's own site or StudyFetch's, and that is fine: one solid announcement establishes a claim, and a silent second party is worth a note rather than a verdict. Plenty of real partnerships are announced by one side, and a small organization may not run a newsroom at all. One detail worth seeing: NVIDIA's page writes the second organization as two words, Study Fetch, where the company itself writes StudyFetch. A name spelled differently is not a different claim. <a href="https://blogs.nvidia.com/blog/ai-education-k-12/">blogs.nvidia.com/blog/ai-education-k-12/</a>, published 4 September 2025, read 3 September 2026.</p>
+      <p><strong>Row 5 is unsupported.</strong> The page loads. It names nine partners and Khan Academy is not among them, so the page loads and does not say what you were told it says. That is the harder failure to catch and the reason you read the page rather than the status code. The line to send back: the page you gave me does not mention Khan Academy anywhere, withdraw the claim. Both organizations exist and the page exists, so what happened is that a real page was attached to a claim it does not support. Ask again. Do not conclude that anything was invented out of nothing.</p>
+      <p><strong>Notice what caught the fabrication, because it was not knowledge.</strong> NVIDIA is on row 3 and on row 4. Anthropic is on row 1 and on row 5. In each pair one claim holds and one does not, and recognizing the company separates them not at all. The addresses separate them in seconds, which is the only reason this check is any use on a list made almost entirely of names you have never seen before.</p>
+    </details>
+
+    <h2>Open the real pages yourself</h2>
+    <p>Both sourced claims above are one page away. These are the check, run by hand:</p>
+    <ul>
+      <li><a href="https://www.anthropic.com/news/claude-for-teachers">anthropic.com/news/claude-for-teachers</a></li>
+      <li><a href="https://blogs.nvidia.com/blog/ai-education-k-12/">blogs.nvidia.com/blog/ai-education-k-12/</a></li>
+    </ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Three outcomes, not a pass and a fail. This is the corrected teaching
+     in substep 3.1.3 and the whole build turns on it: a claim can be
+     sourced, unsupported, or unverified, and unverified is not false.
+     Every glyph below is paired with its uppercase word everywhere it is
+     drawn, so no state is ever carried by colour or by shape alone. */
+  var OUT = {
+    sourced:     {word:"SOURCED",     glyph:"✓", cls:"fill"},
+    unsupported: {word:"UNSUPPORTED", glyph:"×", cls:"dash"},
+    unverified:  {word:"UNVERIFIED",  glyph:"?",      cls:"dash"}
+  };
+
+  /* =================================================================
+     The five rows of the model's answer.
+
+     WHAT IS REAL. Rows 1 and 3 are real and sourced, both drawn from
+     pages opened and verified on 3 September 2026 and recorded in
+     08-reviews/p3-fact-verification-2026-09-03.md. Row 2's partnership
+     is real and recorded in the same pass; only the announcement URL is
+     out of reach of this check, which is the point of it.
+
+     WHAT WAS WRITTEN FOR THIS EXERCISE, and both are named in plain
+     words on frames 3 and 4 and in the noscript fallback:
+     - Row 4, the fabrication. Its construction is fixed by the module's
+       build note and is not to be loosened: the partner side of the
+       pairing is an organization that does not exist, named for this
+       exercise. No real named organization is depicted doing something
+       false about another real named organization, and the reveal leaves
+       the student believing nothing untrue about NVIDIA.
+     - Row 5, an unsupported claim whose falsity is VERIFIED rather than
+       asserted: Anthropic's live page names nine partners and Khan
+       Academy is not among them. Correcting it teaches a true fact.
+
+     Nothing here is fetched. Every result below is static text in this
+     file. Row 4's address points at a path that does not exist on a real
+     domain, which is exactly what a 404 is, and the invented organization
+     is given no domain of its own anywhere in this file.
+
+     DESIGNED SO KNOWLEDGE CANNOT HELP AND METHOD CAN. NVIDIA carries a
+     sourced row and the fabricated one. Anthropic carries a sourced row
+     and the unsupported one, off the same URL. Recognising either company
+     separates nothing. The invented figure is smaller and less remarkable
+     than the real figure beside it, its date sits between two real dates,
+     and its address is the same shape as the real NVIDIA address.
+     ================================================================= */
+  var ROWS = [
+    {
+      id:"r1", n:1, org:"Anthropic", when:"14 July 2026", out:"sourced",
+      claim:"Launched Claude for Teachers with nine named edtech partners: ASSISTments, Brisk Teaching, Canva Education, Coteach, Diffit, Eedi, MagicSchool, Snorkl, TeachFX.",
+      short:"Claude for Teachers, nine named edtech partners",
+      url:"anthropic.com/news/claude-for-teachers",
+      href:"https://www.anthropic.com/news/claude-for-teachers",
+      a:["On Anthropic's own site","HTTP 200. Anthropic's own newsroom post, carrying the date 14 July 2026. All nine partner names are on the page."],
+      b:["On the partners' own sites","Nine separate organizations, and no second address came back for any of them."],
+      mean:"The page loads and states the partnership, in the organization's own words, on its own site. Note the date and carry both forward.",
+      stands:"This page loads and names all nine partners. There is nothing here to withdraw.",
+      src:"<b>Row 1, real and sourced.</b> Anthropic, Claude for Teachers, dated 14 July 2026 on the page, nine edtech partners named on it. Read live 3 September 2026."
+    },
+    {
+      id:"r2", n:2, org:"Sesame Workshop", when:"2025", out:"unverified",
+      claim:"Extended a $100 million partnership with the LEGO Foundation through 2028.",
+      short:"$100 million LEGO Foundation partnership, extended through 2028",
+      url:null,
+      href:null,
+      a:["On Sesame Workshop's own site","No address came back. Asked for the announcement on their own site, the model said it could not find one."],
+      b:["On the LEGO Foundation's own site","The same answer. Nothing to open on either side of this pairing."],
+      mean:"Nothing to open means nothing to check, and that is the third outcome. <b>Unverified is not false.</b> What goes in your notes is that you could not source it, not that it did not happen. Do not carry it into a deal card, and do not strike it out either.",
+      stands:"There is nothing here to disprove. No address on either side leaves this unverified, and unverified is not the same as invented. Striking it out is the exact misuse this check is most often put to.",
+      src:"<b>Row 2, real, and out of reach of this check.</b> Sesame Workshop and the LEGO Foundation, $100 million partnership extended through 2028, for 2025. Recorded in this program's own fact verification pass of 3 September 2026. Real all along, and unsourceable by the check you just ran, which is precisely why unverified is never written down as false."
+    },
+    {
+      id:"r3", n:3, org:"NVIDIA", when:"4 September 2025", out:"sourced",
+      claim:"Pledged $25 million toward K-12 AI curriculum and educator training, delivered by CK-12 and StudyFetch.",
+      short:"$25 million K-12 AI curriculum pledge, via CK-12 and StudyFetch",
+      url:"blogs.nvidia.com/blog/ai-education-k-12/",
+      href:"https://blogs.nvidia.com/blog/ai-education-k-12/",
+      a:["On NVIDIA's own site","HTTP 200. NVIDIA's own post, published 4 September 2025, carrying the $25 million figure and naming both delivery organizations. One detail worth seeing: the page writes the second one as two words, Study Fetch, where the company itself writes StudyFetch. A name spelled differently is not a different claim."],
+      b:["On the partners' own sites","No address came back for CK-12's site or StudyFetch's. This one was announced by one side only."],
+      mean:"Announced by one side, and still sourced. <b>One solid announcement establishes the claim</b>, and a silent second party is worth a note rather than a verdict. Plenty of real partnerships are announced by one side, and a small organization may not run a newsroom at all.",
+      stands:"NVIDIA's own page loads and carries the figure and both partners. Only one side announced it, and one side is enough.",
+      src:"<b>Row 3, real and sourced, announced by one side.</b> NVIDIA pledged $25 million toward K-12 AI curriculum and educator training, with CK-12 and StudyFetch named as delivering it. Published 4 September 2025, read live 3 September 2026."
+    },
+    {
+      id:"r4", n:4, org:"NVIDIA", when:"11 March 2026", out:"unsupported", fab:true,
+      claim:"Committed $12 million and free access to its AI training curriculum to the Halvern Numeracy Consortium, a group of 340 school districts, to train 20,000 middle-school math teachers.",
+      short:"$12 million and curriculum to the Halvern Numeracy Consortium",
+      url:"blogs.nvidia.com/blog/halvern-numeracy-consortium-math/",
+      href:null,
+      a:["On NVIDIA's own site","HTTP 404. Nothing at this address, so there is no sentence on it to read."],
+      b:["On the partner's own site","No address came back, and there is nothing to look for. No organization of this name has a site, a members list, or any trace at all. A body said to bind 340 districts and train 20,000 teachers leaves a footprint. This one leaves none."],
+      mean:"The address does not open, so on its own that is <b>unsupported</b>. Then look at the other side of the pairing, because on this row it is the other side that decides it.",
+      stands:"",
+      src:""
+    },
+    {
+      id:"r5", n:5, org:"Anthropic", when:"14 July 2026", out:"unsupported",
+      claim:"Named Khan Academy among the launch partners wired into Claude for Teachers.",
+      short:"Khan Academy named among the Claude for Teachers partners",
+      url:"anthropic.com/news/claude-for-teachers",
+      href:"https://www.anthropic.com/news/claude-for-teachers",
+      a:["On Anthropic's own site","HTTP 200. The page loads and names nine partners: ASSISTments, Brisk Teaching, Canva Education, Coteach, Diffit, Eedi, MagicSchool, Snorkl, TeachFX. Khan Academy is not among them."],
+      b:["On Khan Academy's own site","No announcement, and note what that does not mean here. Khan Academy plainly exists. The problem is not a missing counterparty, it is a page that does not say what you were told it says."],
+      mean:"The page loads and does not carry the claim. That is the second outcome and the harder one to catch, which is why you read the page rather than the status code. The line to send back: the page you gave me does not mention Khan Academy anywhere, withdraw the claim.",
+      stands:"You were right to distrust this one, and it is unsupported. But both organizations exist and so does the page: what happened is that a real page was attached to a claim it does not support. Ask again. Do not conclude that anything was invented out of nothing.",
+      src:"<b>Row 5, written for this exercise, and refuted by the check.</b> Anthropic's Claude for Teachers page names nine edtech partners and Khan Academy is not one of them, read live on 3 September 2026. The claim was written so the check could refute it, and the true fact is the absence."
+    }
+  ];
+
+  var RID = {};
+  ROWS.forEach(function(r){ RID[r.id] = r; });
+  var FAKE = (function(){
+    for(var i=0;i<ROWS.length;i++){ if(ROWS[i].fab) return ROWS[i]; }
+    return null;
+  })();
+
+  /* the plain statements, held in one place so the on-screen reveal, the
+     closing frame and the fallback cannot drift apart from each other */
+  var PLAIN_FAB = "<b>Said plainly, because nobody should leave this exercise believing something untrue about a real organization.</b> Row 4 was written for this exercise. The Halvern Numeracy Consortium is a name invented for it. NVIDIA announced no such partnership, no organization of that name is party to one, and the address in that row is not a real page.";
+  var PLAIN_KA = "<b>Row 5 was written for this exercise too</b>, as a claim the check refutes rather than as a fabrication. Khan Academy is <b>not</b> one of the nine partners named on Anthropic's Claude for Teachers page, read live on 3 September 2026. The true fact is the absence.";
+
+  var TOTAL = 4;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["p1","p2","p3","p4","segs1","segs2","segs3","segs4",
+   "f1","f2","f3","f4","live",
+   "claims","n1","h1",
+   "opens","res","resempty","resbar","resg","resst","resad","resscroll","resbody","more2","b2","n2","h2",
+   "picks","reveal","rlead","rvscroll","rvbody","more3","b3","n3","h3",
+   "crows","srcs","srcscroll","more4","b4","r4"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* ---------------------------------------------------------------
+     A small, failure-tolerant store, so leaving halfway and coming
+     back is a true statement rather than a promise the build breaks.
+     Every read and write is wrapped: a browser with storage disabled
+     must lose the record, not the interactive.
+     --------------------------------------------------------------- */
+  var KEY = "ka-p3-invented-v2";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  var store = load();
+  store.blind = store.blind || null;    /* the pick made before checking anything */
+  store.checked = store.checked || {};  /* row id -> true, once its check is run  */
+  store.last = store.last || null;      /* the row whose result is on screen      */
+  store.pick = store.pick || null;      /* the fabrication, once named            */
+  store.out = store.out || [];          /* rows named and refuted on frame 3      */
+
+  function announce(m){ el.live.textContent = m; }
+
+  function segs(node, at){
+    var out = "";
+    for(var i=1;i<=TOTAL;i++){
+      out += '<i class="' + (i === at ? "here" : (i < at ? "on" : "")) + '"></i>';
+    }
+    node.innerHTML = out;
+  }
+
+  /* Every scrolling region says so, rather than letting a sentence end at
+     the panel edge with no affordance. Measured synchronously: reading
+     scrollHeight forces layout, and deferring this to requestAnimationFrame
+     never fires under headless rendering, so the flag would stay hidden on
+     a panel with content below the fold. The flag is hidden before the read
+     so its own height is never counted as part of what it reports on. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    if(scroller.hidden) return;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+
+  var FRAMES = ["f1","f2","f3","f4"];
+  function show(which){ FRAMES.forEach(function(f){ el[f].hidden = (f !== which); }); }
+  function mobile(){ return window.matchMedia("(max-width:599px)").matches; }
+  function checkedCount(){
+    var n = 0;
+    ROWS.forEach(function(r){ if(store.checked[r.id]) n++; });
+    return n;
+  }
+  var WORD = {0:"None", 1:"One", 2:"Two", 3:"Three", 4:"Four", 5:"Five"};
+  function addr(r){ return r.url ? r.url : "no announcement URL given"; }
+
+  /* ================= FRAME 1: the blind pick ================= */
+
+  function buildClaims(){
+    el.claims.innerHTML = ROWS.map(function(r){
+      return '<button class="claim" type="button" data-r="' + r.id + '" aria-pressed="false">' +
+               '<span class="dot" aria-hidden="true"></span>' +
+               '<span class="cw"><span class="who">' + r.n + ". " + r.org + '</span>' +
+               '<span class="when">' + r.when + "</span></span>" +
+               '<span class="cw"><span class="txt">' + r.claim + "</span>" +
+               '<span class="link">Announcement given: ' + addr(r) + "</span></span>" +
+             "</button>";
+    }).join("");
+    claimButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(b.getAttribute("aria-disabled") === "true") return;
+        blindPick(b.getAttribute("data-r"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(b.getAttribute("aria-disabled") !== "true") return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function claimButtons(){
+    return Array.prototype.slice.call(el.claims.querySelectorAll("button.claim"));
+  }
+
+  function drawList(){
+    el.p1.textContent = "1 of " + TOTAL + " · The answer that came back";
+    segs(el.segs1, 1);
+    var done = store.blind;
+    claimButtons().forEach(function(b){
+      var id = b.getAttribute("data-r");
+      b.classList.toggle("done", !!done);
+      b.setAttribute("aria-pressed", id === done ? "true" : "false");
+      b.setAttribute("aria-disabled", done ? "true" : "false");
+    });
+    el.n1.hidden = !done;
+    /* No verdict here, by design, and none is possible: the claim list is
+       the whole of the evidence on this frame and it settles nothing. The
+       pick is recorded and read back on the last frame. */
+    el.h1.innerHTML = done
+      ? "<b>Recorded: row " + RID[done].n + ".</b> Nothing on this screen could settle it, because every row is written the same way. Go and check."
+      : "Pick one. Keys <span class=\"key\">1</span> to <span class=\"key\">5</span> also work.";
+  }
+
+  function blindPick(id){
+    store.blind = id;
+    save();
+    drawList();
+    el.n1.focus();
+    announce("Recorded row " + RID[id].n + ", " + RID[id].org +
+             ". No verdict yet. Next you run the check on all five.");
+  }
+
+  /* ================= FRAME 2: run the check ================= */
+
+  function buildOpens(){
+    el.opens.innerHTML = ROWS.map(function(r){
+      return '<button class="m" type="button" data-r="' + r.id + '" aria-pressed="false">' +
+               '<span class="g sm" aria-hidden="true"></span>' +
+               '<span class="cw"><span class="mh">' + r.n + ". " + r.org + " · " + r.when + "</span>" +
+               '<span class="ms">' + r.short + "</span>" +
+               '<span class="mu" data-s>' + addr(r) + "</span></span>" +
+             "</button>";
+    }).join("");
+    openButtons().forEach(function(b){
+      b.addEventListener("click", function(){ runCheck(b.getAttribute("data-r")); });
+    });
+  }
+  function openButtons(){
+    return Array.prototype.slice.call(el.opens.querySelectorAll("button.m"));
+  }
+
+  function drawCheck(){
+    el.p2.textContent = "2 of " + TOTAL + " · Run the check";
+    segs(el.segs2, 2);
+    var n = checkedCount(), all = (n === ROWS.length);
+    openButtons().forEach(function(b){
+      var id = b.getAttribute("data-r"), r = RID[id], seen = !!store.checked[id];
+      var o = OUT[r.out], g = b.querySelector(".g");
+      b.setAttribute("aria-pressed", id === store.last ? "true" : "false");
+      /* the glyph reports what the addresses returned, not the student's
+         pick, and the uppercase word rides in the same cell so no glyph
+         ever carries a meaning on its own */
+      g.className = "g sm" + (seen ? " " + o.cls : "");
+      g.textContent = seen ? o.glyph : "";
+      b.querySelector("[data-s]").textContent = seen ? o.word : addr(r);
+      b.setAttribute("aria-label",
+        r.n + ". " + r.org + ", " + r.when + ". " + r.short + ". " +
+        (seen ? "Checked. Outcome: " + o.word + "." : "Address given: " + addr(r) + ". Not checked yet."));
+    });
+
+    if(store.last && store.checked[store.last]){ paintResult(RID[store.last]); }
+    else { clearResult(); }
+
+    el.n2.hidden = !all;
+    el.h2.innerHTML = all
+      ? "<b>All five checked.</b> Two sourced, two unsupported, one unverified. Only one of those is a fabrication."
+      : "<b>" + WORD[n] + " of five checked.</b> Run every one of them. Keys <span class=\"key\">1</span> to <span class=\"key\">5</span> also work.";
+    flag(el.resscroll, el.more2);
+  }
+
+  function clearResult(){
+    el.resempty.hidden = false;
+    el.resbar.hidden = true;
+    el.resscroll.hidden = true;
+    el.more2.hidden = true;
+    el.res.classList.remove("dashed","on");
+  }
+
+  function paintResult(r){
+    var o = OUT[r.out];
+    el.resempty.hidden = true;
+    el.resbar.hidden = false;
+    el.resscroll.hidden = false;
+    el.res.classList.toggle("dashed", r.out !== "sourced");
+    el.resg.className = "g " + o.cls;
+    el.resg.textContent = o.glyph;
+    el.resst.textContent = o.word;
+    el.resad.textContent = "Row " + r.n + ", " + r.org + ". " + addr(r);
+    el.resbody.innerHTML =
+      '<p><span class="step">' + r.a[0] + "</span>" + r.a[1] + "</p>" +
+      '<p><span class="step">' + r.b[0] + "</span>" + r.b[1] + "</p>" +
+      '<p><span class="step">What that means</span>' + r.mean + "</p>";
+    el.resscroll.scrollTop = 0;
+  }
+
+  function runCheck(id){
+    var r = RID[id];
+    store.checked[id] = true;
+    store.last = id;
+    save();
+    drawCheck();
+    el.res.classList.remove("on");
+    void el.res.offsetWidth;
+    el.res.classList.add("on");
+    el.res.focus();
+    if(mobile() && el.res.scrollIntoView){ el.res.scrollIntoView(); }
+    announce("Checked row " + r.n + ". Outcome " + OUT[r.out].word + ". " + el.resbody.textContent);
+  }
+
+  /* ================= FRAME 3: name the fabrication ================= */
+
+  function buildPicks(){
+    el.picks.innerHTML = ROWS.map(function(r){
+      return '<button class="m" type="button" data-r="' + r.id + '" aria-pressed="false">' +
+               '<span class="g sm" aria-hidden="true"></span>' +
+               '<span class="cw"><span class="mh">' + r.n + ". " + r.org + " · " + r.when + "</span>" +
+               '<span class="ms">' + r.short + "</span>" +
+               '<span class="mu" data-s></span></span>' +
+             "</button>";
+    }).join("");
+    pickButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(b.getAttribute("aria-disabled") === "true") return;
+        name(b.getAttribute("data-r"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(b.getAttribute("aria-disabled") !== "true") return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function pickButtons(){
+    return Array.prototype.slice.call(el.picks.querySelectorAll("button.m"));
+  }
+
+  function drawPick(){
+    el.p3.textContent = "3 of " + TOTAL + " · Name the fabrication";
+    segs(el.segs3, 3);
+    var done = store.pick;
+    pickButtons().forEach(function(b){
+      var id = b.getAttribute("data-r"), r = RID[id], o = OUT[r.out];
+      var isOut = store.out.indexOf(id) > -1;
+      var struck = isOut && id !== done;
+      var g = b.querySelector(".g");
+      b.classList.toggle("out", struck);
+      b.classList.toggle("done", !!done);
+      b.setAttribute("aria-pressed", id === done ? "true" : "false");
+      b.setAttribute("aria-disabled", (!!done || isOut) ? "true" : "false");
+      g.className = "g sm " + o.cls;
+      g.textContent = o.glyph;
+      b.querySelector("[data-s]").textContent = o.word;
+      b.setAttribute("aria-label",
+        r.n + ". " + r.org + ", " + r.when + ". " + r.short +
+        ". Outcome: " + o.word + "." + (struck ? " Ruled out." : ""));
+    });
+
+    if(done){ paintReveal(done, true); }
+    else if(store.out.length){ paintReveal(store.out[store.out.length - 1], false); }
+    else { clearReveal(); }
+
+    el.n3.hidden = !done;
+    var left = ROWS.length - store.out.length;
+    el.h3.innerHTML = done
+      ? "You named it. The reasoning is on this frame, beside the rows."
+      : (store.out.length
+          ? "<b>" + WORD[left] + (left === 1 ? " row" : " rows") + " left.</b> Pick another. Keys <span class=\"key\">1</span> to <span class=\"key\">5</span> also work."
+          : "Pick one. Keys <span class=\"key\">1</span> to <span class=\"key\">5</span> also work.");
+    flag(el.rvscroll, el.more3);
+  }
+
+  function clearReveal(){
+    el.rlead.textContent = "Nothing named yet";
+    el.rvbody.innerHTML = '<p class="empty">Every row carries what its addresses returned. Name the one that is a fabrication rather than merely unsourced, and the reasoning appears here.</p>';
+    el.reveal.classList.remove("on");
+    el.more3.hidden = true;
+  }
+
+  /* ok true prints the mechanism, the three way distinction and the plain
+     statements. ok false prints only that row's real outcome, and never
+     names the answer by any route. */
+  function paintReveal(id, ok){
+    var r = RID[id];
+    el.rlead.innerHTML = ok
+      ? "<b>That is the fabrication.</b> And here is what proved it"
+      : "<b>Not this one.</b> What the check actually returned here";
+    if(ok){
+      el.rvbody.innerHTML =
+        "<p><b>The address, not your read of the wording.</b> " + r.url +
+        " returns a 404, so there is no sentence on it to read. On its own that is unsupported, and unsupported is not proof of anything.</p>" +
+        "<p><b>The other side of the pairing is what proves it.</b> No address came back, and there is nothing to look for: no site, no members list, no trace of an organization by that name. This is not an announcement you failed to find. There is no counterparty to announce anything.</p>" +
+        "<p><b>Three outcomes, and only this one is a fabrication.</b> Row 5's page opens and simply does not carry the claim: two real organizations, a real page, a claim to send back and ask again. Row 2 has no address on either side, so it is unverified, which is not the same as false and goes in your notes as unsourced. A single missing announcement disproves nothing, because plenty of real partnerships are announced by one side only.</p>" +
+        '<div class="note"><p>' + PLAIN_FAB + "</p></div>";
+    } else {
+      el.rvbody.innerHTML =
+        "<p><b>" + OUT[r.out].word + ".</b> " + r.stands + "</p>" +
+        "<p>Read the results again and find the row where there is no counterparty to ask about at all. That is the difference between a claim you send back and a claim that was invented.</p>";
+    }
+    el.rvscroll.scrollTop = 0;
+  }
+
+  function name(id){
+    var ok = !!RID[id].fab;
+    if(ok){ store.pick = id; }
+    else if(store.out.indexOf(id) < 0){ store.out.push(id); }
+    save();
+    drawPick();
+    el.reveal.classList.remove("on");
+    void el.reveal.offsetWidth;
+    el.reveal.classList.add("on");
+    /* focus is placed by hand on every state change, so it can never fall
+       back to <body>, and after a wrong pick it never lands on the answer */
+    if(ok){
+      el.reveal.focus();
+      announce("Row " + RID[id].n + " named. That is the fabrication. " + el.rvbody.textContent);
+    } else {
+      focusAfterWrong(id);
+      announce("Row " + RID[id].n + " is not a fabrication. " + el.rvbody.textContent);
+    }
+  }
+
+  function focusAfterWrong(id){
+    var all = pickButtons(), from = 0;
+    all.forEach(function(b, k){ if(b.getAttribute("data-r") === id) from = k; });
+    var live = all.filter(function(b){
+      return b.getAttribute("aria-disabled") !== "true" && b.getAttribute("data-r") !== FAKE.id;
+    });
+    var after = live.filter(function(b){ return all.indexOf(b) > from; });
+    var target = after[0] || live[0];
+    if(target){ target.focus(); return; }
+    el.reveal.focus();
+  }
+
+  /* ================= FRAME 4: the close ================= */
+
+  function drawClose(){
+    el.p4.textContent = TOTAL + " of " + TOTAL + " · What actually caught it";
+    segs(el.segs4, TOTAL);
+
+    var blind = store.blind ? RID[store.blind] : null;
+    var rows = [];
+    rows.push([
+      "Before you checked anything",
+      blind
+        ? "You picked <b>row " + blind.n + ", " + blind.org + "</b>. " +
+          (blind.fab
+            ? "That happened to be the fabrication. Reading the wording gave you a one in five guess and no way to know you were right, which is not something you can say out loud in a room."
+            : "Row " + blind.n + " came back " + OUT[blind.out].word.toLowerCase() +
+              ", which is not the same as invented. Nothing in the wording of the fabricated row wobbled to warn you, and that is the whole problem.")
+        : "You did not pick, which is honest: nothing on that screen could settle it."
+    ]);
+    rows.push([
+      "Three outcomes, not two",
+      "<b>Sourced</b>, the page loads and states it. <b>Unsupported</b>, the address does not open or the page never mentions the other organization, so you send it back and ask again. <b>Unverified</b>, nothing on either side, which is not false and goes in your notes as unsourced."
+    ]);
+    rows.push([
+      "What made row " + FAKE.n + " different",
+      "Not the 404 on its own. <b>There was no counterparty to ask about.</b> That is the line between a claim that is unsourced and a claim that was invented, and it is the only row here on the far side of it."
+    ]);
+    rows.push([
+      "Recognizing a company got you nothing",
+      "NVIDIA is on rows 3 and 4. Anthropic is on rows 1 and 5. In each pair one claim holds and one does not, and knowing who either company is separates them not at all. The addresses separated them in seconds, which is the only reason this check is any use on a list made almost entirely of names you have never seen before."
+    ]);
+    el.crows.innerHTML = rows.map(function(r){
+      return '<div class="row"><span class="nm">' + r[0] + '</span><span class="rr">' + r[1] + "</span></div>";
+    }).join("");
+
+    var out = '<li class="say">' + PLAIN_FAB + "</li>" +
+              '<li class="say">' + PLAIN_KA + "</li>";
+    ROWS.forEach(function(r){
+      if(!r.src) return;
+      out += "<li>" + r.src + (r.href ? " <a href=\"" + r.href + "\">" + r.url + "</a>" : "") + "</li>";
+    });
+    el.srcs.innerHTML = out;
+    flag(el.srcscroll, el.more4);
+  }
+
+  /* ================= navigation =================
+     Every one of these lands focus on a real control or on a panel that
+     takes focus. Nothing here can leave focus on <body>, and every frame
+     has a way forward and a way back. */
+
+  function goList(){
+    show("f1");
+    drawList();
+    if(store.blind){ el.n1.focus(); return; }
+    var first = el.claims.querySelector("button.claim");
+    if(first) first.focus();
+  }
+  function goCheck(){
+    show("f2");
+    drawCheck();
+    if(checkedCount() === ROWS.length){ el.n2.focus(); return; }
+    var next = openButtons().filter(function(b){
+      return !store.checked[b.getAttribute("data-r")];
+    })[0];
+    (next || el.b2).focus();
+  }
+  function goPick(){
+    show("f3");
+    drawPick();
+    if(store.pick){ el.n3.focus(); return; }
+    var first = pickButtons().filter(function(b){
+      return b.getAttribute("aria-disabled") !== "true";
+    })[0];
+    (first || el.b3).focus();
+  }
+  function goClose(){
+    show("f4");
+    drawClose();
+    el.b4.focus();
+  }
+
+  el.n1.addEventListener("click", goCheck);
+  el.b2.addEventListener("click", goList);
+  el.n2.addEventListener("click", goPick);
+  el.b3.addEventListener("click", goCheck);
+  el.n3.addEventListener("click", goClose);
+  el.b4.addEventListener("click", goPick);
+  el.r4.addEventListener("click", function(){
+    store.blind = null; store.checked = {}; store.last = null;
+    store.pick = null; store.out = [];
+    save();
+    clearResult(); clearReveal();
+    goList();
+    announce("Cleared. Five rows to read again.");
+  });
+
+  /* Plain Tab and Enter operate every control in this file. The number keys
+     and the arrows below are an addition, not a protocol: nothing here is
+     reachable only by keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    var num = (e.key >= "1" && e.key <= "5") ? parseInt(e.key, 10) - 1 : -1;
+
+    if(!el.f1.hidden){
+      if(num > -1 && !store.blind){ e.preventDefault(); blindPick(ROWS[num].id); return; }
+      if(e.key === "ArrowRight" && store.blind){ e.preventDefault(); goCheck(); }
+      return;
+    }
+    if(!el.f2.hidden){
+      if(num > -1){ e.preventDefault(); runCheck(ROWS[num].id); return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); goList(); return; }
+      if(e.key === "ArrowRight" && checkedCount() === ROWS.length){ e.preventDefault(); goPick(); }
+      return;
+    }
+    if(!el.f3.hidden){
+      if(num > -1 && !store.pick && store.out.indexOf(ROWS[num].id) < 0){
+        e.preventDefault(); name(ROWS[num].id); return;
+      }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); goCheck(); return; }
+      if(e.key === "ArrowRight" && store.pick){ e.preventDefault(); goClose(); }
+      return;
+    }
+    if(!el.f4.hidden){
+      if(e.key === "ArrowLeft"){ e.preventDefault(); goPick(); }
+    }
+  });
+
+  /* ---- swipe, the third input method ---- */
+  (function(){
+    var x0 = null, y0 = null;
+    document.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1){ x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, {passive:true});
+    document.addEventListener("touchend", function(e){
+      if(x0 === null || !e.changedTouches || !e.changedTouches.length) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      var dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if(Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+      var fwd = dx < 0;
+      if(!el.f1.hidden){ if(fwd && store.blind) goCheck(); return; }
+      if(!el.f2.hidden){
+        if(fwd){ if(checkedCount() === ROWS.length) goPick(); } else { goList(); }
+        return;
+      }
+      if(!el.f3.hidden){
+        if(fwd){ if(store.pick) goClose(); } else { goCheck(); }
+        return;
+      }
+      if(!el.f4.hidden){ if(!fwd) goPick(); }
+    }, {passive:true});
+  })();
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(mobile()){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.resscroll, el.more2);
+    flag(el.rvscroll, el.more3);
+    flag(el.srcscroll, el.more4);
+  });
+
+  buildClaims();
+  buildOpens();
+  buildPicks();
+
+  /* resume: the saved record lands the student where they stopped. No
+     resume screen, no extra step, and no state that hands the answer to
+     somebody who has not run the check yet. */
+  (function(){
+    if(store.pick){ goClose(); return; }
+    if(checkedCount() === ROWS.length){ goPick(); return; }
+    if(store.blind){ goCheck(); return; }
+    goList();
+  })();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run force
+     a state without hand-driving the UI */
+  window.__ex = {
+    list:goList, check:goCheck, pick:goPick, close:goClose,
+    blind:function(i){ show("f1"); drawList(); blindPick(ROWS[i].id); },
+    checkAll:function(){ ROWS.forEach(function(r){ store.checked[r.id] = true; }); save(); },
+    run:function(i){ show("f2"); drawCheck(); runCheck(ROWS[i].id); },
+    name:function(i){ show("f3"); drawPick(); name(ROWS[i].id); },
+    fakeId:function(){ return FAKE.id; },
+    outcomes:function(){ return ROWS.map(function(r){ return r.out + (r.fab ? "/fabricated" : ""); }); },
+    reduced:function(){ return reduce; },
+    reset:function(){
+      store.blind = null; store.checked = {}; store.last = null;
+      store.pick = null; store.out = []; save();
+    },
+    state:function(){
+      return {blind:store.blind, checked:store.checked, last:store.last,
+              pick:store.pick, out:store.out, checked_n:checkedCount()};
+    }
+  };
+})();
+</script>
+</body>
+</html>

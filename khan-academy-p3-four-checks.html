@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The four checks</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     coloured state also carries a glyph, a border style or a label.
+     Sibling build: khan-academy-p1-run-the-candidates.html. This one
+     reuses its canvas scaling, its progress header, its keyboard
+     path, its noscript override and its reduced-motion collapse.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between-frame movement   */
+    --t-reveal:420ms;  /* reasoning resolving      */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:14px 40px 10px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header: progress across candidates AND checks, readable from
+         first paint. Twelve pips in three groups of four: one group per
+         candidate, one pip per check, so how much is left is a glance
+         rather than a calculation. ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:5px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px;align-items:center}
+  .segs i{display:block;width:14px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .segs i.sp{background:transparent;width:8px}
+
+  h1{font-size:18px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  h1 .tag{vertical-align:2px;margin-left:7px}
+  .sub{flex:0 0 auto;font-size:14px;line-height:1.45;max-width:96ch;margin-bottom:6px}
+  .sub b{color:var(--title);font-weight:600}
+
+  /* ---- boards ----
+     One frame per check. Left column carries the evidence on the table
+     and the four checks in order; right column carries the one check
+     question, its fixed options and the reasoning. The reasoning is the
+     only thing whose height varies, so it gets the 470 and never a
+     scroll region: no student reads teaching through a 4px scrollbar. */
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;gap:16px}
+  .board.cand{grid-template-columns:1fr 470px}
+  .board.one{grid-template-columns:1fr}
+  .pcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:9px 12px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  .tag{
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:1px 5px;flex:0 0 auto;
+  }
+
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:7px}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{font-size:11.5px;font-weight:600;color:var(--on-highlight);margin-top:5px;flex:0 0 auto}
+
+  .plab{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);flex:0 0 auto}
+
+  /* ---- the evidence on the table. Every figure carries its period and
+         where it came from, on its own line, because a figure without
+         those two is not evidence. ---- */
+  .ev{font-size:12.5px;line-height:1.42;margin-bottom:7px}
+  .ev:last-child{margin-bottom:0}
+  .ev b{color:var(--title);font-weight:600}
+  .ev .src{display:block;font-size:11.5px;line-height:1.35;margin-top:1px}
+  /* a figure that is NOT usable, marked by a dashed box and a label, so
+     it can never be mistaken for one that is */
+  .ev.flag{border:1.5px dashed var(--line);border-radius:8px;padding:6px 8px;background:var(--bg)}
+
+  /* ---- the four checks, in order, with the current one marked by a
+         glyph and a weight change rather than by colour ---- */
+  .rem{
+    flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;
+    background:var(--tint);border-radius:9px;padding:7px 10px;margin-top:7px;
+  }
+  .rem p{font-size:12.5px;line-height:1.35;display:flex;gap:6px}
+  .rem p .mk{flex:0 0 auto;width:12px;color:var(--on-highlight);font-weight:700;text-align:center}
+  .rem p.now{color:var(--title);font-weight:600}
+
+  /* ---- the fixed options ---- */
+  .vwrap{display:flex;flex-direction:column;min-height:0;min-width:0}
+  .vlab{font-size:14px;font-weight:600;color:var(--title);line-height:1.3;margin-bottom:5px;flex:0 0 auto}
+  .vlab .n{color:var(--on-highlight)}
+  .choices{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+  button.ch{
+    display:flex;align-items:flex-start;gap:9px;text-align:left;width:100%;
+    font-family:inherit;font-size:13.5px;line-height:1.35;font-weight:600;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:5px 11px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.ch .dot{
+    flex:0 0 auto;width:15px;height:15px;border-radius:50%;margin-top:2px;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  button.ch:hover:not([aria-disabled="true"]){border-color:var(--on-highlight)}
+  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ch[aria-pressed="true"]{border-color:var(--on-highlight)}
+  /* settled options stay in the tab order, so they are aria-disabled
+     rather than disabled: reachable, announced, inert */
+  button.ch[aria-disabled="true"]{cursor:default}
+  /* the answer, whether or not they picked it: filled dot, tick, solid
+     border. The glyph reports the fact, not the pick. */
+  button.ch.right{border-color:var(--on-highlight)}
+  button.ch.right .dot{background:var(--on-highlight);color:var(--bg)}
+  /* an option that does not answer the check: glyph, struck label and a
+     dashed border. Three signals, none of them colour on its own. */
+  button.ch.out{background:transparent;border:2px dashed var(--line);color:var(--body);font-weight:500}
+  button.ch.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.ch.out .dot{border-style:dashed}
+  /* their own pick keeps a solid border whatever the verdict on it, so a
+     struck option they chose never looks like one they did not. Border
+     style, not colour, and the reasoning names it in words as well. */
+  button.ch.picked{border-style:solid;border-color:var(--on-highlight)}
+  /* check 3 is not graded, so nothing is struck and nothing is ticked.
+     The position they took keeps its border and its filled dot; the two
+     they did not take dim. #1C1B1B on #DCE1FF holds 5.36:1 at .7. */
+  button.ch.mine{border-color:var(--on-highlight)}
+  button.ch.mine .dot{background:var(--on-highlight)}
+  button.ch.dim{opacity:.7}
+  button.ch.out.dim{opacity:.85}
+
+  /* ---- the reasoning. It lands under the options, on the same frame,
+         and it appears only after a commit. Nothing here exists in the
+         DOM before the student picks, so there is nothing to read by
+         scrolling ahead. ---- */
+  .reason{
+    flex:0 0 auto;margin-top:7px;min-width:0;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;
+  }
+  .reason:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .reason:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .lead{font-size:11.5px;line-height:1.32;font-weight:600;color:var(--on-highlight);margin-bottom:4px}
+  .lead b{color:var(--title);font-weight:700}
+  .rbody{font-size:12.5px;line-height:1.42}
+  .rbody p{margin-bottom:5px}
+  .rbody p:last-child{margin-bottom:0}
+  .rbody b{color:var(--title);font-weight:600}
+  .vnote{font-size:11.5px;line-height:1.38;border-top:1.5px solid var(--line);margin-top:5px;padding-top:5px}
+  .vnote b{color:var(--title);font-weight:600}
+  .reason.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ---- the closing rows ---- */
+  .rows{display:flex;flex-direction:column;gap:7px;flex:0 0 auto;max-width:780px}
+  .row{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:baseline;
+       background:var(--highlight);border-radius:9px;padding:8px 12px}
+  .row .nm{font-size:14px;font-weight:600;color:var(--title);line-height:1.3}
+  .row .rr{font-size:13.5px;line-height:1.42;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+  .decoy{
+    flex:0 0 auto;margin-top:9px;border:2px dashed var(--on-highlight);border-radius:9px;
+    padding:9px 13px;font-size:13px;line-height:1.46;max-width:780px;
+  }
+  .decoy p{margin-bottom:6px}
+  .decoy p:last-child{margin-bottom:0}
+  .decoy b{color:var(--title);font-weight:600}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row. ---- */
+  .bar{margin-top:6px;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:34px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:12px;padding:7px 12px}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .push{margin-left:auto}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .sub{font-size:15px}
+    /* align-content, not just align-items: a stretched one column grid
+       hands its leftover height to the auto rows, which opens a dead band
+       between the stacked panels on a tall phone. */
+    .board,.board.cand,.board.one{
+      grid-template-columns:1fr;gap:16px;flex:0 0 auto;align-items:start;align-content:start;
+    }
+    .scroll{overflow:visible}
+    /* the label and its tag are one nowrap row at 960. At 320 the two
+       together are wider than the viewport, and a nowrap flex row does not
+       overflow its own box quietly: it widens the document and the page
+       scrolls sideways. Wrapping is the fix. */
+    h1 .tag{display:inline-block;margin-left:0;vertical-align:baseline}
+    .plab{font-size:14px}
+    .ev{font-size:16px;margin-bottom:12px}
+    .ev .src{font-size:14px}
+    .rem{grid-template-columns:1fr;gap:8px;padding:11px 13px;margin-top:14px}
+    .rem p{font-size:15px}
+    .more{display:none}
+    button.ch{font-size:16px;padding:12px 13px}
+    .reason{margin-top:14px;padding:12px 14px}
+    .rbody{font-size:16px}
+    .lead{font-size:15px}
+    .vlab{font-size:17px}
+    .vnote{font-size:14px}
+    .row{grid-template-columns:1fr;gap:4px;padding:11px 13px}
+    .row .nm{font-size:16px}
+    .row .rr{font-size:15px}
+    .decoy{font-size:15px}
+    .bar{margin-top:16px;min-height:0}
+    button.nav{font-size:16px;padding:13px 18px}
+    button.nav.small{font-size:14px;padding:10px 14px}
+    .hint{font-size:14px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ==================== THE CHECK FRAME ====================
+       One candidate, one check, one commit. Twelve of these: three
+       candidates by four checks. The evidence panel and the list of the
+       four checks stay put on the left; the question, its fixed options
+       and the reasoning occupy the right. The reasoning is injected on
+       commit and not before, so there is nothing to read ahead. -->
+  <div class="frame" id="fc" hidden>
+    <div class="top">
+      <span class="prog" id="pc">Candidate 1 of 3 &middot; Check 1 of 4</span>
+      <span class="segs" id="segc" aria-hidden="true"></span>
+    </div>
+
+    <h1><span id="cname">Candidate</span><span class="tag" id="ctag"></span></h1>
+
+    <div class="board cand">
+      <div class="pcol">
+        <section class="panel" id="evpanel" aria-labelledby="evlab" tabindex="-1">
+          <p class="plab" id="evlab">On the table</p>
+          <div class="scroll" id="evscroll" tabindex="0" role="group" aria-labelledby="evlab">
+            <div id="evlist"></div>
+          </div>
+          <div class="more" id="evmore" hidden>More below. Scroll inside this panel.</div>
+        </section>
+        <div class="rem" id="strip" aria-label="The four checks, in order"></div>
+      </div>
+
+      <div class="vwrap">
+        <div class="vlab" id="vlab"></div>
+        <div class="choices" id="choices" role="group" aria-labelledby="vlab"></div>
+        <section class="reason" id="reason" hidden tabindex="-1" role="group" aria-labelledby="rlead">
+          <p class="lead" id="rlead"></p>
+          <div class="rbody" id="rbody"></div>
+          <p class="vnote" id="rnote" hidden></p>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="cback" type="button">Back</button>
+      <button class="nav small" id="cnext" type="button" hidden>Next</button>
+      <button class="nav ghost small" id="credo" type="button" hidden>Change my position</button>
+      <span class="hint" id="chint"></span>
+    </div>
+  </div>
+
+  <!-- ==================== THE CLOSE ==================== -->
+  <div class="frame" id="fz" hidden>
+    <div class="top">
+      <span class="prog" id="pz">Done &middot; 3 candidates, 4 checks each</span>
+      <span class="segs" id="segz" aria-hidden="true"></span>
+    </div>
+
+    <h1>Three candidates, two calls, and one that stops</h1>
+    <p class="sub">The four checks in the same order every time. Lane, then budget, then the trust question that is yours, then the three of them added up.</p>
+
+    <div class="board one">
+      <div class="vwrap">
+        <div class="rows" id="rows"></div>
+        <div class="decoy">
+          <p><b>"Cannot tell from public information" was the right answer three times here, and the wrong answer six times.</b> Right on two of the budget checks and on whether Amira Learning is a trade or a donation. Wrong on all three lane checks, where an incumbent was named on the table and reaching for the unknown just walked past it. The honest unknown is a real answer. It is not somewhere to stand when the evidence is sitting in front of you.</p>
+          <p><b>Check 3 came back three times with your name on it.</b> There is no glyph anywhere on those three and there was never going to be. It has no query, and it is the one of the four you own outright.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="zback" type="button">Back to the last check</button>
+      <button class="nav ghost small" id="zreset" type="button">Run them again</button>
+      <span class="hint push"><b>That is the end of this one.</b> Nothing further is required.</span>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:15px 0 5px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul,.nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf details{border:1.5px solid rgba(0,29,105,.26);border-radius:9px;padding:9px 12px;margin-bottom:9px}
+    .nsf summary{font-weight:600;color:#001D69;cursor:pointer}
+    .nsf details p{margin:9px 0 0}
+    .nsf .hedge2{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+  </style>
+  <div class="nsf">
+    <h1>The four checks</h1>
+    <p>With scripts blocked, here is the same content as a document: three shortlist candidates, the evidence on the table for each, and all four checks. The reasoning for every check sits under a heading you open, so you can still make your own call first.</p>
+
+    <h2>The four checks, in order</h2>
+    <ol>
+      <li><strong>Is the lane already claimed?</strong> The move is a sweep of the organization's own newsroom, the page where it publishes its own announcements, plus any partner or grantee pages it keeps.</li>
+      <li><strong>Can they write a large check, and out of which budget?</strong> The move is finding whether the giving runs through a grants portal, where you apply alongside everybody else, or through a team that buys partnerships and marketing, which is a conversation rather than an application.</li>
+      <li><strong>Would a parent trust this logo next to Khan Academy's?</strong> There is no query for this one. It is the check research cannot do for you, and the only one of the four you own outright.</li>
+      <li><strong>Is this a trade or a donation?</strong> This one is the other three added up.</li>
+    </ol>
+    <div class="hedge2">
+      <p style="margin-bottom:0"><strong>"Cannot tell from public information" is a real answer.</strong> On three of the twelve checks below it is the answer, and writing it down in those words is the correct output of the check rather than a gap in your searching. On the other nine it is not, and reaching for it where the evidence is on the table is its own mistake.</p>
+    </div>
+
+    <h2>Candidate 1: Amazon Web Services</h2>
+    <p>Cloud infrastructure. It runs a named education program and publishes what that program funds.</p>
+    <p><strong>On the table.</strong> $100 million committed to its Education Equity Initiative, a current commitment. AWS Imagine Grant, more than $21 million awarded to more than 180 nonprofits, cumulative since 2018. Up to $10,000 offered in social impact credits, as credits rather than cash, current. All three read from AWS's own program pages on 3 September 2026. <em>Not usable:</em> a "$30 million in credits, $1.5 million in prizes" line circulates in write-ups about AWS and has no primary source behind it, so it does not go on a shortlist.</p>
+    <details><summary>Check 1. Is the lane already claimed? Open the reasoning</summary>
+      <p><strong>Claimed, and the evidence tells you the size of the queue.</strong> More than 180 nonprofits funded since 2018 is not an empty seat, it is a queue, and you now know roughly how long it is. That is not a dead end. It turns the pitch into one hard question you have to answer out loud: why Khan Academy rather than the next nonprofit in the line? Read the period while you are here. The figure is cumulative since 2018, so it tells you how many have been through, not how many are funded this year.</p>
+    </details>
+    <details><summary>Check 2. Can they write a large check, and out of which budget? Open the reasoning</summary>
+      <p><strong>Yes, and the published routes are a grant program and product credits.</strong> Scale is the easy half: $100 million committed and more than $21 million awarded since 2018. Nothing there is startling against the rough sense of scale Sarah gave you. Which budget is the real question, and here it is answered. Both published doors are giving doors: a grant program you apply to alongside everybody else, and credits worth up to $10,000 that you redeem rather than spend. Neither is a team that buys partnerships.</p>
+    </details>
+    <details><summary>Check 3. Would a parent trust this logo next to Khan Academy's? Open what a partnerships team would weigh</summary>
+      <p><strong>Your call. There is no right answer printed here.</strong> A cloud company is not a consumer education brand, so most parents will not read the logo as a claim about how their child learns. That is the easy side. The other side is the one every sponsor raises: Khan Academy's courses are free and carry no advertising, a funder's name on a course is not an advertisement, and where the line between those two sits is a judgement rather than a fact you can look up. Your position stands. Nothing here overrules it.</p>
+    </details>
+    <details><summary>Check 4. Is this a trade or a donation? Open the reasoning</summary>
+      <p><strong>A donation, or credits, wearing a partnership's clothes.</strong> Check 4 is the other three added up, so read them back. The lane has a queue in it. Both published routes are giving routes. Nothing on the table is a commercial door. Credits are real value and can be worth having, but an application is not the deal this team is looking for. Notice what this is not: not a no forever, a no through this door. Find a commercial door inside the same company and the answer changes.</p>
+    </details>
+
+    <h2>Candidate 2: Sesame Workshop</h2>
+    <p>Children's media and education, nonprofit. It publishes both its reach and its funders.</p>
+    <p><strong>On the table.</strong> Reaches audiences in 190 countries, 2025. 5 billion YouTube views, up 130% year over year, 2025. A $100 million partnership with the LEGO Foundation, extended through 2028. All from Sesame Workshop's own published 2025 reporting, read 3 September 2026. <em>Period discipline:</em> an earlier annual report frames the same programs differently, so do not mix the two sets in one sentence.</p>
+    <details><summary>Check 1. Is the lane already claimed? Open the reasoning</summary>
+      <p><strong>Claimed, and the incumbent comes with a figure and an end date.</strong> This is the cleanest version of check 1 you will get. Most sweeps hand you a partner logo with no size and no dates. Here you get both: $100 million, running through 2028. An incumbent with a named end date is a different conversation from one without, because it tells you when the seat is next empty. One thing to check rather than assume: the LEGO Foundation sits there as a funder, and a funder's seat and a content partner's seat may not be the same seat.</p>
+    </details>
+    <details><summary>Check 2. Can they write a large check, and out of which budget? Open the reasoning</summary>
+      <p><strong>That $100 million is money arriving, not going out. Cannot tell from public information.</strong> This is the most common misread of a scale number, so it is worth slowing down every time. The LEGO Foundation is the one writing and Sesame Workshop is the one receiving, and a figure on the receiving side tells you nothing about what the receiving side spends. So which budget would pay for a course here? Cannot tell from public information. Write it down in those words. Organizations do not publish budget lines, so this is not a hole in your searching, and it becomes the first question you ask if you ever get a call.</p>
+    </details>
+    <details><summary>Check 3. Would a parent trust this logo next to Khan Academy's? Open what a partnerships team would weigh</summary>
+      <p><strong>Your call. There is no right answer printed here.</strong> A children's education brand next to a children's education brand is about as easy as this check gets, and it is worth noticing that the interesting edge runs the other way. Their brand is protected as carefully as Khan Academy's, so they are asking this question about you at the same time as you are asking it about them. A check that runs in both directions is still a judgement, not a fact. Your position stands. Nothing here overrules it.</p>
+    </details>
+    <details><summary>Check 4. Is this a trade or a donation? Open the reasoning</summary>
+      <p><strong>A trade on the evidence available, with the money question named and open.</strong> Add the three up. The funder seat is taken through 2028. The cash line cannot be traced. Check 3 came back easy. What is still on the table is reach: 190 countries and 5 billion views on one side, Khan Academy's own audience on the other. Both sides walk away with something they came for, so it is a trade, and the currency is not cash. Say it the honest way: a trade on the evidence available, with one question still holding it up.</p>
+    </details>
+
+    <h2>Candidate 3: Amira Learning</h2>
+    <p>Reading practice, K-12. Merged with Istation on 11 June 2024. Its own published scale figures do not all agree with each other.</p>
+    <p><strong>On the table.</strong> Microsoft Reading Coach is live and free, with educator features generally available since May 2025, from Microsoft's own announcement; Microsoft is already in the portfolio you went through in week one, so it is not a find here, it is the seat. Khan Academy announced its own Gemini-powered Reading Coach on 21 January 2026, forthcoming rather than live. "Serves 4 million students today", about a 15% share of US K-12, and more than 1,800 districts, from the company's own materials covering 2024 to 2026; elsewhere the same site says "4K+ districts", so two district figures from one source do not agree. Merged with Istation on 11 June 2024. All read 3 September 2026. <em>Not usable:</em> how much Amira has raised in total, because aggregators disagree by about $3 million and no primary source settles it.</p>
+    <details><summary>Check 1. Is the lane already claimed? Open the reasoning</summary>
+      <p><strong>Claimed twice, and one of the claimants is Khan Academy.</strong> Microsoft Reading Coach is live and free today, which is the hardest incumbent to argue with, because the incumbent costs nothing. And Khan Academy announced its own Reading Coach on 21 January 2026, forthcoming rather than live. Keep those two apart: similar names, two different products, present tense for one and future for the other. Check 1 looks at the partner and it looks at home.</p>
+    </details>
+    <details><summary>Check 2. Can they write a large check, and out of which budget? Open the reasoning</summary>
+      <p><strong>Cannot tell from public information. Their own two numbers disagree.</strong> Two problems, not one. Their own materials say more than 1,800 districts in one place and 4K+ in another, so before you reach a budget you have a source that disagrees with itself. And the funding figure that would give the rough shape of the house is not settled: aggregators differ by about $3 million and no primary source resolves it. When a company's own two numbers disagree, the disagreement is the finding, and you name it rather than picking the bigger one.</p>
+    </details>
+    <details><summary>Check 3. Would a parent trust this logo next to Khan Academy's? Open what a partnerships team would weigh</summary>
+      <p><strong>Your call. There is no right answer printed here.</strong> Reading practice for young children is the most sensitive room in the house. A parent looking at a reading product for a six-year-old is asking a harder question than a parent looking at test prep, and no amount of searching softens that. The 2024 merge raises a fair question too, not an accusation: the thing carrying the logo now may not be the thing that earned the reputation. Your position stands. Nothing here overrules it.</p>
+    </details>
+    <details><summary>Check 4. Is this a trade or a donation? Open the reasoning</summary>
+      <p><strong>Cannot tell from public information.</strong> This is where the four checks refuse to add up, and the honest thing is to say so on the page. Check 1 came back claimed twice, and one claimant is Khan Academy's own forthcoming product, whose scope nobody outside the building can state. Check 2 came back with a source that disagrees with itself and a funding figure nobody has settled. Check 3 was yours, and a judgement does not decide a money shape. Add those together and you do not have a trade and you do not have a donation.</p>
+      <p><strong>Where that leaves Amira Learning.</strong> No verdict. Not a pass, not a fail, and not unfinished work. Two named questions decide it: does Khan Academy's own forthcoming Reading Coach cover this lane, and which of their two district numbers is right.</p>
+    </details>
+
+    <h2>Where the three of them land</h2>
+    <ul>
+      <li><strong>Amazon Web Services.</strong> Ruled out on shape, not on size. The scale is there and the route in is documented, and both documented routes run to a giving desk.</li>
+      <li><strong>Sesame Workshop.</strong> Survives, with the money question named and open, and the shape changed on the way through: a co-creation or distribution lead, not a sponsorship one.</li>
+      <li><strong>Amira Learning.</strong> <strong>No verdict.</strong> Two named questions decide it and neither is public. That is where this one stops, and it stops there on purpose.</li>
+    </ul>
+    <div class="hedge2">
+      <p><strong>Check 3 came back three times with your name on it.</strong> There is no glyph anywhere on those three and there was never going to be. It has no query, and it is the one of the four you own outright.</p>
+      <p style="margin-bottom:0"><strong>Go and run the move yourself.</strong> Check 1 is a sweep of the organization's own pages, so start where the evidence above came from: <a href="https://aws.amazon.com">aws.amazon.com</a>, <a href="https://sesameworkshop.org">sesameworkshop.org</a> and <a href="https://amiralearning.com">amiralearning.com</a>.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var GLYPH = {ok:"✓", no:"×"};
+
+  /* =================================================================
+     The four checks. Fixed order, same four on every candidate, and the
+     same order as the strip on the left. Check 3 is not graded and has
+     no research move: it is judgement, and the module states outright
+     that it is the one the student owns. Do not attach evidence to it
+     and do not mark it right or wrong in a later pass.
+     ================================================================= */
+  var CHECKS = [
+    {q:"Is the lane already claimed?",                            s:"Lane claimed?"},
+    {q:"Can they write a large check, and out of which budget?",  s:"Which budget?"},
+    {q:"Would a parent trust this logo next to Khan Academy's?",  s:"Parent trust?"},
+    {q:"Is this a trade or a donation?",                          s:"Trade or donation?"}
+  ];
+
+  /* =================================================================
+     Three shortlist candidates. None of them is the worked example that
+     sits above this panel in the prose, none is on the
+     do-not-present-as-new-finds list, and every figure on screen carries
+     its period and where it was read. Facts come only from
+     08-reviews/p3-fact-verification-2026-09-03.md. A figure that file
+     marks unverified appears only inside a dashed "not usable" box, as
+     the thing you refuse to use.
+
+     The three are picked so the four checks land differently on each:
+     AWS resolves on every graded check and the answer is a no on shape;
+     Sesame Workshop resolves as a trade whose currency is not cash, with
+     its money question open; Amira Learning does not resolve at all, and
+     that ending is the teaching. Do not add a verdict to the third.
+     ================================================================= */
+  var CANDS = [
+    {
+      id:"aws",
+      name:"Amazon Web Services",
+      tag:"Cloud infrastructure",
+      who:"<b>What they are.</b> The cloud arm of Amazon. It runs a named education program and publishes what that program funds.",
+      ev:[
+        {t:"<b>$100 million</b> committed to its Education Equity Initiative.",
+         s:"Current commitment. AWS's own program pages, read 3 September 2026."},
+        {t:"AWS Imagine Grant: more than <b>$21 million</b> awarded to more than <b>180 nonprofits</b>.",
+         s:"Cumulative since 2018. AWS's own program pages, read 3 September 2026."},
+        {t:"Up to <b>$10,000</b> offered in social impact credits, as credits rather than cash.",
+         s:"Current. AWS's own program pages, read 3 September 2026."},
+        {flag:true,
+         t:"<b>Not usable.</b> A \"$30 million in credits, $1.5 million in prizes\" line circulates in write-ups about AWS and has no primary source behind it.",
+         s:"Unverified. It does not go on a shortlist and it is not used below."}
+      ],
+      checks:[
+        {
+          opts:[
+            {id:"open",  label:"Open. Nothing here puts anybody in the seat."},
+            {id:"claim", label:"Claimed, and the evidence tells you the size of the queue.", right:true},
+            {id:"unk",   label:"Cannot tell from public information."}
+          ],
+          why:"More than 180 nonprofits funded since 2018 is not an empty seat, it is a queue, and you now know roughly how long it is. That is not a dead end. It turns the pitch into one hard question you have to answer out loud: why Khan Academy rather than the next nonprofit in the line? Read the period while you are here. The figure is cumulative since 2018, so it tells you how many have been through, not how many are funded this year.",
+          wrong:{
+            open:"More than 180 nonprofits since 2018 is somebody in the seat, and quite a lot of somebodies.",
+            unk:"This is a check where the evidence does answer. Save those words for one that has actually come back empty."
+          },
+          note:"<b>The move.</b> Sweep the organization's own newsroom plus any partner or grantee pages it keeps. AWS publishes a grantee count, which plenty of organizations do not."
+        },
+        {
+          opts:[
+            {id:"mkt",  label:"Yes, and the route in is a partnerships and marketing conversation."},
+            {id:"give", label:"Yes, and the published routes are a grant program and product credits.", right:true},
+            {id:"unk",  label:"Cannot tell from public information."}
+          ],
+          why:"Scale is the easy half: $100 million committed and more than $21 million awarded since 2018. Nothing there is startling against the rough sense of scale Sarah gave you. Which budget is the real question, and here it is answered. Both published doors are giving doors: a grant program you apply to alongside everybody else, and credits you redeem rather than spend. Neither is a team that buys partnerships.",
+          wrong:{
+            mkt:"Nothing on the table names a partnerships desk. Both of the named routes are giving routes.",
+            unk:"Unusually, this one does not come back empty. Both doors are published, which is the rarer case."
+          },
+          note:"<b>The move.</b> Grants portal, or a team that buys partnerships and marketing. One is an application, the other is a conversation."
+        },
+        {
+          own:true,
+          opts:[
+            {id:"yes",  label:"It passes. I would put it next to ours without a caveat."},
+            {id:"open", label:"It passes, with a question I would name out loud."},
+            {id:"no",   label:"It does not pass for me."}
+          ],
+          why:"A cloud company is not a consumer education brand, so most parents will not read the logo as a claim about how their child learns. That is the easy side. The other side is the one every sponsor raises: Khan Academy's courses are free and carry no advertising, a funder's name on a course is not an advertisement, and where the line between those two sits is a judgement rather than a fact you can look up. Your position stands. Nothing here overrules it.",
+          note:"<b>No move on this one, and that is the point.</b> There is no query for it. It is the one of the four you own outright."
+        },
+        {
+          opts:[
+            {id:"trade", label:"A trade. Both sides walk away with something they came for."},
+            {id:"give",  label:"A donation, or credits, wearing a partnership's clothes.", right:true},
+            {id:"unk",   label:"Cannot tell from public information."}
+          ],
+          why:"Check 4 is the other three added up, so read them back. The lane has a queue in it. Both published routes are giving routes. Nothing on the table is a commercial door. Credits are real value and can be worth having, but an application is not the deal this team is looking for. Notice what this is not: not a no forever, a no through this door. Find a commercial door inside the same company and the answer changes.",
+          wrong:{
+            trade:"For a trade you need a counterparty who can trade. Both of the named doors hand things out rather than buy.",
+            unk:"Check 2 came back answered on this candidate, which is what makes this one answerable too."
+          },
+          note:"<b>Where that leaves Amazon Web Services.</b> The scale is there and the route in is documented. The route runs to the wrong desk. Ruled out on shape, not on size, and you can say exactly why."
+        }
+      ]
+    },
+
+    {
+      id:"sesame",
+      name:"Sesame Workshop",
+      tag:"Children's media, nonprofit",
+      who:"<b>What they are.</b> A nonprofit children's media and education organization. It publishes both its reach and its funders.",
+      ev:[
+        {t:"Reaches audiences in <b>190 countries</b>.",
+         s:"2025. Sesame Workshop's own published reporting, read 3 September 2026."},
+        {t:"<b>5 billion</b> YouTube views, up <b>130%</b> year over year.",
+         s:"2025. Same source, same read date."},
+        {t:"A <b>$100 million</b> partnership with the LEGO Foundation, extended through 2028.",
+         s:"2025, running through 2028. Same source, same read date."},
+        {flag:true,
+         t:"<b>Period discipline.</b> All three figures come from the 2025 reporting.",
+         s:"An earlier annual report frames the same programs differently, so do not mix the two sets in one sentence."}
+      ],
+      checks:[
+        {
+          opts:[
+            {id:"open",  label:"Open. No incumbent is named here."},
+            {id:"claim", label:"Claimed, and the incumbent comes with a figure and an end date.", right:true},
+            {id:"unk",   label:"Cannot tell from public information."}
+          ],
+          why:"This is the cleanest version of check 1 you will get. Most sweeps hand you a partner logo with no size and no dates. Here you get both: $100 million, running through 2028. An incumbent with a named end date is a different conversation from one without, because it tells you when the seat is next empty. One thing to check rather than assume: the LEGO Foundation sits there as a funder, and a funder's seat and a content partner's seat may not be the same seat.",
+          wrong:{
+            open:"The LEGO Foundation is named, sized at $100 million and dated through 2028. That is an incumbent.",
+            unk:"This is as answered as check 1 ever gets. Read the third line of the evidence again."
+          },
+          note:"<b>The move.</b> The same sweep as before, their own newsroom and partner pages, and this time read for the two things a logo does not give you: how big, and until when."
+        },
+        {
+          opts:[
+            {id:"yes", label:"Yes. The $100 million says so."},
+            {id:"unk", label:"That $100 million is money arriving, not going out. Cannot tell.", right:true},
+            {id:"no",  label:"No. A nonprofit this size could not."}
+          ],
+          why:"This is the most common misread of a scale number, so it is worth slowing down every time. The LEGO Foundation is the one writing and Sesame Workshop is the one receiving, and a figure on the receiving side tells you nothing about what the receiving side spends. So which budget would pay for a course here? Cannot tell from public information. Write it down in those words. Organizations do not publish budget lines, so this is not a hole in your searching.",
+          wrong:{
+            yes:"Read the direction of the arrow. The LEGO Foundation is writing and Sesame Workshop is receiving.",
+            no:"Nothing on the table says that, and organizations at this scale commission work all the time."
+          },
+          note:"<b>The move.</b> Grants portal or partnerships team. Here neither one is visible, so the honest output of the check is the unknown, named, and it becomes the first question you ask if you get a call."
+        },
+        {
+          own:true,
+          opts:[
+            {id:"yes",  label:"It passes. I would put it next to ours without a caveat."},
+            {id:"open", label:"It passes, with a question I would name out loud."},
+            {id:"no",   label:"It does not pass for me."}
+          ],
+          why:"A children's education brand next to a children's education brand is about as easy as this check gets, and it is worth noticing that the interesting edge runs the other way. Their brand is protected as carefully as Khan Academy's, so they are asking this question about you at the same time as you are asking it about them. A check that runs in both directions is still a judgement, not a fact. Your position stands. Nothing here overrules it.",
+          note:"<b>No move on this one either.</b> No query answers it, on any candidate. It is yours on all three."
+        },
+        {
+          opts:[
+            {id:"trade", label:"A trade on the evidence available, with the money question named and open.", right:true},
+            {id:"give",  label:"A donation. They would be doing Khan Academy a favour."},
+            {id:"unk",   label:"Cannot tell from public information."}
+          ],
+          why:"Add the three up. The funder seat is taken through 2028. The cash line cannot be traced. Check 3 came back easy. What is still on the table is reach: 190 countries and 5 billion views on one side, Khan Academy's own audience on the other. Both sides walk away with something they came for, so it is a trade, and the currency is not cash.",
+          wrong:{
+            give:"A favour runs one way. Reach on both sides runs both ways, which is the other answer.",
+            unk:"Something here does decide the shape. Two audiences are on the table, and neither side has to write a cheque for that to be a trade."
+          },
+          note:"<b>Where that leaves Sesame Workshop.</b> It survives, and the shape changed on the way through. Not a sponsorship lead. A co-creation or distribution lead, which is a different pitch to a different desk."
+        }
+      ]
+    },
+
+    {
+      id:"amira",
+      name:"Amira Learning",
+      tag:"Reading practice, K-12",
+      who:"<b>What they are.</b> A reading practice company, merged with Istation on 11 June 2024.",
+      ev:[
+        {t:"<b>Microsoft Reading Coach</b> is live and free, educator features generally available since <b>May 2025</b>.",
+         s:"Microsoft's own announcement, read 3 September 2026. Already in the portfolio you went through in week one, so not a find here. It is the seat."},
+        {t:"Khan Academy announced its own Gemini-powered <b>Reading Coach</b> on <b>21 January 2026</b>. Forthcoming, not live.",
+         s:"Two products, similar names, so keep the tenses apart."},
+        {t:"\"Serves <b>4 million students</b> today\", about a <b>15%</b> share of US K-12, and more than <b>1,800 districts</b>. Elsewhere the same site says <b>\"4K+ districts\"</b>.",
+         s:"2024 to 2026. The company's own materials, read 3 September 2026. Two district figures, one source, and they do not agree."},
+        {flag:true,
+         t:"<b>Not usable.</b> How much Amira has raised in total.",
+         s:"Aggregators disagree by about $3 million with no primary source, so no figure goes on the table."}
+      ],
+      checks:[
+        {
+          opts:[
+            {id:"open",  label:"Open. Reading practice is a big lane with room in it."},
+            {id:"claim", label:"Claimed twice, and one of the claimants is Khan Academy.", right:true},
+            {id:"unk",   label:"Cannot tell from public information."}
+          ],
+          why:"Microsoft Reading Coach is live and free today, which is the hardest incumbent to argue with, because the incumbent costs nothing. And Khan Academy announced its own Reading Coach on 21 January 2026, forthcoming rather than live. Keep those two apart: similar names, two different products, present tense for one and future for the other. Check 1 looks at the partner, and it looks at home.",
+          wrong:{
+            open:"A free product from Microsoft is already live in it, which is the hardest kind of room to find.",
+            unk:"Both claimants are named and dated on the table, so this one is answerable from what is in front of you."
+          },
+          note:"<b>The move.</b> Sweep the partner's pages, then sweep your own employer's. The incumbent people miss most often is the one down the corridor."
+        },
+        {
+          opts:[
+            {id:"yes", label:"Yes. Four million students and more than 1,800 districts is a company with money."},
+            {id:"unk", label:"Cannot tell from public information. Their own two numbers disagree.", right:true},
+            {id:"no",  label:"No. Nothing here shows money at this scale."}
+          ],
+          why:"Two problems, not one. Their own materials say more than 1,800 districts in one place and 4K+ in another, so before you reach a budget you have a source that disagrees with itself. And the funding figure that would give the rough shape of the house is not settled: aggregators differ by about $3 million and no primary source resolves it. When a company's own two numbers disagree, the disagreement is the finding, and you name it rather than picking the bigger one.",
+          wrong:{
+            yes:"Student counts are not budget lines, and one of those counts is contradicted on the same site.",
+            no:"Nothing on the table rules the money out either. Absence of a figure is not a figure."
+          },
+          note:"<b>The move.</b> Grants portal or partnerships team, and one step before that: do the organization's own numbers agree with each other?"
+        },
+        {
+          own:true,
+          opts:[
+            {id:"yes",  label:"It passes. I would put it next to ours without a caveat."},
+            {id:"open", label:"It passes, with a question I would name out loud."},
+            {id:"no",   label:"It does not pass for me."}
+          ],
+          why:"Reading practice for young children is the most sensitive room in the house. A parent looking at a reading product for a six-year-old is asking a harder question than a parent looking at test prep, and no amount of searching softens that. The 2024 merge raises a fair question too, not an accusation: the thing carrying the logo now may not be the thing that earned the reputation. Your position stands. Nothing here overrules it.",
+          note:"<b>No move, third time.</b> There is still no query for it, and there is not going to be. Whatever the other three come back with, this one is yours."
+        },
+        {
+          opts:[
+            {id:"trade", label:"A trade. Both sides get something they came for."},
+            {id:"give",  label:"A donation wearing a partnership's clothes."},
+            {id:"unk",   label:"Cannot tell from public information.", right:true}
+          ],
+          why:"This is where the four checks refuse to add up, and the honest thing is to say so on the page. Check 1 came back claimed twice, and one claimant is Khan Academy's own forthcoming product, whose scope nobody outside the building can state. Check 2 came back with a source that disagrees with itself and a funding figure nobody has settled. Check 3 was yours, and a judgement does not decide a money shape. Add those together: you do not have a trade, and you do not have a donation.",
+          wrong:{
+            trade:"On what evidence? Check 1 says the lane may already belong to your own employer, and check 2 has a source that contradicts itself.",
+            give:"Nothing on the table points at a giving door either. There is not enough here to call it in either direction."
+          },
+          note:"<b>Where that leaves Amira Learning.</b> No verdict. Not a pass, not a fail, and not unfinished work. Two named questions decide it: does Khan Academy's own forthcoming Reading Coach cover this lane, and which of their two district numbers is right."
+        }
+      ]
+    }
+  ];
+
+  var ROWS = [
+    ["Amazon Web Services","Ruled out on shape, not on size. The scale is there and the route in is documented, and both documented routes run to a giving desk."],
+    ["Sesame Workshop","Survives, with the money question named and open, and the shape changed on the way through: a co-creation or distribution lead, not a sponsorship one."],
+    ["Amira Learning","<b>No verdict.</b> Two named questions decide it and neither is public. That is where this one stops, and it stops there on purpose."]
+  ];
+
+  var NCH = 4, NCA = 3, TOTAL = NCH * NCA;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["pc","segc","fc","cname","ctag","evpanel","evlab","evscroll","evlist","evmore","strip",
+   "vlab","choices","reason","rlead","rbody","rnote","cback","cnext","credo","chint",
+   "pz","segz","fz","rows","zback","zreset","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* ---------------------------------------------------------------
+     State is per device and in memory only. Nothing is written to
+     storage, nothing is sent anywhere, and the panel never tells the
+     student their answers are kept: the module's own submission table
+     is what actually persists, and the prose above this embed already
+     says so once. Do not add a store in a later pass.
+     --------------------------------------------------------------- */
+  var picks = {};                 /* "ci-ki" -> option id */
+  var ci = 0, ki = 0;
+
+  function key(a,b){ return a + "-" + b; }
+  function pick(a,b){ return picks[key(a,b)]; }
+  function cur(){ return CANDS[ci].checks[ki]; }
+  function optOf(chk, id){
+    for(var i=0;i<chk.opts.length;i++){ if(chk.opts[i].id === id) return chk.opts[i]; }
+    return null;
+  }
+  function rightOf(chk){
+    for(var i=0;i<chk.opts.length;i++){ if(chk.opts[i].right) return chk.opts[i]; }
+    return null;
+  }
+
+  function announce(m){ el.live.textContent = m; }
+
+  /* twelve pips in three groups of four, one group per candidate. The
+     current pip is taller as well as filled, so position survives with no
+     colour at all. */
+  function pips(node, at){
+    var out = "";
+    for(var c=0;c<NCA;c++){
+      if(c) out += '<i class="sp"></i>';
+      for(var k=0;k<NCH;k++){
+        var i = c*NCH + k;
+        out += '<i class="' + (i === at ? "here" : (i < at ? "on" : "")) + '"></i>';
+      }
+    }
+    node.innerHTML = out;
+  }
+
+  /* Every scrolling region says so, rather than letting a sentence end at
+     the panel edge with no affordance. Measured synchronously: reading
+     scrollHeight forces layout, and deferring this to requestAnimationFrame
+     leaves the flag hidden under headless rendering. The flag is hidden
+     before the read so its own height is never counted. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+
+  var FRAMES = ["fc","fz"];
+  function show(which){ FRAMES.forEach(function(f){ el[f].hidden = (f !== which); }); }
+
+  /* ---------------- the check frame ---------------- */
+
+  function drawEvidence(){
+    var c = CANDS[ci];
+    var out = '<p class="ev">' + c.who + "</p>";
+    c.ev.forEach(function(e){
+      out += '<p class="ev' + (e.flag ? " flag" : "") + '">' + e.t +
+             '<span class="src">' + e.s + "</span></p>";
+    });
+    el.evlist.innerHTML = out;
+    el.evscroll.scrollTop = 0;
+    flag(el.evscroll, el.evmore);
+  }
+
+  function drawStrip(){
+    var out = "";
+    for(var k=0;k<NCH;k++){
+      var state = pick(ci,k) ? "done" : (k === ki ? "now" : "todo");
+      var mk = state === "done" ? GLYPH.ok : (state === "now" ? "▸" : "·");
+      out += '<p class="' + (k === ki ? "now" : "") + '">' +
+               '<span class="mk" aria-hidden="true">' + mk + "</span>" +
+               '<span>' + (k+1) + ". " + CHECKS[k].s +
+                 (state === "done" ? ' <span class="sr">answered</span>' : "") +
+                 (state === "now" ? ' <span class="sr">you are here</span>' : "") +
+               "</span></p>";
+    }
+    el.strip.innerHTML = out;
+  }
+
+  function buildChoices(){
+    var chk = cur(), out = "";
+    chk.opts.forEach(function(o){
+      out += '<button class="ch" type="button" data-o="' + o.id + '" aria-pressed="false">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span class="txt">' + o.label + "</span></button>";
+    });
+    el.choices.innerHTML = out;
+    /* aria-disabled, not disabled. A disabled button leaves the tab order,
+       so a keyboard screen-reader user could never land on a settled option
+       and hear what it is. These stay reachable and are held inert by the
+       two guards below, one for pointer and one for keyboard. */
+    choiceButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(locked(b)) return;
+        commit(b.getAttribute("data-o"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(!locked(b)) return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function choiceButtons(){
+    return Array.prototype.slice.call(el.choices.querySelectorAll("button.ch"));
+  }
+  function locked(b){ return b.getAttribute("aria-disabled") === "true"; }
+
+  function paintChoices(){
+    var chk = cur(), mine = pick(ci,ki), settled = !!mine;
+    choiceButtons().forEach(function(b){
+      var id = b.getAttribute("data-o"), o = optOf(chk, id);
+      b.classList.remove("right","out","mine","dim","picked");
+      b.querySelector(".dot").textContent = "";
+      b.removeAttribute("aria-label");
+      b.setAttribute("aria-pressed", id === mine ? "true" : "false");
+      b.setAttribute("aria-disabled", settled ? "true" : "false");
+      if(!settled) return;
+      if(id === mine) b.classList.add("picked");
+
+      if(chk.own){
+        /* nothing is graded here, so nothing carries a tick or a cross */
+        if(id === mine){
+          b.classList.add("mine");
+          b.setAttribute("aria-label", o.label + " Your position.");
+        } else {
+          b.classList.add("dim");
+        }
+        return;
+      }
+      /* the glyph reports the fact and not the pick: a tick on the option
+         that actually answers the check, whether or not they chose it, and
+         a cross on the ones that do not. Which one they chose is carried by
+         the pressed border and named in the reasoning lead, so no glyph
+         ever has two meanings. */
+      if(o.right){
+        b.classList.add("right");
+        b.querySelector(".dot").textContent = GLYPH.ok;
+        b.setAttribute("aria-label", o.label + " This is the answer." + (id === mine ? " You picked this." : ""));
+      } else {
+        b.classList.add("out","dim");
+        b.querySelector(".dot").textContent = GLYPH.no;
+        b.setAttribute("aria-label", o.label + " Does not answer this check." + (id === mine ? " You picked this." : ""));
+      }
+    });
+  }
+
+  function clearReason(){
+    el.reason.hidden = true;
+    el.reason.classList.remove("on");
+    el.rlead.innerHTML = "";
+    el.rbody.innerHTML = "";
+    el.rnote.hidden = true;
+    el.rnote.innerHTML = "";
+  }
+
+  function paintReason(){
+    var chk = cur(), mine = pick(ci,ki);
+    if(!mine){ clearReason(); return; }
+    var o = optOf(chk, mine), body = "";
+
+    if(chk.own){
+      el.rlead.innerHTML = "<b>Your call.</b> No glyph on this one, and no grade. Here is what a partnerships team would weigh";
+      body = "<p>" + chk.why + "</p>";
+    } else if(o && o.right){
+      el.rlead.innerHTML = "<b>You had it.</b> Why this is the answer";
+      body = "<p>" + chk.why + "</p>";
+    } else {
+      el.rlead.innerHTML = "<b>Not this one.</b> Why the evidence points elsewhere";
+      body = "<p>" + (chk.wrong && chk.wrong[mine] ? chk.wrong[mine] : "") + "</p><p>" + chk.why + "</p>";
+    }
+    el.rbody.innerHTML = body;
+    el.rnote.innerHTML = chk.note || "";
+    el.rnote.hidden = !chk.note;
+    el.reason.hidden = false;
+  }
+
+  function drawCheck(){
+    var c = CANDS[ci], chk = cur(), mine = pick(ci,ki);
+    el.pc.textContent = "Candidate " + (ci+1) + " of " + NCA + " · Check " + (ki+1) + " of " + NCH;
+    pips(el.segc, ci*NCH + ki);
+    el.cname.textContent = c.name;
+    el.ctag.textContent = c.tag;
+    el.vlab.innerHTML = '<span class="n">Check ' + (ki+1) + ".</span> " + CHECKS[ki].q;
+
+    drawEvidence();
+    drawStrip();
+    buildChoices();
+    paintChoices();
+    paintReason();
+
+    el.cback.hidden = (ci === 0 && ki === 0);
+    el.cnext.hidden = !mine;
+    el.credo.hidden = !(mine && chk.own);
+    if(mine){
+      el.cnext.textContent = (ki < NCH - 1)
+        ? "Next check"
+        : (ci < NCA - 1 ? "Next: candidate " + (ci+2) + " of " + NCA : "Last frame");
+    }
+
+    var n = chk.opts.length;
+    el.chint.innerHTML = mine
+      ? "The reasoning is on this frame, under your answer. <span class=\"key\">&larr;</span> and <span class=\"key\">&rarr;</span> move between checks."
+      : (chk.own
+          ? "<b>Take a position.</b> Nothing appears until you do, and nothing here is graded. Keys <span class=\"key\">1</span> to <span class=\"key\">" + n + "</span> also work."
+          : "<b>Commit first.</b> Nothing appears until you pick. Keys <span class=\"key\">1</span> to <span class=\"key\">" + n + "</span> also work.");
+  }
+
+  function commit(id){
+    var chk = cur();
+    picks[key(ci,ki)] = id;
+    drawCheck();
+    if(!reduce){
+      el.reason.classList.remove("on");
+      void el.reason.offsetWidth;
+      el.reason.classList.add("on");
+    }
+    /* focus is placed by hand on every state change, so it can never fall
+       back to <body> */
+    el.reason.focus();
+    var o = optOf(chk, id);
+    if(chk.own){
+      announce("You took the position: " + o.label + " Nothing is graded on this check. What a partnerships team would weigh is open. " + el.rbody.textContent);
+    } else if(o && o.right){
+      announce("You said " + o.label + " That is the answer. " + el.rbody.textContent);
+    } else {
+      var r = rightOf(chk);
+      announce("You said " + o.label + " Not this one. The option that answers the check is: " + (r ? r.label : "") + " " + el.rbody.textContent);
+    }
+  }
+
+  /* ---------------- the close ---------------- */
+
+  function drawClose(){
+    el.pz.textContent = "Done · " + NCA + " candidates, " + NCH + " checks each";
+    pips(el.segz, TOTAL);
+    el.rows.innerHTML = ROWS.map(function(r){
+      return '<div class="row"><span class="nm">' + r[0] + '</span><span class="rr">' + r[1] + "</span></div>";
+    }).join("");
+  }
+
+  /* ---------------- navigation ----------------
+     Every one of these lands focus on a real control or on a panel that
+     takes focus. Nothing here can leave focus on <body>, and nothing
+     dead-ends: every frame has a way forward and a way back. */
+
+  function goCheck(a,b){
+    ci = Math.max(0, Math.min(NCA-1, a));
+    ki = Math.max(0, Math.min(NCH-1, b));
+    show("fc");
+    drawCheck();
+    /* an answered check has its reasoning on screen already, so arriving
+       lands on the way forward. An unanswered one lands on the evidence,
+       never on an option button: the fixed list would hand the answer to
+       whoever presses Enter on arrival. */
+    if(pick(ci,ki)){ el.cnext.focus(); return; }
+    el.evpanel.focus();
+  }
+  function goClose(){
+    show("fz");
+    drawClose();
+    el.zback.focus();
+  }
+  function canNext(){ return !!pick(ci,ki); }
+  function nextStep(){
+    if(!canNext()) return;
+    if(ki < NCH-1){ goCheck(ci, ki+1); return; }
+    if(ci < NCA-1){ goCheck(ci+1, 0); return; }
+    goClose();
+  }
+  function prevStep(){
+    if(ki > 0){ goCheck(ci, ki-1); return; }
+    if(ci > 0){ goCheck(ci-1, NCH-1); return; }
+  }
+
+  el.cback.addEventListener("click", prevStep);
+  el.cnext.addEventListener("click", nextStep);
+  el.credo.addEventListener("click", function(){
+    delete picks[key(ci,ki)];
+    drawCheck();
+    var first = el.choices.querySelector("button.ch");
+    if(first) first.focus();
+    announce("Your position is open again.");
+  });
+
+  el.zback.addEventListener("click", function(){ goCheck(NCA-1, NCH-1); });
+  el.zreset.addEventListener("click", function(){
+    picks = {};
+    goCheck(0,0);
+    announce("Cleared. Three candidates and twelve checks to run again.");
+  });
+
+  /* Plain Tab and Enter operate every control in this file. The number keys
+     and the arrows below are additions, not a protocol: nothing in here is
+     reachable only by keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(!el.fc.hidden){
+      var n = cur().opts.length;
+      if(e.key >= "1" && e.key <= String(n)){
+        var b = choiceButtons()[parseInt(e.key, 10) - 1];
+        if(b && !locked(b)){ e.preventDefault(); commit(b.getAttribute("data-o")); return; }
+      }
+      if(e.key === "ArrowRight"){ if(canNext()){ e.preventDefault(); nextStep(); } return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); prevStep(); return; }
+    }
+    if(!el.fz.hidden){
+      if(e.key === "ArrowLeft"){ e.preventDefault(); goCheck(NCA-1, NCH-1); }
+    }
+  });
+
+  /* swipe, the third input method. Horizontal only, and it never commits
+     an answer: it does exactly what the two visible buttons do. */
+  (function(){
+    var x0 = null, y0 = null;
+    var stage = document.getElementById("stage");
+    stage.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1){ x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, {passive:true});
+    stage.addEventListener("touchend", function(e){
+      if(x0 === null || !e.changedTouches || !e.changedTouches.length) return;
+      var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if(Math.abs(dx) < 55 || Math.abs(dy) > 45) return;
+      if(!el.fc.hidden){
+        if(dx < 0){ nextStep(); } else { prevStep(); }
+      } else if(!el.fz.hidden && dx > 0){
+        goCheck(NCA-1, NCH-1);
+      }
+    }, {passive:true});
+  })();
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.evscroll, el.evmore);
+  });
+
+  goCheck(0,0);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run force
+     a state without hand-driving the UI */
+  window.__ex = {
+    go:goCheck, close:goClose,
+    commit:function(a,b,id){ goCheck(a,b); commit(id); },
+    rightId:function(a,b){ var r = rightOf(CANDS[a].checks[b]); return r ? r.id : null; },
+    optIds:function(a,b){ return CANDS[a].checks[b].opts.map(function(o){ return o.id; }); },
+    isOwn:function(a,b){ return !!CANDS[a].checks[b].own; },
+    reset:function(){ picks = {}; },
+    state:function(){ return {ci:ci, ki:ki, picks:picks}; }
+  };
+})();
+</script>
+</body>
+</html>

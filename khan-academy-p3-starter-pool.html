@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The starter pool</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     flag also carries a glyph and a written label.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between-state movement   */
+    --t-reveal:560ms;  /* a flag settling into place */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:12px 32px 10px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header: the count, readable from first paint, and the
+         verified-as-of line, which is a maintenance requirement and
+         not decoration: these figures and links go stale fast. ---- */
+  .top{flex:0 0 auto;display:flex;align-items:baseline;gap:12px;margin-bottom:3px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .vfy{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:20px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  h1 .tag{vertical-align:3px;margin-left:8px}
+
+  .tag{
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:1px 5px;flex:0 0 auto;
+  }
+
+  /* ---- the two filter rows plus search ---- */
+  .filters{flex:0 0 auto;display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
+  .frow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .flab{
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--body);width:52px;flex:0 0 auto;
+  }
+  button.chip{
+    font-family:inherit;font-size:11.5px;font-weight:600;line-height:1.2;color:var(--title);
+    background:var(--highlight);border:1.5px solid transparent;border-radius:20px;
+    padding:4px 10px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;gap:5px;
+    transition:border-color var(--t-fast) var(--ease-out),background-color var(--t-fast) var(--ease-out);
+  }
+  button.chip .gl{font-size:10px;font-weight:700;line-height:1;color:var(--on-highlight)}
+  button.chip:hover:not(:disabled){border-color:var(--on-highlight)}
+  button.chip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.chip[aria-pressed="true"]{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  button.chip[aria-pressed="true"] .gl{color:var(--bg)}
+  /* a switched-off chip stays readable rather than becoming a grey ghost:
+     .65 composites #1C1B1B on #DCE1FF to 4.82:1, above the body floor, and
+     the dashed border carries the state as a shape rather than as a tint */
+  button.chip:disabled{cursor:default;opacity:.65;border-style:dashed;border-color:var(--line)}
+
+  .srch{position:relative;flex:0 0 auto;margin-left:auto}
+  .srch input{
+    font-family:inherit;font-size:12px;color:var(--title);background:var(--bg);
+    border:1.5px solid var(--line);border-radius:20px;padding:4px 26px 4px 11px;width:186px;
+  }
+  .srch input::placeholder{color:var(--body)}
+  .srch input:focus{outline:3px solid var(--on-highlight);outline-offset:1px;border-color:var(--on-highlight)}
+  .srch button{
+    position:absolute;right:2px;top:1px;font-family:inherit;font-size:13px;font-weight:700;
+    line-height:1;color:var(--on-highlight);background:transparent;border:0;cursor:pointer;
+    padding:5px 7px;border-radius:14px;
+  }
+  .srch button:focus-visible{outline:2px solid var(--on-highlight);outline-offset:0}
+
+  /* ---- the board: a list on the left, the whole record on the right.
+         Master and detail, because a reference the student comes back to
+         on day four must not make them re-open a row to read it. ---- */
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;grid-template-columns:368px 1fr;gap:14px}
+  .pcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:8px 10px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{font-size:11px;font-weight:600;color:var(--on-highlight);margin-top:4px;flex:0 0 auto}
+
+  /* the banner that answers a search for a name that is deliberately
+     not a row, so no name in the verification file is ever silently
+     missing from this board */
+  .banner{
+    flex:0 0 auto;border:1.5px dashed var(--on-highlight);border-radius:8px;
+    padding:5px 9px;margin-bottom:5px;font-size:11.5px;line-height:1.38;
+  }
+  .banner b{color:var(--title);font-weight:600}
+
+  /* ---- the list ---- */
+  .list{display:flex;flex-direction:column;gap:3px}
+  button.orow{
+    display:flex;align-items:center;gap:8px;text-align:left;width:100%;
+    font-family:inherit;background:var(--bg);border:1.5px solid transparent;border-radius:7px;
+    padding:5px 8px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out);
+  }
+  button.orow .nm{
+    flex:1 1 auto;min-width:0;font-size:12.5px;font-weight:600;line-height:1.25;color:var(--title);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  button.orow:hover{border-color:var(--on-highlight)}
+  button.orow:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.orow[aria-current="true"]{border-color:var(--on-highlight);background:var(--bg)}
+  button.orow[aria-current="true"] .nm{color:var(--on-highlight)}
+
+  .cat{
+    flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--body);
+  }
+
+  /* ---- the status flag. Glyph, plus a written word, plus a border
+         style. Three signals, none of them colour on its own. ---- */
+  .flag{
+    flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;
+    font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    border:1.5px solid var(--on-highlight);border-radius:5px;padding:1px 5px;
+    color:var(--on-highlight);white-space:nowrap;
+  }
+  .flag .gl{font-size:10px;line-height:1}
+  .flag.f-open{background:var(--on-highlight);color:var(--bg)}
+  .flag.f-ka{background:var(--tint2);border-style:solid}
+  .flag.f-comp{background:transparent;border-style:dashed}
+  .flag.f-vfy{background:transparent;border-style:dotted}
+  /* the list flag is abbreviated for scanning; the detail panel and the
+     screen-reader label both carry the flag in full */
+  button.orow .flag{font-size:9px;padding:1px 4px}
+
+  /* ---- the guess control, optional and never blocking ---- */
+  .guess{
+    flex:0 0 auto;display:flex;align-items:center;gap:5px;
+  }
+  button.gs{
+    font-family:inherit;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--on-highlight);background:transparent;border:1.5px solid var(--on-highlight);
+    border-radius:5px;padding:1px 5px;cursor:pointer;
+    transition:background-color var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  button.gs:hover{background:var(--on-highlight);color:var(--bg)}
+  button.gs:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .revealed{animation:settle var(--t-reveal) var(--ease-over) both}
+  @keyframes settle{
+    from{opacity:0;transform:scale(.86)}
+    to{opacity:1;transform:none}
+  }
+
+  /* ---- the detail: the whole record for one organization ---- */
+  .dh{flex:0 0 auto;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+  .dh h2{font-size:16.5px;line-height:1.2;font-weight:600;color:var(--title)}
+  .fld{font-size:12.5px;line-height:1.44;margin-bottom:7px}
+  .fld:last-child{margin-bottom:0}
+  .fld .lab{
+    display:block;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:1px;
+  }
+  .fld b{color:var(--title);font-weight:600}
+  .num{
+    background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:6px 9px;
+    margin-bottom:7px;
+  }
+  .num .big{font-size:14.5px;font-weight:600;line-height:1.3;color:var(--title);display:block}
+  .num .per{font-size:11.5px;line-height:1.35;display:block;margin-top:2px}
+  .num .cav{font-size:11.5px;line-height:1.35;display:block;margin-top:3px;font-style:normal}
+  .num .cav b{color:var(--title);font-weight:600}
+  /* the labels inside .num are a class, never an inline style: an inline
+     font-size cannot be reached by the 599px breakpoint below */
+  .nlab{
+    display:block;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:2px;
+  }
+  a.src{
+    font-size:11.5px;font-weight:600;color:var(--on-highlight);
+    text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:2px;
+  }
+  a.src:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:3px}
+
+  /* the notes state, which is also the empty state: the board's own
+     caveats live here rather than in a modal nobody opens */
+  .nh{font-size:13px;font-weight:600;color:var(--title);margin:9px 0 3px}
+  .nh:first-child{margin-top:0}
+  .nb{font-size:12px;line-height:1.44;margin-bottom:6px}
+  .nb b{color:var(--title);font-weight:600}
+  .nl{font-size:12px;line-height:1.44;margin:0 0 6px 17px}
+  .nl li{margin-bottom:3px}
+
+  .empty{font-size:13px;line-height:1.45}
+  .empty b{color:var(--title);font-weight:600}
+
+  /* ---- the bar. margin-top plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row. ---- */
+  .bar{margin-top:7px;flex:0 0 auto;display:flex;align-items:center;gap:8px;min-height:32px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:11.5px;padding:6px 11px}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{flex:1 1 auto;min-width:0;font-size:11px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- 600 to 899px: fluid 16:9, type down one step ---- */
+  @media (min-width:600px) and (max-width:899px){
+    .frame{padding:12px 22px 10px}
+    .board{grid-template-columns:330px 1fr;gap:11px}
+    button.orow .nm{font-size:12px}
+    .fld{font-size:12px}
+  }
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide.
+         The two side-by-side panels become sequential: filters, then the
+         list, then the record for whatever is selected. ---- */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 14px 34px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:6px}
+    .prog{font-size:14px;white-space:normal}
+    .vfy{margin-left:0;font-size:13px;white-space:normal;width:100%}
+    h1{font-size:23px}
+    h1 .tag{display:inline-block;margin-left:0;vertical-align:baseline;font-size:13px}
+    .flab{font-size:13px}
+    .filters{gap:9px;margin-bottom:12px}
+    .frow{gap:6px}
+    .flab{width:100%}
+    button.chip{font-size:14px;padding:8px 13px}
+    button.chip .gl,.flag .gl{font-size:14px}
+    .srch{margin-left:0;width:100%}
+    .srch input{width:100%;font-size:16px;padding:9px 34px 9px 14px}
+    .srch button{font-size:17px;padding:8px 10px;top:2px}
+    /* align-content, not just align-items: a stretched one column grid
+       hands its leftover height to the auto rows, which opens a dead band
+       between the two stacked panels on a tall phone. */
+    .board{grid-template-columns:1fr;gap:14px;flex:0 0 auto;align-items:start;align-content:start}
+    .scroll{overflow:visible}
+    .more{display:none}
+    .panel{padding:13px 14px}
+    button.orow{padding:11px 11px;flex-wrap:wrap;gap:7px}
+    button.orow .nm{font-size:16px;white-space:normal;flex:1 1 100%}
+    button.orow .flag{font-size:13px;padding:2px 7px}
+    .cat{font-size:13px}
+    .flag{font-size:13px;padding:2px 7px}
+    button.gs{font-size:13px;padding:7px 11px}
+    .banner{font-size:15px;padding:11px 13px;margin-bottom:11px}
+    .dh h2{font-size:20px}
+    .fld{font-size:16px}
+    .fld .lab{font-size:13px}
+    .num{padding:11px 13px}
+    .num .big{font-size:18px}
+    .num .per,.num .cav{font-size:15px}
+    .nlab{font-size:13px}
+    a.src{font-size:15px}
+    .nh{font-size:17px}
+    .nb,.nl{font-size:16px}
+    .empty{font-size:16px}
+    .bar{margin-top:16px;min-height:0}
+    button.nav{font-size:16px;padding:12px 16px}
+    button.nav.small{font-size:14px;padding:10px 13px}
+    .hint{font-size:14px}
+    .key{font-size:13px;padding:1px 5px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    /* the one value reveal in this build survives as a single cross-fade,
+       which is what the spec asks for rather than nothing at all */
+    .revealed{animation:xfade 120ms linear both!important}
+    @keyframes xfade{from{opacity:0}to{opacity:1}}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ==================== ONE BOARD, NOT A SLIDESHOW ====================
+       This is a reference the student returns to in 3.1.1, in 3.1.4, again
+       in Project 3 Step 2 and again in Project 4. It has no frames and no
+       sequence, so there is nothing to navigate back from and no quiz to
+       be forced through on a return visit. The header carries the live
+       count in place of "3 of 7", the filters and the search are the only
+       navigation, and every filter, the search text and the selected row
+       are remembered on the device. -->
+  <div class="frame" id="fboard">
+    <div class="top">
+      <span class="prog" id="count">Showing 27 of 27 organizations</span>
+      <span class="vfy">Verified as of 3 September 2026</span>
+    </div>
+
+    <h1>The starter pool<span class="tag">Wes's list</span></h1>
+
+    <div class="filters">
+      <div class="frow" role="group" aria-label="Filter by category">
+        <span class="flab" aria-hidden="true">Category</span>
+        <span id="catchips" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+        <span class="srch">
+          <label class="sr" for="q">Search the pool by name, number, money-model fit or blocker</label>
+          <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search names and text">
+          <button id="qclear" type="button" aria-label="Clear the search" hidden>&times;</button>
+        </span>
+      </div>
+      <div class="frow" role="group" aria-label="Filter by status">
+        <span class="flab" aria-hidden="true">Status</span>
+        <span id="statchips" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="pcol">
+        <div class="banner" id="banner" hidden></div>
+        <section class="panel" aria-label="The pool, filtered" style="flex:1 1 auto">
+          <div class="scroll" id="lscroll">
+            <div class="list" id="list" role="list" aria-label="Organizations in the pool"></div>
+            <p class="empty" id="noneleft" hidden></p>
+          </div>
+          <div class="more" id="lmore" hidden>More below. Scroll inside this panel.</div>
+        </section>
+      </div>
+
+      <div class="pcol">
+        <section class="panel" id="detail" tabindex="-1" aria-live="polite" aria-atomic="false"
+                 aria-label="The record for the selected organization" style="flex:1 1 auto">
+          <div class="scroll" id="dscroll">
+            <div id="dbody"></div>
+          </div>
+          <div class="more" id="dmore" hidden>More below. Scroll inside this panel.</div>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="clearall" type="button">Clear filters</button>
+      <button class="nav ghost small" id="notes" type="button">Notes and gaps</button>
+      <button class="nav small" id="guessbtn" type="button">Cover six flags and guess</button>
+      <span class="hint" id="hint"></span>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:1040px;margin:0 auto;padding:26px 20px 48px;font-size:15px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:8px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .vfy2{border:2px dashed #001D69;border-radius:9px;padding:10px 13px;margin-bottom:14px;font-weight:600;color:#001D69}
+    .nsf .wrap{overflow-x:auto;border:1.5px solid rgba(0,29,105,.26);border-radius:9px;margin-bottom:14px}
+    .nsf table{border-collapse:collapse;width:100%;min-width:900px;font-size:13.5px}
+    .nsf th,.nsf td{text-align:left;vertical-align:top;padding:7px 9px;border-bottom:1px solid rgba(0,29,105,.26);line-height:1.4}
+    .nsf th{background:#DCE1FF;color:#1C1B1B;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+    .nsf tr:last-child td{border-bottom:0}
+    .nsf td.fl{white-space:nowrap;font-weight:600;color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>The starter pool</h1>
+    <p>With scripts blocked, here is the same pool as a plain table: every organization, its category, its one hard number with the period that number covers, the money-model fit, the blocker, and its status flag. The filters are the only thing missing, so the table is sorted by status instead. Read the status column before anything else.</p>
+    <div class="vfy2">Verified as of 3 September 2026. These numbers and links go stale faster than anything else in the program. Re-source any figure before it goes into a pitch.</div>
+    <p>The interactive version of this board, with the category and status filters, is at <a href="https://smitabudhiaextern.github.io/extern-html-pages/khan-academy-p3-starter-pool.html">smitabudhiaextern.github.io/extern-html-pages/khan-academy-p3-starter-pool.html</a>.</p>
+
+    <h2>The pool, 27 organizations</h2>
+    <div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Organization</th><th>Category</th><th>The number, and the period it covers</th>
+        <th>Money-model fit</th><th>Blocker</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><strong>International Baccalaureate</strong></td><td>Credentialing and assessment</td><td>1.95 million or more students. As of August 2026. The freshest number in the pool. <a href="https://www.ibo.org/about-the-ib/facts-and-figures/">Source</a></td><td>B2B2C institutional</td><td>The IB sets curriculum of its own, so the first question is whether Khan Academy content maps onto IB assessment or competes with it.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>Cambium Assessment</strong></td><td>Credentialing and assessment</td><td>15.8 million students across 29 states. 2026. <a href="https://www.cambiumassessment.com/">Source</a></td><td>Licensing</td><td>The organization that pays is a state, not Cambium, so ask who signs and on whose procurement calendar.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>Scholastic</strong></td><td>Content media and publishers</td><td>Revenue of $1,625.5 million. Fiscal year ended 31 May 2025, from the 10-K filed 25 July 2025. <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=SCHL&amp;type=10-K">Source</a></td><td>Licensing</td><td>The same filing reports a net loss of $1.9 million for that year against $12.1 million of income the year before, so ask which budget this would come out of.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>CompTIA</strong></td><td>Credentialing and assessment</td><td>3.6 million or more certifications awarded. Cumulative, and CompTIA publishes no start year, so attach no year to it. <a href="https://www.comptia.org/about-us">Source</a></td><td>Licensing</td><td>With no period on the figure it cannot be turned into a yearly volume, which is the number a pitch actually needs.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>Sesame Workshop</strong></td><td>Content media and publishers</td><td>5 billion YouTube views, up 130 percent year on year. 2025. <a href="https://www.sesameworkshop.org/press-room">Source</a></td><td>Content sponsorship</td><td>The LEGO Foundation's $100 million partnership was extended through 2028, so the funded early-learning seat here already has somebody in it.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>AWS</strong></td><td>AI and cloud</td><td>$100 million committed to the Education Equity Initiative. Current commitment. <a href="https://press.aboutamazon.com/aws">Source</a></td><td>In-kind sponsorship, with a commercial-AI licensing conversation possible next to it</td><td>Credits are the easy yes. Ask early whether any of the commitment can arrive as something other than credits.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>Amira Learning</strong></td><td>EdTech tools</td><td>"Serves 4 million students today", a company statement covering 2024 to 2026. <a href="https://www.amiralearning.com/">Source</a></td><td>Licensing</td><td>Microsoft already ships a reading coach free, so this one has real traction and still needs an answer to why anyone would pay for a second.</td><td class="fl">&#9671; Open</td></tr>
+        <tr><td><strong>Cognia</strong></td><td>Credentialing and assessment</td><td>17 million students. Undated marketing copy, no year published. <a href="https://www.cognia.org/">Source</a></td><td>B2B2C institutional</td><td>Nothing published says which year the 17 million covers, so it cannot travel into a pitch as it stands.</td><td class="fl">? Verify scale first</td></tr>
+        <tr><td><strong>Encyclopaedia Britannica</strong></td><td>Content media and publishers</td><td>150 million students. Undated marketing copy, no year published. <a href="https://corporate.britannica.com/">Source</a></td><td>Commercial-AI licensing</td><td>Britannica is private and files no financials, so there is no public way to size what it could pay.</td><td class="fl">? Verify scale first</td></tr>
+        <tr><td><strong>GED Testing Service</strong></td><td>Credentialing and assessment</td><td>About 150,000 credentials a year across 90 or more countries. Roughly 2021 to 2022, and stale. <a href="https://ged.com/">Source</a></td><td>Licensing</td><td>The volume figure is around four years old, so re-source it before it goes anywhere near a pitch.</td><td class="fl">? Verify scale first</td></tr>
+        <tr><td><strong>Anthropic</strong></td><td>AI and cloud</td><td>100,000 or more teachers reached through Teach For All, across 63 countries. 2025 to 2026. <a href="https://www.anthropic.com/news">Source</a></td><td>Commercial-AI licensing</td><td>Claude for Teachers names nine edtech partners and Khan Academy is not one of them, and the product runs straight at the same teachers Khanmigo serves.</td><td class="fl">&times; Claimed by a competitor</td></tr>
+        <tr><td><strong>OpenAI</strong></td><td>AI and cloud</td><td>300,000 or more educators, across more than 100 K-12 organizations in 30 states. 2026. <a href="https://openai.com/">Source</a></td><td>Commercial-AI licensing</td><td>The named district relationships are signed and expanding to 55 more systems, so this is a seat with somebody sitting in it.</td><td class="fl">&times; Claimed by a competitor</td></tr>
+        <tr><td><strong>NVIDIA</strong></td><td>AI and cloud</td><td>$25 million pledged to K-12 AI curriculum, through CK-12 and Study Fetch. Announced 4 September 2025. This is one deal, not a scale figure: NVIDIA publishes no aggregate for its education reach. <a href="https://nvidianews.nvidia.com/">Source</a></td><td>Commercial-AI licensing</td><td>The K-12 curriculum money went to two other organizations, so the question here is what is left rather than what is available.</td><td class="fl">&times; Claimed by a competitor</td></tr>
+        <tr><td><strong>Microsoft</strong></td><td>AI and cloud</td><td>Covers the $44 a year per-teacher cost of Khanmigo for Teachers. Current, checked 3 September 2026. <a href="https://www.khanmigo.ai/teachers">Source</a></td><td>In-kind sponsorship</td><td>Already Khan Academy's cloud and AI partner, so anything here is deepening a relationship. Presenting it as a discovery tells the room you did not check.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Google and Google.org</strong></td><td>AI and cloud</td><td>No public figure. Gemini access plus a grant, and neither has ever been given a dollar value. No period published. <a href="https://www.khanacademy.org/about/our-supporters">Source</a></td><td>In-kind sponsorship</td><td>Live relationship, and the one where you cannot show anyone a number. Worth knowing that before you are asked for one.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>College Board</strong></td><td>Credentialing and assessment</td><td>Official SAT Practice, live since 2 June 2015. Still live, checked 3 September 2026. <a href="https://www.khanacademy.org/test-prep/sat">Source</a></td><td>Licensing</td><td>Live, not historic. Nothing here has ended, so there is no lane to reopen.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>AAMC</strong></td><td>Credentialing and assessment</td><td>1,100 videos in the MCAT Collection. No end date found, checked 3 September 2026. <a href="https://www.khanacademy.org/test-prep/mcat">Source</a></td><td>Licensing</td><td>An existing collection with no published end date, so treat it as running until somebody inside tells you otherwise.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>NWEA, a division of HMH</strong></td><td>Credentialing and assessment</td><td>No aggregate figure sourced in this pass. What is dated is the end of MAP Accelerator support, 31 August 2025, and Learning Paths informed by MAP Growth is still sold as a Districts add-on. Current, checked 3 September 2026. <a href="https://www.khanacademy.org/districts">Source</a></td><td>Licensing</td><td>The trap in this pool. One co-built product ended and the commercial arrangement did not, and NWEA has been an HMH division since 1 May 2023, so a pitch here lands on HMH.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>ETS</strong></td><td>Credentialing and assessment</td><td>Named co-founder of the Khan TED Institute, announced 14 April 2026. <a href="https://blog.khanacademy.org/introducing-the-khan-ted-institute-a-new-approach-to-higher-education/">Source</a></td><td>No revenue arrangement has been published</td><td>Named in a Khan Academy announcement five months ago. Read the flag before you read the name.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Clever</strong></td><td>EdTech tools</td><td>111,000 or more schools. Undated company figure, no year published. <a href="https://clever.com/">Source</a></td><td>Not a revenue arrangement. A rostering integration Khan Academy Districts requires</td><td>A required integration is already wired in, and an integration is not a new logo.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>ClassLink</strong></td><td>EdTech tools</td><td>No aggregate published. One state-level example: 750,000 or more students across 79 South Carolina districts. Current, undated. This is one state, not a total: do not add the state figures together and call it scale. <a href="https://www.classlink.com/">Source</a></td><td>Not a revenue arrangement. A rostering integration Khan Academy Districts requires</td><td>A required integration with no public aggregate to size it, so any scale claim here would be your own arithmetic rather than a sourced figure.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Walmart</strong></td><td>Financial and consumer brands</td><td>Founding sponsor of Financial Literacy, July 2023. No dollar figure published. <a href="https://www.khanacademy.org/college-careers-more/financial-literacy">Source</a></td><td>CSR-brand</td><td>Founding sponsor of a course that already exists, so the seat was filled three years ago.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Intuit</strong></td><td>Financial and consumer brands</td><td>Additional support for Financial Literacy, July 2023. No dollar figure published. <a href="https://www.khanacademy.org/college-careers-more/financial-literacy">Source</a></td><td>CSR-brand</td><td>The awkward one. Intuit reads as the best numerical fit in this category and it has been a Financial Literacy supporter since July 2023, so the good idea has already been had.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Capital One</strong></td><td>Financial and consumer brands</td><td>Additional support for Financial Literacy, July 2023. No dollar figure published. <a href="https://www.khanacademy.org/college-careers-more/financial-literacy">Source</a></td><td>CSR-brand</td><td>Supporting the same course as Walmart and Intuit since July 2023, so this seat is not empty either.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Disney and Pixar</strong></td><td>Content media and publishers</td><td>No public figure. Pixar in a Box is live and no dollar value has ever been published. No period published. <a href="https://www.khanacademy.org/computing/pixar">Source</a></td><td>Content sponsorship</td><td>A live relationship with no published value, which is exactly what makes it easy to mistake for an opening.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>General Motors</strong></td><td>Employers and workforce</td><td>$1 million, January 2021. Five years stale, and secondary sources only: no primary source for this figure was found in the verification pass. <a href="https://www.khanacademy.org/about/our-supporters">Source</a></td><td>CSR-brand</td><td>Five years old and never confirmed from a primary source, so treat it as a lead on your own file rather than a figure you can quote.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+        <tr><td><strong>Salesforce Foundation</strong></td><td>Employers and workforce</td><td>No public figure. Named supporter, no amount and no period published. <a href="https://www.khanacademy.org/about/our-supporters">Source</a></td><td>CSR-brand</td><td>Already named as a supporter, so there is nothing to find here. There is a relationship to deepen.</td><td class="fl">&#9679; Claimed by Khan Academy</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2>Two of the six categories have no open row, and that is a finding</h2>
+    <p><strong>Employers and workforce</strong> and <strong>Financial and consumer brands</strong> both have rows, and every one of them is already claimed by Khan Academy. No organization in either category came out of the verification pass with a number good enough to ship as an open candidate. Read that as a gap in the list you were handed, not as a gap in the category.</p>
+    <p>The brand-funded free content seat in particular is not empty. <strong>Discovery Education</strong> and <strong>EVERFI</strong> run that model as an operating business, which is why neither of them is a row here. They are not prospects. They are who you would be asking a company to leave.</p>
+
+    <h2>Already named, and not rows here</h2>
+    <p>These names came out of the same verification pass as organizations already named in a Khan Academy announcement. None of them has a published number, and some fit none of the six categories, so none of them ships as a row. They are listed so that no name is missing from this board without a reason: <strong>Adobe</strong>, <strong>TED</strong>, <strong>Accenture</strong>, <strong>Bain</strong>, <strong>McKinsey</strong>, <strong>Replit</strong>, the <strong>Gates Foundation</strong>, the <strong>Overdeck Family Foundation</strong>, the <strong>Yass Foundation</strong>, and the <strong>National Constitution Center</strong>.</p>
+
+    <h2>What the four flags mean</h2>
+    <ul>
+      <li><strong>&#9671; Open.</strong> Nobody published as sitting in this seat, and the number is good enough to use.</li>
+      <li><strong>&#9679; Claimed by Khan Academy.</strong> A live relationship. The work here is deepening it, which is a real job and is not a find.</li>
+      <li><strong>&times; Claimed by a competitor.</strong> Somebody else got there first, so the pitch has to answer why anyone should move.</li>
+      <li><strong>? Verify scale first.</strong> Nobody is visibly there and the only number available is undated or stale. The number comes before the pitch.</li>
+    </ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Glyphs, so no flag is ever carried by colour alone. Each one is paired
+     with a written label in the list, in the detail panel and in the
+     screen-reader name. */
+  var GL = {open:"◇", ka:"●", comp:"×", vfy:"?"};
+
+  var VERIFIED = "3 September 2026";
+
+  /* =================================================================
+     The six categories, from the research file's own six category
+     tables. The chip label is abbreviated so seven chips fit one row at
+     960; the full name travels in the row, in the detail panel and in
+     the chip's accessible name.
+     ================================================================= */
+  var CATS = [
+    {id:"edtech",  chip:"EdTech",        full:"EdTech tools"},
+    {id:"cred",    chip:"Credentialing", full:"Credentialing and assessment"},
+    {id:"employ",  chip:"Employers",     full:"Employers and workforce"},
+    {id:"ai",      chip:"AI and cloud",  full:"AI and cloud"},
+    {id:"content", chip:"Content media", full:"Content media and publishers"},
+    {id:"fin",     chip:"Financial",     full:"Financial and consumer brands"}
+  ];
+  var CATBY = {};
+  CATS.forEach(function(c){ CATBY[c.id] = c; });
+
+  /* The four status flags. Exactly four, exactly these. */
+  var STATS = [
+    {id:"open", chip:"Open",         full:"Open",                      cls:"f-open", gl:GL.open,
+     mean:"Nobody published as sitting in this seat, and the number is good enough to use."},
+    {id:"ka",   chip:"Khan Academy", full:"Claimed by Khan Academy",   cls:"f-ka",   gl:GL.ka,
+     mean:"A live relationship. The work here is deepening it, which is a real job and is not a find."},
+    {id:"comp", chip:"Competitor",   full:"Claimed by a competitor",   cls:"f-comp", gl:GL.comp,
+     mean:"Somebody else got there first, so the pitch has to answer why anyone should move."},
+    {id:"vfy",  chip:"Verify scale", full:"Verify scale first",        cls:"f-vfy",  gl:GL.vfy,
+     mean:"Nobody is visibly there and the only number available is undated or stale. The number comes before the pitch."}
+  ];
+  var STATBY = {};
+  STATS.forEach(function(s){ STATBY[s.id] = s; });
+
+  /* =================================================================
+     THE POOL. 27 organizations, six fields each.
+
+     Every figure here comes from 08-reviews/p3-fact-verification-2026-09-03.md
+     and from nowhere else. Where that file records no public number, the
+     row says so in those words rather than borrowing an estimate: an
+     honest unknown is a real answer and it is the answer a student has to
+     be able to give out loud.
+
+     Deliberate exclusions, and each one is a rule rather than an oversight:
+       - Closed-lane organizations are not here. No ACT, no LSAC, no school
+         district. The rule that shuts those lanes is taught in the page
+         around this board, and a pool that contained them would teach a
+         student to read a status column instead of learning the rule.
+       - Discovery Education and EVERFI operate the brand-funded category.
+         They are not prospects, so they are not rows. They appear in the
+         notes as the occupants of that seat.
+       - The one bank named in the research file's brand-funded shape is
+         excluded program-wide by roster rule (d), so it is not here either.
+       - NWEA and ETS are NOT exclusions. Both ship, flagged as claimed by
+         Khan Academy, because omitting a name is exactly what lets an
+         intern pitch it.
+     This board does not rank the lanes. Ranking is the prose's job.
+     ================================================================= */
+  var POOL = [
+    {
+      id:"ib", name:"International Baccalaureate", cat:"cred", stat:"open",
+      big:"1.95 million or more students",
+      per:"As of August 2026.",
+      cav:"<b>The freshest number in the pool.</b> Sourced this month, which almost nothing else here is.",
+      fit:"B2B2C institutional. The IB would be buying access for a school network it already answers to, rather than for itself.",
+      block:"The IB sets curriculum of its own, so the first question is whether Khan Academy content maps onto IB assessment or competes with it.",
+      src:"https://www.ibo.org/about-the-ib/facts-and-figures/", srcname:"IB, facts and figures"
+    },
+    {
+      id:"cambium", name:"Cambium Assessment", cat:"cred", stat:"open",
+      big:"15.8 million students across 29 states",
+      per:"2026.",
+      cav:"",
+      fit:"Licensing. They would pay to have practice built against tests they already run.",
+      block:"The organization that pays is a state, not Cambium, so ask who signs and on whose procurement calendar.",
+      src:"https://www.cambiumassessment.com/", srcname:"Cambium Assessment"
+    },
+    {
+      id:"scholastic", name:"Scholastic", cat:"content", stat:"open",
+      big:"Revenue of $1,625.5 million",
+      per:"Fiscal year ended 31 May 2025, from the 10-K filed 25 July 2025.",
+      cav:"<b>Cash is tighter than the revenue line suggests.</b> Read the blocker before you read the number again.",
+      fit:"Licensing.",
+      block:"The same filing reports a net loss of $1.9 million for that year, against $12.1 million of income the year before, so ask which budget this would come out of.",
+      src:"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=SCHL&type=10-K", srcname:"Scholastic 10-K filings, SEC EDGAR"
+    },
+    {
+      id:"comptia", name:"CompTIA", cat:"cred", stat:"open",
+      big:"3.6 million or more certifications awarded",
+      per:"Cumulative, and CompTIA publishes no start year for it.",
+      cav:"<b>Attach no year to this figure.</b> It has none, and inventing one is how a good number becomes a wrong one.",
+      fit:"Licensing. Official free practice for a certification, paid for by the certification's owner.",
+      block:"With no period on the figure it cannot be turned into a yearly volume, which is the number a pitch actually needs.",
+      src:"https://www.comptia.org/about-us", srcname:"CompTIA, about"
+    },
+    {
+      id:"sesame", name:"Sesame Workshop", cat:"content", stat:"open",
+      big:"5 billion YouTube views, up 130 percent year on year",
+      per:"2025.",
+      cav:"",
+      fit:"Content sponsorship.",
+      block:"The LEGO Foundation's $100 million partnership was extended through 2028, so the funded early-learning seat here already has somebody in it.",
+      src:"https://www.sesameworkshop.org/press-room", srcname:"Sesame Workshop press room"
+    },
+    {
+      id:"aws", name:"AWS", cat:"ai", stat:"open",
+      big:"$100 million committed to the Education Equity Initiative",
+      per:"Current commitment.",
+      cav:"The Imagine Grant route is a separate number, $21 million or more to 180 or more nonprofits since 2018. Do not run the two together.",
+      fit:"In-kind sponsorship, with a commercial-AI licensing conversation possible next to it.",
+      block:"Credits are the easy yes. Ask early whether any of the commitment can arrive as something other than credits.",
+      src:"https://press.aboutamazon.com/aws", srcname:"AWS newsroom"
+    },
+    {
+      id:"amira", name:"Amira Learning", cat:"edtech", stat:"open",
+      big:"“Serves 4 million students today”",
+      per:"A company statement covering 2024 to 2026.",
+      cav:"Their own site elsewhere says “4K+ districts”. Two claims, one company, so quote the one you can point at.",
+      fit:"Licensing.",
+      block:"Microsoft already ships a reading coach free, so this one has real traction and still needs an answer to why anyone would pay for a second.",
+      src:"https://www.amiralearning.com/", srcname:"Amira Learning"
+    },
+    {
+      id:"cognia", name:"Cognia", cat:"cred", stat:"vfy",
+      big:"17 million students",
+      per:"Undated marketing copy. No year is published anywhere for it.",
+      cav:"<b>This is why the flag says verify scale first.</b> A number with no period is not yet a number.",
+      fit:"B2B2C institutional.",
+      block:"Nothing published says which year the 17 million covers, so it cannot travel into a pitch as it stands.",
+      src:"https://www.cognia.org/", srcname:"Cognia"
+    },
+    {
+      id:"britannica", name:"Encyclopaedia Britannica", cat:"content", stat:"vfy",
+      big:"150 million students",
+      per:"Undated marketing copy. No year is published anywhere for it.",
+      cav:"",
+      fit:"Commercial-AI licensing.",
+      block:"Britannica is private and files no financials, so there is no public way to size what it could pay.",
+      src:"https://corporate.britannica.com/", srcname:"Britannica, corporate"
+    },
+    {
+      id:"ged", name:"GED Testing Service", cat:"cred", stat:"vfy",
+      big:"About 150,000 credentials a year",
+      per:"Roughly 2021 to 2022, and stale. Also 90 or more countries, same vintage.",
+      cav:"",
+      fit:"Licensing.",
+      block:"The volume figure is around four years old, so re-source it before it goes anywhere near a pitch.",
+      src:"https://ged.com/", srcname:"GED Testing Service"
+    },
+    {
+      id:"anthropic", name:"Anthropic", cat:"ai", stat:"comp",
+      big:"100,000 or more teachers, across 63 countries",
+      per:"Reached through Teach For All, 2025 to 2026.",
+      cav:"",
+      fit:"Commercial-AI licensing.",
+      block:"Claude for Teachers names nine edtech partners and Khan Academy is not one of them, and the product runs straight at the same teachers Khanmigo serves.",
+      src:"https://www.anthropic.com/news", srcname:"Anthropic news"
+    },
+    {
+      id:"openai", name:"OpenAI", cat:"ai", stat:"comp",
+      big:"300,000 or more educators",
+      per:"Across more than 100 K-12 organizations in 30 states, 2026.",
+      cav:"",
+      fit:"Commercial-AI licensing.",
+      block:"The named district relationships are signed and expanding to 55 more systems, so this is a seat with somebody sitting in it.",
+      src:"https://openai.com/", srcname:"OpenAI"
+    },
+    {
+      id:"nvidia", name:"NVIDIA", cat:"ai", stat:"comp",
+      big:"$25 million pledged to K-12 AI curriculum",
+      per:"Through CK-12 and Study Fetch, announced 4 September 2025.",
+      cav:"<b>This is one deal, not a scale figure.</b> NVIDIA publishes no aggregate for its education reach, so there is no total to quote.",
+      fit:"Commercial-AI licensing.",
+      block:"The K-12 curriculum money went to two other organizations, so the question here is what is left rather than what is available.",
+      src:"https://nvidianews.nvidia.com/", srcname:"NVIDIA newsroom"
+    },
+    {
+      id:"microsoft", name:"Microsoft", cat:"ai", stat:"ka",
+      big:"Covers the $44 a year per-teacher cost of Khanmigo for Teachers",
+      per:"Current, checked 3 September 2026.",
+      cav:"",
+      fit:"In-kind sponsorship.",
+      block:"Already Khan Academy's cloud and AI partner, so anything here is deepening a relationship. Presenting it as a discovery tells the room you did not check.",
+      src:"https://www.khanmigo.ai/teachers", srcname:"Khanmigo for Teachers"
+    },
+    {
+      id:"google", name:"Google and Google.org", cat:"ai", stat:"ka",
+      big:"No public figure",
+      per:"Gemini access plus a grant, and no period is published for either.",
+      cav:"<b>Neither has ever been given a dollar value.</b> That is the sourced answer, not a gap in the research.",
+      fit:"In-kind sponsorship.",
+      block:"Live relationship, and the one where you cannot show anyone a number. Worth knowing that before you are asked for one.",
+      src:"https://www.khanacademy.org/about/our-supporters", srcname:"Khan Academy supporters"
+    },
+    {
+      id:"cb", name:"College Board", cat:"cred", stat:"ka",
+      big:"Official SAT Practice, live since 2 June 2015",
+      per:"Still live, checked 3 September 2026.",
+      cav:"",
+      fit:"Licensing.",
+      block:"Live, not historic. Nothing here has ended, so there is no lane to reopen.",
+      src:"https://www.khanacademy.org/test-prep/sat", srcname:"Khan Academy SAT practice"
+    },
+    {
+      id:"aamc", name:"AAMC", cat:"cred", stat:"ka",
+      big:"1,100 videos in the MCAT Collection",
+      per:"No end date found, checked 3 September 2026.",
+      cav:"Also 3,000 review questions in the same collection.",
+      fit:"Licensing.",
+      block:"An existing collection with no published end date, so treat it as running until somebody inside tells you otherwise.",
+      src:"https://www.khanacademy.org/test-prep/mcat", srcname:"Khan Academy MCAT collection"
+    },
+    {
+      id:"nwea", name:"NWEA, a division of HMH", cat:"cred", stat:"ka",
+      big:"No aggregate figure sourced in this pass",
+      per:"What is dated is the end of MAP Accelerator support, 31 August 2025. Current relationship, checked 3 September 2026.",
+      cav:"<b>Learning Paths informed by MAP Growth is still sold</b> as a Khan Academy Districts add-on. One co-built product ended. The commercial arrangement did not.",
+      fit:"Licensing.",
+      block:"The trap in this pool. It reads like a dead deal and it is a live one, and NWEA has been an HMH division since 1 May 2023, so a pitch here lands on HMH.",
+      src:"https://www.khanacademy.org/districts", srcname:"Khan Academy Districts"
+    },
+    {
+      id:"ets", name:"ETS", cat:"cred", stat:"ka",
+      big:"Named co-founder of the Khan TED Institute",
+      per:"Announced 14 April 2026.",
+      cav:"",
+      fit:"No revenue arrangement has been published.",
+      block:"Named in a Khan Academy announcement five months ago. Read the flag before you read the name.",
+      src:"https://blog.khanacademy.org/introducing-the-khan-ted-institute-a-new-approach-to-higher-education/", srcname:"Khan Academy blog, 14 April 2026"
+    },
+    {
+      id:"clever", name:"Clever", cat:"edtech", stat:"ka",
+      big:"111,000 or more schools",
+      per:"Undated company figure. No year is published for it.",
+      cav:"",
+      fit:"Not a revenue arrangement. A rostering integration that Khan Academy Districts requires.",
+      block:"A required integration is already wired in, and an integration is not a new logo.",
+      src:"https://clever.com/", srcname:"Clever"
+    },
+    {
+      id:"classlink", name:"ClassLink", cat:"edtech", stat:"ka",
+      big:"No aggregate published",
+      per:"One state-level example: 750,000 or more students across 79 South Carolina districts. Current, undated.",
+      cav:"<b>That is one state, not a total.</b> Do not add the state figures together and call the result scale. It would be your arithmetic, not anybody's published number.",
+      fit:"Not a revenue arrangement. A rostering integration that Khan Academy Districts requires.",
+      block:"A required integration with no public aggregate to size it, so any scale claim here would be something you made rather than something you sourced.",
+      src:"https://www.classlink.com/", srcname:"ClassLink"
+    },
+    {
+      id:"walmart", name:"Walmart", cat:"fin", stat:"ka",
+      big:"Founding sponsor of Financial Literacy, July 2023",
+      per:"As of July 2023. No dollar figure published.",
+      cav:"",
+      fit:"CSR-brand.",
+      block:"Founding sponsor of a course that already exists, so the seat was filled three years ago.",
+      src:"https://www.khanacademy.org/college-careers-more/financial-literacy", srcname:"Khan Academy financial literacy"
+    },
+    {
+      id:"intuit", name:"Intuit", cat:"fin", stat:"ka",
+      big:"Additional support for Financial Literacy, July 2023",
+      per:"As of July 2023. No dollar figure published.",
+      cav:"<b>The awkward one.</b> Intuit reads as the best numerical fit in its category and it is already here.",
+      fit:"CSR-brand.",
+      block:"Intuit has been a Financial Literacy supporter since July 2023, so the good idea has already been had. Being the best fit and being available are two different questions.",
+      src:"https://www.khanacademy.org/college-careers-more/financial-literacy", srcname:"Khan Academy financial literacy"
+    },
+    {
+      id:"capone", name:"Capital One", cat:"fin", stat:"ka",
+      big:"Additional support for Financial Literacy, July 2023",
+      per:"As of July 2023. No dollar figure published.",
+      cav:"",
+      fit:"CSR-brand.",
+      block:"Supporting the same course as Walmart and Intuit since July 2023, so this seat is not empty either.",
+      src:"https://www.khanacademy.org/college-careers-more/financial-literacy", srcname:"Khan Academy financial literacy"
+    },
+    {
+      id:"pixar", name:"Disney and Pixar", cat:"content", stat:"ka",
+      big:"No public figure",
+      per:"Pixar in a Box is live and no period or value has ever been published.",
+      cav:"",
+      fit:"Content sponsorship.",
+      block:"A live relationship with no published value, which is exactly what makes it easy to mistake for an opening.",
+      src:"https://www.khanacademy.org/computing/pixar", srcname:"Pixar in a Box"
+    },
+    {
+      id:"gm", name:"General Motors", cat:"employ", stat:"ka",
+      big:"$1 million",
+      per:"January 2021, and five years stale.",
+      cav:"<b>Secondary sources only.</b> No primary source for this figure was found in the verification pass, so it is not yours to quote.",
+      fit:"CSR-brand.",
+      block:"Five years old and never confirmed from a primary source, so treat it as a lead on your own file rather than a figure you can put in front of anyone.",
+      src:"https://www.khanacademy.org/about/our-supporters", srcname:"Khan Academy supporters"
+    },
+    {
+      id:"salesforce", name:"Salesforce Foundation", cat:"employ", stat:"ka",
+      big:"No public figure",
+      per:"Named supporter. No amount and no period published.",
+      cav:"",
+      fit:"CSR-brand.",
+      block:"Already named as a supporter, so there is nothing to find here. There is a relationship to deepen.",
+      src:"https://www.khanacademy.org/about/our-supporters", srcname:"Khan Academy supporters"
+    }
+  ];
+
+  /* =================================================================
+     Names that came out of the same verification pass as already named
+     in a Khan Academy announcement, and that ship as notes rather than
+     as rows: none has a published number, and several fit none of the
+     six categories. They are here so that no name is missing from this
+     board without a stated reason, and the search finds them.
+     ================================================================= */
+  var NONROWS = [
+    "Adobe","TED","Accenture","Bain","McKinsey","Replit",
+    "Gates Foundation","Overdeck Family Foundation","Yass Foundation",
+    "National Constitution Center"
+  ];
+
+  /* =================================================================
+     The optional guess. Six rows whose flag is worth guessing before
+     seeing, because the obvious read is wrong on four of them. It is
+     off unless the student turns it on, it can be ended in one click,
+     and it never gates the board: a student coming back on day four
+     must not be walked through a quiz to reach a table.
+     ================================================================= */
+  var GUESSABLE = ["amira","sesame","nwea","ets","anthropic","clever"];
+  var GUESSNOTE = {
+    amira:"Four million students and real traction, and still open. Traction is not the same as occupancy.",
+    sesame:"Open, with a caveat that is not about Khan Academy at all: another funder is already in the early-learning seat.",
+    nwea:"This is the one that catches people. It looks like a dead deal and it is a live commercial arrangement.",
+    ets:"Named in a Khan Academy announcement five months ago, which is the opposite of what its history suggests.",
+    anthropic:"Taken, and by the organization running hardest at the same teachers.",
+    clever:"Taken, and quietly: it is a required integration rather than an announcement anyone made noise about."
+  };
+  /* the binary the student commits to, before the exact flag appears */
+  var TAKEN = {open:false, vfy:false, ka:true, comp:true};
+
+  var el = {};
+  ["count","catchips","statchips","q","qclear","banner","list","noneleft",
+   "lscroll","lmore","detail","dscroll","dbody","dmore",
+   "clearall","notes","guessbtn","hint","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------------------------------------------------------------
+     A small, failure-tolerant store. This board is used four times
+     across two projects, so "come back on day four and your filters
+     are still on" has to be true rather than promised. Every read and
+     write is wrapped: a browser with storage disabled must lose the
+     record, not the board.
+     --------------------------------------------------------------- */
+  var KEY = "ka-p3-starter-pool-v1";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  var store = load();
+  store.cat  = store.cat  || {};   /* category id -> true when on */
+  store.stat = store.stat || {};   /* status id   -> true when on */
+  store.q    = typeof store.q === "string" ? store.q : "";
+  store.sel  = store.sel || null;  /* selected organization id, or null for the notes */
+  store.g    = store.g || {};      /* organization id -> "open" | "taken", their guess */
+  store.gon  = !!store.gon;        /* is the guess running */
+  store.seen = !!store.seen;       /* has this device opened the board before */
+
+  var returning = store.seen;
+  store.seen = true;
+  /* The guess never survives a reload. Recorded answers do, so the flags a
+     student already revealed stay revealed, but the covered state and the
+     switched-off status filter are cleared on every load. This is the whole
+     reason the guess is safe to ship inside a reference: a student coming
+     back on day four opens a table, never a half-finished quiz. */
+  store.gon = false;
+  save();
+
+  function announce(m){ el.live.textContent = m; }
+  function on(map){ return Object.keys(map).filter(function(k){ return map[k]; }); }
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  /* ---------------- what is currently visible ---------------- */
+
+  function matches(o){
+    var cats = on(store.cat), stats = on(store.stat);
+    if(cats.length && cats.indexOf(o.cat) < 0) return false;
+    if(stats.length && stats.indexOf(o.stat) < 0) return false;
+    var t = store.q.trim().toLowerCase();
+    if(!t) return true;
+    var hay = [o.name, CATBY[o.cat].full, o.big, o.per, o.cav, o.fit, o.block, STATBY[o.stat].full]
+              .join(" ").toLowerCase();
+    return hay.indexOf(t) > -1;
+  }
+  function visible(){ return POOL.filter(matches); }
+
+  /* a flag is hidden only while the guess is running, only on the six
+     rows it covers, and only until that row has been answered */
+  function covered(o){
+    return store.gon && GUESSABLE.indexOf(o.id) > -1 && !store.g[o.id];
+  }
+
+  /* ---------------- the filter chips ---------------- */
+
+  function buildChips(){
+    var c = '<button class="chip" type="button" data-k="cat" data-v="" aria-pressed="false">All</button>';
+    CATS.forEach(function(x){
+      c += '<button class="chip" type="button" data-k="cat" data-v="' + x.id + '" aria-pressed="false"' +
+           ' aria-label="' + esc(x.full) + '">' + esc(x.chip) + "</button>";
+    });
+    el.catchips.innerHTML = c;
+
+    var s = '<button class="chip" type="button" data-k="stat" data-v="" aria-pressed="false">All</button>';
+    STATS.forEach(function(x){
+      s += '<button class="chip" type="button" data-k="stat" data-v="' + x.id + '" aria-pressed="false"' +
+           ' aria-label="' + esc(x.full) + '"><span class="gl" aria-hidden="true">' + x.gl + "</span>" +
+           esc(x.chip) + "</button>";
+    });
+    el.statchips.innerHTML = s;
+
+    chipEls().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(b.disabled) return;
+        var k = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+        if(!v){ store[k] = {}; }
+        else { store[k][v] = !store[k][v]; if(!store[k][v]) delete store[k][v]; }
+        save(); draw();
+        announce(describeFilters());
+      });
+    });
+  }
+  function chipEls(){
+    return Array.prototype.slice.call(document.querySelectorAll("button.chip"));
+  }
+
+  function paintChips(){
+    chipEls().forEach(function(b){
+      var k = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+      b.setAttribute("aria-pressed", v ? (store[k][v] ? "true" : "false") : (on(store[k]).length ? "false" : "true"));
+      /* While the guess is running the status filter would hand over the
+         six covered flags, so it is switched off and says so. A defined
+         state, rather than a leak. */
+      if(k === "stat"){
+        b.disabled = store.gon;
+        if(store.gon){ b.title = "The status filter is off while you are guessing."; }
+        else { b.removeAttribute("title"); }
+      }
+    });
+  }
+
+  function describeFilters(){
+    var cats = on(store.cat).map(function(id){ return CATBY[id].full; });
+    var stats = on(store.stat).map(function(id){ return STATBY[id].full; });
+    var n = visible().length;
+    var bits = [];
+    if(cats.length) bits.push("category " + cats.join(" or "));
+    if(stats.length) bits.push("status " + stats.join(" or "));
+    if(store.q.trim()) bits.push('search "' + store.q.trim() + '"');
+    return n + (n === 1 ? " organization" : " organizations") +
+           (bits.length ? ", filtered by " + bits.join(", ") : ", no filter on") + ".";
+  }
+
+  /* ---------------- the list ---------------- */
+
+  function flagHTML(o, small){
+    var s = STATBY[o.stat];
+    return '<span class="flag ' + s.cls + '"><span class="gl" aria-hidden="true">' + s.gl +
+           "</span>" + esc(small ? s.chip : s.full) + "</span>";
+  }
+
+  function drawList(){
+    var vis = visible();
+    var out = "";
+    vis.forEach(function(o){
+      var cov = covered(o);
+      var lab = o.name + ", " + CATBY[o.cat].full + ", " +
+                (cov ? "flag covered, guess it first" : STATBY[o.stat].full);
+      out += '<div role="listitem"><button class="orow" type="button" data-id="' + o.id + '"' +
+               ' tabindex="-1" aria-current="' + (store.sel === o.id ? "true" : "false") + '"' +
+               ' aria-label="' + esc(lab) + '">' +
+               '<span class="nm">' + esc(o.name) + "</span>" +
+               (cov ? '<span class="flag f-vfy"><span class="gl" aria-hidden="true">&#183;&#183;&#183;</span>Covered</span>'
+                    : flagHTML(o, true)) +
+             "</button></div>";
+    });
+    el.list.innerHTML = out;
+    el.list.hidden = vis.length === 0;
+
+    if(vis.length === 0){
+      el.noneleft.hidden = false;
+      el.noneleft.innerHTML = "<b>Nothing in the pool matches.</b> " +
+        "Clear the filters below, or narrow only one of them at a time.";
+    } else {
+      el.noneleft.hidden = true;
+    }
+
+    rowEls().forEach(function(b){
+      b.addEventListener("click", function(){ select(b.getAttribute("data-id")); });
+    });
+    /* roving tabindex: one stop for the whole list in Tab order, then the
+       arrow keys move inside it. A 27 row list should not cost 27 tabs. */
+    var first = el.list.querySelector('button.orow[aria-current="true"]') || el.list.querySelector("button.orow");
+    if(first) first.setAttribute("tabindex","0");
+
+    el.count.textContent = "Showing " + vis.length + " of " + POOL.length + " organizations";
+  }
+  function rowEls(){
+    return Array.prototype.slice.call(el.list.querySelectorAll("button.orow"));
+  }
+
+  /* ---------------- the search banner for names that are not rows ---------------- */
+
+  function drawBanner(){
+    var t = store.q.trim().toLowerCase();
+    if(!t || t.length < 2){ el.banner.hidden = true; return; }
+
+    var hits = NONROWS.filter(function(n){ return n.toLowerCase().indexOf(t) > -1; });
+    var ops = ["Discovery Education","EVERFI"].filter(function(n){ return n.toLowerCase().indexOf(t) > -1; });
+
+    if(ops.length){
+      el.banner.hidden = false;
+      el.banner.innerHTML = "<b>" + esc(ops.join(" and ")) +
+        (ops.length > 1 ? " are" : " is") + " not a candidate.</b> " +
+        (ops.length > 1 ? "They run" : "It runs") +
+        " the brand-funded free content model as an operating business, which is why " +
+        (ops.length > 1 ? "they are" : "it is") + " not a row. Open Notes and gaps.";
+      return;
+    }
+    if(hits.length){
+      el.banner.hidden = false;
+      el.banner.innerHTML = "<b>" + esc(hits.join(", ")) +
+        (hits.length > 1 ? " are" : " is") + " already named in a Khan Academy announcement.</b> " +
+        "No published number, so no row. Open Notes and gaps for the full list.";
+      return;
+    }
+    el.banner.hidden = true;
+  }
+
+  /* ---------------- the detail, and the notes that share its panel ---------------- */
+
+  function drawDetail(){
+    if(!store.sel){ drawNotes(); return; }
+    var o = null;
+    POOL.forEach(function(x){ if(x.id === store.sel) o = x; });
+    if(!o){ store.sel = null; save(); drawNotes(); return; }
+
+    var cov = covered(o);
+    var head = '<div class="dh"><h2>' + esc(o.name) + "</h2>" +
+               '<span class="cat">' + esc(CATBY[o.cat].full) + "</span></div>";
+
+    /* commit before reveal: while the guess is running, the flag on a
+       covered row is a question and nothing on this panel answers it. */
+    var flagBlock;
+    if(cov){
+      flagBlock = '<div class="num"><span class="nlab">Status, covered</span>' +
+        '<span class="per" style="margin-top:0">Is this seat open, or is somebody already in it? ' +
+        'Read the number and the blocker first, then say.</span>' +
+        '<span class="guess" style="margin-top:6px">' +
+        '<button class="gs" type="button" data-g="open" data-id="' + o.id + '">It is open</button>' +
+        '<button class="gs" type="button" data-g="taken" data-id="' + o.id + '">Somebody is in it</button>' +
+        "</span></div>";
+    } else {
+      var mine = store.g[o.id];
+      var verdict = "";
+      if(mine){
+        var right = (mine === "taken") === TAKEN[o.stat];
+        verdict = '<span class="cav">' +
+          "<b>" + (right ? "You had it." : "Not this one.") + "</b> " +
+          esc(GUESSNOTE[o.id] || "") + "</span>";
+      }
+      flagBlock = '<div class="num' + (mine ? " revealed" : "") + '">' +
+        '<span class="nlab">Status</span>' +
+        flagHTML(o, false) +
+        '<span class="per">' + esc(STATBY[o.stat].mean) + "</span>" + verdict + "</div>";
+    }
+
+    var num = '<div class="num"><span class="nlab">The number</span>' +
+      '<span class="big">' + esc(o.big) + "</span>" +
+      '<span class="per">' + esc(o.per) + "</span>" +
+      (o.cav ? '<span class="cav">' + o.cav + "</span>" : "") +
+      '<span class="per"><a class="src" href="' + esc(o.src) + '" target="_blank" rel="noopener noreferrer">' +
+      esc(o.srcname) + "</a></span></div>";
+
+    var rest = '<p class="fld"><span class="lab">Money-model fit</span>' + esc(o.fit) + "</p>" +
+               '<p class="fld"><span class="lab">Blocker, the thing you would have to answer</span>' +
+               esc(o.block) + "</p>";
+
+    el.dbody.innerHTML = head + flagBlock + num + rest;
+
+    Array.prototype.slice.call(el.dbody.querySelectorAll("button.gs")).forEach(function(b){
+      b.addEventListener("click", function(){
+        commitGuess(b.getAttribute("data-id"), b.getAttribute("data-g"));
+      });
+    });
+    el.dscroll.scrollTop = 0;
+    flag(el.dscroll, el.dmore);
+  }
+
+  function drawNotes(){
+    var lg = STATS.map(function(s){
+      return "<li><b>" + s.gl + " " + esc(s.full) + ".</b> " + esc(s.mean) + "</li>";
+    }).join("");
+
+    el.dbody.innerHTML =
+      '<p class="nh">How to use this board</p>' +
+      '<ul class="nl">' +
+        "<li>Filter by category, filter by status, then read the status column before anything else.</li>" +
+        "<li>Pick a name on the left to read its number, its money-model fit and its blocker. Arrow keys move down the list.</li>" +
+        "<li>Your filters, your search and the name you were last reading are kept on this device, so you can come back to this and pick it up.</li>" +
+      "</ul>" +
+      '<p class="nh">What the four flags mean</p>' +
+      '<ul class="nl">' + lg + "</ul>" +
+      '<p class="nh">Two of the six categories have no open row, and that is a finding</p>' +
+      '<p class="nb"><b>Employers and workforce</b> and <b>Financial and consumer brands</b> both have rows here, ' +
+        "and every one of them is already claimed by Khan Academy. Nothing in either category came out of the " +
+        "verification pass with a number good enough to ship as an open candidate. Read that as a gap in the list " +
+        "you were handed, not as a gap in the category.</p>" +
+      '<p class="nb">The brand-funded free content seat in particular is not empty. <b>Discovery Education</b> and ' +
+        "<b>EVERFI</b> run that model as an operating business, which is why neither of them is a row. They are not " +
+        "prospects. They are who you would be asking a company to leave.</p>" +
+      '<p class="nh">Already named, and not rows here</p>' +
+      '<p class="nb">These came out of the same pass as organizations already named in a Khan Academy announcement. ' +
+        "None has a published number and several fit none of the six categories, so none ships as a row. They are " +
+        "listed so that no name is missing from this board without a reason: " +
+        NONROWS.map(function(n){ return "<b>" + esc(n) + "</b>"; }).join(", ") + ".</p>" +
+      '<p class="nh">Verified as of ' + VERIFIED + "</p>" +
+      '<p class="nb">These numbers and these links go stale faster than anything else in the program. Re-source any ' +
+        "figure here before it goes into a pitch, and if a link has moved, the organization's own newsroom is where " +
+        "the current version of it lives.</p>";
+    el.dscroll.scrollTop = 0;
+    flag(el.dscroll, el.dmore);
+  }
+
+  /* ---------------- the guess ---------------- */
+
+  function commitGuess(id, g){
+    store.g[id] = g;
+    /* the reveal always lands on the row that was guessed, so the panel
+       can never print one organization's flag under another's name */
+    store.sel = id;
+    save();
+    drawList();
+    drawDetail();
+    if(!reduce){
+      var n = el.dbody.querySelector(".revealed");
+      if(n){ n.classList.remove("revealed"); void n.offsetWidth; n.classList.add("revealed"); }
+    }
+    var o = null;
+    POOL.forEach(function(x){ if(x.id === id) o = x; });
+    var right = o ? ((g === "taken") === TAKEN[o.stat]) : false;
+    /* the announcement reports the flag, not the pick */
+    announce((o ? o.name + " is " + STATBY[o.stat].full + ". " : "") +
+             (right ? "Your guess matched. " : "Your guess did not match. ") +
+             (o ? (GUESSNOTE[o.id] || "") : ""));
+
+    var left = GUESSABLE.filter(function(x){ return !store.g[x]; });
+    if(!left.length){
+      store.gon = false; save();
+      paintChips(); drawList(); drawButtons();
+      announce("All six flags are showing. The status filter is back on.");
+    } else {
+      drawButtons();
+    }
+    el.detail.focus();
+  }
+
+  function startGuess(){
+    store.gon = true;
+    store.g = {};
+    store.stat = {};
+    /* land them on the first covered row, so the guess starts on a
+       question rather than on an instruction */
+    store.sel = GUESSABLE[0];
+    save();
+    draw();
+    var b = el.list.querySelector('button.orow[data-id="' + GUESSABLE[0] + '"]');
+    if(b){ b.setAttribute("tabindex","0"); }
+    el.detail.focus();
+    announce("Six flags are covered. Read each one, then say whether the seat is open or taken. " +
+             "The status filter is switched off while flags are covered. " +
+             "Show all flags ends this at any point, and nothing is graded.");
+  }
+  function endGuess(){
+    store.gon = false; save();
+    draw();
+    el.detail.focus();
+    announce("All flags are showing. The status filter is back on.");
+  }
+
+  /* ---------------- the footer ---------------- */
+
+  function drawButtons(){
+    var anyFilter = on(store.cat).length || on(store.stat).length || store.q.trim();
+    el.clearall.hidden = !anyFilter;
+    el.notes.hidden = !store.sel;
+
+    if(store.gon){
+      var left = GUESSABLE.filter(function(x){ return !store.g[x]; }).length;
+      el.guessbtn.textContent = "Show all flags";
+      el.guessbtn.className = "nav ghost small";
+      el.hint.innerHTML = "<b>" + left + " of 6 flags still covered.</b> Guess whether the seat is open or taken, " +
+        "then the flag appears. The status filter is switched off until every flag is showing. " +
+        "Nothing is graded, and Show all flags ends this at any point.";
+      return;
+    }
+
+    var done = GUESSABLE.filter(function(x){ return store.g[x]; }).length;
+    el.guessbtn.textContent = done ? "Cover the six again" : "Cover six flags and guess";
+    el.guessbtn.className = "nav small";
+    el.hint.innerHTML = returning
+      ? "<b>Your filters are where you left them.</b> Arrow keys move down the list, " +
+        "<span class=\"key\">/</span> jumps to the search."
+      : "Wes asked for one taken seat, and who is sitting in it. " +
+        "Arrow keys move down the list, <span class=\"key\">/</span> jumps to the search.";
+  }
+
+  /* ---------------- selection ---------------- */
+
+  /* Selection repaints attributes in place and never rebuilds the list.
+     It cannot change which rows are visible, and rebuilding would destroy
+     the focused button, which is how arrow-key navigation loses focus to
+     <body> on every keypress. Paint, do not re-render. */
+  function paintSelection(){
+    rowEls().forEach(function(b){
+      var mine = b.getAttribute("data-id") === store.sel;
+      b.setAttribute("aria-current", mine ? "true" : "false");
+      b.setAttribute("tabindex", mine ? "0" : "-1");
+    });
+    if(!el.list.querySelector('button.orow[tabindex="0"]')){
+      var first = el.list.querySelector("button.orow");
+      if(first) first.setAttribute("tabindex","0");
+    }
+  }
+
+  function select(id){
+    store.sel = id; save();
+    paintSelection(); drawDetail(); drawButtons();
+    /* under 600px the record sits below the list, so bring it into view
+       rather than leaving the student wondering whether anything happened */
+    if(window.matchMedia("(max-width:599px)").matches){
+      try{ el.detail.scrollIntoView({block:"start"}); }catch(e){ el.detail.scrollIntoView(); }
+    }
+  }
+
+  /* Every scrolling region says so, rather than letting a sentence end at
+     the panel edge with no affordance. Measured synchronously: reading
+     scrollHeight forces layout, and deferring this to requestAnimationFrame
+     never fires under headless rendering, so the flag stays hidden on a
+     panel with content below the fold. The flag is hidden before the read
+     so its own height is never counted as part of what it reports on. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+
+  function draw(){
+    paintChips();
+    drawBanner();
+    drawList();
+    drawDetail();
+    drawButtons();
+    el.qclear.hidden = !store.q;
+    flag(el.lscroll, el.lmore);
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  el.q.addEventListener("input", function(){
+    store.q = el.q.value; save();
+    drawBanner(); drawList(); drawButtons();
+    el.qclear.hidden = !store.q;
+    flag(el.lscroll, el.lmore);
+    announce(describeFilters());
+  });
+  el.qclear.addEventListener("click", function(){
+    store.q = ""; el.q.value = ""; save();
+    draw(); el.q.focus();
+    announce(describeFilters());
+  });
+  el.q.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && el.q.value){
+      e.preventDefault();
+      store.q = ""; el.q.value = ""; save(); draw(); el.q.focus();
+    }
+  });
+
+  el.clearall.addEventListener("click", function(){
+    store.cat = {}; store.stat = {}; store.q = ""; el.q.value = "";
+    save(); draw();
+    announce("Filters cleared. " + describeFilters());
+  });
+  el.notes.addEventListener("click", function(){
+    store.sel = null; save();
+    drawList(); drawDetail(); drawButtons();
+    el.detail.focus();
+    announce("Notes and gaps.");
+  });
+  el.guessbtn.addEventListener("click", function(){
+    if(store.gon){ endGuess(); } else { startGuess(); }
+  });
+
+  /* arrow-key movement inside the list, with a roving tabindex, so the
+     whole 27 row list is one Tab stop and every row is still reachable */
+  el.list.addEventListener("keydown", function(e){
+    var rows = rowEls();
+    if(!rows.length) return;
+    var at = rows.indexOf(document.activeElement);
+    if(at < 0) return;
+    var to = -1;
+    if(e.key === "ArrowDown"){ to = Math.min(rows.length - 1, at + 1); }
+    else if(e.key === "ArrowUp"){ to = Math.max(0, at - 1); }
+    else if(e.key === "Home"){ to = 0; }
+    else if(e.key === "End"){ to = rows.length - 1; }
+    else { return; }
+    e.preventDefault();
+    rows.forEach(function(b){ b.setAttribute("tabindex","-1"); });
+    rows[to].setAttribute("tabindex","0");
+    rows[to].focus();
+    select(rows[to].getAttribute("data-id"));
+  });
+
+  /* Plain Tab and Enter operate every control in this file. The one key
+     below is an addition, not a protocol: nothing is reachable only by
+     keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(e.key === "/"){ e.preventDefault(); el.q.focus(); el.q.select(); }
+  });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.lscroll, el.lmore);
+    flag(el.dscroll, el.dmore);
+  });
+
+  buildChips();
+  el.q.value = store.q;
+  /* a returning device keeps whatever the guess was mid-way through, but
+     never starts one: the board opens as a table, every time */
+  draw();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run
+     force a state without hand-driving the UI */
+  window.__ex = {
+    rows:function(){ return POOL.length; },
+    visible:function(){ return visible().map(function(o){ return o.id; }); },
+    select:select,
+    notes:function(){ store.sel = null; save(); draw(); },
+    setCat:function(id){ store.cat = {}; if(id) store.cat[id] = true; save(); draw(); },
+    setStat:function(id){ store.stat = {}; if(id) store.stat[id] = true; save(); draw(); },
+    search:function(t){ store.q = t || ""; el.q.value = store.q; save(); draw(); },
+    startGuess:startGuess, endGuess:endGuess, guess:commitGuess,
+    reset:function(){ store.cat={}; store.stat={}; store.q=""; store.sel=null; store.g={}; store.gon=false; save(); el.q.value=""; draw(); },
+    openCandidates:function(){ return POOL.filter(function(o){ return o.stat === "open"; }).map(function(o){ return o.name; }); },
+    state:function(){ return {cat:store.cat, stat:store.stat, q:store.q, sel:store.sel, gon:store.gon, g:store.g}; }
+  };
+})();
+</script>
+</body>
+</html>
