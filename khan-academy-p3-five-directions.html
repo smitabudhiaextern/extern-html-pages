@@ -152,6 +152,18 @@
   /* No fill mode. The resting state is fully visible, so a throttled or
      never-run animation cannot leave this panel invisible in an embed. */
   .reveal.in{animation:rin var(--t-reveal) var(--ease-over)}
+  /* The reveal's slot before they commit. It holds the space the answer will
+     take, so the canvas is not two thirds empty while they decide, and it says
+     what happens next without saying any part of the answer. Dashed and
+     unfilled against the reveal's solid panel: the difference is a border
+     style and a label, never colour on its own. */
+  .wait{flex:1 1 auto;min-height:0;overflow-y:auto;border:1.5px dashed var(--line);
+    border-radius:11px;padding:10px 12px;margin-top:10px;display:flex;flex-direction:column;
+    justify-content:center;gap:6px}
+  .wait .wl{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);display:flex;align-items:center;gap:6px}
+  .wait .wl svg{width:13px;height:13px;flex:0 0 auto;display:block}
+  .wait .wt{font-size:12.5px;line-height:1.44;color:var(--body)}
   @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   .rl{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
     color:var(--on-highlight);display:flex;align-items:center;gap:6px}
@@ -206,6 +218,8 @@
     button.opt .g{width:18px;height:18px;font-size:11px}
     button.opt .tag{font-size:12px}
     .reveal{flex:0 0 auto;overflow:visible;padding:14px 15px;margin-top:14px}
+    .wait{flex:0 0 auto;overflow:visible;padding:14px 15px;margin-top:14px}
+    .wait .wt{font-size:16px}
     .rt{font-size:16px;line-height:1.5}
     .cap{font-size:13.5px}
     .tally .tr{grid-template-columns:1fr;gap:3px;padding:11px 13px}
@@ -574,22 +588,29 @@
     for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
     el.segs.innerHTML = h;
 
-    /* The chip counts the directions, so a student always knows how many of
-       the five are left even though the deck runs to six slides. */
+    /* The chip says what the progress line cannot: that the question does not
+       change. The repetition is the teaching, so it is worth naming. */
     if(s.kind === "commit"){
       el.chip.hidden = false;
-      el.chip.textContent = "Direction " + (i+1) + " of 5";
+      el.chip.textContent = "The same question, all five";
     } else el.chip.hidden = true;
 
     el.back.disabled = (i === 0);
-    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; el.hint.textContent = ""; }
     else if(s.kind === "commit" && !st.answers[s.id]){
       /* Commit required. Nothing reveals and nothing advances until they pick. */
       el.next.disabled = true;
       el.next.textContent = "Continue";
       if(!el.hint.textContent) el.hint.textContent = "Pick one before you read on. There is no penalty for being wrong, and the answer will not appear until you commit.";
     }
-    else { el.next.disabled = false; el.next.textContent = "Continue"; }
+    else {
+      el.next.disabled = false;
+      el.next.textContent = "Continue";
+      /* Cleared, not left standing. The gating message used to survive the
+         commit that satisfied it and sat under an answered slide telling the
+         student to pick one. */
+      el.hint.textContent = "";
+    }
   }
 
   /* ---------------- render ---------------- */
@@ -638,6 +659,17 @@
            'stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6.4"/>'+
            '<path d="M8 4.6v4.2"/><path d="M8 11.2h.01"/></svg>';
   }
+  function lockSVG(){
+    return '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" '+
+           'stroke-width="1.6" stroke-linecap="round"><rect x="3.1" y="7" width="9.8" height="6.4" rx="1.4"/>'+
+           '<path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7"/></svg>';
+  }
+  function waitHTML(){
+    return '<div class="wl">' + lockSVG() + "Locked until you pick</div>" +
+           '<div class="wt">The record for this direction lands here, and not before you '+
+           "pick. Guessing wrong costs you nothing. It is the fastest way to find out what "+
+           "you actually thought.</div>";
+  }
 
   function renderCommit(s){
     var chosen = st.answers[s.id] || null;
@@ -647,6 +679,7 @@
     var right = '<div class="col">' +
       '<div class="q">' + esc(s.q) + "</div>" +
       '<div class="opts">' + s.opts.map(function(o){ return optHTML(s, o, chosen); }).join("") + "</div>" +
+      '<div class="wait"' + (chosen ? " hidden" : "") + ">" + (chosen ? "" : waitHTML()) + "</div>" +
       '<div class="reveal" tabindex="-1"' + (chosen ? "" : " hidden") + '>' +
         (chosen ? verdictHTML(s) : "") + "</div>" +
       "</div>";
@@ -676,6 +709,10 @@
     var chosen = oid;
     var opts = el.board.querySelector(".opts");
     opts.innerHTML = s.opts.map(function(o){ return optHTML(s, o, chosen); }).join("");
+    /* The placeholder is emptied as well as hidden, so nothing of it is left in
+       the accessibility tree behind the answer that replaced it. */
+    var wt = el.board.querySelector(".wait");
+    if(wt){ wt.innerHTML = ""; wt.hidden = true; }
     var rv = el.board.querySelector(".reveal");
     rv.innerHTML = verdictHTML(s);
     rv.hidden = false;
