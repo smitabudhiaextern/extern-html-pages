@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Five directions worth thinking about</title>
+<!--
+  Khan Academy, Project 3, substep 3.1.1. Built from the Extern deck shell.
+
+  ONE QUESTION, FIVE TIMES. Every direction slide asks the same question in the
+  same words and offers the same two buttons. Nothing reveals until the student
+  commits. Neither button is wrong: this is a commitment, not a quiz, so no
+  option carries a checkmark and no option carries a cross. The accent lands on
+  the option they chose and nowhere else on the slide.
+
+  FACTUAL LOCKS, all binding, all checked against the source substep and the
+  fact-verification files before this file was written:
+    - Wikimedia Enterprise's paying customers are never named here. The chat
+      assistant company a writer reaches for first is not one of them, and
+      naming it was rejected once already in this program.
+    - No plural claim about AI companies paying. Row KA4 of
+      08-reviews/p2-fact-verification-2026-08-24.md marks that unverified.
+      Direction 2 therefore describes ONE deal of a shape, and says plainly
+      that nobody published a figure or even whether cash moved.
+    - The large software company the owner ruled out by name on 5 September
+      2026 is not written anywhere in this file, comments included.
+    - No organization that is a row in khan-academy-p3-starter-pool.html is
+      named anywhere in this deck. Those are the names the student is meant to
+      discover in 3.1.4. Discovery Education and Wikimedia are deliberate
+      exclusions from that pool, so both are safe to name here.
+    - Directions 4 and 5 have no published example, and the deck says so in
+      those words rather than reaching for one.
+
+  ANIMATION NOTE, learned the hard way in this program. The shell's reveal
+  animation shipped as `animation: rin ... both`, whose from-state is
+  opacity:0. In a Notion embed that starts off screen, CSS animations are
+  throttled and the backwards fill can leave the element permanently invisible.
+  The fill mode is dropped here on purpose: the reveal's resting state is fully
+  visible, so with the animation never running the panel still renders.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. Extern's five, from KHAN-ACADEMY-STYLE-GUIDE.md
+     section 7. No sixth colour. Every tint is an rgba() of #001D69.
+     No state is ever signalled by colour alone: every coloured state
+     also carries a glyph and a label.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, the reveal             */
+    --on-highlight:#001D69; /* accents, borders, the chosen option   */
+    --bg:#FDF8F8;           /* canvas background, and text on navy   */
+    --body:#484646;         /* body copy, captions                   */
+    --title:#1C1B1B;        /* headings, primary text                */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback: hover, press, focus, select */
+    --t-frame:300ms;   /* movement between slides                  */
+    --t-reveal:560ms;  /* an answer resolving                      */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    /* System stack, no webfont. A font that blocks first paint is worse
+       than any font choice, and a deck makes no network request. */
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ---- */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:16px 40px 12px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header. Progress visible from first paint. ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:6px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border-radius:20px;
+    padding:3px 10px;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:20px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:6px}
+
+  /* ---- the board. Idea on the left, the same question on the right. ---- */
+  .board{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 388px;gap:20px}
+  .board.one{grid-template-columns:1fr}
+  .col{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  /* ---- prose. Max ~74ch: past that the eye loses the line. ---- */
+  .intro{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:9px;max-width:74ch}
+  .intro p{font-size:14.5px;line-height:1.55}
+  .intro p b{color:var(--title);font-weight:600}
+
+  /* ---- the question. Identical on all five direction slides, and it
+         stays on screen through the reveal so the repetition is visible. ---- */
+  .q{flex:0 0 auto;font-size:14.5px;line-height:1.35;font-weight:600;color:var(--title);margin-bottom:8px}
+
+  /* ---- the two options. Real buttons: Tab and Enter, no custom key
+         protocol. Neither is wrong, so neither ever takes a cross or a
+         checkmark. ---- */
+  .opts{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+  button.opt{
+    font-family:inherit;font-size:12.5px;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:9px;
+    padding:8px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  button.opt .g{flex:0 0 auto;width:15px;height:15px;border-radius:50%;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:9px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center}
+  button.opt .txt{flex:1 1 auto;min-width:0}
+  button.opt .tag{flex:0 0 auto;font-size:10.5px;font-weight:600;letter-spacing:.03em;
+    text-transform:uppercase;opacity:.85}
+  button.opt:hover:not(:disabled){background:var(--highlight);border-color:var(--on-highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  /* The chosen option: navy fill, a filled glyph, and the words "your call".
+     Three signals, only one of which is colour. */
+  button.opt.picked{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  button.opt.picked .g{border-color:var(--bg);color:var(--bg)}
+  /* The one they did not choose: dashed, hollow glyph, and a label. Never
+     struck through and never crossed out, because it is not wrong. */
+  button.opt.notpicked{background:transparent;border-style:dashed;border-color:var(--line);color:var(--body)}
+  button.opt.notpicked .g{border-style:dashed}
+
+  /* ---- the reveal. flex:1 1 auto with its own scroll region, so the
+         verdict can be long without ever displacing the bar below. ---- */
+  .reveal{flex:1 1 auto;min-height:0;overflow-y:auto;background:var(--highlight);
+    border-radius:11px;padding:9px 12px;margin-top:10px;display:flex;flex-direction:column;gap:6px}
+  .reveal:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  /* No fill mode. The resting state is fully visible, so a throttled or
+     never-run animation cannot leave this panel invisible in an embed. */
+  .reveal.in{animation:rin var(--t-reveal) var(--ease-over)}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .rl{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);display:flex;align-items:center;gap:6px}
+  .rl svg{width:13px;height:13px;flex:0 0 auto;display:block}
+  .rt{font-size:12.5px;line-height:1.44;color:var(--body)}
+  .rt b{color:var(--title);font-weight:600}
+  /* The source line. overflow-wrap is load bearing: a long citation URL is
+     one unbroken token and would otherwise widen the canvas. */
+  .cap{font-size:11px;line-height:1.4;color:var(--body);border-top:1px solid var(--line);
+    padding-top:6px;overflow-wrap:anywhere;word-break:break-word}
+  .cap a{color:var(--on-highlight)}
+  .cap b{color:var(--title);font-weight:600}
+
+  /* ---- the closing slide's three-line summary ---- */
+  .tally{display:flex;flex-direction:column;gap:5px;margin:2px 0 4px}
+  .tally .tr{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:baseline;
+    background:var(--highlight);border-radius:8px;padding:7px 11px}
+  .tally .tn{font-size:12px;font-weight:600;color:var(--on-highlight);line-height:1.3}
+  .tally .tv{font-size:12.5px;line-height:1.36;color:var(--body)}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         scrolls inside its own region and can never displace this row. ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:52px;padding-top:8px}
+  button.nav{font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:52px;overflow-y:auto;font-size:11.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .board{grid-template-columns:1fr;gap:18px;align-items:start;align-content:start}
+    /* 16px is the body floor. Never below it. */
+    .intro{overflow:visible}
+    .intro p{font-size:16px}
+    .q{font-size:17px}
+    button.opt{font-size:16px;padding:12px 13px}
+    button.opt .g{width:18px;height:18px;font-size:11px}
+    button.opt .tag{font-size:12px}
+    .reveal{flex:0 0 auto;overflow:visible;padding:14px 15px;margin-top:14px}
+    .rt{font-size:16px;line-height:1.5}
+    .cap{font-size:13.5px}
+    .tally .tr{grid-template-columns:1fr;gap:3px;padding:11px 13px}
+    .tally .tn{font-size:14px}
+    .tally .tv{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:13.5px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Five directions worth thinking about">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 6</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <!-- The static version. It teaches the same thing, in the same order, with
+       every verdict stated plainly. The test: read the substep with the embed
+       blocked, which is a real thing that happens in an iframe. If the student
+       learns nothing then, that is a bug, and this is what fixes it. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf a{color:#001D69;overflow-wrap:anywhere}
+    .nsf .v{color:#1C1B1B;font-weight:600}
+  </style>
+  <div class="nsf">
+    <h2>Five directions worth thinking about</h2>
+    <p>Five directions are open. They are not equal. Ask the same question of
+      every one of them, in the same words, before you spend a week on any of
+      them: <span class="v">has anyone actually paid for this, or is it just a
+      good idea?</span> Answer it out loud for each direction below, then read
+      what the record says.</p>
+
+    <h3>1. A company pays to put Khan Academy's lessons inside a product it sells.</h3>
+    <p>Khan Academy has thousands of lessons and exercises, and it knows a lot
+      about how students work through them. Another company wants that inside
+      its own product, the one it sells to customers, and pays Khan Academy for
+      it. Say a company is building an AI tutor that parents pay for. An AI can
+      already give you the answer. What it has to learn is how to walk a student
+      through the steps, and to learn that it needs thousands of worked
+      examples, meaning questions with all the working written out. Building
+      that from scratch would take years. Khan Academy already has it.</p>
+    <p><span class="v">Somebody has paid.</span> Wikimedia Enterprise earned
+      $8.3 million in the year ending 30 June 2025 from 13 paying customers. You
+      took this apart in Project 2. Source: Wikimedia Foundation, 24 November
+      2025,
+      <a href="https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/">diff.wikimedia.org</a>.
+      That is a number, with a date, that somebody published. Hold on to how
+      that feels, because not every idea in this deck has one.</p>
+
+    <h3>2. A large technology company pays to build AI features with Khan Academy.</h3>
+    <p>A technology company is putting a tutor inside software that schools
+      already use. It has the engineering. What it does not have is the lessons,
+      and it does not have the practice questions that sit under them, meaning
+      the questions a student works through until the idea holds. Khan Academy
+      has both. Building an AI tutor for school looks like one job. It is two,
+      and only one of them is code.</p>
+    <p><span class="v">Somebody has done it. Nobody printed a number.</span> A
+      deal of this shape has been announced in public, with both names on it, so
+      the shape is proven and you are not inventing it. What is missing is the
+      figure. Nobody published what changed hands, or whether anything changed
+      hands in cash at all. You can name the shape. You cannot put a number next
+      to it the way you could on the direction above.</p>
+
+    <h3>3. A company pays for a free course in a subject Khan Academy has not covered.</h3>
+    <p>A company wants young people to understand something, and Khan Academy
+      does not teach it yet. The company pays for the course to be built. Then
+      the course sits on the site for free, the same as everything else on it,
+      and anyone can take it. The company does not get a customer out of that.
+      It gets a subject it cares about taught to a lot of people.</p>
+    <p><span class="v">Somebody has paid.</span> Discovery Education runs a
+      group of companies and charities that funds free science and career
+      material for schools, and it has reached over 10.7 million students since
+      2019. Source: Discovery Education, 28 October 2024,
+      <a href="https://www.discoveryeducation.com/details/ahead-of-schedule-stem-careers-coalition-reaches-over-10-7-million-students/">discoveryeducation.com</a>.
+      That is a second real number, and it comes with a second problem. The seat
+      is taken. Walk up to a company with this idea and a fair number of them
+      can say they already fund that.</p>
+
+    <h3>4. Somebody other than a school district pays so that schools get access.</h3>
+    <p>A school district can pay for Khan Academy across the schools it runs.
+      Some districts cannot afford it, and those are often the districts whose
+      students would gain most. So somebody else pays instead. A state, a
+      foundation, a group of libraries, an employer buying access for the
+      families of the people who work for it. The school still gets the thing.
+      The bill goes to a different address.</p>
+    <p><span class="v">Nobody is named. The shape is real, the example is
+      missing.</span> This is the one direction that touches districts without
+      turning back into a sales lead, meaning a customer for something that
+      already exists, because the organization you pitch is whoever would pay
+      for the districts that cannot pay for themselves. That much is a real
+      shape. What this page cannot give you is a name. There is no state, no
+      foundation and no company on it that anybody can point at and say, that
+      one paid. Nothing is being kept from you here. It is not there. If you
+      take this direction, finding the first name is the work.</p>
+
+    <h3>5. Free official practice for a qualification that is not a college entrance exam.</h3>
+    <p>Khan Academy already builds the free official practice for one college
+      entrance exam, meaning the test students sit to get into university.
+      Plenty of qualifications are not that. A certificate that says you can
+      wire a house, or keep a set of accounts, or look after a ward. The same
+      argument seems to carry across. Somebody owns the test, the practice for
+      it ought to be free, and Khan Academy knows how to build practice.</p>
+    <p><span class="v">Nobody yet.</span> Nothing on this page shows anyone
+      paying Khan Academy to build the free practice for a career or industry
+      certificate. What sits behind this direction is not a payment. It is an
+      inference about what the owners of tests tend to do with their own
+      practice material, and the one case you met in week one is a test owner
+      pulling that material back under its own roof. That is thinner than a
+      number. It is not nothing, and it is not the same thing.</p>
+
+    <h3>Five directions, one question, five different answers.</h3>
+    <p>You asked the same question five times, in the same words. Look at what
+      came back. A published figure with a date on it. A deal with names on it
+      and no number. A second figure, and a seat already occupied. A shape with
+      nobody in it. An inference.</p>
+    <p>None of the five is shut. That is not the same as saying they are equal.
+      Start where the evidence is strongest, and if you want a harder one later,
+      walk into it knowing that is what it is.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- content ----------------
+     One record per slide. `kind` picks the render case.
+
+     kind "commit" is this deck's whole grammar: an idea, then the same
+     question in the same words, then two buttons, neither of which is wrong.
+     The student has to pick one before anything reveals and before Continue
+     unlocks. The repetition is the teaching: five slides, one question, five
+     answers of five different qualities.
+
+     Slide 1's h1 and body are owner-approved and verbatim. Do not reword. */
+  var Q = "Has anyone actually paid for this? Or is it just a good idea?";
+  var OPTS = [
+    { id:"paid", txt:"Somebody has already paid" },
+    { id:"not",  txt:"Nobody has yet" }
+  ];
+
+  var S = [
+    { id:"d1", kind:"commit", label:"Direction 1",
+      h1:"A company pays to put Khan Academy's lessons inside a product it sells.",
+      body:["Khan Academy has thousands of lessons and exercises, and it knows a lot "+
+            "about how students work through them. Another company wants that inside "+
+            "its own product, the one it sells to customers, and pays Khan Academy for "+
+            "it. Say a company is building an AI tutor that parents pay for. An AI can "+
+            "already give you the answer. What it has to learn is how to walk a student "+
+            "through the steps, and to learn that it needs thousands of worked examples, "+
+            "meaning questions with all the working written out. Building that from "+
+            "scratch would take years. Khan Academy already has it."],
+      q:Q, opts:OPTS,
+      verdict:{
+        lab:"Somebody has paid",
+        txt:"Wikimedia Enterprise earned <b>$8.3 million</b> in the year ending "+
+            "30 June 2025 from <b>13 paying customers</b>. You took this apart in "+
+            "Project 2.<br><br>That is a number, with a date, that somebody published. "+
+            "Hold on to how that feels, because not every idea in this deck has one.",
+        cap:"<b>Source.</b> Wikimedia Foundation, 24 November 2025. "+
+            "<a href=\"https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/\">"+
+            "https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/</a>"
+      } },
+
+    { id:"d2", kind:"commit", label:"Direction 2",
+      h1:"A large technology company pays to build AI features with Khan Academy.",
+      body:["A technology company is putting a tutor inside software that schools "+
+            "already use. It has the engineering. What it does not have is the lessons, "+
+            "and it does not have the practice questions that sit under them, meaning "+
+            "the questions a student works through until the idea holds. Khan Academy "+
+            "has both.",
+            "Building an AI tutor for school looks like one job. It is two, and only "+
+            "one of them is code."],
+      q:Q, opts:OPTS,
+      verdict:{
+        lab:"Somebody has done it. Nobody printed a number",
+        txt:"A deal of this shape has been announced in public, with both names on it. "+
+            "So the shape is proven and you are not inventing it. What is missing is the "+
+            "figure. Nobody published what changed hands, or whether anything changed "+
+            "hands in cash at all.<br><br>You can name the shape. You cannot put a number "+
+            "next to it the way you could on the last slide.",
+        cap:"<b>No source line here.</b> There is no published figure to cite for this "+
+            "direction. That absence is the answer, not an omission."
+      } },
+
+    { id:"d3", kind:"commit", label:"Direction 3",
+      h1:"A company pays for a free course in a subject Khan Academy has not covered.",
+      body:["A company wants young people to understand something, and Khan Academy does "+
+            "not teach it yet. The company pays for the course to be built. Then the "+
+            "course sits on the site for free, the same as everything else on it, and "+
+            "anyone can take it.",
+            "The company does not get a customer out of that. It gets a subject it cares "+
+            "about taught to a lot of people."],
+      q:Q, opts:OPTS,
+      verdict:{
+        lab:"Somebody has paid",
+        txt:"Discovery Education runs a group of companies and charities that funds free "+
+            "science and career material for schools, and it has reached "+
+            "<b>over 10.7 million students since 2019</b>.<br><br>That is a second real "+
+            "number, and it comes with a second problem. The seat is taken. Walk up to a "+
+            "company with this idea and a fair number of them can say they already fund "+
+            "that.",
+        cap:"<b>Source.</b> Discovery Education, 28 October 2024. "+
+            "<a href=\"https://www.discoveryeducation.com/details/ahead-of-schedule-stem-careers-coalition-reaches-over-10-7-million-students/\">"+
+            "https://www.discoveryeducation.com/details/ahead-of-schedule-stem-careers-coalition-reaches-over-10-7-million-students/</a>"
+      } },
+
+    { id:"d4", kind:"commit", label:"Direction 4",
+      h1:"Somebody other than a school district pays so that schools get access.",
+      body:["A school district can pay for Khan Academy across the schools it runs. Some "+
+            "districts cannot afford it, and those are often the districts whose students "+
+            "would gain most. So somebody else pays instead. A state, a foundation, a "+
+            "group of libraries, an employer buying access for the families of the people "+
+            "who work for it.",
+            "The school still gets the thing. The bill goes to a different address."],
+      q:Q, opts:OPTS,
+      verdict:{
+        lab:"Nobody named. The shape is real",
+        txt:"This is the one direction that touches districts without turning back into a "+
+            "sales lead, meaning a customer for something that already exists. The "+
+            "organization you pitch is whoever would pay for the districts that cannot "+
+            "pay for themselves.<br><br>That much is a real shape. What this page cannot "+
+            "give you is a name. Nobody on it can be pointed at and told, you paid for "+
+            "this one. Finding the first name is the work.",
+        cap:"<b>No source line here.</b> Nothing is being kept from you on this one. "+
+            "It is not there."
+      } },
+
+    { id:"d5", kind:"commit", label:"Direction 5",
+      h1:"Free official practice for a qualification that is not a college entrance exam.",
+      body:["Khan Academy already builds the free official practice for one college "+
+            "entrance exam, meaning the test students sit to get into university. Plenty "+
+            "of qualifications are not that. A certificate that says you can wire a "+
+            "house, or keep a set of accounts, or look after a ward.",
+            "The same argument seems to carry across. Somebody owns the test, the "+
+            "practice for it ought to be free, and Khan Academy knows how to build "+
+            "practice."],
+      q:Q, opts:OPTS,
+      verdict:{
+        lab:"Nobody yet",
+        txt:"Nothing on this page shows anyone paying Khan Academy to build the free "+
+            "practice for a career or industry certificate. What sits behind this "+
+            "direction is not a payment.<br><br>It is an inference about what the owners "+
+            "of tests tend to do with their own practice material, and the one case you "+
+            "met in week one is a test owner pulling that material back under its own "+
+            "roof. That is thinner than a number. It is not nothing, and it is not the "+
+            "same thing.",
+        cap:"<b>No source line here.</b> This one rests on a pattern you met in week one, "+
+            "not on a figure anybody published."
+      } },
+
+    { id:"close", kind:"close", label:"Close",
+      h1:"Five directions, one question, five different answers.",
+      lead:"You asked the same question five times, in the same words. Look at what came back.",
+      tally:[
+        { n:"A figure",     v:"Published, with a date on it. $8.3 million, 13 customers, year ending 30 June 2025." },
+        { n:"A deal",       v:"Names on it, in public, and no number anywhere." },
+        { n:"A figure, and a queue", v:"Over 10.7 million students since 2019, and the seat already occupied." },
+        { n:"A shape",      v:"Real, and nobody named on this page who has done it." },
+        { n:"An inference", v:"A pattern about what test owners do, and no payment behind it." }
+      ],
+      tailFoot:"None of the five is shut. That is not the same as saying they are equal. "+
+               "Start where the evidence is strongest, and if you want a harder one later, "+
+               "walk into it knowing that is what it is." }
+  ];
+
+  /* ---------------- state ----------------
+     localStorage is wrapped: a blocked storage API must degrade silently, not
+     throw and take the deck down with it. */
+  var KEY = "khan-academy-p3-five-directions-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return { answers:{} };
+      return { answers: isPlain(raw.answers) ? raw.answers : {} };
+    }catch(e){ return { answers:{} }; }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* Filled and hollow, not tick and cross. Neither answer is wrong here and a
+     glyph that reads as a verdict would say otherwise. */
+  var GLYPH = { on:"●", off:"○" };
+
+  /* Data validation, at load, loud. A duplicate id silently records the wrong
+     answer, and a commit slide with one option is not a choice. Both are
+     authoring mistakes that look fine on screen. */
+  (function validate(){
+     var problems = [];
+     var ids = {};
+     S.forEach(function(s, n){
+       if(!s.id) problems.push("slide " + (n+1) + " has no id");
+       if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+       ids[s.id] = 1;
+       if(s.kind !== "commit") return;
+       var oids = {};
+       (s.opts || []).forEach(function(o){
+         if(oids[o.id]) problems.push('slide "' + s.id + '" has duplicate option id "' + o.id + '"');
+         oids[o.id] = 1;
+       });
+       if((s.opts || []).length !== 2) problems.push('slide "' + s.id + '" needs exactly 2 options');
+       if(!s.q) problems.push('slide "' + s.id + '" has no question');
+       if(!s.verdict || !s.verdict.lab || !s.verdict.txt) problems.push('slide "' + s.id + '" has no verdict');
+     });
+     if(problems.length){
+       document.getElementById("board").innerHTML =
+         '<div class="intro"><p><b>This deck has authoring errors and will not '
+         + 'behave correctly:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+         + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+       throw new Error("deck data invalid: " + problems.join("; "));
+     }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    /* Segments generate from S.length. Never hardcode a slide count. */
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    /* The chip counts the directions, so a student always knows how many of
+       the five are left even though the deck runs to six slides. */
+    if(s.kind === "commit"){
+      el.chip.hidden = false;
+      el.chip.textContent = "Direction " + (i+1) + " of 5";
+    } else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "commit" && !st.answers[s.id]){
+      /* Commit required. Nothing reveals and nothing advances until they pick. */
+      el.next.disabled = true;
+      el.next.textContent = "Continue";
+      if(!el.hint.textContent) el.hint.textContent = "Pick one before you read on. There is no penalty for being wrong, and the answer will not appear until you commit.";
+    }
+    else { el.next.disabled = false; el.next.textContent = "Continue"; }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    el.board.className = "board" + (s.kind === "commit" ? "" : " one");
+    el.hint.textContent = "";
+
+    if(s.kind === "commit") renderCommit(s);
+    else if(s.kind === "close") renderClose(s);
+    else {
+      el.board.className = "board one";
+      el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "'
+        + esc(String(s.kind)) + '".</b></p><p>This deck ships commit and close. '
+        + 'A new kind needs its own render case rather than reusing one of these.</p></div>';
+    }
+
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  function optHTML(s, o, chosen){
+    var picked = chosen === o.id;
+    var cls = chosen ? (picked ? " picked" : " notpicked") : "";
+    var tag = chosen ? (picked ? "Your call" : "Not your call") : "";
+    return '<button class="opt' + cls + '" type="button" data-o="' + esc(o.id) + '"' +
+      (chosen ? ' disabled aria-disabled="true"' : "") + '>' +
+      '<span class="g" aria-hidden="true">' + (picked ? GLYPH.on : GLYPH.off) + "</span>" +
+      '<span class="txt">' + esc(o.txt) + "</span>" +
+      (tag ? '<span class="tag">' + tag + "</span>" : "") + "</button>";
+  }
+
+  function verdictHTML(s){
+    var v = s.verdict;
+    return '<div class="rl">' + iconSVG() + esc(v.lab) + "</div>" +
+           '<div class="rt">' + v.txt + "</div>" +
+           (v.cap ? '<div class="cap">' + v.cap + "</div>" : "");
+  }
+
+  /* Inline SVG, no network. A verdict is never colour alone: this mark sits
+     beside the label as a second signal. */
+  function iconSVG(){
+    return '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" '+
+           'stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6.4"/>'+
+           '<path d="M8 4.6v4.2"/><path d="M8 11.2h.01"/></svg>';
+  }
+
+  function renderCommit(s){
+    var chosen = st.answers[s.id] || null;
+    var left = '<div class="col"><div class="intro">' +
+      (s.body || []).map(function(p){ return "<p>" + esc(p) + "</p>"; }).join("") +
+      "</div></div>";
+    var right = '<div class="col">' +
+      '<div class="q">' + esc(s.q) + "</div>" +
+      '<div class="opts">' + s.opts.map(function(o){ return optHTML(s, o, chosen); }).join("") + "</div>" +
+      '<div class="reveal" tabindex="-1"' + (chosen ? "" : " hidden") + '>' +
+        (chosen ? verdictHTML(s) : "") + "</div>" +
+      "</div>";
+    el.board.innerHTML = left + right;
+    if(!chosen) wireOpts(s);
+  }
+
+  function renderClose(s){
+    el.board.innerHTML = '<div class="intro">' +
+      "<p>" + esc(s.lead) + "</p>" +
+      '<div class="tally">' + (s.tally || []).map(function(t){
+        return '<div class="tr"><div class="tn">' + esc(t.n) + '</div>' +
+               '<div class="tv">' + esc(t.v) + "</div></div>";
+      }).join("") + "</div>" +
+      "<p>" + esc(s.tailFoot) + "</p></div>";
+  }
+
+  function wireOpts(s){
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.opt"), function(b){
+      b.addEventListener("click", function(){ commit(s, b.dataset.o); });
+    });
+  }
+
+  function commit(s, oid){
+    st.answers[s.id] = oid;
+    save(st);
+    var chosen = oid;
+    var opts = el.board.querySelector(".opts");
+    opts.innerHTML = s.opts.map(function(o){ return optHTML(s, o, chosen); }).join("");
+    var rv = el.board.querySelector(".reveal");
+    rv.innerHTML = verdictHTML(s);
+    rv.hidden = false;
+    if(!reduce){ rv.classList.remove("in"); void rv.offsetWidth; rv.classList.add("in"); }
+    rv.focus();
+    header();
+    var body = rv.querySelector(".rt");
+    say(s.verdict.lab + ". " + (body ? body.textContent : ""));
+  }
+
+  /* ---------------- navigation ----------------
+     Three input methods: visible buttons, keyboard arrows, and swipe. A slide
+     the student has not answered cannot be passed by any of the three. */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    var s = S[i];
+    if(d > 0 && s.kind === "commit" && !st.answers[s.id]){
+      el.hint.innerHTML = "<b>Pick one first.</b> Nothing reveals until you commit, and that is the point of the exercise.";
+      say("Pick one first. Nothing reveals until you commit.");
+      return;
+    }
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  /* One predicate, used by both the key handler and the swipe handler, so they
+     can never drift apart about what owns an interaction. */
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    /* Horizontal dominance required, or a thumb-flick down the portrait layout
+       skips a slide. */
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps through the deck with this. Without it only slide 1
+     can be measured, which is exactly how an overflowing slide ships. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    pick:function(id){
+      var b = el.board.querySelector('button.opt[data-o="' + id + '"]:not(:disabled)');
+      if(b) b.click();
+      return !!b;
+    },
+    /* Clears every commitment AND returns to slide 1, so "reset" means the
+       state a student sees on a first visit. */
+    reset:function(){ st = {answers:{}}; save(st); i = 0; render(); },
+    state:function(){ return { i:i, answers:st.answers }; }
+  };
+})();
+</script>
+</body>
+</html>
