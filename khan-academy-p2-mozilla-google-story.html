@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Pays for Firefox</title>
+<style>
+  /* ===============================================================
+     Extern design system. Five palette values, and every tint below
+     is an rgba() of #001D69 rather than a new hue. No image, no font,
+     no script and no stylesheet is loaded from anywhere. Every mark
+     on this page is drawn in this file.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up.
+         flex:0 0 auto is load bearing: the canvas always holds 960 in
+         layout and the transform does all of the fitting. ---- */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:7px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{
+    display:block;width:18px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{
+    margin-left:auto;flex:0 0 auto;background:var(--highlight);border-radius:20px;
+    padding:3px 10px;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap;
+  }
+
+  h1{font-size:21px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:7px}
+
+  /* ---- the board and its three column shapes ---- */
+  .board{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr;gap:20px}
+  .board.two{grid-template-columns:1fr 348px;gap:24px;align-items:start;align-content:center}
+  .board.quiz,.board.guess{grid-template-columns:226px 1fr;gap:22px;align-items:stretch}
+  .board.reveal{grid-template-columns:340px 1fr;gap:22px;align-items:stretch}
+  .col{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  /* ---- prose ---- */
+  .prose{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;gap:9px;max-width:74ch}
+  .prose p{font-size:15px;line-height:1.52}
+  .prose p b{color:var(--title);font-weight:600}
+
+  /* ---- the figure card that sits beside the prose ---- */
+  .fig{flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:13px 14px}
+  .figh{
+    display:flex;align-items:center;gap:6px;margin-bottom:9px;
+    font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);
+  }
+  .figh svg{width:13px;height:13px;flex:0 0 auto;display:block}
+
+  /* three small facts stacked, divided by a rule rather than by colour */
+  .ch{display:grid;grid-template-columns:19px 1fr;gap:10px;align-items:start;padding:8px 0}
+  .ch + .ch{border-top:1.5px solid var(--tint2)}
+  .ch svg{width:18px;height:18px;display:block;color:var(--on-highlight);margin-top:1px}
+  .ch .ct{font-size:12.5px;line-height:1.42;color:var(--body)}
+  .ch .ct b{display:block;font-size:13px;color:var(--title);font-weight:600;margin-bottom:1px}
+
+  /* a drawn browser window. No screenshot, no image file. */
+  .win{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;overflow:hidden}
+  .wtop{display:flex;align-items:center;gap:5px;padding:7px 10px;border-bottom:1.5px solid var(--tint2)}
+  .wtop i{display:block;width:7px;height:7px;border-radius:50%;background:var(--tint2)}
+  .wbody{padding:12px}
+  .wsearch{
+    display:flex;align-items:center;gap:8px;
+    border:2px solid var(--on-highlight);border-radius:20px;padding:8px 13px;
+  }
+  .wsearch svg{width:16px;height:16px;flex:0 0 auto;display:block;color:var(--on-highlight)}
+  .wsearch span{font-size:13px;color:var(--body)}
+  .wcar{margin-left:auto;display:block;width:2px;height:15px;background:var(--on-highlight);border-radius:1px}
+  .wnote{
+    margin-top:11px;display:grid;grid-template-columns:16px 1fr;gap:8px;align-items:start;
+    font-size:11.5px;line-height:1.38;color:var(--on-highlight);font-weight:600;
+  }
+  .wnote svg{width:16px;height:16px;flex:0 0 auto;display:block;margin-top:1px}
+
+  /* a drawn page of search results. The paid rows are marked by a
+     label and a solid border, never by colour alone. */
+  .res{display:flex;flex-direction:column;gap:7px}
+  .row{
+    display:grid;grid-template-columns:30px 1fr;gap:9px;align-items:center;
+    border-radius:7px;padding:8px 9px;background:var(--bg);border:1.5px solid var(--tint2);
+  }
+  .row.ad{border:1.5px solid var(--on-highlight)}
+  .tag{
+    font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);border:1.2px solid var(--on-highlight);border-radius:4px;
+    padding:1px 0;text-align:center;
+  }
+  .bars{display:flex;flex-direction:column;gap:4px}
+  .bars i{display:block;height:5px;border-radius:3px;background:var(--tint2)}
+  .row.ad .bars i{background:var(--on-highlight)}
+  .rescap{margin-top:10px;font-size:11.5px;line-height:1.4;color:var(--body)}
+  .rescap b{color:var(--on-highlight);font-weight:600}
+
+  /* a quoted sentence from a document */
+  .qt{
+    font-size:12.5px;line-height:1.5;color:var(--title);
+    border-left:3px solid var(--on-highlight);padding-left:11px;
+  }
+  .qs{margin-top:9px;font-size:11px;line-height:1.4;color:var(--body)}
+  .qs b{color:var(--on-highlight);font-weight:600}
+
+  /* ---- the recap card on the left of both interactive screens ---- */
+  .side{
+    flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:13px 13px 12px;
+    display:flex;flex-direction:column;height:100%;
+  }
+  .sideh{
+    font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:10px;
+  }
+  .sidei{display:grid;grid-template-columns:16px 1fr;gap:9px;align-items:start;margin-bottom:10px}
+  .sidei svg{width:15px;height:15px;display:block;color:var(--on-highlight);margin-top:2px}
+  .sidei span{font-size:12px;line-height:1.42;color:var(--body)}
+  .sidei span b{color:var(--title);font-weight:600}
+  .sidef{
+    margin-top:auto;padding-top:10px;font-size:11.5px;line-height:1.38;
+    color:var(--on-highlight);font-weight:600;
+  }
+
+  /* ---- the exercise column, shared by the question and the guess ---- */
+  .ex{display:flex;flex-direction:column;min-height:0;height:100%}
+  .exlead{font-size:13px;line-height:1.45;color:var(--body);margin-bottom:10px}
+  .exlead b{color:var(--title);font-weight:600}
+  .exh{
+    font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:5px;
+  }
+  .exask{font-size:16px;line-height:1.38;font-weight:600;color:var(--title);margin-bottom:12px}
+  .exask:focus{outline:none}
+
+  /* the stacked answers */
+  .opts{display:grid;gap:10px}
+  button.opt{
+    position:relative;font-family:inherit;cursor:pointer;text-align:left;
+    background:var(--highlight);border:2px solid transparent;border-radius:11px;
+    color:var(--title);padding:12px 44px 12px 15px;font-size:14.5px;line-height:1.35;font-weight:600;
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  /* chosen and correct: filled, plus a check and the word Correct for
+     a screen reader. chosen and wrong: emptied and dashed, the same
+     convention the disabled nav button uses. Still tappable. */
+  button.opt.pick{background:var(--on-highlight);border-color:var(--on-highlight);color:var(--bg)}
+  button.opt.miss{background:transparent;border:2px dashed var(--line);color:var(--body)}
+  .mark{position:absolute;top:50%;margin-top:-9px;right:13px;width:18px;height:18px;display:block}
+  button.opt.pick .mark{color:var(--bg)}
+  button.opt.miss .mark{color:var(--on-highlight)}
+
+  /* the four guess bands */
+  .bands{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  button.band{
+    font-family:inherit;cursor:pointer;text-align:center;
+    background:var(--highlight);border:2px solid transparent;border-radius:11px;padding:14px 6px 12px;
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  button.band:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .band .bn{display:block;font-size:22px;line-height:1.05;font-weight:600;color:var(--title)}
+  .band .bs{display:block;font-size:11px;line-height:1.3;color:var(--body);margin-top:4px}
+  button.band.on{background:var(--on-highlight);border-color:var(--on-highlight)}
+  button.band.on .bn,button.band.on .bs{color:var(--bg)}
+
+  /* the feedback strip. margin-top:auto pins it to the bottom of the
+     board so the layout never jumps between states. */
+  .fb{
+    margin-top:auto;flex:0 0 auto;display:grid;grid-template-columns:21px 1fr;gap:11px;
+    align-items:center;min-height:52px;border-radius:9px;padding:9px 12px;
+    background:var(--tint);border:1.5px solid var(--line);
+  }
+  .fb.ok{background:var(--highlight);border-color:var(--on-highlight)}
+  .fb > svg{width:21px;height:21px;display:block;color:var(--on-highlight)}
+  .fb p{font-size:13px;line-height:1.42;color:var(--body)}
+  .fb p b{color:var(--title);font-weight:600}
+
+  /* ---- the reveal, two panels side by side ---- */
+  .pan{background:var(--highlight);border-radius:12px;padding:15px 16px;display:flex;flex-direction:column;height:100%}
+  .pan.plain{background:var(--tint);border:1.5px solid var(--line)}
+  .panh{
+    font-size:10.5px;font-weight:600;letter-spacing:.045em;text-transform:uppercase;
+    color:var(--on-highlight);line-height:1.35;margin-bottom:8px;
+  }
+
+  .panrow{
+    margin-top:11px;padding-top:10px;border-top:1.5px solid var(--tint2);
+    display:grid;grid-template-columns:17px 1fr;gap:9px;align-items:start;
+  }
+  .panrow svg{width:16px;height:16px;display:block;color:var(--on-highlight);margin-top:2px}
+  .panrow span{font-size:12.5px;line-height:1.42;color:var(--body)}
+  .panrow span b{color:var(--title);font-weight:600}
+  .pan p{font-size:13.5px;line-height:1.48;color:var(--body)}
+  .pan p b{color:var(--title);font-weight:600}
+  .pan .qt{margin:10px 0}
+  .pan p.big{font-size:80px;line-height:.94;font-weight:600;color:var(--on-highlight);letter-spacing:-.025em;margin-top:2px}
+  .pan p.big:focus{outline:none}
+  .pan p.bigsub{margin-top:8px;font-size:13.5px;line-height:1.42;color:var(--title);font-weight:600}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto keeps it on canvas ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  /* disabled keeps full contrast type. It reads as disabled by the dashed
+     border and the label, not by being faded. */
+  button.nav:disabled{
+    opacity:1;cursor:not-allowed;
+    background:transparent;color:var(--on-highlight);border-style:dashed;
+  }
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{
+    flex:1 1 auto;min-width:0;height:56px;overflow:hidden;
+    font-size:11.5px;line-height:1.36;color:var(--body);
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken canvas ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .board,.board.two,.board.quiz,.board.guess,.board.reveal{grid-template-columns:1fr;gap:16px;align-items:start;align-content:start}
+    .prose p{font-size:16px;line-height:1.52}
+    .side{height:auto}
+    .sidef{margin-top:0}
+    .exask{font-size:18px}
+    button.opt{font-size:16px}
+    .bands{grid-template-columns:1fr 1fr}
+    .fb{margin-top:14px}
+    .pan{height:auto}
+    .big{font-size:66px}
+    .bar{margin-top:20px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:13.5px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Who pays for Firefox">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 8</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip">Mozilla and Google</span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:24px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf em{color:#001D69;font-style:normal;font-weight:600}
+    .nsf blockquote{
+      margin:0 0 12px;padding:2px 0 2px 14px;border-left:3px solid #001D69;
+      font-size:16px;line-height:1.5;color:#1C1B1B;
+    }
+    .nsf .src{font-size:14px;color:#484646;margin-bottom:14px}
+    .nsf .src strong{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Who pays for Firefox</h1>
+    <p>This page is normally an eight screen interactive with two questions in it. Scripting is off, so here is the whole thing written out, questions included.</p>
+
+    <h2>1. Mozilla makes Firefox and gives it away</h2>
+    <p>Firefox is a web browser, meaning the program you open to look at websites. A group called Mozilla builds it.</p>
+    <p>It is free. You download it, you use it for years, and nobody ever asks you for money. There is no paid version with extra bits in it.</p>
+    <p>Mozilla is a nonprofit, meaning it is not set up to make money for owners. It still needs money. Hundreds of people work on Firefox and all of them get paid, and the computers that keep it running cost money every day.</p>
+    <p>So the bills are real. The people using Firefox are not paying them.</p>
+
+    <h2>2. Every browser has a search box</h2>
+    <p>Open Firefox and there is a box across the top. Type into it and press enter.</p>
+    <p>You do not go straight to a website. You land on a search engine, meaning a site that hunts through the rest of the web and hands you back a list of links.</p>
+    <p>That box has to send you to one particular search engine. One of them is already picked, before you touch anything. You are allowed to change it. Almost nobody does.</p>
+
+    <h2>3. The question: so who pays for that box?</h2>
+    <p>Stop and think before you read on. The box costs you nothing, and Mozilla earns nothing from you typing in it. Yet being the search engine that is already in that box is something companies want.</p>
+    <p><strong>Who pays to be the search engine that is already there, and why would that be worth paying for?</strong> On the live version you pick one of three answers. Here is each one, with what it teaches.</p>
+    <ul>
+      <li><strong>Firefox users, through a small charge for searching.</strong> No. Typing in that box costs you nothing and Mozilla never sends you a bill. The money is coming from somewhere other than you.</li>
+      <li><strong>Nobody. It is just a free feature Mozilla built.</strong> It is free to you, but it is not free to be in. Companies want that spot, and companies do not want things that are worth nothing. Something is being paid here.</li>
+      <li><strong>The search engine itself, because people arriving there are worth money to it.</strong> This is the one. The search engine is the one with something to gain. Every person who lands on it is worth money to it, so it will pay to be the one that is already there.</li>
+    </ul>
+
+    <h2>4. Why an arrival is worth money</h2>
+    <p>Google search is free too. Nobody is charged for a search.</p>
+    <p>Look at the top of a page of Google results. Some of those links are ads, meaning a company paid to be put there. Google gets paid for them.</p>
+    <p>So a person arriving at Google is worth something. It is one more chance to show an ad. Multiply that by every arrival in a day and it turns into a lot of money.</p>
+    <p>Which is why a search box inside somebody else&rsquo;s browser is worth paying for.</p>
+
+    <h2>5. So Google pays Mozilla to be the one already switched on</h2>
+    <p>Google pays Mozilla. In return, the Firefox search box uses Google, unless you go into the settings and change it yourself.</p>
+    <p>The word for that setting is default, meaning what a thing arrives set to before anybody changes it.</p>
+    <p>Mozilla does not hide this. It says so on its own blog:</p>
+    <blockquote>For the past seven years, Google search has been the default in Firefox in the U.S. because it provides the best search experience for our users.</blockquote>
+    <p class="src"><strong>Source: Mozilla&rsquo;s blog, 20 November 2024.</strong></p>
+    <p>Note where Mozilla is saying it. On the blog.</p>
+
+    <h2>6. The guess: how much of Mozilla&rsquo;s money is that one deal?</h2>
+    <p>Mozilla gets money from more than one place. Some of it is donations from people. Most of it comes from companies that sign contracts, meaning written deals to pay. Google is one of those companies.</p>
+    <p>On the live version you commit to a number here before you see the real one. <strong>Out of every hundred dollars Mozilla earns from customers under contract, how many come from that one company?</strong> The four choices are about 10, about 30, about 60, and over 80. Pick one in your head now, before you read the next line.</p>
+
+    <h2>7. The answer: 86, and no name attached</h2>
+    <p><strong>86.</strong> Out of every hundred dollars Mozilla earned from customers under contract in 2024, 86 came from one company.</p>
+    <p>Two years earlier it was 81. So it is going up, not down.</p>
+    <p>Now the other half. Read Mozilla&rsquo;s accounts and the name Google is not in them. This is the whole sentence about it:</p>
+    <blockquote>Approximately 86% and 85% of Mozilla&rsquo;s revenues from customers with contracts were derived from one customer for the years ended December 31, 2024 and 2023, respectively.</blockquote>
+    <p class="src"><strong>Source: Mozilla&rsquo;s audited financial statements, year ended 31 December 2024.</strong></p>
+    <p><em>One customer.</em> That is all it is called. Mozilla says the name Google on its blog, as you read two screens ago. In the accounts, where the money is counted, it does not.</p>
+
+    <h2>8. It is a slice, not a fee</h2>
+    <p>Google does not hand Mozilla a fixed amount each year.</p>
+    <p>Mozilla is paid a royalty, meaning a payment worked out as a share of what somebody else earns. Here it is a share of what Google earns from the searches that Firefox users actually do. Mozilla writes it out like this:</p>
+    <blockquote>Mozilla generally receives royalties at a certain percentage of revenues earned by its partners through their search engines incorporated in the Firefox web browser.</blockquote>
+    <p class="src"><strong>Source: Mozilla&rsquo;s audited financial statements, revenue note.</strong></p>
+    <p>So the payment moves on its own. Fewer people using Firefox means fewer searches, which means a smaller payment. Nobody has to decide that for it to happen.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Icons, drawn here. Phosphor style, one line weight, 24 by 24,
+     fill none, stroke currentColor, 1.7, round caps and joins. The
+     colour is always #001D69 by inheritance. */
+  var I = {
+    gift:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="9.5" width="17" height="11" rx="1.6"/><path d="M3.5 14h17M12 9.5v11"/><path d="M12 9.5S10.9 5 8.7 5a2.25 2.25 0 0 0 0 4.5Z"/><path d="M12 9.5S13.1 5 15.3 5a2.25 2.25 0 0 1 0 4.5Z"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.4" r="3.3"/><path d="M3.4 19.6a5.6 5.6 0 0 1 11.2 0"/><path d="M16.1 5.5a3.3 3.3 0 0 1 0 5.8"/><path d="M17.3 14.6a5.6 5.6 0 0 1 3.3 5"/></svg>',
+    coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.3a3 3 0 0 0-2.6-1.3c-1.6 0-2.6.9-2.6 2s1 1.8 2.6 2.1 2.6 1 2.6 2.1-1 2-2.6 2a3 3 0 0 1-2.6-1.3"/><path d="M12 6.2v1.6M12 16.2v1.6"/></svg>',
+    search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.6"/><path d="M15.6 15.6 20.6 20.6"/></svg>',
+    browser:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9.2h18"/><path d="M6.2 6.9h.01M8.7 6.9h.01M11.2 6.9h.01"/></svg>',
+    toggle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="7" width="18.8" height="10" rx="5"/><circle cx="16.4" cy="12" r="2.9"/></svg>',
+    ads:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.4" y="4.4" width="17.2" height="6" rx="1.6"/><path d="M8 14.4h12.6M8 18.2h9"/><path d="M4 14.4h.01M4 18.2h.01"/></svg>',
+    doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.2 3.5H14l4.4 4.4V20a1.5 1.5 0 0 1-1.5 1.5H6.2A1.5 1.5 0 0 1 4.7 20V5A1.5 1.5 0 0 1 6.2 3.5Z"/><path d="M14 3.5V8h4.4"/><path d="M7.7 12.6h7.7M7.7 16.1h4.8"/></svg>',
+    quote:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 6.5H5.5v4h4v-4c0 4-1.6 6-4 6.6"/><path d="M18.5 6.5h-4v4h4v-4c0 4-1.6 6-4 6.6"/></svg>',
+    slice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v8.5h8.5"/></svg>',
+    up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19.5V5.2"/><path d="M6.2 11 12 5.2 17.8 11"/></svg>',
+    ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.3"/><path d="M12 17h.01"/></svg>',
+    dot:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.4"/></svg>',
+    hand:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v9"/><path d="M8.6 7.1 12 3.5l3.4 3.6"/><path d="M5 14.5v2.2c0 2.1 1.7 3.8 3.8 3.8h6.4c2.1 0 3.8-1.7 3.8-3.8v-2.2"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.5 17.6 19.5 6.6"/></svg>',
+    cross:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    checkc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.3 11 15.1l4.8-5.6"/></svg>',
+    crossc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M9.4 9.4 14.6 14.6M14.6 9.4 9.4 14.6"/></svg>'
+  };
+
+  /* ===============================================================
+     THE EIGHT BEATS. This build carries the story only: the free
+     browser, the search box, why an arrival is worth money, the deal,
+     the share, and the shape of the payment. Everything the module
+     handles afterwards stays out of this file, in the copy and in
+     the fallback both. No dollar figure for the deal appears here,
+     because no primary Mozilla document states one.
+     =============================================================== */
+
+  var GUESS = [
+    {n:"10",   s:"out of 100", say:"about 10"},
+    {n:"30",   s:"out of 100", say:"about 30"},
+    {n:"60",   s:"out of 100", say:"about 60"},
+    {n:"Over 80", s:"out of 100", say:"over 80"}
+  ];
+
+  var Q = {marks:{}, msg:null, ok:false, focus:null};
+  var G = {pick:null, focus:null};
+
+  var F = [
+
+  /* ---------- 1 ---------- */
+  {
+    label:"Free browser",
+    title:"Mozilla makes Firefox and gives it away",
+    kind:"two",
+    body:[
+      "Firefox is a <b>web browser</b>, meaning the program you open to look at websites. A group called Mozilla builds it.",
+      "It is free. You download it, you use it for years, and nobody ever asks you for money. There is no paid version with extra bits in it.",
+      "Mozilla is a <b>nonprofit</b>, meaning it is not set up to make money for owners. It still needs money. Hundreds of people work on Firefox and all of them get paid, and the computers that keep it running cost money every day.",
+      "So the bills are real. The people using Firefox are not paying them."
+    ],
+    fig:{kind:"chips", head:[I.doc,"Three facts about Mozilla"], items:[
+      [I.gift,"Free to you","No price, no paid version, and no copy that stops working after a month."],
+      [I.users,"Built by people who get paid","Firefox does not build itself. Mozilla employs the people who do."],
+      [I.coin,"So the money comes from somewhere","Servers, salaries, offices. Every one of them is a bill."]
+    ]},
+    hint:'<span>Eight screens. Two of them ask you something before they tell you anything.</span>'
+  },
+
+  /* ---------- 2 ---------- */
+  {
+    label:"The search box",
+    title:"Every browser has a search box",
+    kind:"two",
+    body:[
+      "Open Firefox and there is a box across the top. Type into it and press enter.",
+      "You do not go straight to a website. You land on a <b>search engine</b>, meaning a site that hunts through the rest of the web and hands you back a list of links.",
+      "That box has to send you to one particular search engine. One of them is already picked, before you touch anything. You are allowed to change it. Almost nobody does."
+    ],
+    fig:{kind:"browser", head:[I.browser,"The box, drawn"]},
+    hint:'<span>Nothing here is a screenshot. Everything on this page is drawn in the page itself.</span>'
+  },
+
+  /* ---------- 3: the question, and the pivot of the build ---------- */
+  {
+    label:"Your call",
+    title:"So who pays for that box?",
+    kind:"quiz",
+    side:{head:"What you know so far", items:[
+      [I.gift,"Firefox is <b>free</b>."],
+      [I.coin,"Mozilla earns <b>nothing</b> when you type in the box."],
+      [I.toggle,"One search engine is <b>already sitting in it</b>."]
+    ], foot:"Think it through before you pick. Nothing here is graded."},
+    lead:"The box costs you nothing, and Mozilla makes nothing from you using it. Yet being the search engine that is already in that box is a thing companies want.",
+    exh:"Think first, then pick",
+    ask:"Who pays to be the search engine that is already there, and why would that be worth paying for?",
+    idle:"Pick the one you think is right. A wrong pick tells you why and leaves every answer live.",
+    opts:[
+      {w:"Firefox users, through a small charge for searching.", ok:false,
+       fb:"No. Typing in that box costs you nothing and Mozilla never sends you a bill. The money is coming from somewhere other than you. Pick again."},
+      {w:"Nobody. It is just a free feature Mozilla built.", ok:false,
+       fb:"It is free to you, but it is not free to be in. Companies want that spot, and companies do not want things that are worth nothing. Something is being paid here. Pick again."},
+      {w:"The search engine itself, because people arriving there are worth money to it.", ok:true,
+       fb:"That is it. The search engine is the one with something to gain. Every person who lands on it is worth money to it, so it will pay to be the one already there."}
+    ],
+    hint:function(){
+      if(Q.ok) return '<span>You have it. <b>Continue</b> for why an arrival is worth anything at all.</span>';
+      if(Q.msg) return '<span>Wrong picks stay on screen so you can see what you ruled out. Every answer is still live.</span>';
+      return '<span>Tab moves, Enter picks. There is no penalty here and nothing gets locked.</span>';
+    }
+  },
+
+  /* ---------- 4 ---------- */
+  {
+    label:"Where the money is",
+    title:"Why an arrival is worth money",
+    kind:"two",
+    body:[
+      "Google search is free too. Nobody is charged for a search.",
+      "Look at the top of a page of Google results. Some of those links are <b>ads</b>, meaning a company paid to be put there. Google gets paid for them.",
+      "So a person arriving at Google is worth something. It is one more chance to show an ad. Multiply that by every arrival in a day and it turns into a lot of money.",
+      "Which is why a search box inside somebody else&rsquo;s browser is worth paying for."
+    ],
+    fig:{kind:"results", head:[I.ads,"A page of results, drawn"]},
+    hint:function(){
+      if(Q.ok) return '<span>You picked the search engine two screens ago. This screen is why that answer works.</span>';
+      return '<span>Screen 3 asked who pays. This screen is why the answer is the search engine.</span>';
+    }
+  },
+
+  /* ---------- 5 ---------- */
+  {
+    label:"The deal",
+    title:"So Google pays Mozilla to be the one already switched on",
+    kind:"two",
+    body:[
+      "Google pays Mozilla. In return, the Firefox search box uses Google, unless you go into the settings and change it yourself.",
+      "The word for that setting is <b>default</b>, meaning what a thing arrives set to before anybody changes it.",
+      "Mozilla does not hide this. It says so on its own blog.",
+      "Note where Mozilla is saying it. On the blog."
+    ],
+    fig:{kind:"quote", head:[I.quote,"Mozilla, in its own words"],
+      text:"For the past seven years, Google search has been the default in Firefox in the U.S. because it provides the best search experience for our users.",
+      src:"Source: Mozilla&rsquo;s blog, 20 November 2024."},
+    hint:'<span>Two screens from now, that last line matters.</span>'
+  },
+
+  /* ---------- 6: the guess, closed on screen 7 ---------- */
+  {
+    label:"Your guess",
+    title:"How much of Mozilla&rsquo;s money is that one deal?",
+    kind:"guess",
+    side:{head:"Where Mozilla&rsquo;s money comes from", items:[
+      [I.dot,"Some of it is <b>donations</b> from people."],
+      [I.doc,"Most of it comes from companies that sign <b>contracts</b>, meaning written deals to pay."],
+      [I.search,"Google is one of those companies."]
+    ], foot:"Commit to a number. The next screen gives you the real one."},
+    lead:"Pick before you see the answer. A number you guessed sticks in a way a number you were handed does not.",
+    exh:"Commit to a band",
+    ask:"Out of every hundred dollars Mozilla earns from customers under contract, how many come from that one company?",
+    idle:"Pick a band. Nothing is right or wrong yet, and you can change it.",
+    hint:function(){
+      if(G.pick != null) return '<span>Locked in. <b>Continue</b> to see what Mozilla&rsquo;s own accounts say.</span>';
+      return '<span>Tab moves, Enter picks. Change your mind as often as you like before you continue.</span>';
+    }
+  },
+
+  /* ---------- 7: the reveal, in two halves ---------- */
+  {
+    label:"The number",
+    title:"86 out of every hundred, and no name attached",
+    kind:"reveal",
+    hint:'<span>Two things on this screen: how big the share is, and what the accounts will not call it.</span>'
+  },
+
+  /* ---------- 8 ---------- */
+  {
+    label:"How it is paid",
+    title:"It is a slice, not a fee",
+    kind:"two",
+    body:[
+      "Google does not hand Mozilla a fixed amount each year.",
+      "Mozilla is paid a <b>royalty</b>, meaning a payment worked out as a share of what somebody else earns. Here it is a share of what Google earns from the searches that Firefox users actually do.",
+      "So the payment moves on its own. Fewer people using Firefox means fewer searches, which means a smaller payment. Nobody has to decide that for it to happen."
+    ],
+    fig:{kind:"quote", head:[I.slice,"How the payment is worked out"],
+      text:"Mozilla generally receives royalties at a certain percentage of revenues earned by its partners through their search engines incorporated in the Firefox web browser.",
+      src:"Source: Mozilla&rsquo;s audited financial statements, revenue note."},
+    hint:'<span>End of the story. Back moves through it again if you want a second pass.</span>'
+  }
+  ];
+
+  var HINT_DEFAULT = '<span>Tab moves, Enter picks. <b>Continue</b> to move on, <b>Back</b> to return.</span>';
+
+  var i = 0;
+  var el = {};
+  ["frame","prog","segs","h1","board","back","next","hint","live"]
+    .forEach(function(k){ el[k] = document.getElementById(k); });
+
+  /* ---- the drawn figures ---- */
+  function figure(f){
+    var head = '<div class="figh">' + f.head[0] + '<span>' + f.head[1] + '</span></div>';
+    var inner = "";
+
+    if(f.kind === "chips"){
+      inner = f.items.map(function(c){
+        return '<div class="ch">' + c[0] + '<div class="ct"><b>' + c[1] + '</b>' + c[2] + '</div></div>';
+      }).join("");
+    }
+    else if(f.kind === "browser"){
+      inner =
+        '<div class="win">' +
+          '<div class="wtop"><i></i><i></i><i></i></div>' +
+          '<div class="wbody">' +
+            '<div class="wsearch">' + I.search + '<span>type anything here</span><span class="wcar"></span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="wnote">' + I.toggle + '<span>One search engine is already switched on in that box. You never chose it.</span></div>';
+    }
+    else if(f.kind === "results"){
+      var row = function(ad){
+        return '<div class="row' + (ad ? " ad" : "") + '">' +
+                 (ad ? '<span class="tag">Ad</span>' : '<span></span>') +
+                 '<span class="bars"><i style="width:78%"></i><i style="width:52%"></i></span>' +
+               '</div>';
+      };
+      inner = '<div class="res">' + row(true) + row(true) + row(false) + row(false) + '</div>' +
+              '<p class="rescap">The two rows marked <b>Ad</b> were paid for. They sit above everything else.</p>';
+    }
+    else if(f.kind === "quote"){
+      inner = '<p class="qt">' + f.text + '</p><p class="qs"><b>' + f.src + '</b></p>';
+    }
+    return '<div class="fig">' + head + inner + '</div>';
+  }
+
+  /* ---- the recap card shared by both interactive screens ---- */
+  function sidecard(s){
+    return '<div class="side"><div class="sideh">' + s.head + '</div>' +
+           s.items.map(function(it){
+             return '<div class="sidei">' + it[0] + '<span>' + it[1] + '</span></div>';
+           }).join("") +
+           '<div class="sidef">' + s.foot + '</div></div>';
+  }
+
+  /* ---- screen 3, the question ---- */
+  function renderQuiz(){
+    var f = F[2];
+    var opts = f.opts.map(function(o,k){
+      var state = "", badge = "", say = "";
+      if(Q.marks[k] === "pick"){ state = " pick"; badge = '<span class="mark">' + I.check + '</span>'; say = '<span class="sr">. Correct.</span>'; }
+      else if(Q.marks[k] === "miss"){ state = " miss"; badge = '<span class="mark">' + I.cross + '</span>'; say = '<span class="sr">. Marked not correct.</span>'; }
+      return '<button class="opt' + state + '" type="button" data-q="' + k + '">' + o.w + badge + say + '</button>';
+    }).join("");
+
+    var fb = Q.msg
+      ? '<div class="fb' + (Q.ok ? " ok" : "") + '">' + (Q.ok ? I.checkc : I.crossc) + '<p>' + Q.msg + '</p></div>'
+      : '<div class="fb">' + I.hand + '<p>' + f.idle + '</p></div>';
+
+    el.board.innerHTML =
+      sidecard(f.side) +
+      '<div class="col"><div class="ex">' +
+        '<p class="exlead">' + f.lead + '</p>' +
+        '<p class="exh">' + f.exh + '</p>' +
+        '<p class="exask" id="exask" tabindex="-1">' + f.ask + '</p>' +
+        '<div class="opts">' + opts + '</div>' +
+        fb +
+      '</div></div>';
+    refocus(Q);
+  }
+
+  /* ---- screen 6, the guess ---- */
+  function renderGuess(){
+    var f = F[5];
+    var bands = GUESS.map(function(g,k){
+      var on = (G.pick === k);
+      return '<button class="band' + (on ? " on" : "") + '" type="button" data-g="' + k + '"' +
+             (on ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+             '<span class="bn">' + g.n + '</span><span class="bs">' + g.s + '</span></button>';
+    }).join("");
+
+    var fb = (G.pick != null)
+      ? '<div class="fb ok">' + I.checkc + '<p>Locked in: <b>' + GUESS[G.pick].say + ' out of every hundred</b>. Continue, and the next screen tells you the real number.</p></div>'
+      : '<div class="fb">' + I.hand + '<p>' + f.idle + '</p></div>';
+
+    el.board.innerHTML =
+      sidecard(f.side) +
+      '<div class="col"><div class="ex">' +
+        '<p class="exlead">' + f.lead + '</p>' +
+        '<p class="exh">' + f.exh + '</p>' +
+        '<p class="exask" id="exask" tabindex="-1">' + f.ask + '</p>' +
+        '<div class="bands">' + bands + '</div>' +
+        fb +
+      '</div></div>';
+    refocus(G);
+  }
+
+  /* ---- screen 7, the reveal. The guess made on screen 6 is closed
+         here, in the left panel, whether or not one was made. ---- */
+  function renderReveal(){
+    var guessline = (G.pick == null)
+      ? "You went past the guess on the last screen. Here is the number anyway."
+      : (G.pick === 3
+          ? "You guessed <b>over 80</b>. You were right to go high."
+          : "You guessed <b>" + GUESS[G.pick].say + "</b>. The real number is higher.");
+
+    el.board.innerHTML =
+      '<div class="col"><div class="pan">' +
+        '<div class="panh">Mozilla&rsquo;s audited accounts, year ended 31 December 2024</div>' +
+        '<p class="big" id="big" tabindex="-1">86</p>' +
+        '<p class="bigsub">out of every hundred dollars Mozilla earned from customers under contract</p>' +
+        '<div class="panrow">' + I.ask + '<span>' + guessline + '</span></div>' +
+        '<div class="panrow">' + I.up + '<span>Two years earlier it was <b>81</b>. So it is going up, not down.</span></div>' +
+      '</div></div>' +
+      '<div class="col"><div class="pan plain">' +
+        '<p>Read Mozilla&rsquo;s accounts and the name Google is not in them. This is the whole sentence about it.</p>' +
+        '<p class="qt">Approximately 86% and 85% of Mozilla&rsquo;s revenues from customers with contracts were derived from one customer for the years ended December 31, 2024 and 2023, respectively.</p>' +
+        '<p class="qs"><b>Source: Mozilla&rsquo;s audited financial statements, year ended 31 December 2024.</b></p>' +
+        '<p style="margin-top:12px"><b>One customer.</b> That is all it is called. Mozilla says the name Google on its blog, as you read two screens ago. In the accounts, where the money is counted, it does not.</p>' +
+      '</div></div>';
+  }
+
+  function refocus(st){
+    if(!st.focus) return;
+    var t = el.board.querySelector(st.focus);
+    if(t) t.focus();
+    st.focus = null;
+  }
+
+  /* one delegated handler, bound once. render() replaces board.innerHTML
+     on every draw, so per element listeners would leak. */
+  function boardClick(e){
+    var b = e.target.closest ? e.target.closest("[data-q],[data-g]") : null;
+    if(!b || !el.board.contains(b)) return;
+
+    if(b.hasAttribute("data-q")){
+      var k = parseInt(b.getAttribute("data-q"), 10);
+      var o = F[2].opts[k];
+      Q.marks[k] = o.ok ? "pick" : "miss";
+      Q.msg = o.fb;
+      if(o.ok) Q.ok = true;
+      /* nothing is ever disabled, so focus simply stays on the option
+         the student pressed and every other answer is still live. */
+      Q.focus = '[data-q="' + k + '"]';
+      renderQuiz(); header(); say(o.fb);
+      return;
+    }
+
+    var g = parseInt(b.getAttribute("data-g"), 10);
+    G.pick = g;
+    G.focus = '[data-g="' + g + '"]';
+    renderGuess(); header();
+    say("Locked in: " + GUESS[g].say + " out of every hundred. Continue for the real number.");
+  }
+
+  function say(html){
+    el.live.textContent = String(html).replace(/<[^>]+>/g, "").replace(/&rsquo;/g, "'").replace(/&nbsp;/g, " ");
+  }
+
+  function header(){
+    var f = F[i];
+    el.prog.textContent = (i + 1) + " of " + F.length + " · " + f.label;
+    var out = "";
+    for(var k = 0; k < F.length; k++){
+      out += '<i class="' + (k === i ? "here" : (k < i ? "on" : "")) + '"></i>';
+    }
+    el.segs.innerHTML = out;
+    el.back.disabled = (i === 0);
+    el.next.disabled = (i === F.length - 1);
+    el.next.textContent = (i === F.length - 1) ? "You are at the end" : "Continue";
+    /* hint may be a function, so the bar can track state inside a screen */
+    el.hint.innerHTML = (typeof f.hint === "function" ? f.hint() : f.hint) || HINT_DEFAULT;
+  }
+
+  function render(){
+    var f = F[i];
+    el.h1.innerHTML = f.title;
+    el.board.className = "board " + f.kind;
+
+    if(f.kind === "quiz"){ renderQuiz(); }
+    else if(f.kind === "guess"){ renderGuess(); }
+    else if(f.kind === "reveal"){ renderReveal(); }
+    else {
+      el.board.innerHTML =
+        '<div class="col"><div class="prose">' +
+          f.body.map(function(p){ return '<p>' + p + '</p>'; }).join("") +
+        '</div></div>' +
+        '<div class="col">' + figure(f.fig) + '</div>';
+    }
+
+    header();
+    el.live.textContent = "Screen " + (i + 1) + " of " + F.length + ". " + f.label.replace(/&rsquo;/g, "'") + ".";
+  }
+
+  /* navigation. Plain buttons, Tab and Enter. After every move focus
+     lands on the frame, a real element with tabindex -1, so a screen
+     reader announces the new screen and focus is never on BODY. */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= F.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  el.board.addEventListener("click", boardClick);
+
+  /* scale the fixed canvas down to fit, never up */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* exposed for render QA only */
+  window.__ex = {
+    goto:function(n){ i = n; render(); },
+    frames:F.length,
+    quiz:function(k){ i = 2; render(); el.board.querySelector('[data-q="' + k + '"]').click(); },
+    guess:function(k){ i = 5; render(); el.board.querySelector('[data-g="' + k + '"]').click(); },
+    reset:function(){ Q = {marks:{}, msg:null, ok:false, focus:null}; G = {pick:null, focus:null}; },
+    state:function(){ return {i:i, q:Q.ok, g:G.pick}; }
+  };
+})();
+</script>
+</body>
+</html>

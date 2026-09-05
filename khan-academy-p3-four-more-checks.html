@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four more checks</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     coloured state also carries a glyph, a border style or a label.
+     Sibling build: khan-academy-p3-four-checks.html. This one reuses
+     its canvas scaling, its progress header, its keyboard path, its
+     noscript override and its reduced-motion collapse.
+     Zero external requests: no fonts, no icons, no images.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-reveal:420ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, double shrinking the design. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:20px 44px 16px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:5px;align-items:center}
+  .segs i{display:block;width:26px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:26px;line-height:1.2;color:var(--title);font-weight:700;margin-bottom:9px}
+  h2{font-size:19px;line-height:1.25;color:var(--title);font-weight:700}
+  .sub{font-size:15px;line-height:1.5;max-width:760px}
+  .sub b{color:var(--title)}
+
+  /* ---- intro ---- */
+  .introwrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:14px}
+  .rules{display:flex;gap:12px;margin-top:2px}
+  .rule{flex:1 1 0;border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--tint)}
+  .rule .n{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:5px}
+  .rule p{font-size:13.5px;line-height:1.45}
+
+  /* ---- candidate card ---- */
+  .card{
+    flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:15px 18px;
+    margin-bottom:13px;border:1.5px solid var(--line);
+  }
+  .card .who{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:6px}
+  .card p{font-size:15.5px;line-height:1.45;color:var(--title)}
+
+  .ask{font-size:14px;font-weight:600;color:var(--title);margin-bottom:9px}
+
+  /* ---- the two choices ---- */
+  .choices{display:flex;gap:11px;flex:0 0 auto;margin-bottom:12px}
+  button.ch{
+    flex:1 1 0;text-align:left;cursor:pointer;font:inherit;font-size:14.5px;line-height:1.35;
+    background:var(--bg);color:var(--title);border:2px solid var(--line);border-radius:10px;
+    padding:12px 14px;transition:border-color var(--t-fast) var(--ease-out),background var(--t-fast) var(--ease-out);
+  }
+  button.ch:hover:not(:disabled){border-color:var(--on-highlight);background:var(--tint)}
+  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.ch .k{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--on-highlight);margin-bottom:4px}
+  button.ch:disabled{cursor:default;opacity:.55}
+  /* the state the learner chose. Carries a label, not just a colour. */
+  button.ch.picked{opacity:1;border-color:var(--on-highlight);border-style:solid;background:var(--highlight)}
+  button.ch.picked .k::after{content:" \00b7 you chose this"}
+
+  /* ---- reveal ---- */
+  .reveal{
+    flex:1 1 auto;overflow:auto;border-top:1.5px dashed var(--line);padding-top:11px;
+    animation:rise var(--t-reveal) var(--ease-out) both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  .qlab{
+    display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);background:var(--tint2);border-radius:5px;padding:3px 8px;margin-bottom:7px;
+  }
+  .reveal h2{margin-bottom:6px}
+  .reveal p{font-size:14.5px;line-height:1.5;margin-bottom:8px}
+  .reveal p b{color:var(--title)}
+  .reveal p:last-child{margin-bottom:0}
+  .nb{border-left:3px solid var(--on-highlight);padding-left:11px;background:var(--tint);border-radius:0 7px 7px 0;padding:8px 11px 8px 11px}
+
+  /* ---- footer nav ---- */
+  .foot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding-top:10px;margin-top:auto}
+  .hint{font-size:12.5px;color:var(--body);flex:1 1 auto}
+  button.nav{
+    cursor:pointer;font:inherit;font-size:13.5px;font-weight:600;
+    background:var(--on-highlight);color:var(--bg);border:2px solid var(--on-highlight);
+    border-radius:8px;padding:8px 17px;transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:hover:not(:disabled){opacity:.84}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.nav:disabled{opacity:.32;cursor:default}
+
+  /* ---- closing frame ---- */
+  .grid{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:11px;align-content:center}
+  .q{border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;background:var(--tint)}
+  .q .n{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .q p{font-size:14px;line-height:1.4;color:var(--title)}
+  .q span{display:block;font-size:12.5px;line-height:1.4;color:var(--body);margin-top:4px}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .sub{font-size:15px}
+    .rules{flex-direction:column}
+    .choices{flex-direction:column}
+    .grid{grid-template-columns:1fr}
+    .reveal{overflow:visible}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage" aria-live="polite">
+
+  <!-- ===================== intro ===================== -->
+  <section class="frame" id="f-intro" tabindex="-1">
+    <div class="top">
+      <span class="prog">Before you start</span>
+    </div>
+    <div class="introwrap">
+      <div>
+        <h1>Four ideas somebody else brought in</h1>
+        <p class="sub">Each one is a real-sounding partnership idea. Your job on each is the one Wes asked for: decide whether you would bring it to him on Monday, or leave it out.</p>
+      </div>
+      <div class="rules">
+        <div class="rule">
+          <div class="n">Commit first</div>
+          <p>Choose before you see any reasoning. A guess you committed to teaches you more than a verdict you read.</p>
+        </div>
+        <div class="rule">
+          <div class="n">There is no trick</div>
+          <p>Some of these are worth bringing and some are not. Nothing here is a joke answer designed to catch you out.</p>
+        </div>
+        <div class="rule">
+          <div class="n">Out is not always no</div>
+          <p>One of these turns out to be worth bringing even though a part of it is weak. Watch for which one.</p>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="hint">Use the buttons, or the arrow keys.</span>
+      <button class="nav" id="start">Start</button>
+    </div>
+  </section>
+
+  <!-- ===================== candidates ===================== -->
+  <section class="frame" id="f-cand" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog" id="pc">Idea 1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <div class="card">
+      <div class="who" id="who"></div>
+      <p id="pitch"></p>
+    </div>
+
+    <p class="ask" id="ask">Would you bring this to Wes on Monday?</p>
+
+    <div class="choices" id="choices">
+      <button class="ch" id="ch-in" data-v="in"><span class="k">Bring it</span><span id="ch-in-t"></span></button>
+      <button class="ch" id="ch-out" data-v="out"><span class="k">Leave it out</span><span id="ch-out-t"></span></button>
+    </div>
+
+    <div class="reveal" id="reveal" hidden>
+      <span class="qlab" id="qlab"></span>
+      <h2 id="rh"></h2>
+      <div id="rbody"></div>
+    </div>
+
+    <div class="foot">
+      <button class="nav ghost" id="back">Back</button>
+      <span class="hint" id="hint">Commit to an answer to see the reasoning.</span>
+      <button class="nav" id="next" disabled>Next</button>
+    </div>
+  </section>
+
+  <!-- ===================== closing ===================== -->
+  <section class="frame" id="f-end" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog">What you just used</span>
+    </div>
+    <h1>Four questions, one per idea</h1>
+    <p class="sub" style="margin-bottom:11px">Each idea above turned on a different one of these. Two of them you answer by searching. Two of them nobody can answer for you.</p>
+    <div class="grid">
+      <div class="q">
+        <div class="n">Question five</div>
+        <p>What does Khan Academy get?</p>
+        <span>More learners, or more money. Nothing else counts.</span>
+      </div>
+      <div class="q">
+        <div class="n">Question six</div>
+        <p>Is this even a kind of deal this team does?</p>
+        <span>Checked against the closed lanes you already know.</span>
+      </div>
+      <div class="q">
+        <div class="n">Question seven</div>
+        <p>Has anybody done this before, and what was it worth?</p>
+        <span>The one you answer by searching.</span>
+      </div>
+      <div class="q">
+        <div class="n">Question eight</div>
+        <p>Would Khan Academy still be Khan Academy?</p>
+        <span>No search behind this one. It is yours.</span>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="nav ghost" id="again">Start again</button>
+      <span class="hint">Now read how to test each one, then take all eight to your own names.</span>
+    </div>
+  </section>
+
+</div>
+
+<p class="sr" id="live" role="status"></p>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element, which puts
+       it after the head stylesheet and lets it win on source order. An
+       override placed in <head> before the main sheet loses and the
+       fallback silently fails. Two things must happen, and both have
+       shipped broken in this program before: the dead canvas has to be
+       hidden so nobody is offered controls that cannot work, and the
+       flex-centred body has to go back to block flow, otherwise this text
+       lays out as a narrow column beside a 960px sibling and is pushed off
+       the centred overflow, which cannot be scrolled back to. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf p{margin-bottom:11px}
+    .nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf details{border:1.5px solid rgba(0,29,105,.26);border-radius:9px;padding:9px 12px;margin-bottom:9px}
+    .nsf summary{font-weight:600;color:#001D69;cursor:pointer}
+    .nsf details p{margin:9px 0 0}
+  </style>
+  <div class="nsf">
+    <h1>Four more checks</h1>
+    <p>With scripts blocked, here is the same content as a document: four partnership ideas somebody else brought in, and the reasoning on each. The reasoning sits under a heading you open, so you can still decide for yourself first.</p>
+
+    <h2>The four ideas</h2>
+    <ol>
+      <li>
+        <strong>A large school district</strong> wants to buy Khan Academy for every school it runs, and it is offering to launch it together with both names on the announcement.
+        <details><summary>Show the reasoning</summary><p><strong>Leave it out, and it turns on question six.</strong> A district paying for something that already exists is a sale, and the co-branded launch does not change that. The lesson is that you test the deal, not the name: what is being proposed here is a purchase with an announcement attached to it.</p></details>
+      </li>
+      <li>
+        <strong>A maker of children's tablets</strong> wants Khan Academy loaded on every device it sells, and will put Khan Academy's name on the box.
+        <details><summary>Show the reasoning</summary><p><strong>Leave it out as written, and it turns on question five.</strong> Finish the sentence "Khan Academy gets ___" and the only ending on offer is its name on a box. Being seen is not Khan Academy's problem. This one is worth going back to the other side about, though, because there is a version of it with a real answer: if those tablets reach learners who had no device at all, the ending becomes more learners, and you would want to know roughly who they are.</p></details>
+      </li>
+      <li>
+        <strong>A test-preparation company</strong> wants to build a paid upgrade on top of Khan Academy's free lessons and split the money with Khan Academy.
+        <details><summary>Show the reasoning</summary><p><strong>Leave it out, and it turns on question eight.</strong> This one is tempting because question five has an easy answer: money arrives, and it runs the right way. But a learner now has to pay to get past a point in a free lesson, and that changes what Khan Academy is for rather than only who pays for it. A strong answer on one question does not rescue a failure on another.</p></details>
+      </li>
+      <li>
+        <strong>A translation software company</strong> offers to translate Khan Academy's lessons into ten more languages at no cost, in exchange for using the results publicly to show its software works.
+        <details><summary>Show the reasoning</summary><p><strong>Bring it, and it is the one with a weak part.</strong> Question five has a clear answer in learners, and you can say roughly who they are. Question six is clean and question eight is clean, because nothing stops being free and no lesson bends towards what the company sells. Question seven is where it goes soft: this shape does happen, and a public figure for what one is worth is hard to find. That is a thing to write down honestly, not a reason to drop the name.</p></details>
+      </li>
+    </ol>
+
+    <h2>What each one turned on</h2>
+    <ol>
+      <li><strong>Question five.</strong> What does Khan Academy get? More learners, or more money. Nothing else counts.</li>
+      <li><strong>Question six.</strong> Is this even a kind of deal this team does? Checked against the closed lanes you already know.</li>
+      <li><strong>Question seven.</strong> Has anybody done this before, and what was it worth? The one you answer by searching.</li>
+      <li><strong>Question eight.</strong> Would Khan Academy still be Khan Academy? No search behind this one. It is yours.</li>
+    </ol>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var CANDS = [
+    {
+      who: "Brought in by a colleague on the sales side",
+      pitch: "A large school district wants to buy Khan Academy for every school it runs, and it is offering to launch it together, with both names on the announcement.",
+      inT: "This is a real deal with a real budget behind it.",
+      outT: "Something about this is not a partnership.",
+      right: "out",
+      qlab: "This one turned on question six",
+      rh: "Is this even a kind of deal this team does?",
+      body: [
+        "A district paying for something that already exists is a sale. The co-branded launch is genuine and it does not change what is underneath it.",
+        "<b>The lesson is to test the deal, not the name.</b> Nothing is wrong with this district. What is being proposed is a purchase with an announcement attached, and a purchase belongs to somebody else on this team."
+      ]
+    },
+    {
+      who: "Brought in by somebody who met them at a conference",
+      pitch: "A maker of children's tablets wants Khan Academy loaded on every device it sells, and will put Khan Academy's name on the box.",
+      inT: "Every device sold puts Khan Academy in front of a family.",
+      outT: "I cannot see what comes back the other way.",
+      right: "out",
+      qlab: "This one turned on question five",
+      rh: "What does Khan Academy get?",
+      body: [
+        "Finish the sentence <b>Khan Academy gets ______</b> and the only ending on offer is its name on a box. Being seen is not Khan Academy's problem.",
+        "<div class=\"nb\">This is the one worth going back about rather than dropping. There is a version with a real answer: if those tablets reach learners who had no device at all, the ending becomes more learners, and the next thing you would want is roughly who they are.</div>"
+      ]
+    },
+    {
+      who: "Brought in by somebody who was asked to find revenue",
+      pitch: "A test-preparation company wants to build a paid upgrade on top of Khan Academy's free lessons, and split the money with Khan Academy.",
+      inT: "Money arrives, and it runs towards Khan Academy.",
+      outT: "The money is real and something else here is wrong.",
+      right: "out",
+      qlab: "This one turned on question eight",
+      rh: "Would Khan Academy still be Khan Academy?",
+      body: [
+        "This one is tempting because the money question has an easy answer, and it runs the right way.",
+        "But a learner now has to pay to get past a point in a lesson that was free. That changes what Khan Academy is <b>for</b>, not only who pays for it.",
+        "<div class=\"nb\">A strong answer on one question does not rescue a failure on another. All of them have to hold.</div>"
+      ]
+    },
+    {
+      who: "Brought in by you, from your own search",
+      pitch: "A translation software company offers to translate Khan Academy's lessons into ten more languages at no cost, in exchange for using the results publicly to show its software works.",
+      inT: "Both sides get something they cannot get alone.",
+      outT: "I cannot prove this is worth anything.",
+      right: "in",
+      qlab: "This one turned on question seven",
+      rh: "Has anybody done this before, and what was it worth?",
+      body: [
+        "Three of the four are clean here. Learners is a real answer and you can say roughly who they are. No closed lane is touched. Nothing stops being free and no lesson bends towards what the company sells.",
+        "Question seven is where it goes soft. This shape does happen, and a public figure for what one is worth is hard to find.",
+        "<div class=\"nb\"><b>Bring it anyway, and say so.</b> A weak answer you have named is worth more than a strong one you invented. Not being able to find a price is a finding, and you write it down as one.</div>"
+      ]
+    }
+  ];
+
+  var el = {};
+  ["pc","segs","who","pitch","ch-in","ch-out","ch-in-t","ch-out-t","choices","reveal",
+   "qlab","rh","rbody","back","next","hint","start","again","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+  var stage  = document.getElementById("stage");
+  var fIntro = document.getElementById("f-intro");
+  var fCand  = document.getElementById("f-cand");
+  var fEnd   = document.getElementById("f-end");
+
+  var i = 0;                                  /* which candidate  */
+  var picked = CANDS.map(function(){return null;});
+  var view = "intro";
+
+  /* build the progress pips once */
+  CANDS.forEach(function(){ el.segs.appendChild(document.createElement("i")); });
+
+  function say(t){ el.live.textContent = t; }
+
+  function show(which){
+    view = which;
+    fIntro.hidden = which !== "intro";
+    fCand.hidden  = which !== "cand";
+    fEnd.hidden   = which !== "end";
+    var f = which === "intro" ? fIntro : which === "cand" ? fCand : fEnd;
+    f.focus();
+  }
+
+  function render(){
+    var c = CANDS[i];
+    el.pc.textContent = "Idea " + (i+1) + " of " + CANDS.length;
+    Array.prototype.forEach.call(el.segs.children, function(pip, n){
+      pip.className = n === i ? "here" : (picked[n] ? "on" : "");
+    });
+
+    el.who.textContent   = c.who;
+    el.pitch.textContent = c.pitch;
+    el["ch-in-t"].textContent  = c.inT;
+    el["ch-out-t"].textContent = c.outT;
+
+    var done = picked[i] !== null;
+    ["ch-in","ch-out"].forEach(function(k){
+      var b = el[k];
+      b.disabled = done;
+      b.classList.toggle("picked", done && b.dataset.v === picked[i]);
+    });
+
+    el.reveal.hidden = !done;
+    if(done){
+      el.qlab.textContent = c.qlab;
+      el.rh.textContent   = c.rh;
+      el.rbody.innerHTML  = c.body.map(function(p){
+        return p.indexOf("<div") === 0 ? p : "<p>" + p + "</p>";
+      }).join("");
+      el.hint.textContent = i === CANDS.length - 1
+        ? "That is all four. Next collects the questions."
+        : "Reasoning below. Next when you are ready.";
+    } else {
+      el.hint.textContent = "Commit to an answer to see the reasoning.";
+    }
+
+    el.next.disabled = !done;
+    el.back.disabled = false;
+    el.next.textContent = (done && i === CANDS.length - 1) ? "See the four questions" : "Next";
+  }
+
+  function commit(v){
+    if(picked[i] !== null) return;
+    picked[i] = v;
+    render();
+    say("Recorded. " + CANDS[i].qlab + ".");
+  }
+
+  el["ch-in"].addEventListener("click",  function(){ commit("in");  });
+  el["ch-out"].addEventListener("click", function(){ commit("out"); });
+
+  el.next.addEventListener("click", function(){
+    if(picked[i] === null) return;
+    if(i === CANDS.length - 1){ show("end"); say("All four done."); return; }
+    i++; render();
+  });
+
+  el.back.addEventListener("click", function(){
+    if(i === 0){ show("intro"); return; }
+    i--; render();
+  });
+
+  el.start.addEventListener("click", function(){ show("cand"); render(); });
+
+  el.again.addEventListener("click", function(){
+    i = 0;
+    picked = CANDS.map(function(){return null;});
+    show("intro");
+    say("Reset.");
+  });
+
+  /* keyboard: arrows move, 1 and 2 choose. Kept off the choice buttons
+     themselves so a learner tabbing through does not fire one by accident. */
+  document.addEventListener("keydown", function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = (e.target.tagName || "").toLowerCase();
+    if(e.key === "ArrowRight"){
+      if(view === "intro"){ show("cand"); render(); e.preventDefault(); return; }
+      if(view === "cand" && !el.next.disabled){ el.next.click(); e.preventDefault(); }
+      return;
+    }
+    if(e.key === "ArrowLeft"){
+      if(view === "cand"){ el.back.click(); e.preventDefault(); }
+      return;
+    }
+    if(view === "cand" && tag !== "button"){
+      if(e.key === "1"){ commit("in");  e.preventDefault(); }
+      if(e.key === "2"){ commit("out"); e.preventDefault(); }
+    }
+  });
+
+  /* ---- canvas fit. Scales DOWN only. Under 600px the CSS restacks and
+          the transform must be cleared or it fights the restack. ---- */
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  show("intro");
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion force a
+     state without hand-driving the UI */
+  window.__ex = {
+    go: function(n){ i = n; show("cand"); render(); },
+    commit: function(n,v){ i = n; show("cand"); picked[n] = null; render(); commit(v); },
+    end: function(){ show("end"); },
+    rightOf: function(n){ return CANDS[n].right; }
+  };
+})();
+</script>
+</body>
+</html>
