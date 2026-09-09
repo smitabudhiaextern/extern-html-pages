@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Districts that have it, and districts that do not</title>
+<style>
+  /* ===============================================================
+     Extern design system. Five values are the entire palette and no
+     sixth colour is introduced anywhere. Every tint below is an
+     rgba() of #001D69, not a new hue.
+
+       --highlight   #DCE1FF   the plot field, panels, chips
+       --on-highlight#001D69   the bars, the masthead, focus rings
+       --bg          #FDF8F8   canvas ground, knocked-out type on ink
+       --body        #484646   body copy, captions, axis ticks
+       --title       #1C1B1B   headings, printed values
+
+     Contrast, measured with the WCAG relative-luminance formula and
+     not assumed:
+
+       #FDF8F8 on #001D69   14.47:1
+       #DCE1FF on #001D69   11.78:1
+       #1C1B1B on #FDF8F8   16.33:1
+       #1C1B1B on #DCE1FF   13.30:1
+       #001D69 on #DCE1FF   11.78:1
+       #484646 on #FDF8F8    8.91:1
+       #484646 on #DCE1FF    7.26:1   <- worst pair on the page
+
+     Everything clears 4.5:1, so the 3:1 large-text floor is clear as
+     well. The pairings that are NOT safe are #484646 on #001D69
+     (1.6:1) and #1C1B1B on #001D69 (1.1:1), and neither is ever
+     created: inside the inked masthead the copy switches to #FDF8F8
+     with #DCE1FF for the subtle line. The bar fill #001D69 sits on
+     the #DCE1FF plot field at 11.78:1, far past the 3:1 that a
+     non-text mark needs.
+
+     Sibling build: khan-academy-p3-free-and-paid.html. This one
+     reuses its canvas scaling, its bleeding inked masthead, its
+     focus-ring rules, its noscript override and its reduced-motion
+     collapse, so the two read as one family.
+
+     THE SCALE IS NOT CUT. Zero baseline, one linear scale, top of
+     scale at 12,500. 795 renders as roughly 18 pixels of bar against
+     280. That sliver is the finding, so it is labelled with its own
+     printed value above it and its own name and year below it rather
+     than flattered by a broken axis.
+
+     WHY THERE IS NO PERCENTAGE ANYWHERE. The two counts are two
+     school years apart, so a share, a ratio or a "times bigger"
+     figure would be invented. If anyone ever adds one, that is a
+     defect, not an improvement.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* every one of these is an alpha of #001D69 and nothing else */
+    --hair:rgba(0,29,105,.16);
+    --rule:rgba(0,29,105,.45);
+
+    --sh-pale:0 1px 2px rgba(0,29,105,.07),0 4px 10px rgba(0,29,105,.07);
+    --sh-lift:0 1px 2px rgba(0,29,105,.10),0 8px 18px rgba(0,29,105,.12);
+
+    --t-fast:160ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* the 960x540 canvas, scaled down only, never up. flex:0 0 auto is
+     load bearing: as a shrinkable flex item the canvas would lay out
+     at the viewport width and the JS transform would then shrink it a
+     second time. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  /* no padding on top: the masthead band bleeds to the canvas edge and
+     supplies its own inset. */
+  .frame{
+    position:absolute;inset:0;padding:0 40px 8px;display:flex;flex-direction:column;
+    background:var(--bg);
+  }
+
+  /* =============================================================
+     THE MASTHEAD. Two bleeding blocks, .top then h1, sharing one
+     background so they read as a single inked band across the top.
+     ============================================================= */
+  .top{
+    flex:0 0 auto;display:flex;align-items:center;gap:10px;
+    background:var(--on-highlight);
+    margin:0 -40px 0;padding:9px 40px 4px;
+  }
+  .prog{
+    font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--bg);white-space:nowrap;
+  }
+  /* the unit chip lives in a pale capsule so its #001D69 ink keeps its
+     11.78:1 against a ground it can actually be seen on */
+  .unit{
+    flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);background:var(--highlight);
+    border-radius:999px;padding:2px 9px;white-space:nowrap;
+  }
+  /* scoped to .frame on purpose. A bare h1 rule would also paint the
+     <h1> in the <noscript> document, which has its own colour but not
+     its own background, and would put #1C1B1B on #001D69 there. */
+  .frame>h1{
+    font-size:21px;line-height:1.16;font-weight:700;letter-spacing:-.006em;
+    color:var(--bg);background:var(--on-highlight);
+    margin:0 -40px 10px;padding:1px 40px 11px;flex:0 0 auto;
+    box-shadow:inset 0 -5px 0 var(--highlight);
+  }
+
+  /* =============================================================
+     BODY
+     ============================================================= */
+  .bodyarea{flex:1 1 auto;min-height:0;min-width:0;display:flex;flex-direction:column;gap:9px}
+  .split{flex:1 1 auto;min-height:0;min-width:0;display:grid;grid-template-columns:1fr 352px;gap:20px}
+  .col{min-width:0;min-height:0;display:flex;flex-direction:column;gap:7px}
+
+  /* =============================================================
+     THE CHART. Gutter for the axis ticks, a pale plot field, one
+     linear scale from zero, two bands.
+     ============================================================= */
+  .plotwrap{position:relative;padding-left:58px;flex:0 0 auto}
+  .plot{
+    position:relative;height:290px;
+    background:var(--highlight);border-radius:10px;box-shadow:var(--sh-pale);
+  }
+  /* the scale box. Its height IS the 12,500 top of scale, so every bar
+     height is a percentage of one number and the geometry cannot drift
+     out of step with the data. Bottom of this box is the zero
+     baseline. The 32px of plot above it is headroom for the tall
+     bar's printed value, not extra scale. */
+  .scale{position:absolute;left:0;right:0;bottom:0;height:258px}
+  .gl{position:absolute;left:0;right:0;height:1px;background:var(--hair)}
+  .gl.base{height:1.5px;background:var(--rule)}
+  .tk{
+    position:absolute;right:calc(100% + 9px);top:0;transform:translateY(-50%);
+    font-size:10.5px;line-height:1;font-weight:600;color:var(--body);
+    white-space:nowrap;font-variant-numeric:tabular-nums;
+  }
+  /* the bands sit on top of the gridlines in the same box. overflow is
+     deliberately visible: the tall bar's value label rides up into the
+     plot headroom. */
+  /* align-items must stay stretch. With align-items:flex-end the bands
+     would shrink to content height, a percentage bar height would then
+     resolve against an auto height, and every bar would collapse to
+     nothing. Each band anchors its own bar to the baseline with
+     justify-content:flex-end instead. */
+  .bands{position:absolute;inset:0;display:flex;align-items:stretch}
+  .band{
+    flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:flex-end;
+  }
+  .val{
+    flex:0 0 auto;margin-bottom:6px;line-height:1.05;white-space:nowrap;
+    color:var(--title);font-weight:800;font-size:21px;
+  }
+  .val .ab{font-size:12.5px;font-weight:700;color:var(--body)}
+  /* the mark. Kept narrow on purpose: a slab wide enough to fill the
+     band would read as a block of colour rather than as a column, and
+     the short bar would read as a nub rather than as a bar. */
+  .bfill{
+    width:56px;flex:0 0 auto;
+    background:var(--on-highlight);
+    border-radius:5px 5px 0 0;
+  }
+  /* the x band. Two equal flex cells over the same width as the two
+     bands, so a name always sits under its own bar. */
+  .xrow{display:flex;margin-top:8px}
+  .xc{flex:1 1 0;min-width:0;text-align:center;padding:0 8px}
+  .xn{font-size:13.5px;font-weight:700;color:var(--title);line-height:1.22}
+  .xy{font-size:11px;line-height:1.32;margin-top:3px;color:var(--body)}
+  .xy b{color:var(--title);font-weight:700}
+
+  /* =============================================================
+     PANELS. A pale card carries a fact. A dashed card carries a
+     caution or a thing that is not published, and it says so in
+     words as well as in shape, so nothing on the page is signalled
+     by colour or by border style alone.
+     ============================================================= */
+  .card{
+    background:var(--highlight);border-radius:10px;padding:7px 11px;flex:0 0 auto;
+    font-size:11px;line-height:1.4;box-shadow:var(--sh-pale);
+  }
+  .card b{color:var(--title);font-weight:700}
+  .hedge{
+    border:2px dashed var(--on-highlight);border-radius:10px;padding:7px 11px;flex:0 0 auto;
+    font-size:11px;line-height:1.4;background:var(--bg);
+  }
+  .hedge b{color:var(--title);font-weight:700}
+  .hedge p+p,.card p+p{margin-top:5px}
+  .chip{
+    display:inline-flex;align-items:center;
+    font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--bg);background:var(--on-highlight);
+    border-radius:5px;padding:2px 7px;margin-bottom:5px;
+  }
+  .chip.pale{color:var(--on-highlight);background:var(--bg);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
+  .src{display:block;font-size:10.5px;line-height:1.35}
+  .src+.src{margin-top:6px}
+  .src b{color:var(--title);font-weight:700}
+  a{color:var(--on-highlight);font-weight:700}
+  a:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* the year-gap statement runs the full width under the chart,
+     because it governs how both bars may be read. */
+  .yeargap{
+    flex:0 0 auto;border:2px dashed var(--on-highlight);border-radius:10px;
+    padding:7px 12px;background:var(--bg);font-size:11px;line-height:1.38;
+  }
+  .yeargap b{color:var(--title);font-weight:700}
+
+  /* =============================================================
+     THE BAR AT THE BOTTOM. margin-top:auto plus flex:0 0 auto means
+     content above can never displace this row, and nothing above can
+     collide with it.
+     ============================================================= */
+  .bar{
+    margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:11px;
+    min-height:32px;padding-top:5px;border-top:1px solid var(--hair);
+  }
+  button.nav{
+    font-family:inherit;font-size:13px;font-weight:700;padding:7px 15px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    box-shadow:var(--sh-lift);
+    transition:background-color var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  button.nav:hover{background:var(--bg);color:var(--on-highlight)}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .hint{flex:1 1 auto;min-width:0;font-size:11px;line-height:1.38}
+  .hint b{color:var(--title);font-weight:700}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* under 600px: a portrait restack, not a shrunken slide */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow:visible;overflow-x:hidden}
+    html,body{height:auto}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:0 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px;margin:0 -16px 0;padding:14px 16px 9px}
+    .prog{font-size:12px;white-space:normal}
+    .unit{font-size:11px}
+    .frame>h1{font-size:24px;line-height:1.18;margin:0 -16px 16px;padding:2px 16px 15px}
+    .split{grid-template-columns:1fr;gap:14px;flex:0 0 auto;align-items:start;align-content:start}
+    .plotwrap{padding-left:50px}
+    .plot{height:268px}
+    .scale{height:240px}
+    .tk{font-size:10px;right:calc(100% + 7px)}
+    .bfill{width:52px}
+    .val{font-size:19px}
+    .xn{font-size:14px}
+    .xy{font-size:12px}
+    .card,.hedge,.yeargap{font-size:14px;line-height:1.45;padding:11px 13px}
+    .src{font-size:13px}
+    .chip{font-size:10.5px}
+    .bar{margin-top:16px;flex-wrap:wrap;padding-top:14px}
+    button.nav{font-size:16px;padding:12px 17px}
+    .hint{font-size:13.5px}
+  }
+  /* the narrowest phone. The axis gutter and the bar width both give
+     ground so two bands still fit side by side without the page
+     scrolling sideways. */
+  @media (max-width:400px){
+    .plotwrap{padding-left:44px}
+    .plot{height:246px}
+    .scale{height:220px}
+    .tk{font-size:9.5px;right:calc(100% + 5px)}
+    .bfill{width:42px}
+    .val{font-size:17px}
+    .val .ab{font-size:11px}
+    .xc{padding:0 4px}
+    .xn{font-size:13px}
+    .xy{font-size:11.5px}
+  }
+
+  /* the whole thing collapses to its final state. Nothing on this page
+     is readable only during or after motion, so removing the motion
+     removes nothing. */
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<!-- =====================================================================
+     THE THREE HONESTY RULES THIS FILE IS BUILT AROUND. Do not edit any
+     of them out.
+
+     1. DISTRICTS, NEVER SCHOOLS. A district is the body that runs a
+        group of schools. This program has no school-level count of any
+        kind, so neither bar may be called a count of schools. The word
+        "schools" appears in this file only where it explains what a
+        district runs, and inside the NCES coverage note, never as a
+        label for either bar.
+
+     2. THE TWO COUNTS ARE TWO SCHOOL YEARS APART. 795 is SY24-25.
+        13,318 is 2022-23. Each bar prints its own year, and the dashed
+        block under the chart says the gap out loud. No percentage, no
+        share, no ratio, no "times bigger" figure appears anywhere,
+        because two figures from different years cannot honestly be
+        divided into one.
+
+     3. THE 12,500 BAR IS DERIVED, NOT PUBLISHED. It is 13,318 minus
+        795, rounded. The page says so, and it says what the NCES total
+        covers and what it leaves out.
+     ===================================================================== -->
+
+<div id="stage">
+  <div class="frame">
+    <div class="top">
+      <span class="prog">Project 3 / checking a number at the source</span>
+      <span class="unit">Unit: districts</span>
+    </div>
+    <h1>How many U.S. school districts have Khan Academy's paid arrangement</h1>
+
+    <div class="bodyarea">
+      <div class="split">
+
+        <!-- ============ the chart ============ -->
+        <div class="col">
+          <div class="plotwrap">
+            <div class="plot">
+              <div class="scale">
+                <div class="gl" style="bottom:100%"><span class="tk">12,500</span></div>
+                <div class="gl" style="bottom:80%"><span class="tk">10,000</span></div>
+                <div class="gl" style="bottom:60%"><span class="tk">7,500</span></div>
+                <div class="gl" style="bottom:40%"><span class="tk">5,000</span></div>
+                <div class="gl" style="bottom:20%"><span class="tk">2,500</span></div>
+                <div class="gl base" style="bottom:0"><span class="tk">0</span></div>
+
+                <div class="bands">
+                  <div class="band">
+                    <div class="val"><span class="num" id="n1">795</span></div>
+                    <div class="bfill" id="b1" style="height:6.36%"></div>
+                  </div>
+                  <div class="band">
+                    <div class="val"><span class="ab">about</span> <span class="num" id="n2">12,500</span></div>
+                    <div class="bfill" id="b2" style="height:100%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="xrow">
+              <div class="xc">
+                <div class="xn">Districts that have it</div>
+                <div class="xy">school year <b>2024 to 2025</b></div>
+              </div>
+              <div class="xc">
+                <div class="xn">Districts that do not</div>
+                <div class="xy">from the <b>2022 to 2023</b> total</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ the reading notes ============ -->
+        <div class="col">
+          <div class="card">
+            <span class="chip">What a district is</span>
+            <p>A district is the body that runs a group of schools. Both bars count <b>districts</b>, not schools.</p>
+          </div>
+
+          <div class="hedge">
+            <span class="chip pale">The tall bar is worked out, not published</span>
+            <p>Nobody publishes a count of districts <i>without</i> the paid arrangement. So this bar is subtraction: <b>13,318</b> minus <b>795</b>, rounded to <b>about 12,500</b>.</p>
+            <p>That 13,318 counts regular public school districts in the 50 states and the District of Columbia. It leaves out independent charter schools and service agencies.</p>
+          </div>
+
+          <div class="card">
+            <span class="chip">Sources</span>
+            <span class="src"><b>795 districts.</b> "Nearly 1.5M licensed learners across 795 U.S. districts", in <a href="https://annualreport.khanacademy.org/">Khan Academy, Annual Report SY24-25</a>.</span>
+            <span class="src"><b>13,318 districts.</b> The 2022 to 2023 national total, in <a href="https://nces.ed.gov/programs/digest/d23/tables/dt23_214.10.asp">NCES, Digest of Education Statistics, Table 214.10</a>.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="yeargap">
+        <b>Read this before you compare the two bars.</b> They are two school years apart. The 795 is from the 2024 to 2025 school year and the national total of 13,318 is from 2022 to 2023, so the comparison is close but not exact. That is why there is no percentage, no share and no ratio anywhere on this page: two counts from different years cannot honestly be divided into one number.
+      </div>
+
+      <div class="bar">
+        <button type="button" class="nav" id="replay">Replay the animation</button>
+        <p class="hint"><b>Both bars start at zero and the scale is not cut anywhere.</b> The short bar really is that short. Top of the scale is 12,500.</p>
+      </div>
+    </div>
+
+    <!-- the same figures as plain text for a screen reader, so no value
+         on this page depends on seeing a bar or on the animation having
+         run. -->
+    <div class="sr">
+      <p>Two counts of U.S. school districts, on one scale from zero to 12,500.</p>
+      <ul>
+        <li>Districts that have Khan Academy's paid arrangement: 795, school year 2024 to 2025, from Khan Academy's annual report.</li>
+        <li>Districts that do not: about 12,500. This figure is worked out by subtraction, 13,318 minus 795, rounded. The national total of 13,318 regular public school districts is for 2022 to 2023, from the NCES Digest of Education Statistics, Table 214.10.</li>
+      </ul>
+      <p>The two counts are two school years apart, so no percentage or ratio is given.</p>
+    </div>
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <!-- This style block has to live INSIDE the noscript element so it wins
+       on source order. Two things must happen: the dead canvas is hidden
+       so nobody is offered a replay control that cannot work, and the
+       flex-centred body goes back to block flow, otherwise this text lays
+       out as a narrow column beside a 960px sibling and is pushed off the
+       centred overflow, which cannot be scrolled back to. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow:visible!important;overflow-x:hidden}
+    .nsf{max-width:680px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf .hedge2{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+  </style>
+  <div class="nsf">
+    <h1>Districts that have it, and districts that do not</h1>
+    <p>With scripts blocked, here is the same thing as a document. The chart is a picture of these two numbers and nothing more, so nothing is lost.</p>
+
+    <h2>The two counts</h2>
+    <ul>
+      <li><strong>795 districts have Khan Academy's paid arrangement.</strong> This is for the school year 2024 to 2025. Khan Academy's own annual report for that year states "nearly 1.5M licensed learners across 795 U.S. districts". Source: <a href="https://annualreport.khanacademy.org/">Khan Academy, Annual Report SY24-25</a>.</li>
+      <li><strong>About 12,500 districts do not.</strong> This one is not published anywhere. It is worked out by subtraction: the national total of 13,318 regular public school districts, minus the 795 that have the paid arrangement, rounded. The national total is for 2022 to 2023. Source: <a href="https://nces.ed.gov/programs/digest/d23/tables/dt23_214.10.asp">NCES, Digest of Education Statistics, Table 214.10</a>.</li>
+    </ul>
+
+    <h2>Districts, not schools</h2>
+    <p>A district is the body that runs a group of schools. One district can run many of them. Both figures above count districts, so neither one tells you how many schools are involved. This program has no school-level count at all, and treating either number as a count of schools would be wrong.</p>
+
+    <div class="hedge2">
+      <p><strong>The two counts are two school years apart.</strong> The 795 is from the school year 2024 to 2025. The national total of 13,318 is from 2022 to 2023. So the comparison is close but not exact, and that is why no percentage, share or ratio is given anywhere: two counts from different years cannot honestly be divided into one number.</p>
+      <p style="margin-bottom:0"><strong>What the national total covers.</strong> The 13,318 counts regular public school districts in the 50 states and the District of Columbia. It leaves out independent charter schools and service agencies, so it is not a count of every school body in the country.</p>
+    </div>
+
+    <h2>What the chart does with them</h2>
+    <p>Two vertical bars on one scale that runs from zero to 12,500. The scale is not cut off, not broken, and does not start anywhere but zero, so 795 renders as a sliver next to the tall bar. That sliver is the finding. In the interactive version the bars grow up from the baseline once, in under two seconds, and the two numbers count up as they grow. A button replays it. With motion turned off in the reader's system settings, the bars are simply drawn at their final height with the final numbers already printed.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion:reduce)");
+
+  /* One number, 12500, is the top of the scale and the divisor for every
+     bar height, so the geometry cannot drift out of step with the data. */
+  var TOP = 12500;
+
+  var SERIES = [
+    { bar:document.getElementById("b1"), num:document.getElementById("n1"),
+      to:795,   step:1,  delay:0,  dur:600 },
+    { bar:document.getElementById("b2"), num:document.getElementById("n2"),
+      to:12500, step:50, delay:110, dur:1020 }
+  ];
+
+  var replay = document.getElementById("replay");
+  var live = document.getElementById("live");
+  var raf = null;
+  var t0 = 0;
+
+  function comma(n){
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+  function pct(v){
+    return (v / TOP * 100).toFixed(3) + "%";
+  }
+  /* easeOutCubic. Fast at the start, settles rather than stops. */
+  function ease(t){
+    var u = 1 - t;
+    return 1 - u * u * u;
+  }
+
+  function paint(s, v){
+    s.bar.style.height = pct(v);
+    s.num.textContent = comma(v);
+  }
+
+  function setFinal(){
+    if(raf !== null){ cancelAnimationFrame(raf); raf = null; }
+    for(var i = 0; i < SERIES.length; i++) paint(SERIES[i], SERIES[i].to);
+  }
+
+  function setZero(){
+    for(var i = 0; i < SERIES.length; i++) paint(SERIES[i], 0);
+  }
+
+  function tick(now){
+    if(!t0) t0 = now;
+    var el = now - t0, running = false;
+    for(var i = 0; i < SERIES.length; i++){
+      var s = SERIES[i], t = (el - s.delay) / s.dur;
+      if(t <= 0){ paint(s, 0); running = true; continue; }
+      if(t >= 1){ paint(s, s.to); continue; }
+      var v = s.to * ease(t);
+      /* rounded to the series step while in flight, so a five figure
+         number is not a blur of changing digits, then snapped exact. */
+      paint(s, Math.round(v / s.step) * s.step);
+      running = true;
+    }
+    if(running){ raf = requestAnimationFrame(tick); }
+    else { raf = null; setFinal(); }
+  }
+
+  function play(){
+    if(reduce.matches){
+      setFinal();
+      live.textContent = "Motion is turned off in your system settings, so the bars are shown at their final size. 795 districts have it. About 12,500 do not.";
+      return;
+    }
+    if(raf !== null){ cancelAnimationFrame(raf); raf = null; }
+    t0 = 0;
+    setZero();
+    live.textContent = "Bars growing from zero. 795 districts have it. About 12,500 do not.";
+    raf = requestAnimationFrame(tick);
+  }
+
+  replay.addEventListener("click", play);
+
+  /* if the reader flips the setting while the page is open, land on the
+     static final state rather than mid flight */
+  if(typeof reduce.addEventListener === "function"){
+    reduce.addEventListener("change", function(){
+      if(reduce.matches) setFinal();
+    });
+  }
+
+  /* scale the fixed canvas down to fit, never up */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  /* The markup ships the FINAL state: full bar heights and the final
+     numbers already printed. So a reader whose scripts run but whose
+     motion is off, and a reader whose scripts fail after parsing, both
+     get the finished chart. Only when motion is allowed does this run
+     knock the bars back to zero and animate them up, and it does that
+     here, synchronously in the same task as parsing, before the first
+     paint. */
+  if(reduce.matches){ setFinal(); } else { setZero(); play(); }
+
+  /* exposed for render QA only: lets a screenshot run force a state
+     without hand driving the UI */
+  window.__ex = {
+    zero:setZero,
+    finalState:setFinal,
+    play:play,
+    values:function(){
+      return [SERIES[0].num.textContent, SERIES[1].num.textContent,
+              SERIES[0].bar.style.height, SERIES[1].bar.style.height];
+    }
+  };
+})();
+</script>
+</body>
+</html>
