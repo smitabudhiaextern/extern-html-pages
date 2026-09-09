@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kian's six slides, and the three that do not hold</title>
+<style>
+  /* ===============================================================
+     BUILD NOTE, not student facing. This file uses zero HTML
+     comments on purpose, so every note in it lives inside a CSS or
+     script comment. A literal doubled hyphen would sit in the page
+     as two hyphens, and this program bans that everywhere, so no
+     comment or sentence in this file contains one. Underlines here
+     are made of equals signs or underscores for the same reason.
+
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue. No state is ever carried by colour alone: every
+     state also carries a glyph, a border style and wording.
+     The program's measured feedback colours are deliberately NOT
+     used here. Nothing on this screen is a right or wrong answer
+     that needs a red or a green: the marks are a tick, a cross, a
+     struck label, a dashed border and a sentence.
+
+     MEASURED CONTRAST RATIOS, computed on the pairs actually used:
+       #1C1B1B on #FDF8F8 ............ 16.57:1
+       #484646 on #FDF8F8 ............  8.93:1
+       #001D69 on #FDF8F8 ............ 14.50:1
+       #1C1B1B on #DCE1FF ............ 13.47:1
+       #484646 on #DCE1FF ............  7.26:1
+       #001D69 on #DCE1FF ............ 11.79:1
+       #FDF8F8 on #001D69 ............ 14.50:1
+     A dimmed settled option is #1C1B1B on #DCE1FF at .7 opacity,
+     which composites to about 5.4:1 and stays above the 4.5:1 body
+     minimum. Nothing in this file falls below it.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+    --lift:rgba(0,29,105,.10);
+
+    --t-fast:160ms;    /* UI feedback            */
+    --t-frame:300ms;   /* between frame movement */
+    --t-reveal:560ms;  /* a reveal resolving     */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* the focus ring, once, for everything that can take focus. The
+     button rules further down keep the same ring and only widen the
+     offset by a pixel so it clears a 2px border. */
+  :focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ==== the 960 by 540 canvas, scaled down only, never up ====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the script
+     transform then scales it a second time, double shrinking the design.
+     The canvas must always hold 960 in layout and let the transform do
+     all of the fitting. getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  .frame{position:absolute;inset:0;padding:14px 40px 10px;display:flex;flex-direction:column}
+  /* the frame takes programmatic focus on every new slide so a screen
+     reader announces it, and it draws no ring of its own */
+  .frame:focus{outline:none}
+  .frame:focus-visible{outline:none}
+
+  /* ==== HEIGHT BUDGET, and it is fixed rather than minimum ====
+     A min-height panel grew on the first wrong answer in an earlier
+     build in this program and pushed the options the reader was mid
+     way through down the panel. So every box below has a height, not
+     a floor, and the arithmetic is here so a later edit can check it.
+
+       540 stage
+     minus 14 top padding and 10 bottom padding      = 516
+     minus .top   18 tall plus 5 margin              = 493
+     minus h1     22 tall plus 5 margin              = 466
+     minus .bar   34 tall plus 6 margin              = 426  <- .board
+
+     LEFT COLUMN, 470 wide, total 426:
+       .slide     470 by 264, which is 16 by 9 to the pixel
+       gap                                              8
+       .about panel                                   154
+                                                      ___
+                                                      426
+
+     Inside .slide: 264 minus 28 padding minus 3 border = 233.
+       kicker row 11, its 5 padding, 1 rule, 7 margin  = 24
+       title 15px at 1.2, two lines, plus 8 margin     = 44
+       body area left                                 = 165
+     Every one of the six slide bodies is drawn to sit under 165.
+     Measured at about 5.2px per character for 10.5px text, so a
+     217px cell holds about 41 characters on a line.
+
+     RIGHT COLUMN, 394 wide, total 426:
+       .vlab      18 tall plus 5 margin               = 23
+       .choices   four buttons of 38, three gaps of 4  = 164
+       gap                                               7
+       .reason                                        = 232
+                                                      ___
+                                                      426
+     A 38px option button holds two lines of 13px text at 1.3 plus its
+     4px of border, so a label that wraps still cannot change a height.
+     .reason holds a fixed 232 whatever is printed in it: its body is
+     its own scroll region and the region says so in words when there
+     is more below, checked synchronously. ==== */
+
+  /* ==== header ==== */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:5px;height:18px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px;align-items:center}
+  .segs i{display:block;width:18px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:18px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px;height:22px;overflow:hidden}
+  .sub{flex:0 0 auto;font-size:14px;line-height:1.45;max-width:96ch;margin-bottom:6px}
+  .sub b{color:var(--title);font-weight:600}
+
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;gap:16px;height:426px}
+  .board.deck{grid-template-columns:470px 1fr}
+  .board.one{grid-template-columns:1fr}
+  .pcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:9px 12px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .plab{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);flex:0 0 auto}
+
+  /* ==== KIAN'S SLIDE ====
+     This is the one design problem in the file worth solving properly.
+     The teaching is that polish is not evidence, so the six slides have
+     to look like a competent deck: a kicker rule, an action title, a
+     real layout per slide kind, a lift off the canvas. All of it inside
+     the five values. The defects are in the words, never in the craft. */
+  .slide{
+    flex:0 0 auto;width:470px;height:264px;background:var(--bg);
+    border:1.5px solid var(--line);border-radius:10px;
+    box-shadow:0 2px 12px var(--lift);
+    padding:13px 16px;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .skick{
+    flex:0 0 auto;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:7px;height:17px;
+  }
+  .skick .kk{font-size:8.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--on-highlight)}
+  .skick .nn{font-size:8.5px;font-weight:600;letter-spacing:.06em;color:var(--body)}
+  .stitle{flex:0 0 auto;font-size:15px;line-height:1.2;font-weight:600;color:var(--title);margin-bottom:8px}
+  .sbodywrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-start}
+  .sfoot{font-size:10px;line-height:1.35;color:var(--body);margin-top:7px}
+  .sfoot b{color:var(--title);font-weight:600}
+
+  .s2col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .scard{background:var(--highlight);border-radius:8px;padding:8px 9px}
+  .slab{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .sbody{font-size:10.5px;line-height:1.35;color:var(--title)}
+  .scap{font-size:8.5px;line-height:1.3;color:var(--body);margin-top:5px}
+
+  .srail{display:flex;align-items:stretch;gap:6px}
+  .sstep{
+    flex:1 1 0;background:var(--highlight);border-radius:8px;padding:8px 9px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .sstep .sn{
+    width:15px;height:15px;border-radius:50%;background:var(--on-highlight);color:var(--bg);
+    font-size:9px;font-weight:700;line-height:15px;text-align:center;flex:0 0 auto;
+  }
+  .sstep p{font-size:10.5px;line-height:1.3;color:var(--title)}
+  .sar{width:14px;height:14px;flex:0 0 auto;align-self:center;color:var(--on-highlight)}
+
+  .sstat{
+    background:var(--highlight);border-radius:8px;padding:14px 12px;text-align:center;
+  }
+  .sbig{font-size:36px;line-height:1;font-weight:600;color:var(--on-highlight);letter-spacing:-.01em}
+  .sstat .sbody{margin-top:7px}
+
+  .stab{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .strow{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+  .strow>span{background:var(--bg);padding:5px 8px;font-size:10.5px;line-height:1.3;color:var(--title)}
+  .strow.sth>span{background:var(--highlight);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);padding:4px 8px}
+
+  .srisk{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .srrow{display:grid;grid-template-columns:.8fr 1.2fr;gap:1px;background:var(--line)}
+  .srrow>span{background:var(--bg);padding:5px 8px;font-size:10.5px;line-height:1.3;color:var(--title)}
+  .srrow.sth>span{background:var(--highlight);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);padding:4px 8px}
+
+  /* ==== the panel under the slide: who Kian is, and the line that
+         says every word on his six slides is invented ==== */
+  .about{flex:0 0 auto;height:154px;background:var(--tint);border-radius:10px;padding:8px 11px;overflow:hidden}
+  .about p{font-size:11px;line-height:1.38;margin-top:4px}
+  .about p b{color:var(--title);font-weight:600}
+  .about .made{
+    border:1.5px dashed var(--on-highlight);border-radius:8px;padding:6px 8px;margin-top:6px;
+    font-size:10.5px;line-height:1.35;
+  }
+  .about .made b{color:var(--on-highlight);font-weight:700}
+  .about .fict{font-size:10px;margin-top:5px}
+
+  /* ==== the four calls. Fixed order, same four on all six slides ==== */
+  .vwrap{display:flex;flex-direction:column;min-height:0;min-width:0}
+  .vlab{font-size:14px;font-weight:600;color:var(--title);line-height:1.3;margin-bottom:5px;flex:0 0 auto;height:18px;overflow:hidden}
+  .choices{display:flex;flex-direction:column;gap:4px;flex:0 0 auto;height:164px}
+  button.ch{
+    flex:1 1 0;display:flex;align-items:center;gap:9px;text-align:left;width:100%;overflow:hidden;
+    font-family:inherit;font-size:13px;line-height:1.3;font-weight:600;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:0 11px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.ch .dot{
+    flex:0 0 auto;width:15px;height:15px;border-radius:50%;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  button.ch:hover:not([aria-disabled="true"]){border-color:var(--on-highlight)}
+  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ch[aria-pressed="true"]{border-color:var(--on-highlight)}
+  /* ruled out and settled options stay in the tab order, so they are
+     aria-disabled rather than disabled: reachable, announced, inert.
+     Two guards hold them so, one for pointer and one for keyboard. */
+  button.ch[aria-disabled="true"]{cursor:default}
+  /* the call that is the answer, whether or not they pressed it:
+     filled dot, tick, solid border */
+  button.ch.right{border-color:var(--on-highlight)}
+  button.ch.right .dot{background:var(--on-highlight);color:var(--bg)}
+  /* a call that does not fit this slide: glyph, struck label, dashed
+     border. Three signals, and not one of them is colour on its own. */
+  button.ch.out{background:transparent;border:2px dashed var(--line);color:var(--body);font-weight:500}
+  button.ch.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.ch.out .dot{border-style:dashed}
+  /* their own press keeps a solid border whatever the verdict on it, so
+     a struck call they chose never looks like one they did not touch */
+  button.ch.picked{border-style:solid;border-color:var(--on-highlight)}
+  button.ch.dim{opacity:.7}
+  button.ch.out.dim{opacity:.85}
+
+  /* ==== the reveal. Fixed 232 tall, lands under the calls, and holds
+         two labelled parts. Nothing is in the document before a press,
+         so there is nothing to read ahead. ==== */
+  .reason{
+    flex:0 0 auto;margin-top:7px;height:232px;min-width:0;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;
+    display:flex;flex-direction:column;
+  }
+  .reason:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .reason:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .lead{flex:0 0 auto;font-size:11.5px;line-height:1.32;font-weight:600;color:var(--on-highlight);margin-bottom:4px}
+  .lead b{color:var(--title);font-weight:700}
+  .rscroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+  .rscroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .more{flex:0 0 auto;font-size:11px;font-weight:600;color:var(--on-highlight);margin-top:4px}
+  .part{margin-bottom:7px}
+  .part:last-child{margin-bottom:0}
+  .ptag{
+    font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:2px;
+  }
+  .ptxt{font-size:12.5px;line-height:1.42}
+  .ptxt b{color:var(--title);font-weight:600}
+  .part.carry{border-top:1.5px solid var(--line);padding-top:6px}
+  .reason.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ==== the opening frame and the close ==== */
+  .open{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:100%}
+  .obox{background:var(--highlight);border-radius:11px;padding:12px 14px;overflow:hidden}
+  .obox p{font-size:13.5px;line-height:1.45;margin-bottom:8px}
+  .obox p:last-child{margin-bottom:0}
+  .obox p b{color:var(--title);font-weight:600}
+  .obox .made{
+    border:2px dashed var(--on-highlight);border-radius:9px;padding:9px 11px;
+    font-size:13px;line-height:1.42;
+  }
+  .obox .made b{color:var(--on-highlight);font-weight:700}
+
+  .rows{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+  .row{display:grid;grid-template-columns:22px 210px 1fr;gap:10px;align-items:baseline;
+       background:var(--highlight);border-radius:8px;padding:5px 11px}
+  .row .g{
+    width:16px;height:16px;border-radius:50%;font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+  }
+  .row .g.fill{background:var(--on-highlight);color:var(--bg)}
+  .row .nm{font-size:12.5px;font-weight:600;color:var(--title);line-height:1.3}
+  .row .rr{font-size:12.5px;line-height:1.35;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+
+  .qbox{background:var(--bg);border:2px solid var(--on-highlight);border-radius:10px;padding:9px 12px}
+  .qbox .attrib{font-size:11.5px;line-height:1.35;margin-bottom:5px;color:var(--body)}
+  .qbox ol{margin:0 0 0 18px}
+  .qbox li{font-size:12.5px;line-height:1.38;color:var(--title);margin-bottom:3px}
+  .qbox li:last-child{margin-bottom:0}
+  .closed{
+    border:1.5px dashed var(--on-highlight);border-radius:9px;padding:8px 11px;margin-top:8px;
+    font-size:12.5px;line-height:1.42;
+  }
+  .closed b{color:var(--title);font-weight:600}
+
+  /* ==== the bar. margin-top:auto plus flex:0 0 auto means nothing above
+         it can ever push it off the canvas. ==== */
+  .bar{margin-top:6px;flex:0 0 auto;display:flex;align-items:center;gap:10px;height:34px;flex-wrap:nowrap}
+  button.nav{
+    font-family:inherit;font-size:13px;font-weight:600;padding:8px 15px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:12px;padding:6px 11px}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .push{margin-left:auto}
+  .hint{flex:1 1 auto;min-width:0;font-size:11px;line-height:1.35}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  /* ==== under 600px: a portrait restack, not a shrunken slide.
+         Every fixed height above is released here, or the stack
+         clips. ==== */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits min-width:auto
+       and refuses to shrink below its content width, which pushes the board
+       off screen. Block layout removes that floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px;height:auto}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px;height:auto;overflow:visible}
+    .sub{font-size:15px}
+    .board,.board.deck,.board.one{
+      grid-template-columns:1fr;gap:16px;flex:0 0 auto;height:auto;
+      align-items:start;align-content:start;
+    }
+    .open{grid-template-columns:1fr;height:auto}
+    .slide{width:100%;height:auto;padding:14px 15px}
+    .skick{height:auto}
+    .skick .kk,.skick .nn{font-size:11px}
+    .stitle{font-size:21px}
+    .sbody,.sstep p,.strow>span,.srrow>span{font-size:15px}
+    .slab,.strow.sth>span,.srrow.sth>span{font-size:12px}
+    .scap{font-size:12.5px}
+    .sfoot{font-size:14px}
+    .sbig{font-size:44px}
+    .srail{flex-direction:column;align-items:stretch}
+    .sar{transform:rotate(90deg)}
+    .strow,.srrow{grid-template-columns:1fr}
+    .about{height:auto}
+    .about p{font-size:15px}
+    .about .made{font-size:14.5px}
+    .about .fict{font-size:14px}
+    .vlab{font-size:17px;height:auto;overflow:visible}
+    .choices{height:auto}
+    button.ch{flex:0 0 auto;font-size:16px;padding:12px 13px;align-items:flex-start}
+    button.ch .dot{margin-top:2px}
+    .reason{height:auto;margin-top:14px;padding:12px 14px}
+    .rscroll{overflow:visible}
+    .more{display:none}
+    .lead{font-size:15px}
+    .ptag{font-size:12px}
+    .ptxt{font-size:16px}
+    .obox p{font-size:15.5px}
+    .obox .made{font-size:15px}
+    .row{grid-template-columns:22px 1fr;gap:6px 10px;padding:11px 13px}
+    .row .rr{grid-column:2}
+    .row .nm{font-size:16px}
+    .row .rr{font-size:15px}
+    .qbox li{font-size:15.5px}
+    .qbox .attrib{font-size:14px}
+    .closed{font-size:15px}
+    .bar{margin-top:16px;height:auto;flex-wrap:wrap}
+    button.nav{font-size:16px;padding:13px 18px}
+    button.nav.small{font-size:14px;padding:10px 14px}
+    .hint{font-size:14px;flex:1 1 100%}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <div class="frame" id="f0" tabindex="-1">
+    <div class="top">
+      <span class="prog" id="p0">1 of 8 &middot; What Kian sent</span>
+      <span class="segs" id="segs0" aria-hidden="true"></span>
+    </div>
+
+    <h1>Kian's six slides, and the three that do not hold</h1>
+
+    <div class="board one">
+      <div class="open">
+        <div class="obox">
+          <p><b>Kian is the other new intern on this team.</b> He has been building the same deck you are about to build. This morning he put the first six slides of his into the team channel and asked for a look before he takes it to the room.</p>
+          <p>The deck is tidy. The titles are written as findings, the type is consistent, and every slide has a shape to it. <b>Read it anyway.</b></p>
+          <p>Six slides, one at a time. On each one you decide whether something is wrong with it, and if so what. The same four calls sit under every slide, in the same order.</p>
+          <p><b>Some of these slides are fine.</b> Saying so is a real answer, not a way out of the question.</p>
+        </div>
+        <div class="obox">
+          <p class="made"><b>Everything on Kian's six slides is invented for this exercise, figures included.</b> No figure on those slides is a claim this program is making, and no real organization is named on any of them. His partners are named by type: a device manufacturer, a children's media company, a national retailer. The numbers are there to be examined, and one of them is there to fail.</p>
+          <p style="margin-top:8px">Nothing you press is graded, nothing is sent anywhere, and your calls are kept on this device so you can stop and come back.</p>
+          <p><b>Note: Wes and Kian are fictional characters.</b></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="ostart" type="button">Open slide 1</button>
+      <span class="hint" id="ohint">His slides stay on screen the whole way through.</span>
+    </div>
+  </div>
+
+  <div class="frame" id="fs" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog" id="ps">2 of 8 &middot; Slide 1 of 6</span>
+      <span class="segs" id="segsS" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="sh1">Slide 1 of the deck Kian sent</h1>
+
+    <div class="board deck">
+      <div class="pcol">
+        <section class="slide" id="slide" aria-labelledby="sh1">
+          <div class="skick"><span class="kk" id="skk">Recommendation</span><span class="nn" id="snn">1 / 6</span></div>
+          <p class="stitle" id="stt"></p>
+          <div class="sbodywrap" id="sbd"></div>
+        </section>
+        <div class="about">
+          <p class="plab">About this deck</p>
+          <p class="made"><b>Invented, all of it.</b> Every word and every figure on these six slides was written for this exercise. No figure on them is a claim this program is making, and no real organization is named on any of them.</p>
+          <p class="fict">Note: Wes and Kian are fictional characters.</p>
+        </div>
+      </div>
+
+      <div class="vwrap">
+        <div class="vlab" id="vlab">Is there something wrong with this slide?</div>
+        <div class="choices" id="choices" role="group" aria-labelledby="vlab"></div>
+        <section class="reason" id="reason" hidden tabindex="-1" role="group" aria-labelledby="rlead">
+          <p class="lead" id="rlead"></p>
+          <div class="rscroll" id="rscroll" tabindex="0" role="group" aria-label="The reveal">
+            <div id="rbody"></div>
+          </div>
+          <p class="more" id="rmore" hidden>More below. Scroll inside this box.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="sback" type="button">Back</button>
+      <button class="nav small" id="snext" type="button" hidden>Next</button>
+      <span class="hint" id="shint"><b>Make a call first.</b> Nothing appears until you do. Keys <span class="key">1</span> to <span class="key">4</span> also work.</span>
+    </div>
+  </div>
+
+  <div class="frame" id="fz" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog" id="pz">8 of 8 &middot; What the three questions found</span>
+      <span class="segs" id="segsZ" aria-hidden="true"></span>
+    </div>
+
+    <h1>Three of the six, and the questions that found them</h1>
+
+    <div class="board one">
+      <div class="open">
+        <div class="pcol">
+          <div class="rows" id="rows"></div>
+          <p class="closed"><b>Three of the six were sound, and that is the part worth keeping.</b> Kian's deck looks finished because most of it is. Polish is not evidence, and none of the three things that sink this deck is about design. All three would have taken him ten minutes.</p>
+        </div>
+        <div class="pcol">
+          <div class="qbox">
+            <p class="plab" style="margin-bottom:5px">Three questions to run on any deck</p>
+            <p class="attrib" id="attrib" hidden></p>
+            <ol>
+              <li>What does this term stand for, and is it written out on the slide where it first appears?</li>
+              <li>Where did this number come from, and why do you believe it?</li>
+              <li>What is the one idea on this slide, and does the slide say which way you would go?</li>
+            </ol>
+          </div>
+          <p class="closed"><b>They take about a minute each.</b> You run them on somebody else's deck the way you just did, and then on your own, which is harder and matters more.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="zback" type="button">Back to slide 6</button>
+      <button class="nav ghost small" id="zreset" type="button">Read the deck again</button>
+      <span class="hint push"><b>That is the end of this one.</b> Nothing further is required.</span>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:700px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:16px 0 5px}
+    .nsf h4{font-size:15px;line-height:1.3;color:#001D69;margin:12px 0 4px}
+    .nsf p{margin-bottom:11px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .card{background:#DCE1FF;border-radius:9px;padding:11px 13px;margin:0 0 12px}
+    .nsf .card strong{color:#001D69}
+    .nsf .made{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin:0 0 14px}
+    .nsf .made strong{color:#001D69}
+    .nsf table{border-collapse:collapse;width:100%;margin-bottom:14px}
+    .nsf th,.nsf td{border:1px solid rgba(0,29,105,.26);padding:7px 9px;text-align:left;font-size:15px;vertical-align:top}
+    .nsf th{background:#DCE1FF;color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Kian's six slides, and the three that do not hold</h1>
+    <p>With scripts blocked, here is the same content as a document: the six slides Kian sent, written out in full, which three of them carry something wrong and what, the reveal and the carry line for each of the six, and the three questions that find all three defects.</p>
+
+    <div class="made">
+      <p><strong>Everything on Kian's six slides is invented for this exercise, figures included.</strong> No figure on those slides is a claim this program is making, and no real organization is named on any of them. His partners are named by type: a device manufacturer, a children's media company, a national retailer. The market figure on slide 4 has no source on purpose. It is the object of study, and it is the one thing on these slides that is meant to fail.</p>
+      <p style="margin-bottom:0"><strong>Note: Wes and Kian are fictional characters.</strong></p>
+    </div>
+
+    <p>Kian is the other new intern on this team. He has been building the same deck you are about to build, and this morning he put the first six slides of his into the team channel. The deck is tidy: the titles are written as findings, the type is consistent, every slide has a shape to it. Three of the six slides are genuinely sound. Three are not.</p>
+
+    <h2>The four calls, the same four on every slide</h2>
+    <ol>
+      <li>A term on this slide is never explained.</li>
+      <li>A number here has nothing behind it.</li>
+      <li>It does not say which way he would go.</li>
+      <li>Nothing is wrong with this one.</li>
+    </ol>
+    <p>Each of the first three is the real defect on a different slide, so no call is a safe guess. The fourth is the right answer three times.</p>
+
+    <h2>Slide 1. Recommendation</h2>
+    <p><strong>Title:</strong> Two partnerships worth taking to the team</p>
+    <table>
+      <tr><th>Option A</th><th>Option B</th></tr>
+      <tr>
+        <td>The device manufacturer. Put our practice sets on the devices they already ship to schools. Bigger reach, slower to start.</td>
+        <td>The children's media company. Co-make a numeracy series for younger learners. Smaller reach, faster to start.</td>
+      </tr>
+    </table>
+    <p><strong>Footer on the slide:</strong> Both are defensible. Happy to go whichever way the team prefers.</p>
+    <h3>The call: it does not say which way he would go.</h3>
+    <h4>Why this is the answer</h4>
+    <p>The title promises a recommendation. The body gives two options with the same amount of space and the same wording, in no order, and the last line hands the choice back to the room. Anybody reading this slide finishes it without knowing what Kian thinks. That is a <strong>hedge</strong>: wording that avoids saying which way you would go.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>One idea per slide, and the slide says which way you would go.</strong> Naming both deals here is right, and the ask requires it. What is missing is the half sentence that puts one of them first. The other deal still gets all of its slides.</p>
+
+    <h2>Slide 2. Strategic fit</h2>
+    <p><strong>Title:</strong> Both sides want the same school year to go well</p>
+    <table>
+      <tr><th>Our side</th><th>Their side, in their words</th></tr>
+      <tr>
+        <td>We want to reach students in districts that buy no software at all. Their devices are already in those districts.<br><em>Source: the team's own priority list for this school year.</em></td>
+        <td>They have said they want their school hardware judged on what students do with it, not on how many units ship.<br><em>Source: the manufacturer's own education update, September 2025.</em></td>
+      </tr>
+    </table>
+    <p><strong>Footer on the slide:</strong> One school year, and two reasons to care about the same thing.</p>
+    <h3>The call: nothing is wrong with this one.</h3>
+    <h4>Why this is the answer</h4>
+    <p>Both sides are on the slide, so it is not an argument about what we want with the partner left off it. Each half says where it came from. And the partner's half is what they said themselves rather than what Kian would like them to want.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>A fit line holds when the other side is on the slide and each half says where it came from.</strong> If you cannot find the partner's own words, put that on the slide and label the rest as your read.</p>
+
+    <h2>Slide 3. Partnership model</h2>
+    <p><strong>Title:</strong> The model: co-developed content, funded from their MDF</p>
+    <ol>
+      <li>They fund year one</li>
+      <li>We build 40 practice sets</li>
+      <li>The sets ship on every new device</li>
+    </ol>
+    <p><strong>Line under the flow:</strong> Year one comes out of their MDF, so it never touches their product budget.</p>
+    <h3>The call: a term on this slide is never explained.</h3>
+    <h4>Why this is the answer</h4>
+    <p>The same three letters sit in the title and again under the flow, and nowhere on the slide are they written out. An <strong>acronym</strong> is a short form built from the first letters of several words, the way ASAP is. Somebody asked in the channel what these three stand for. Kian said it is what the manufacturer calls that budget and that he would find out. In this line of work those letters stand for more than one thing, so nobody in the room can check the claim attached to them, and the person who wrote the slide could not settle it either. That last part is what sinks it.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>Define it on the slide where it first appears, or delete it.</strong> Write the words out the first time, in brackets, on that slide. The fix is a bracket and four words. The cost of skipping it is that the person you are pitching stops listening to you and starts working out what you said.</p>
+
+    <h2>Slide 4. The opportunity</h2>
+    <p><strong>Title:</strong> The market we are not in yet is the biggest one</p>
+    <p class="card"><strong>$4 billion</strong><br>the school device market. It is growing about 20 percent a year.</p>
+    <p><strong>Footer on the slide:</strong> A small share of that is still a big number.</p>
+    <h3>The call: a number here has nothing behind it.</h3>
+    <h4>Why this is the answer</h4>
+    <p>A round figure, a confident verb, and nothing else. No source, no period, no link. A reader cannot tell whether it covers one country or all of them, this school year or a forecast for five years out, hardware or software. Kian cannot tell them either, because he does not have the page it came off.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>Every number carries its source and the period it covers, on the same slide as the number.</strong> If you cannot find the source, the number does not go on the slide. A smaller figure you can stand behind beats a big one you cannot.</p>
+
+    <h2>Slide 5. What each side gets</h2>
+    <p><strong>Title:</strong> Each thing we give faces the thing we get back</p>
+    <table>
+      <tr><th>We give</th><th>They give</th></tr>
+      <tr><td>40 practice sets, 8 per grade band, by 1 August</td><td>One link to them on the setup screen of every device</td></tr>
+      <tr><td>Two 90 minute training sessions a year</td><td>Their support desk takes first line teacher questions in 3 regions</td></tr>
+      <tr><td>Our name on the setup screen, one line</td><td>Their name on the collection page, one line</td></tr>
+    </table>
+    <p><strong>Footer on the slide:</strong> Read it across, not down. Each row is one trade.</p>
+    <h3>The call: nothing is wrong with this one.</h3>
+    <h4>Why this is the answer</h4>
+    <p>The rows pair, so each thing given faces the thing received. Both halves of every row carry a unit: how many, how often, by when, and how far. And the partner's column is written from the partner's chair rather than from ours.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>Put a unit on both sides of every row.</strong> A benefit with no unit on it cannot be planned against, and a table with units only on our side is one side of the trade written down twice.</p>
+
+    <h2>Slide 6. Risks and alternatives</h2>
+    <p><strong>Title:</strong> Two risks, and what I would say to each</p>
+    <table>
+      <tr><th>Risk</th><th>What I would say</th></tr>
+      <tr><td>They ship to more regions than we have content for.</td><td>Year one covers the 3 regions we already cover. I confirm the list with their programme lead before the meeting.</td></tr>
+      <tr><td>The media company could take the same seat.</td><td>We ask for a named review date instead of exclusivity. I check with our contracts contact first.</td></tr>
+    </table>
+    <p><strong>Footer on the slide:</strong> Who else could take the seat: the media company, or a national retailer that funds school programmes.</p>
+    <h3>The call: nothing is wrong with this one.</h3>
+    <h4>Why this is the answer</h4>
+    <p>Two risks, each with what he would say back, and each answer names who does what and by when: the region list gets confirmed with their programme lead, the review date question goes to our own contracts contact, and both happen before the meeting. The people who could take the seat instead are on the slide too.</p>
+    <h4>What to carry from this one</h4>
+    <p><strong>A risk with no answer next to it is a worry. A risk with an answer that names a person and a deadline is a plan.</strong> Put the people who could take the seat instead on this slide as well, and call them alternatives rather than competitors.</p>
+
+    <h2>Where the six of them land</h2>
+    <table>
+      <tr><th>Slide</th><th>The call</th></tr>
+      <tr><td>1. The recommendation</td><td>It does not say which way he would go.</td></tr>
+      <tr><td>2. Strategic fit</td><td>Sound.</td></tr>
+      <tr><td>3. The model</td><td>A term the deck never explains.</td></tr>
+      <tr><td>4. The opportunity</td><td>A number with nothing behind it.</td></tr>
+      <tr><td>5. What each side gets</td><td>Sound.</td></tr>
+      <tr><td>6. Risks and alternatives</td><td>Sound.</td></tr>
+    </table>
+    <p><strong>Three of the six were sound, and that is the part worth keeping.</strong> Kian's deck looks finished because most of it is. Polish is not evidence, and none of the three things that sink this deck is about design. All three would have taken him ten minutes.</p>
+
+    <h2>Three questions to run on any deck</h2>
+    <ol>
+      <li>What does this term stand for, and is it written out on the slide where it first appears?</li>
+      <li>Where did this number come from, and why do you believe it?</li>
+      <li>What is the one idea on this slide, and does the slide say which way you would go?</li>
+    </ol>
+    <p>They take about a minute each. You run them on somebody else's deck the way you just did, and then on your own, which is harder and matters more.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var GLYPH = {ok:"✓", no:"×"};
+
+  // Phosphor style line icon, one stroke width, colour by inheritance.
+  var CHEV = '<svg class="sar" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+             'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+             '<path d="M9 6l6 6-6 6"/></svg>';
+
+  /* =================================================================
+     THE FOUR CALLS. Fixed order, identical on all six slides, and the
+     same order as keys 1 to 4. Each of the first three is the real
+     defect on a DIFFERENT slide, so guessing by feel cannot work, and
+     the fourth is the answer three times out of six. Do not reorder
+     these and do not add a fifth: a fifth would let a student reach
+     the answer by elimination on a slide they never read.
+     ================================================================= */
+  var OPTS = [
+    {id:"term",   label:"A term on this slide is never explained."},
+    {id:"number", label:"A number here has nothing behind it."},
+    {id:"way",    label:"It does not say which way he would go."},
+    {id:"none",   label:"Nothing is wrong with this one."}
+  ];
+  var OD = {};
+  OPTS.forEach(function(o){ OD[o.id] = o; });
+
+  /* =================================================================
+     KIAN'S SIX SLIDES. Every word and every figure here is invented
+     for this exercise, and the frame around the deck says so on every
+     slide and again in the fallback document. Two rules govern this
+     array and both have a post-mortem behind them in this program:
+
+     1. NO REAL ORGANIZATION IS NAMED, on any slide, ever. Partners
+        are named by type. A hollow pitch with a real logo on it
+        grades that organization.
+     2. The market figure on the "number" slide is a DELIBERATE
+        DEFECT. It has no source, no period and no link because that
+        is the whole point of it. It is labelled on screen as invented
+        and as the object of study, so a later fact check pass does
+        not delete the teaching along with the figure.
+
+     Three slides carry a defect and three are sound, in the order
+     defect, sound, defect, defect, sound, sound. That order is
+     deliberate: it does not alternate and it does not split the deck
+     in half, so a student cannot ride a pattern to the answers. And
+     three of the six being genuinely good is the point of Kian. A
+     student who learns that every slide is broken has learned the
+     wrong thing.
+     ================================================================= */
+  var SL = [
+    {
+      slug:"recommendation", kick:"Recommendation", right:"way",
+      name:"The recommendation",
+      title:"Two partnerships worth taking to the team",
+      body:
+        '<div class="s2col">' +
+          '<div class="scard"><p class="slab">Option A</p>' +
+            '<p class="sbody">The device manufacturer. Put our practice sets on the devices they already ship to schools. Bigger reach, slower to start.</p></div>' +
+          '<div class="scard"><p class="slab">Option B</p>' +
+            '<p class="sbody">The children&rsquo;s media company. Co-make a numeracy series for younger learners. Smaller reach, faster to start.</p></div>' +
+        '</div>' +
+        '<p class="sfoot">Both are defensible. Happy to go whichever way the team prefers.</p>',
+      verdict:"It does not say which way he would go.",
+      why:"The title promises a recommendation. The body gives two options with the same amount of space and the same wording, in no order, and the last line hands the choice back to the room. Anybody reading this slide finishes it without knowing what Kian thinks. That is a <b>hedge</b>: wording that avoids saying which way you would go.",
+      carry:"<b>One idea per slide, and the slide says which way you would go.</b> Naming both deals here is right, and the ask requires it. What is missing is the half sentence that puts one of them first. The other deal still gets all of its slides.",
+      wrong:{
+        term:"Every word on this slide is one you already know. There is no shorthand and no set of initials anywhere on it. That call is a real defect in this deck, and it is on a slide further in.",
+        number:"There is no figure on this slide at all, so nothing here can be missing a source. That call is a real defect in this deck, and it is on a slide further in.",
+        none:"Read the title again, then read the last line. The title promises one thing and the last line takes it back."
+      }
+    },
+    {
+      slug:"fit", kick:"Strategic fit", right:"none",
+      name:"Strategic fit",
+      title:"Both sides want the same school year to go well",
+      body:
+        '<div class="s2col">' +
+          '<div class="scard"><p class="slab">Our side</p>' +
+            '<p class="sbody">We want to reach students in districts that buy no software at all. Their devices are already in those districts.</p>' +
+            '<p class="scap">Source: the team&rsquo;s own priority list for this school year.</p></div>' +
+          '<div class="scard"><p class="slab">Their side, in their words</p>' +
+            '<p class="sbody">They have said they want their school hardware judged on what students do with it, not on how many units ship.</p>' +
+            '<p class="scap">Source: the manufacturer&rsquo;s own education update, September 2025.</p></div>' +
+        '</div>' +
+        '<p class="sfoot">One school year, and two reasons to care about the same thing.</p>',
+      verdict:"Sound.",
+      why:"Both sides are on the slide, so it is not an argument about what we want with the partner left off it. Each half says where it came from. And the partner&rsquo;s half is what they said themselves rather than what Kian would like them to want.",
+      carry:"<b>A fit line holds when the other side is on the slide and each half says where it came from.</b> If you cannot find the partner&rsquo;s own words, put that on the slide and label the rest as your read.",
+      wrong:{
+        term:"The two cards use plain words throughout, and nothing on this slide needs expanding. That call is a real defect in this deck, and it is on a slide further in.",
+        number:"There is no figure on this slide. What there is instead is two claims, and both of them say where they came from, which is the thing a figure would need as well.",
+        way:"That is slide 1&rsquo;s problem, and it is not this slide&rsquo;s job. A fit slide says why the two sides care about the same thing. It is not where the recommendation goes."
+      }
+    },
+    {
+      slug:"model", kick:"Partnership model", right:"term",
+      name:"The model",
+      title:"The model: co-developed content, funded from their MDF",
+      body:
+        '<div class="srail">' +
+          '<div class="sstep"><span class="sn">1</span><p>They fund year one</p></div>' + CHEV +
+          '<div class="sstep"><span class="sn">2</span><p>We build 40 practice sets</p></div>' + CHEV +
+          '<div class="sstep"><span class="sn">3</span><p>The sets ship on every new device</p></div>' +
+        '</div>' +
+        '<p class="sfoot">Year one comes out of their MDF, so it never touches their product budget.</p>',
+      verdict:"A term the deck never explains.",
+      why:"The same three letters sit in the title and again under the flow, and nowhere on the slide are they written out. An <b>acronym</b> is a short form built from the first letters of several words, the way ASAP is. Somebody asked in the channel what these three stand for. Kian said it is what the manufacturer calls that budget and that he would find out. In this line of work those letters stand for more than one thing, so nobody in the room can check the claim attached to them, and the person who wrote the slide could not settle it either. That last part is what sinks it.",
+      carry:"<b>Define it on the slide where it first appears, or delete it.</b> Write the words out the first time, in brackets, on that slide. The fix is a bracket and four words. The cost of skipping it is that the person you are pitching stops listening to you and starts working out what you said.",
+      wrong:{
+        number:"The only figure on this slide is the 40 practice sets, and that is a term of the deal rather than a claim about the world. It needs somebody to keep it, not a source. The unsourced figure is a real defect in this deck, and it is on a slide further in.",
+        way:"That is slide 1&rsquo;s problem. This slide takes one shape and describes it, which is exactly what a model slide is for.",
+        none:"Read the title, then read the line under the flow. The same three letters appear twice, and nowhere on this slide are they written out."
+      }
+    },
+    {
+      slug:"number", kick:"The opportunity", right:"number",
+      name:"The opportunity",
+      title:"The market we are not in yet is the biggest one",
+      body:
+        '<div class="sstat">' +
+          '<p class="sbig">$4 billion</p>' +
+          '<p class="sbody">the school device market. It is growing about 20 percent a year.</p>' +
+        '</div>' +
+        '<p class="sfoot">A small share of that is still a big number.</p>',
+      verdict:"A number with nothing behind it.",
+      why:"A round figure, a confident verb, and nothing else. No source, no period, no link. A reader cannot tell whether it covers one country or all of them, this school year or a forecast for five years out, hardware or software. Kian cannot tell them either, because he does not have the page it came off.",
+      carry:"<b>Every number carries its source and the period it covers, on the same slide as the number.</b> If you cannot find the source, the number does not go on the slide. A smaller figure you can stand behind beats a big one you cannot.",
+      wrong:{
+        term:"There is no shorthand on this slide. Every word on it is a word you already know, which is part of why the figure reads as solid. That call belongs to slide 3.",
+        way:"That is slide 1&rsquo;s problem. This slide is not making a recommendation, it is making a claim.",
+        none:"Read the big figure again, then look for the two things that are not next to it: where it came from, and what period it covers."
+      }
+    },
+    {
+      slug:"value", kick:"What each side gets", right:"none",
+      name:"What each side gets",
+      title:"Each thing we give faces the thing we get back",
+      body:
+        '<div class="stab">' +
+          '<div class="strow sth"><span>We give</span><span>They give</span></div>' +
+          '<div class="strow"><span>40 practice sets, 8 per grade band, by 1 August</span>' +
+            '<span>One link to them on the setup screen of every device</span></div>' +
+          '<div class="strow"><span>Two 90 minute training sessions a year</span>' +
+            '<span>Their support desk takes first line teacher questions in 3 regions</span></div>' +
+          '<div class="strow"><span>Our name on the setup screen, one line</span>' +
+            '<span>Their name on the collection page, one line</span></div>' +
+        '</div>' +
+        '<p class="sfoot">Read it across, not down. Each row is one trade.</p>',
+      verdict:"Sound.",
+      why:"The rows pair, so each thing given faces the thing received. Both halves of every row carry a unit: how many, how often, by when, and how far. And the partner&rsquo;s column is written from the partner&rsquo;s chair rather than from ours.",
+      carry:"<b>Put a unit on both sides of every row.</b> A benefit with no unit on it cannot be planned against, and a table with units only on our side is one side of the trade written down twice.",
+      wrong:{
+        term:"Every heading and every row on this slide is written out in full. There is no shorthand here. That call belongs to slide 3.",
+        number:"Every figure on this slide is a term of the deal. Each one is a commitment somebody has to keep rather than a claim about the world. The unsourced figure is on slide 4.",
+        way:"That is slide 1&rsquo;s problem. This slide is a trade, and a trade does not have a direction to pick."
+      }
+    },
+    {
+      slug:"risks", kick:"Risks and alternatives", right:"none",
+      name:"Risks and alternatives",
+      title:"Two risks, and what I would say to each",
+      body:
+        '<div class="srisk">' +
+          '<div class="srrow sth"><span>Risk</span><span>What I would say</span></div>' +
+          '<div class="srrow"><span>They ship to more regions than we have content for.</span>' +
+            '<span>Year one covers the 3 regions we already cover. I confirm the list with their programme lead before the meeting.</span></div>' +
+          '<div class="srrow"><span>The media company could take the same seat.</span>' +
+            '<span>We ask for a named review date instead of exclusivity. I check with our contracts contact first.</span></div>' +
+        '</div>' +
+        '<p class="sfoot">Who else could take the seat: the media company, or a national retailer that funds school programmes.</p>',
+      verdict:"Sound.",
+      why:"Two risks, each with what he would say back, and each answer names who does what and by when: the region list gets confirmed with their programme lead, the review date question goes to our own contracts contact, and both happen before the meeting. The people who could take the seat instead are on the slide too.",
+      carry:"<b>A risk with no answer next to it is a worry. A risk with an answer that names a person and a deadline is a plan.</b> Put the people who could take the seat instead on this slide as well, and call them alternatives rather than competitors.",
+      wrong:{
+        term:"Nothing on this slide is shortened. The one piece of shorthand in this deck is on slide 3.",
+        number:"The one figure here is the region count, and it is a scope decision rather than a claim about the market. The unsourced figure is on slide 4.",
+        way:"This slide does say what he would do about each risk, and it names who does it and when. Slide 1 is where nothing gets picked."
+      }
+    }
+  ];
+
+  var N = SL.length, TOTAL = N + 2;
+
+  /* Wrapped, because a headless renderer without matchMedia would
+     otherwise throw here at load and take the whole build down before
+     a single frame drew. Both call sites go through this. */
+  function mq(q){
+    try{ return window.matchMedia ? window.matchMedia(q) : {matches:false}; }
+    catch(e){ return {matches:false}; }
+  }
+  var reduce = mq("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["p0","segs0","f0","ostart","ohint",
+   "ps","segsS","fs","sh1","slide","skk","snn","stt","sbd",
+   "vlab","choices","reason","rlead","rscroll","rbody","rmore","sback","snext","shint",
+   "pz","segsZ","fz","rows","attrib","zback","zreset","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* _________________________________________________________________
+     A small, failure tolerant store, so "read three slides and come
+     back" is a true statement rather than a promise the build breaks.
+     Every read and write is wrapped: a browser with storage off has to
+     lose the record, not the interactive.
+
+     KEYED BY SLIDE SLUG, NEVER BY POSITION. If the six slides are ever
+     reordered, a record keyed by index would restore somebody's call
+     onto the wrong slide, and they would meet a reveal for a slide
+     they have not read.
+     _________________________________________________________________ */
+  var KEY = "ka-p4-kians-deck-v1";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ return {}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  var store = load();
+  store.call = store.call || {};   // slug to the call they settled on
+  store.out  = store.out  || {};   // slug to the calls they ruled out
+  store.auto = store.auto || {};   // slug to true when it resolved itself
+
+  var si = 0;
+  var resumeNote = "";
+
+  function announce(m){ el.live.textContent = m; }
+  function cur(){ return SL[si]; }
+  function outOf(s){ return store.out[s.slug] || []; }
+  function settled(s){ return !!store.call[s.slug]; }
+
+  function segs(node, at){
+    var out = "";
+    for(var i=1;i<=TOTAL;i++){
+      out += '<i class="' + (i === at ? "here" : (i < at ? "on" : "")) + '"></i>';
+    }
+    node.innerHTML = out;
+  }
+
+  /* Every scrolling region says so in words, rather than letting a
+     sentence end at the panel edge with no affordance. Measured
+     SYNCHRONOUSLY: reading scrollHeight forces layout, and an earlier
+     build in this program deferred the same check to
+     requestAnimationFrame, which never fired under headless rendering,
+     so the flag stayed hidden on a box with text below the fold. The
+     flag is hidden before the read so its own height is never counted
+     as part of the content it is reporting on. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+
+  var FRAMES = ["f0","fs","fz"];
+  function show(which){ FRAMES.forEach(function(f){ el[f].hidden = (f !== which); }); }
+
+  // ================ the four calls ================
+
+  function buildChoices(){
+    var out = "";
+    OPTS.forEach(function(o){
+      out += '<button class="ch" type="button" data-o="' + o.id + '" aria-pressed="false" aria-disabled="false">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span class="txt">' + o.label + "</span></button>";
+    });
+    el.choices.innerHTML = out;
+    /* aria-disabled, not disabled. A disabled button leaves the tab
+       order, so a keyboard screen reader user could never land on a
+       ruled out call and hear that it is ruled out. These stay
+       reachable and are held inert by the two guards below, one for
+       pointer and one for keyboard. */
+    choiceButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(locked(b)) return;
+        commit(b.getAttribute("data-o"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(!locked(b)) return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function choiceButtons(){
+    return Array.prototype.slice.call(el.choices.querySelectorAll("button.ch"));
+  }
+  function locked(b){ return b.getAttribute("aria-disabled") === "true"; }
+
+  function paintChoices(){
+    var s = cur(), mine = store.call[s.slug], out = outOf(s), done = !!mine;
+    choiceButtons().forEach(function(b){
+      var id = b.getAttribute("data-o");
+      b.classList.remove("right","out","dim","picked");
+      b.querySelector(".dot").textContent = "";
+      b.removeAttribute("aria-label");
+      b.setAttribute("aria-pressed", id === mine ? "true" : "false");
+      var isOut = out.indexOf(id) > -1;
+      b.setAttribute("aria-disabled", (done || isOut) ? "true" : "false");
+
+      if(!done){
+        if(isOut){
+          b.classList.add("out");
+          b.querySelector(".dot").textContent = GLYPH.no;
+          b.setAttribute("aria-label", OD[id].label + " Ruled out.");
+        }
+        return;
+      }
+      /* Settled. The glyph reports the slide and not the press: a tick
+         on the call that is the answer whether or not they chose it, a
+         cross on the three that are not. Which one they pressed is
+         carried by the solid border and named in the lead line, so no
+         glyph ever has two meanings. */
+      if(id === mine) b.classList.add("picked");
+      if(id === s.right){
+        b.classList.add("right");
+        b.querySelector(".dot").textContent = GLYPH.ok;
+        b.setAttribute("aria-label", OD[id].label + " This is the answer." + (id === mine ? " You pressed this." : ""));
+      } else {
+        b.classList.add("out","dim");
+        b.querySelector(".dot").textContent = GLYPH.no;
+        b.setAttribute("aria-label", OD[id].label + " Does not fit this slide." + (id === mine ? " You pressed this." : ""));
+      }
+    });
+  }
+
+  // ================ the reveal, two labelled parts ================
+
+  function clearReason(){
+    el.reason.hidden = true;
+    el.reason.classList.remove("on");
+    el.rlead.innerHTML = "";
+    el.rbody.innerHTML = "";
+    el.rmore.hidden = true;
+  }
+
+  function part(tag, txt, carry){
+    return '<div class="part' + (carry ? " carry" : "") + '">' +
+             '<p class="ptag">' + tag + "</p>" +
+             '<p class="ptxt">' + txt + "</p></div>";
+  }
+
+  /* Two states print in here, and only two. A wrong press prints that
+     one call's own refutation and nothing else, so the answer is never
+     handed over. A settled slide prints both labelled parts, and the
+     second one is the payload. */
+  function paintWrong(id){
+    var s = cur();
+    el.rlead.innerHTML = "<b>Not this one.</b> Why that call does not fit this slide";
+    el.rbody.innerHTML = part("Ruled out", s.wrong[id], false);
+    el.rmore.hidden = true;
+    el.reason.hidden = false;
+    el.rscroll.scrollTop = 0;
+    flag(el.rscroll, el.rmore);
+  }
+
+  function paintReveal(){
+    var s = cur(), mine = store.call[s.slug];
+    var auto = !!store.auto[s.slug];
+    el.rlead.innerHTML = auto
+      ? "<b>Three ruled out, so this one resolved.</b> The answer is: " + OD[s.right].label
+      : "<b>You had it.</b> " + OD[s.right].label;
+    el.rbody.innerHTML =
+      part("Why this is the answer", s.why, false) +
+      part("What to carry from this one", s.carry, true);
+    el.reason.hidden = false;
+    el.rscroll.scrollTop = 0;
+    flag(el.rscroll, el.rmore);
+    if(mine){ /* kept for readability: mine is always s.right once settled */ }
+  }
+
+  function commit(id){
+    var s = cur(), ok = (id === s.right);
+    if(ok){
+      store.call[s.slug] = id;
+    } else {
+      var o = outOf(s);
+      if(o.indexOf(id) < 0) o.push(id);
+      store.out[s.slug] = o;
+      // three wrong presses leave one call standing, so it resolves
+      // itself rather than leaving anybody stuck on a slide
+      if(o.length >= OPTS.length - 1){
+        store.call[s.slug] = s.right;
+        store.auto[s.slug] = true;
+      }
+    }
+    save();
+    drawSlide(id);
+    if(!reduce){
+      el.reason.classList.remove("on");
+      void el.reason.offsetWidth;
+      el.reason.classList.add("on");
+    }
+    /* Focus is placed by hand after every press, so it can never fall
+       back to BODY, and it never lands on the call that is the answer. */
+    if(settled(s)){
+      el.reason.focus();
+      announce((store.auto[s.slug]
+        ? "Three ruled out. This slide resolved itself. The answer is " + OD[s.right].label
+        : "You pressed " + OD[id].label + " That is the answer.") + " " + el.rbody.textContent);
+    } else {
+      focusAfterWrong(id);
+      announce("You pressed " + OD[id].label + " Not this one. " + s.wrong[id]);
+    }
+  }
+
+  /* After a wrong press, land on the next call that is still live and
+     is not the answer. If the answer is the only thing left, focus the
+     slide instead, so nothing is handed over by focus ring. */
+  function focusAfterWrong(id){
+    var all = choiceButtons(), from = 0;
+    all.forEach(function(b, k){ if(b.getAttribute("data-o") === id) from = k; });
+    var live = all.filter(function(b){
+      return !locked(b) && b.getAttribute("data-o") !== cur().right;
+    });
+    var after = live.filter(function(b){ return all.indexOf(b) > from; });
+    var target = after[0] || live[0];
+    if(target){ target.focus(); return; }
+    el.fs.focus();
+  }
+
+  // ================ the slide frame ================
+
+  function drawSlide(justPressed){
+    var s = cur(), mine = store.call[s.slug], out = outOf(s);
+    el.ps.textContent = (si + 2) + " of " + TOTAL + " · Slide " + (si + 1) + " of " + N;
+    segs(el.segsS, si + 2);
+    el.sh1.textContent = "Slide " + (si + 1) + " of the deck Kian sent";
+    el.skk.textContent = s.kick;
+    el.snn.textContent = (si + 1) + " / " + N;
+    el.stt.innerHTML = s.title;
+    el.sbd.innerHTML = s.body;
+
+    buildChoices();
+    paintChoices();
+
+    if(mine){ paintReveal(); }
+    else if(justPressed && out.indexOf(justPressed) > -1){ paintWrong(justPressed); }
+    else if(out.length){ paintWrong(out[out.length - 1]); }
+    else { clearReason(); }
+
+    el.snext.hidden = !mine;
+    if(mine) el.snext.textContent = (si < N - 1) ? "Next: slide " + (si + 2) : "What the questions found";
+    el.sback.textContent = (si === 0) ? "Back to the channel" : "Back";
+
+    var WORD = {1:"One", 2:"Two", 3:"Three"};
+    var left = OPTS.length - out.length;
+    el.shint.innerHTML = (mine
+      ? "The reveal is on this frame, under your call. <span class=\"key\">&larr;</span> and <span class=\"key\">&rarr;</span> move between slides."
+      : (out.length
+          ? "<b>" + (WORD[left] || left) + (left === 1 ? " call" : " calls") + " left on this slide.</b> Press another. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work."
+          : "<b>Make a call first.</b> Nothing appears until you do. Keys <span class=\"key\">1</span> to <span class=\"key\">4</span> also work.")) + resumeNote;
+  }
+
+  // ================ the close ================
+
+  function drawClose(){
+    el.pz.textContent = TOTAL + " of " + TOTAL + " · What the three questions found";
+    segs(el.segsZ, TOTAL);
+    el.rows.innerHTML = SL.map(function(s, k){
+      var sound = (s.right === "none");
+      return '<div class="row">' +
+               '<span class="g' + (sound ? " fill" : "") + '" aria-hidden="true">' +
+                 (sound ? GLYPH.ok : GLYPH.no) + "</span>" +
+               '<span class="nm">' + (k + 1) + ". " + s.name + "</span>" +
+               '<span class="rr">' + (sound ? "<b>Sound.</b>" : s.verdict) + "</span>" +
+             "</div>";
+    }).join("");
+    /* The three questions are worded as questions and carry no
+       attribution, because this program has no cleared format for an
+       external mentor voice yet and that is an open owner decision.
+       When the ruling lands, the attribution line goes in #attrib,
+       which sits above the list, and nothing else in this file has to
+       change. */
+  }
+
+  // ================ navigation ================
+  // Every path here lands focus on a real control or on a frame that
+  // takes focus. Nothing can leave focus on BODY, and no frame is a
+  // dead end: each one has a way forward and a way back.
+
+  function firstUnsettled(){
+    for(var i=0;i<N;i++){ if(!store.call[SL[i].slug]) return i; }
+    return -1;
+  }
+
+  function goOpen(){
+    show("f0");
+    el.p0.textContent = "1 of " + TOTAL + " · What Kian sent";
+    segs(el.segs0, 1);
+    var n = 0;
+    SL.forEach(function(s){ if(store.call[s.slug]) n++; });
+    el.ohint.innerHTML = n
+      ? "<b>You called " + n + " of the six last time.</b> Those calls are kept on this device."
+      : "His slides stay on screen the whole way through.";
+    el.ostart.textContent = n ? "Back to the deck" : "Open slide 1";
+    el.f0.focus();
+  }
+  function goSlide(i){
+    si = Math.max(0, Math.min(N - 1, i));
+    show("fs");
+    drawSlide(null);
+    /* A settled slide has its reveal on screen already, so arriving
+       lands on the way forward. An unsettled one lands on the frame,
+       never on a call button: the fixed list would hand the answer to
+       slide 1 to whoever presses Enter on arrival. */
+    if(store.call[SL[si].slug]){ el.snext.focus(); return; }
+    el.fs.focus();
+    announce("Slide " + (si + 1) + " of " + N + ", " + cur().kick + ". Is there something wrong with this slide?");
+  }
+  function goClose(){
+    show("fz");
+    drawClose();
+    el.zback.focus();
+  }
+  function canNext(){ return !!store.call[SL[si].slug]; }
+  function nextStep(){
+    if(!canNext()) return;
+    if(si < N - 1){ goSlide(si + 1); return; }
+    goClose();
+  }
+  function prevStep(){
+    if(si > 0){ goSlide(si - 1); return; }
+    goOpen();
+  }
+
+  el.ostart.addEventListener("click", function(){
+    var nx = firstUnsettled();
+    goSlide(nx === -1 ? 0 : nx);
+    resumeNote = "";
+  });
+  el.sback.addEventListener("click", prevStep);
+  el.snext.addEventListener("click", nextStep);
+  el.zback.addEventListener("click", function(){ goSlide(N - 1); });
+  el.zreset.addEventListener("click", function(){
+    store.call = {}; store.out = {}; store.auto = {};
+    save();
+    resumeNote = "";
+    goSlide(0);
+    announce("Cleared. Six slides to read again.");
+  });
+
+  /* Plain Tab and Enter operate every control in this file. The number
+     keys and the arrows below are an addition, not a protocol: nothing
+     in here is reachable only by keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(!el.fs.hidden){
+      if(e.key >= "1" && e.key <= String(OPTS.length)){
+        var b = choiceButtons()[parseInt(e.key, 10) - 1];
+        if(b && !locked(b)){ e.preventDefault(); commit(b.getAttribute("data-o")); return; }
+      }
+      if(e.key === "ArrowRight"){ if(canNext()){ e.preventDefault(); nextStep(); } return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); prevStep(); return; }
+      return;
+    }
+    if(!el.fz.hidden && e.key === "ArrowLeft"){ e.preventDefault(); goSlide(N - 1); }
+    if(!el.f0.hidden && e.key === "ArrowRight"){ e.preventDefault(); el.ostart.click(); }
+  });
+
+  // ==== scale the fixed canvas down to fit, never up ====
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(mq("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.rscroll, el.rmore);
+  });
+
+  buildChoices();
+
+  /* Resume. The saved record lands the student on the slide they
+     stopped at, and the hint area says what was kept. No resume
+     screen and no extra step. */
+  (function(){
+    var n = 0;
+    SL.forEach(function(s){ if(store.call[s.slug]) n++; });
+    if(n === 0){ goOpen(); return; }
+    var nx = firstUnsettled();
+    resumeNote = nx === -1
+      ? " <b>You have called all six already.</b> Your calls are kept on this device."
+      : " <b>You called " + n + " of the six last time.</b> Those calls are kept on this device.";
+    goSlide(nx === -1 ? 0 : nx);
+    resumeNote = "";
+  })();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run
+     force a state without hand driving the interface */
+  window.__ex = {
+    slides:N, frames:TOTAL,
+    open:goOpen, slide:goSlide, close:goClose,
+    press:function(i, id){ goSlide(i); commit(id); },
+    rightId:function(i){ return SL[i].right; },
+    wrongIds:function(i){
+      return OPTS.map(function(o){ return o.id; }).filter(function(id){ return id !== SL[i].right; });
+    },
+    slugs:function(){ return SL.map(function(s){ return s.slug; }); },
+    reset:function(){ store.call = {}; store.out = {}; store.auto = {}; save(); },
+    state:function(){ return {si:si, call:store.call, out:store.out, auto:store.auto}; }
+  };
+})();
+</script>
+</body>
+</html>

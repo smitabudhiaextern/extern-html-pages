@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four chains, keep or kill</title>
+<style>
+  /* ===============================================================
+     Extern design system. Five palette values and nothing else.
+     Every tint below is an rgba() of #001D69 rather than a new hue.
+     No state anywhere in this file is carried by colour on its own:
+     every coloured state also carries a glyph, a border style and a
+     word.
+
+     TWO VALUES SIT OUTSIDE THE FIVE, and only on the keep or kill
+     feedback, which is the style guide's one carve out for a state
+     that has to read as right or wrong. They are the pair this
+     program measured and adopted. Ratios computed for this build:
+
+       #0F6B33 on #FDF8F8   6.29:1
+       #B3261E on #FDF8F8   6.21:1
+       #0F6B33 on #DCE1FF   5.13:1
+       #B3261E on #DCE1FF   5.06:1
+
+     Every combination sits between 5.06:1 and 6.29:1, so both clear
+     4.5:1 body text on either ground. Neither one ever appears
+     without the tick or cross glyph, the solid or dashed border, and
+     the words "The answer" or "Not the answer" beside it.
+
+     Sibling builds: khan-academy-p3-four-checks.html and
+     khan-academy-p1-run-the-candidates.html. This file reuses their
+     canvas scaling, their commit then reveal order, their
+     aria-disabled settling, their noscript override and their
+     reduced motion collapse. The two part reveal, "Why this is the
+     answer" and "What to carry from this one", follows
+     khan-academy-p1-the-rails.html, where the second part is the
+     payload.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, the thing THEY did  */
+    --bg:#FDF8F8;           /* canvas background, negative space   */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --ok:#0F6B33;           /* keep or kill feedback only          */
+    --no:#B3261E;           /* keep or kill feedback only          */
+
+    --line:rgba(0,29,105,.26);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback              */
+    --t-frame:300ms;   /* between frame movement   */
+    --t-reveal:560ms;  /* a reveal resolving       */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* =====  the 960x540 canvas, scaled down only and never up  =====
+     flex:0 0 auto is load bearing. As a shrinkable flex item the
+     canvas lays out at the viewport width between 600 and 899px and
+     the script's transform then scales it a second time, shrinking
+     the design twice. The canvas has to hold 960 in layout and let
+     the transform do all of the fitting, so
+     getComputedStyle(stage).width must read 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+  /* the between frame fade, and the only motion outside the reveal. It
+     restarts when a frame goes from hidden to shown, and it moves nothing:
+     opacity only, so no box on the canvas can shift while it runs. */
+  .frame{
+    position:absolute;inset:0;padding:14px 40px 10px;display:flex;flex-direction:column;
+    animation:fadein var(--t-frame) var(--ease-io) both;
+  }
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .frame:focus{outline:none}
+  .frame:focus-visible{outline:3px solid var(--on-highlight);outline-offset:-3px}
+
+  /* =====  height budget, and nothing in this file may reflow  =====
+     An earlier build in this program used a min-height reason box.
+     It grew on the first answer and pushed the options the reader was
+     halfway through down the panel. So every box on the chain frame
+     has a fixed height and overflow scrolls inside its own region.
+
+     Measured in Chrome, not estimated, and the first pass of this file
+     got it wrong twice: the reveal was 322 tall and overflowed its
+     column by 39px, painting over the bottom bar, and the verdict word
+     appeared on commit and pushed the second button down by 14px.
+
+       540  canvas
+       -24  frame padding, 14 top and 10 bottom
+       -20  progress row, 15 tall plus 5 margin
+       -27  h1, 22 tall on one line plus 5 margin
+       -40  bottom bar, 34 tall plus 6 margin
+       ===
+       429  the board, measured
+
+     Right column inside that 429, measured from the top of the board:
+        61  the question label starts, 18 tall plus 5 margin
+        84  the two commit buttons start, 47 each plus a 4 gap, so 99.
+            47 is 18 of label, 10 of padding, 4 of border and 15 of
+            reserved verdict line, and it is the same 47 before and
+            after a commit
+       198  the reveal starts
+       290  the reveal, FIXED, and it scrolls inside itself
+       ===
+       488 against a board that ends at 490, so 2px of slack. At 298
+       the reveal ran 6px past its own column and sat in the bar's
+       margin, which is how this number was arrived at.
+
+     Inside that 290 reveal: 14 of padding, 20 of lead line, 21 of
+     reserved scroll notice, so 235 of scrolling copy. The two longest
+     reveals run past it by a few lines and say so in words.
+
+     Left column inside the same 429:
+        23  panel label, 16 tall plus 7 margin
+       385  the chain, scrolls inside itself
+        21  the scroll notice, always in flow
+       ===
+       429 */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:5px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px;align-items:center}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:18px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:5px}
+  .sub{flex:0 0 auto;font-size:14px;line-height:1.45;max-width:92ch;margin-bottom:7px}
+  .sub b{color:var(--title);font-weight:600}
+
+  .board{flex:1 1 auto;min-height:0;min-width:0;display:grid;gap:16px}
+  .board.two{grid-template-columns:1fr 420px}
+  .board.one{grid-template-columns:1fr}
+  .pcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+  /* the card fills its column, so a short chain and a long one present
+     the same shape and the panel edge never moves between rounds */
+  .pcol > .panel{flex:1 1 auto}
+
+  .panel{
+    background:var(--highlight);border-radius:11px;padding:9px 12px;
+    display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .plab{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);flex:0 0 auto}
+
+  .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:7px}
+  .scroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  /* Every scrolling region says so in words. A sentence that ends at
+     a panel edge with no affordance is a sentence nobody finishes. */
+  .more{font-size:11.5px;font-weight:600;color:var(--on-highlight);margin-top:5px;flex:0 0 auto;min-height:16px}
+
+  /* =====  one row of a chain  =====
+     The label sits in its own 88px column rather than on its own line,
+     which buys a line of height back on every row. Six row chains fit
+     that way; the longest still scrolls, and says so. The column is 88
+     rather than 76 because the longest label, DERIVED AND ILLUSTRATIVE,
+     clipped its third word at 76. */
+  .rw{display:grid;grid-template-columns:88px 1fr;gap:9px;margin-bottom:6px}
+  .rw:last-child{margin-bottom:0}
+  .chip{
+    font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1.25;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    padding:2px 4px;text-align:center;align-self:start;overflow-wrap:anywhere;
+  }
+  .chip.dv{background:var(--on-highlight);color:var(--bg)}
+  .rt{min-width:0;font-size:12.5px;line-height:1.4}
+  .rt b{color:var(--title);font-weight:600}
+  .rt .meta{display:block;font-size:11.5px;line-height:1.34;margin-top:1px}
+  a.srclink{
+    display:inline-block;font-size:11.5px;line-height:1.34;font-weight:600;color:var(--on-highlight);
+    margin-top:1px;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:2px;
+    overflow-wrap:anywhere;
+  }
+  a.srclink:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:3px}
+
+  .op{
+    font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);margin:0 0 6px 97px;
+  }
+  .claim{
+    font-size:12.5px;line-height:1.4;border-top:1.5px solid var(--line);
+    margin-top:7px;padding-top:6px;
+  }
+  .claim b{color:var(--title);font-weight:600}
+  .nclaim{
+    font-size:12px;line-height:1.38;border:1.5px dashed var(--line);border-radius:8px;
+    background:var(--bg);padding:6px 8px;margin-top:7px;
+  }
+  .nclaim b{color:var(--title);font-weight:600}
+
+  /* =====  the two commit buttons  ===== */
+  .vwrap{display:flex;flex-direction:column;min-height:0;min-width:0}
+  .vlab{font-size:14px;font-weight:600;color:var(--title);line-height:1.3;margin-bottom:5px;flex:0 0 auto}
+  .choices{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+  button.ch{
+    display:flex;align-items:flex-start;gap:9px;text-align:left;width:100%;
+    font-family:inherit;font-size:13.5px;line-height:1.35;font-weight:600;color:var(--title);
+    background:var(--highlight);border:2px solid transparent;border-radius:9px;
+    padding:5px 11px;cursor:pointer;
+    transition:border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out);
+  }
+  button.ch .dot{
+    flex:0 0 auto;width:15px;height:15px;border-radius:50%;margin-top:2px;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  /* The verdict word is reserved at a fixed height from first paint,
+     empty until a commit. Measured without this: the word added 14px to
+     each button and pushed the second one down, which is precisely the
+     reflow this file exists to avoid. */
+  button.ch .vd{display:block;height:14px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1.35;margin-top:1px}
+  button.ch:hover:not([aria-disabled="true"]){border-color:var(--on-highlight)}
+  button.ch:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ch[aria-pressed="true"]{border-color:var(--on-highlight)}
+  /* A settled option stays in the tab order, so it is aria-disabled
+     rather than disabled: reachable, announced, inert. Two guards hold
+     it inert, one for pointer and one for keyboard. */
+  button.ch[aria-disabled="true"]{cursor:default}
+  /* The verdict that is correct, whether or not they chose it: filled
+     dot, tick, solid border, the words "The answer", and only then the
+     colour. The glyph reports the fact and never the pick. */
+  button.ch.right{border-color:var(--ok)}
+  button.ch.right .dot{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+  button.ch.right .vd{color:var(--ok)}
+  /* The verdict that is wrong: cross, struck label, dashed border, the
+     words "Not the answer", and only then the colour. */
+  button.ch.out{background:transparent;border:2px dashed var(--no);color:var(--body);font-weight:500}
+  button.ch.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.ch.out .dot{border-style:dashed;border-color:var(--no);color:var(--no)}
+  button.ch.out .vd{color:var(--no)}
+  /* Their own choice keeps a solid outer ring whatever the verdict on
+     it, so a struck option they picked never reads as one they did
+     not. Border style, not colour, and the reveal names it in words. */
+  button.ch.picked{box-shadow:0 0 0 2px var(--on-highlight)}
+  button.ch.dim{opacity:.85}
+
+  /* =====  the reveal, fixed height, injected only on a commit  =====
+     Nothing in here exists in the DOM before the student commits, so
+     there is nothing to read by scrolling or tabbing ahead. */
+  .reason{
+    flex:0 0 auto;height:290px;margin-top:7px;min-width:0;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;
+    display:flex;flex-direction:column;
+  }
+  .reason:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .reason:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .lead{flex:0 0 auto;font-size:11.5px;line-height:1.32;font-weight:600;color:var(--on-highlight);margin-bottom:5px}
+  .lead b{color:var(--title);font-weight:700}
+  .rscroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+  .rscroll:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .rl{
+    font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:3px;
+  }
+  .rb{font-size:12.5px;line-height:1.42}
+  .rb b{color:var(--title);font-weight:600}
+  .pay{
+    border-top:1.5px solid var(--line);margin-top:7px;padding-top:6px;
+  }
+  .pay .rb{color:var(--title)}
+  .reason.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* =====  the opening terms and the closing rows  ===== */
+  .terms{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;flex:0 0 auto;max-width:860px}
+  .term{background:var(--highlight);border-radius:9px;padding:8px 12px;font-size:13px;line-height:1.44}
+  .term b{color:var(--title);font-weight:600}
+  .testline{
+    flex:0 0 auto;margin-top:10px;max-width:860px;
+    border:2px dashed var(--on-highlight);border-radius:9px;padding:9px 13px;
+    font-size:13px;line-height:1.44;
+  }
+  .testline b{color:var(--title);font-weight:600}
+  .rows{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;max-width:880px}
+  .row{display:grid;grid-template-columns:250px 58px 1fr;gap:12px;align-items:baseline;
+       background:var(--highlight);border-radius:9px;padding:7px 12px}
+  .row .nm{font-size:13px;font-weight:600;color:var(--title);line-height:1.3}
+  .row .vv{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1.3}
+  .row .vv.k{color:var(--ok)}
+  .row .vv.x{color:var(--no)}
+  .row .rr{font-size:12.5px;line-height:1.38;color:var(--body)}
+  .row .rr b{color:var(--title);font-weight:600}
+  .close{
+    flex:0 0 auto;margin-top:8px;border:2px dashed var(--on-highlight);border-radius:9px;
+    padding:8px 13px;font-size:12.5px;line-height:1.44;max-width:880px;
+  }
+  .close p{margin-bottom:5px}
+  .close p:last-child{margin-bottom:0}
+  .close b{color:var(--title);font-weight:600}
+
+  /* =====  the bar  =====
+     margin-top:auto plus flex:0 0 auto means any overflow above
+     scrolls inside its own region and can never displace this row. */
+  .bar{margin-top:6px;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:34px;flex-wrap:wrap}
+  button.nav{
+    font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);flex:0 0 auto;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.small{font-size:12px;padding:7px 12px}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .push{margin-left:auto}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* =====  under 600px: a portrait restack, not a shrunken slide  ===== */
+  @media (max-width:599px){
+    /* Drop flex on the body. As a flex item #stage inherits
+       min-width:auto and refuses to shrink below its content width,
+       which pushes the board off screen. Block layout removes that
+       floor. */
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 32px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .sub{font-size:15px}
+    /* align-content as well as align-items: a stretched one column
+       grid hands its leftover height to the auto rows, which opens a
+       dead band between the stacked panels on a tall phone. */
+    .board,.board.two,.board.one{
+      grid-template-columns:1fr;gap:16px;flex:0 0 auto;align-items:start;align-content:start;
+    }
+    .scroll,.rscroll{overflow:visible}
+    .more{display:none}
+    .plab{font-size:14px}
+    .rw{grid-template-columns:1fr;gap:4px;margin-bottom:12px}
+    .chip{justify-self:start;font-size:11px}
+    .rt{font-size:16px}
+    .rt .meta{font-size:14px}
+    a.srclink{font-size:14px}
+    .op{margin-left:0;font-size:13px}
+    .claim{font-size:15px}
+    .nclaim{font-size:14px}
+    .terms{grid-template-columns:1fr}
+    .term{font-size:15px}
+    .testline{font-size:15px}
+    button.ch{font-size:16px;padding:12px 13px}
+    button.ch .vd{font-size:12px}
+    .reason{height:auto;margin-top:14px;padding:12px 14px}
+    .rb{font-size:16px}
+    .lead{font-size:15px}
+    .rl{font-size:12px}
+    .vlab{font-size:17px}
+    .row{grid-template-columns:1fr;gap:3px;padding:11px 13px}
+    .row .nm{font-size:16px}
+    .row .vv{font-size:13px}
+    .row .rr{font-size:15px}
+    .close{font-size:15px}
+    .bar{margin-top:16px;min-height:0}
+    button.nav{font-size:16px;padding:13px 18px}
+    button.nav.small{font-size:14px;padding:10px 14px}
+    .hint{font-size:14px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <div class="frame" id="f0" tabindex="-1" role="group" aria-labelledby="h0">
+    <div class="top">
+      <span class="prog">Before you start</span>
+      <span class="segs" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    </div>
+
+    <h1 id="h0">Four chains, keep or kill</h1>
+    <p class="sub">Four finished pieces of arithmetic, each one somebody's estimate of what a deal could be worth. You read a chain, then you commit: <b>keep it</b>, meaning you would put it in front of somebody, or <b>kill it</b>, meaning it has to come out. Nothing is explained until after you have chosen. Each chain either holds up or does not, and how many of each is not stated anywhere, so judge every one on its own.</p>
+
+    <div class="board one">
+      <div class="vwrap">
+        <div class="terms">
+          <p class="term"><b>Input.</b> A number you took from a source instead of choosing it yourself. Every input on these four screens names where it came from and the period it covers.</p>
+          <p class="term"><b>Assumption.</b> A number you chose because no source hands it to you. It can be a sensible choice and it is still a choice.</p>
+          <p class="term"><b>Derived.</b> The result of your own arithmetic rather than a figure a source reports. You already carry this word, and it goes on every answer you work out yourself.</p>
+          <p class="term"><b>Illustrative.</b> A figure put on screen to give a sense of scale. It is not a forecast and it is not a promise about what will happen.</p>
+        </div>
+        <p class="testline"><b>The test, in one line.</b> Two sourced inputs, one operation, the answer labelled derived, and one sentence saying what the number does not claim. Every chain is measured against that and nothing else.</p>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav" id="start" type="button">Start with chain 1</button>
+      <span class="hint">Every figure on the four screens carries a link you can open yourself. Keys <span class="key">1</span> for keep and <span class="key">2</span> for kill work on every chain.</span>
+    </div>
+  </div>
+
+  <div class="frame" id="fc" hidden tabindex="-1" role="group" aria-labelledby="ctitle">
+    <div class="top">
+      <span class="prog" id="pc">Chain 1 of 4</span>
+      <span class="segs" id="segc" aria-hidden="true"><i class="here"></i><i></i><i></i><i></i></span>
+    </div>
+
+    <h1 id="ctitle">Chain 1</h1>
+
+    <div class="board two">
+      <div class="pcol">
+        <section class="panel" id="cpanel" aria-labelledby="clab" tabindex="-1">
+          <p class="plab" id="clab">The chain, as somebody handed it to you</p>
+          <div class="scroll" id="cscroll" tabindex="0" role="group" aria-labelledby="clab">
+            <div id="clist"></div>
+          </div>
+          <p class="more" id="cmore" hidden>More below. Scroll inside this panel.</p>
+        </section>
+      </div>
+
+      <div class="vwrap">
+        <div class="vlab" id="vlab">Keep this chain or kill it?</div>
+        <div class="choices" id="choices" role="group" aria-labelledby="vlab">
+          <button class="ch" type="button" data-o="keep" aria-pressed="false" aria-disabled="false"><span class="dot" aria-hidden="true"></span><span><span class="txt">Keep it. This one can be defended.</span><span class="vd" aria-hidden="true"></span></span></button>
+          <button class="ch" type="button" data-o="kill" aria-pressed="false" aria-disabled="false"><span class="dot" aria-hidden="true"></span><span><span class="txt">Kill it. This one has to come out.</span><span class="vd" aria-hidden="true"></span></span></button>
+        </div>
+        <section class="reason" id="reason" hidden tabindex="-1" role="group" aria-labelledby="rlead">
+          <p class="lead" id="rlead"></p>
+          <div class="rscroll" id="rscroll" tabindex="0">
+            <div>
+              <p class="rl">Why this is the answer</p>
+              <div class="rb" id="rwhy"></div>
+            </div>
+            <div class="pay">
+              <p class="rl">What to carry from this one</p>
+              <div class="rb" id="rcarry"></div>
+            </div>
+          </div>
+          <p class="more" id="rmore" hidden>More below. Scroll inside this panel.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="cback" type="button">Back</button>
+      <button class="nav small" id="cnext" type="button" hidden>Next</button>
+      <span class="hint" id="chint"><b>Commit first.</b> Nothing appears until you choose. Keys <span class="key">1</span> for keep and <span class="key">2</span> for kill also work.</span>
+    </div>
+  </div>
+
+  <div class="frame" id="fz" hidden tabindex="-1" role="group" aria-labelledby="hz">
+    <div class="top">
+      <span class="prog">Done &middot; four chains</span>
+      <span class="segs" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+    </div>
+
+    <h1 id="hz">Where the four chains landed</h1>
+    <p class="sub">Same test every time. Two inputs, one operation, and the question of whether the two inputs are allowed to be next to each other.</p>
+
+    <div class="board one">
+      <div class="vwrap">
+        <div class="rows" id="rows"></div>
+        <div class="close">
+          <p><b>The plainest one is the one that held.</b> Chain 3 is a single multiplication with two figures read off one page on one day, and it is the only one of the four you could take into a room. Chain 4 had six rows, a running total and an answer to the nearest ten thousand dollars, and it is worth the least of the four. Rows are not evidence, and a table is not a source.</p>
+          <p><b>You have run this shape once already.</b> Earlier in the program you divided Coursera's Enterprise segment revenue of $255.3 million by its 1,730 paying enterprise customers, both figures for the year ended 31 December 2025, and you labelled the answer derived (<a class="srclink" href="https://www.sec.gov/Archives/edgar/data/1651562/000165156226000015/cour-20251231.htm" target="_blank" rel="noopener noreferrer">Coursera, Form 10-K for the year ended 31 December 2025</a>). One source, one period, one operation. That is the chain that survives here, with a different name on it.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost small" id="zback" type="button">Back to chain 4</button>
+      <button class="nav ghost small" id="zreset" type="button">Run them again</button>
+      <span class="hint push"><b>That is the end of this one.</b> Nothing further is required.</span>
+    </div>
+  </div>
+
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<noscript>
+  <style>
+    /* This style block has to live INSIDE the noscript element, which
+       puts it after the head stylesheet and lets it win on source
+       order. An override placed in the head before the main sheet
+       loses, and the fallback silently fails. Two things have to
+       happen and both have shipped broken in this program before: the
+       dead canvas has to be hidden so nobody is offered controls that
+       cannot work, and the flex centred body has to go back to block
+       flow, otherwise this text lays out as a narrow column beside a
+       960px sibling and is pushed off the centred overflow, which
+       cannot be scrolled back to. */
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:700px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:22px 0 7px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:16px 0 5px}
+    .nsf p{margin-bottom:11px}
+    .nsf ul,.nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:7px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+    .nsf details{border:1.5px solid rgba(0,29,105,.26);border-radius:9px;padding:9px 12px;margin-bottom:9px}
+    .nsf summary{font-weight:600;color:#001D69;cursor:pointer}
+    .nsf details p{margin:9px 0 0}
+    .nsf .box{border:2px dashed #001D69;border-radius:9px;padding:11px 13px;margin-bottom:12px}
+  </style>
+  <div class="nsf">
+    <h1>Four chains, keep or kill</h1>
+    <p>With scripts blocked, here is the same content as a document: four finished pieces of arithmetic, every input with its source and its period, the verdict on each one, and what to carry from each. The reasoning for every chain sits under a heading you open, so you can still make your own call first.</p>
+
+    <h2>The four words the chains use</h2>
+    <ul>
+      <li><strong>Input.</strong> A number you took from a source instead of choosing it yourself. Every input below names where it came from and the period it covers.</li>
+      <li><strong>Assumption.</strong> A number you chose because no source hands it to you. It can be a sensible choice and it is still a choice.</li>
+      <li><strong>Derived.</strong> The result of your own arithmetic rather than a figure a source reports. You already carry this word, and it goes on every answer you work out yourself.</li>
+      <li><strong>Illustrative.</strong> A figure put on screen to give a sense of scale. It is not a forecast and it is not a promise about what will happen.</li>
+    </ul>
+    <div class="box">
+      <p style="margin-bottom:0"><strong>The test, in one line.</strong> Two sourced inputs, one operation, the answer labelled derived, and one sentence saying what the number does not claim. Every chain below is measured against that and nothing else.</p>
+    </div>
+    <p>Each chain either holds up or does not, and how many of each is not stated anywhere, so judge every one on its own.</p>
+
+    <h2>Chain 1. What one commercial customer pays Wikimedia Enterprise in a year</h2>
+    <ul>
+      <li><strong>Input.</strong> $3.4 million of Wikimedia Enterprise revenue. Period: the fiscal year ended 30 June 2024. Source: <a href="https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/">Wikimedia Diff, 24 November 2025</a>.</li>
+      <li><strong>Divided by</strong></li>
+      <li><strong>Input.</strong> 13 paying commercial customers. Period: the fiscal year ended 30 June 2025. Source: <a href="https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/">Wikimedia Diff, 24 November 2025</a>.</li>
+      <li><strong>Equals. Derived.</strong> About $262,000 per paying commercial customer for a year.</li>
+    </ul>
+    <p><strong>What the chain claims.</strong> That about $262,000 a year is roughly what a company pays for reliable access to a free encyclopedia, so it is the figure to borrow when you size a similar arrangement.</p>
+    <details><summary>Chain 1. Keep it or kill it? Open the reasoning</summary>
+      <p><strong>Kill it.</strong> Read the two periods. The revenue is for the year that ended 30 June 2024. The customer count is for the year that ended 30 June 2025. One whole fiscal year apart, and Wikimedia Enterprise revenue rose 148% across it, from $3.4 million to $8.3 million. So this divides an old year's money by a new year's customers. It lands on about $262,000 where the matching pair for one single year lands on about $638,000, nearly two and a half times out, from numbers printed one sentence apart in the same report.</p>
+      <p><strong>What to carry from this one.</strong> You already keep a period welded to every figure you quote. The new rule is that two inputs have to share one before you are allowed to put an operator between them. You cannot patch the newer number onto the older one, because nobody published the older year's count. Take the pair the source prints together, and where there is no matching pair, say so rather than running the arithmetic anyway.</p>
+    </details>
+
+    <h2>Chain 2. What Khan Academy's own audience would be worth at the published district price</h2>
+    <ul>
+      <li><strong>Input.</strong> More than 185 million registered students, teachers and parents. Period: the count as at 30 June 2025. Source: <a href="https://projects.propublica.org/nonprofits/full_text/202640439349300549/IRS990">Khan Academy, Form 990 for the fiscal year ended 30 June 2025, via ProPublica</a>.</li>
+      <li><strong>Times</strong></li>
+      <li><strong>Input.</strong> $10 per student per year, the published price of Khan Academy Districts Enterprise Starter, the tier for a United States district buying 1,000 or fewer student licenses. Period: the price shown on Khan Academy's own pricing page, read 8 September 2026. Source: <a href="https://www.khanacademy.org/schools/pricing">Khan Academy, schools pricing page</a>.</li>
+      <li><strong>Equals. Derived and illustrative.</strong> More than $1.85 billion a year.</li>
+    </ul>
+    <p><strong>What the chain claims.</strong> That the audience is already there, and that at the price Khan Academy already charges it is worth more than $1.85 billion a year.</p>
+    <details><summary>Chain 2. Keep it or kill it? Open the reasoning</summary>
+      <p><strong>Kill it.</strong> Count who is inside each number. The 185 million is every account ever registered, worldwide, and it counts teachers and parents alongside students. The same Form 990 says about 53% of learners sat outside the United States. The $10 is what one United States district pays for one license for one student in its own schools. Almost nobody in the first number is somebody the second applies to. And hold the answer against a figure you already have: total revenue on that same Form 990 was $117,488,956, so this chain claims about sixteen times the whole organization's money.</p>
+      <p><strong>What to carry from this one.</strong> Two inputs have to share a population as well as a unit. A free user is not a billed student, a registered account is not a person, and a teacher is not a student license. Before the operator goes in, say who is in the count and who the price applies to. If those are not the same people, stop there. The two periods do not match here either, and fixing the dates would still leave this chain wrong.</p>
+    </details>
+
+    <h2>Chain 3. What one district at the top of the published Starter tier is worth in a year</h2>
+    <ul>
+      <li><strong>Input.</strong> 1,000 student licenses, the ceiling of Khan Academy Districts Enterprise Starter, which is the tier for 1,000 or fewer student licenses. Period: the tier as published, read 8 September 2026. Source: <a href="https://www.khanacademy.org/schools/pricing">Khan Academy, schools pricing page</a>.</li>
+      <li><strong>Times</strong></li>
+      <li><strong>Input.</strong> $10 per student per year, the published price for that same tier. Period: same page, same read date. Source: <a href="https://www.khanacademy.org/schools/pricing">Khan Academy, schools pricing page</a>.</li>
+      <li><strong>Equals. Derived.</strong> $10,000 a year from one district sitting at the top of that tier.</li>
+    </ul>
+    <p><strong>What this number does not claim.</strong> It does not say any district pays $10,000, only that one at the ceiling of this tier would. It says nothing about the larger arrangement, whose price Khan Academy does not publish at all. And a live commercial page can change its prices without telling anybody, so the read date is part of the figure.</p>
+    <details><summary>Chain 3. Keep it or kill it? Open the reasoning</summary>
+      <p><strong>Keep it.</strong> Both inputs come off the same page, read on the same day, describing the same arrangement, and the unit is a student license in both. One operation. The answer is labelled derived because Khan Academy publishes the tier and the price and does not publish this result. You did that part. Then the chain says what it does not claim, which stops a reader hearing more than you said.</p>
+      <p><strong>What to carry from this one.</strong> Conservative and optimistic are two runs of this one chain, not two guesses. You move exactly one input, hold the rest still, and write down which one you moved and why. <strong>Optimistic run:</strong> 1,000 licenses times $10, or $10,000 a year, and the 1,000 is the published ceiling, so this run holds no assumption at all. <strong>Conservative run:</strong> 400 licenses times $10, or $4,000 a year. The moved input is the license count, and 400 is an assumption, chosen because a district on a tier for 1,000 or fewer is usually under the ceiling. Nothing else moved. Naming the moved input is the step people skip and the step that survives a question: a reader can disagree with your 400 and still accept the chain.</p>
+    </details>
+
+    <h2>Chain 4. What United States district licenses could be worth over three years</h2>
+    <ul>
+      <li><strong>Input.</strong> 8.5 million learners active on Khan Academy each month. Period: July 2024 to June 2025. Source: <a href="https://projects.propublica.org/nonprofits/full_text/202640439349300549/IRS990">Khan Academy, Form 990 for the fiscal year ended 30 June 2025, via ProPublica</a>.</li>
+      <li><strong>Assumption, guess 1.</strong> Half of them are school age and use Khan Academy in a class. Leaves 4,250,000.</li>
+      <li><strong>Assumption, guess 2.</strong> Four in ten of those are in the United States. Leaves 1,700,000.</li>
+      <li><strong>Assumption, guess 3.</strong> Two in ten of those sit in a district that would buy a license for every student. Leaves 340,000 student licenses.</li>
+      <li><strong>Assumption, guess 4.</strong> The average district pays $12 per student per year, a little over the one published tier price of $10. Gives $4,080,000 a year.</li>
+      <li><strong>Assumption, guess 5.</strong> Every one of those districts renews for three years at the same price. Gives $12,240,000.</li>
+      <li><strong>Derived and illustrative.</strong> $12,240,000 over three years.</li>
+    </ul>
+    <p><strong>What the chain claims.</strong> Six tidy rows, one sourced figure at the top, a running total down the side, and a three year answer to the nearest ten thousand dollars.</p>
+    <details><summary>Chain 4. Keep it or kill it? Open the reasoning</summary>
+      <p><strong>Kill it.</strong> Count the sourced inputs. There is one, the 8.5 million at the top, and everything under it is a number somebody chose. Now test what those five choices are carrying. If each is wrong by a factor of two in the same direction, which is a mild kind of wrong, the answer moves from about $383,000 to about $392 million. A range covering three orders of magnitude is not an estimate. It is a shrug with a decimal point on it.</p>
+      <p><strong>What to carry from this one.</strong> Every extra step is another place to be wrong, and the third guess is where a reader stops believing you. Notice which of these four chains looked the most like real work. This one did, because it has the most rows and the most arithmetic in it, and it is worth the least. Two sourced inputs and one operation looks thin on a slide and holds up in a room. When a chain needs five choices to reach a number, the output is not the number. It is a sentence naming the input you could not source and where you looked.</p>
+    </details>
+
+    <h2>Where the four chains landed</h2>
+    <ul>
+      <li><strong>Chain 1, Wikimedia Enterprise per customer. Kill.</strong> Two periods one fiscal year apart, and the source prints the matching pair one sentence away.</li>
+      <li><strong>Chain 2, 185 million accounts at the district price. Kill.</strong> Two populations. Almost nobody in the count is somebody the price applies to.</li>
+      <li><strong>Chain 3, one district at the top of the published Starter tier. Keep.</strong> Two sourced inputs, one operation, labelled derived, and a line saying what it does not claim.</li>
+      <li><strong>Chain 4, five stacked guesses over three years. Kill.</strong> One sourced input and five choices, and the honest range covers three orders of magnitude.</li>
+    </ul>
+    <div class="box">
+      <p><strong>The plainest one is the one that held.</strong> Chain 3 is a single multiplication with two figures read off one page on one day, and it is the only one of the four you could take into a room. Chain 4 had six rows, a running total and an answer to the nearest ten thousand dollars, and it is worth the least of the four. Rows are not evidence, and a table is not a source.</p>
+      <p style="margin-bottom:0"><strong>You have run this shape once already.</strong> Earlier in the program you divided Coursera's Enterprise segment revenue of $255.3 million by its 1,730 paying enterprise customers, both figures for the year ended 31 December 2025, and you labelled the answer derived (<a href="https://www.sec.gov/Archives/edgar/data/1651562/000165156226000015/cour-20251231.htm">Coursera, Form 10-K for the year ended 31 December 2025</a>). One source, one period, one operation. That is chain 3 with a different name on it.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  var GLYPH = {ok:"✓", no:"×"};
+
+  var SRC = {
+    diff:{href:"https://diff.wikimedia.org/2025/11/24/wikimedia-enterprise-financial-report-fiscal-year-2024-2025/",
+          label:"Wikimedia Diff, 24 November 2025"},
+    ka990:{href:"https://projects.propublica.org/nonprofits/full_text/202640439349300549/IRS990",
+           label:"Khan Academy, Form 990 for the fiscal year ended 30 June 2025, via ProPublica"},
+    kaprice:{href:"https://www.khanacademy.org/schools/pricing",
+             label:"Khan Academy, schools pricing page"}
+  };
+
+  /* =================================================================
+     The four chains. Every figure on screen traces to one of the three
+     sources above, states the period it covers, and carries a link a
+     student can open alone. Nothing here was invented: the three
+     broken chains are real sourced inputs used wrongly, which is the
+     whole lesson, because a chain built on numbers with no source
+     would be rejected for the wrong reason.
+
+     ORDER IS DELIBERATE AND MUST NOT BE SHUFFLED FOR TIDINESS. The
+     sound chain sits third, immediately before the five guess chain,
+     so the student meets the plainest arithmetic in the set and then
+     meets the chain that looks far more impressive and is worth the
+     least. That contrast is the closing frame's whole argument. The
+     store is keyed by slug rather than by index precisely so a
+     reorder cannot restore an answer onto the wrong chain.
+
+     THE SOUND CHAIN IS THE ONLY ONE WITH A notclaims LINE, and it
+     carries it inside the chain rather than in the reveal, because
+     the not claims sentence is part of the chain being defensible and
+     not part of the explanation of why.
+     ================================================================= */
+  var CHAINS = [
+    {
+      slug:"periods-wikimedia",
+      title:"Chain 1. What one commercial customer pays Wikimedia Enterprise in a year",
+      answer:"kill",
+      rows:[
+        {chip:"Input", t:"<b>$3.4 million</b> of Wikimedia Enterprise revenue.",
+         meta:"Period: the fiscal year ended 30 June 2024.", src:"diff"},
+        {op:"divided by"},
+        {chip:"Input", t:"<b>13 paying commercial customers.</b>",
+         meta:"Period: the fiscal year ended 30 June 2025.", src:"diff"},
+        {op:"equals"},
+        {chip:"Derived", dv:true, t:"<b>About $262,000</b> per paying commercial customer for a year."}
+      ],
+      claim:"<b>What the chain claims.</b> That about $262,000 a year is roughly what a company pays for reliable access to a free encyclopedia, so it is the figure to borrow when you size a similar arrangement.",
+      why:"Read the two periods. The revenue is for the year that ended 30 June 2024. The customer count is for the year that ended 30 June 2025. One whole fiscal year apart, and Wikimedia Enterprise revenue rose <b>148%</b> across it, from $3.4 million to $8.3 million. So this divides an old year's money by a new year's customers. It lands on about $262,000 where the matching pair for one single year lands on about <b>$638,000</b>, nearly two and a half times out, from numbers printed one sentence apart in the same report.",
+      carry:"You already keep a period welded to every figure you quote. The new rule is that <b>two inputs have to share one</b> before you are allowed to put an operator between them. You cannot patch the newer number onto the older one, because nobody published the older year's count. Take the pair the source prints together, and where there is no matching pair, say so rather than running the arithmetic anyway."
+    },
+
+    {
+      slug:"populations-registered",
+      title:"Chain 2. What Khan Academy's own audience would be worth at the published district price",
+      answer:"kill",
+      rows:[
+        {chip:"Input", t:"More than <b>185 million</b> registered students, teachers and parents.",
+         meta:"Period: the count as at 30 June 2025.", src:"ka990"},
+        {op:"times"},
+        {chip:"Input", t:"<b>$10 per student per year</b>, the published price of Khan Academy Districts Enterprise Starter, the tier for a United States district buying 1,000 or fewer student licenses.",
+         meta:"Period: the price shown on Khan Academy's own pricing page, read 8 September 2026.", src:"kaprice"},
+        {op:"equals"},
+        {chip:"Derived and illustrative", dv:true, t:"More than <b>$1.85 billion</b> a year."}
+      ],
+      claim:"<b>What the chain claims.</b> That the audience is already there, and that at the price Khan Academy already charges it is worth more than $1.85 billion a year.",
+      why:"Count who is inside each number. The 185 million is every account ever registered, worldwide, and it counts teachers and parents alongside students. The same Form 990 says about <b>53%</b> of learners sat outside the United States. The $10 is what one United States district pays for one license for one student in its own schools. Almost nobody in the first number is somebody the second applies to. And hold the answer against a figure you already have: total revenue on that same Form 990 was <b>$117,488,956</b>, so this chain claims about sixteen times the whole organization's money.",
+      carry:"Two inputs have to share a <b>population</b> as well as a unit. A free user is not a billed student, a registered account is not a person, and a teacher is not a student license. Before the operator goes in, say who is in the count and who the price applies to. If those are not the same people, stop there. The two periods do not match here either, and fixing the dates would still leave this chain wrong."
+    },
+
+    {
+      slug:"sound-district-tier",
+      title:"Chain 3. What one district at the top of the published Starter tier is worth in a year",
+      answer:"keep",
+      rows:[
+        {chip:"Input", t:"<b>1,000 student licenses</b>, the ceiling of Khan Academy Districts Enterprise Starter, which is the tier for 1,000 or fewer student licenses.",
+         meta:"Period: the tier as published, read 8 September 2026.", src:"kaprice"},
+        {op:"times"},
+        {chip:"Input", t:"<b>$10 per student per year</b>, the published price for that same tier.",
+         meta:"Period: same page, same read date.", src:"kaprice"},
+        {op:"equals"},
+        {chip:"Derived", dv:true, t:"<b>$10,000 a year</b> from one district sitting at the top of that tier."}
+      ],
+      notclaims:"<b>What this number does not claim.</b> It does not say any district pays $10,000, only that one at the ceiling of this tier would. It says nothing about the larger arrangement, whose price Khan Academy does not publish at all. And a live commercial page can change its prices without telling anybody, so the read date is part of the figure.",
+      why:"Both inputs come off the same page, read on the same day, describing the same arrangement, and the unit is a student license in both. One operation. The answer is labelled derived because Khan Academy publishes the tier and the price and does not publish this result. You did that part. Then the chain says what it does not claim, which stops a reader hearing more than you said.",
+      carry:"<b>Conservative and optimistic are two runs of this one chain</b>, not two guesses. You move exactly one input, hold the rest still, and write down which one you moved and why. <b>Optimistic run:</b> 1,000 licenses times $10, or $10,000 a year, and the 1,000 is the published ceiling, so this run holds no assumption at all. <b>Conservative run:</b> 400 licenses times $10, or $4,000 a year. The moved input is the license count, and 400 is an assumption, chosen because a district on a tier for 1,000 or fewer is usually under the ceiling. Nothing else moved. Naming the moved input is the step people skip and the step that survives a question: a reader can disagree with your 400 and still accept the chain."
+    },
+
+    {
+      slug:"stack-five-guesses",
+      title:"Chain 4. What United States district licenses could be worth over three years",
+      answer:"kill",
+      rows:[
+        {chip:"Input", t:"<b>8.5 million</b> learners active on Khan Academy each month.",
+         meta:"Period: July 2024 to June 2025.", src:"ka990"},
+        {chip:"Assumption 1", t:"Half of them are school age and use Khan Academy in a class. Leaves <b>4,250,000</b>."},
+        {chip:"Assumption 2", t:"Four in ten of those are in the United States. Leaves <b>1,700,000</b>."},
+        {chip:"Assumption 3", t:"Two in ten of those sit in a district that would buy a license for every student. Leaves <b>340,000 student licenses</b>."},
+        {chip:"Assumption 4", t:"The average district pays $12 per student per year, a little over the one published tier price of $10. Gives <b>$4,080,000 a year</b>."},
+        {chip:"Assumption 5", t:"Every one of those districts renews for three years at the same price. Gives <b>$12,240,000</b>."},
+        {chip:"Derived and illustrative", dv:true, t:"<b>$12,240,000</b> over three years."}
+      ],
+      claim:"<b>What the chain claims.</b> Six tidy rows, one sourced figure at the top, a running total down the side, and a three year answer to the nearest ten thousand dollars.",
+      why:"Count the sourced inputs. There is one, the 8.5 million at the top, and everything under it is a number somebody chose. Now test what those five choices are carrying. If each is wrong by a factor of two in the same direction, which is a mild kind of wrong, the answer moves from about <b>$383,000</b> to about <b>$392 million</b>. A range covering three orders of magnitude is not an estimate. It is a shrug with a decimal point on it.",
+      carry:"Every extra step is another place to be wrong, and the third guess is where a reader stops believing you. Notice which of these four chains looked the most like real work. This one did, because it has the most rows and the most arithmetic in it, and it is worth the least. Two sourced inputs and one operation looks thin on a slide and holds up in a room. When a chain needs five choices to reach a number, the output is not the number. It is a sentence naming the input you could not source and where you looked."
+    }
+  ];
+
+  var OPTS = [
+    {id:"keep", label:"Keep it. This one can be defended."},
+    {id:"kill", label:"Kill it. This one has to come out."}
+  ];
+
+  var ROWS = [
+    ["Chain 1, Wikimedia Enterprise per customer","kill","Two periods one fiscal year apart, and the source prints the matching pair one sentence away."],
+    ["Chain 2, 185 million accounts at the district price","kill","Two populations. Almost nobody in the count is somebody the price applies to."],
+    ["Chain 3, one district at the top of the published Starter tier","keep","Two sourced inputs, one operation, labelled derived, and a line saying what it does not claim."],
+    ["Chain 4, five stacked guesses over three years","kill","One sourced input and five choices, and the honest range covers three orders of magnitude."]
+  ];
+
+  var N = CHAINS.length;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {};
+  ["f0","fc","fz","start","pc","segc","ctitle","cpanel","clab","cscroll","clist","cmore",
+   "vlab","choices","reason","rlead","rscroll","rwhy","rcarry","rmore",
+   "cback","cnext","chint","rows","zback","zreset","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+
+  /* =================================================================
+     A small, failure tolerant store, so "do chain 1 and come back" is
+     a true statement rather than a promise the build breaks. Keyed by
+     chain SLUG and never by index: if the four chains are ever
+     reordered, a saved answer cannot land on a different chain. Every
+     read and write is wrapped, so a browser with storage switched off
+     loses the record and not the interactive.
+     ================================================================= */
+  var KEY = "ka-p4-four-chains-v1";
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!raw || typeof raw !== "object") return {};
+      return raw;
+    }catch(e){ return {}; }
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  var store = load();
+  store.a = (store.a && typeof store.a === "object") ? store.a : {};
+
+  /* a slug that is no longer in the set is dropped rather than kept
+     around to be matched against something else later */
+  (function(){
+    var live = {}, k;
+    CHAINS.forEach(function(c){ live[c.slug] = true; });
+    for(k in store.a){ if(!live[k]) delete store.a[k]; }
+  })();
+
+  var ci = 0;
+
+  function cur(){ return CHAINS[ci]; }
+  function pick(i){ return store.a[CHAINS[i].slug] || null; }
+  function announce(m){ el.live.textContent = m; }
+
+  function pips(node, at){
+    var out = "";
+    for(var i=0;i<N;i++){
+      out += '<i class="' + (i === at ? "here" : (i < at ? "on" : "")) + '"></i>';
+    }
+    node.innerHTML = out;
+  }
+
+  /* Every scrolling region says so in words. Measured SYNCHRONOUSLY:
+     reading scrollHeight forces layout, and an earlier build in this
+     program deferred this to requestAnimationFrame, which never fired
+     under headless rendering, so the notice stayed hidden on a panel
+     with content below the fold. The notice is hidden before the read
+     so its own height is never counted as part of the content it is
+     reporting on. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    flagEl.hidden = !(scroller.scrollHeight - scroller.clientHeight > 4);
+  }
+
+  var FRAMES = ["f0","fc","fz"];
+  function show(which){ FRAMES.forEach(function(f){ el[f].hidden = (f !== which); }); }
+
+  /* ================ the chain frame ================ */
+
+  function drawChain(){
+    var c = cur(), out = "";
+    c.rows.forEach(function(r){
+      if(r.op){ out += '<p class="op">' + r.op + "</p>"; return; }
+      out += '<div class="rw"><span class="chip' + (r.dv ? " dv" : "") + '">' + r.chip + "</span>" +
+             '<div class="rt">' + r.t +
+             (r.meta ? '<span class="meta">' + r.meta + "</span>" : "") +
+             (r.src ? '<a class="srclink" href="' + SRC[r.src].href + '" target="_blank" rel="noopener noreferrer">' + SRC[r.src].label + "</a>" : "") +
+             "</div></div>";
+    });
+    if(c.notclaims){ out += '<p class="nclaim">' + c.notclaims + "</p>"; }
+    if(c.claim){ out += '<p class="claim">' + c.claim + "</p>"; }
+    el.clist.innerHTML = out;
+    el.cscroll.scrollTop = 0;
+    flag(el.cscroll, el.cmore);
+  }
+
+  function buildChoices(){
+    var out = "";
+    OPTS.forEach(function(o){
+      out += '<button class="ch" type="button" data-o="' + o.id + '" aria-pressed="false" aria-disabled="false">' +
+             '<span class="dot" aria-hidden="true"></span>' +
+             '<span><span class="txt">' + o.label + "</span>" +
+             '<span class="vd" aria-hidden="true"></span></span></button>';
+    });
+    el.choices.innerHTML = out;
+    /* aria-disabled and not disabled. A disabled button leaves the tab
+       order, so a keyboard screen reader user could never land on a
+       settled verdict and hear that it is settled. These stay
+       reachable and are held inert by the two guards below, one for
+       pointer and one for keyboard. */
+    choiceButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(locked(b)) return;
+        commit(b.getAttribute("data-o"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(!locked(b)) return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function choiceButtons(){
+    return Array.prototype.slice.call(el.choices.querySelectorAll("button.ch"));
+  }
+  function locked(b){ return b.getAttribute("aria-disabled") === "true"; }
+
+  function paintChoices(){
+    var c = cur(), mine = pick(ci), settled = !!mine;
+    choiceButtons().forEach(function(b){
+      var id = b.getAttribute("data-o");
+      b.classList.remove("right","out","dim","picked");
+      b.querySelector(".dot").textContent = "";
+      b.querySelector(".vd").textContent = "";
+      b.removeAttribute("aria-label");
+      b.setAttribute("aria-pressed", id === mine ? "true" : "false");
+      b.setAttribute("aria-disabled", settled ? "true" : "false");
+      if(!settled) return;
+      if(id === mine) b.classList.add("picked");
+      /* the glyph, the border style and the word all report the FACT,
+         never the pick. Which one they chose is carried by the outer
+         ring and named in the reveal, so no signal here ever has two
+         meanings, and the colour is the fourth signal rather than the
+         only one. */
+      if(id === c.answer){
+        b.classList.add("right");
+        b.querySelector(".dot").textContent = GLYPH.ok;
+        b.querySelector(".vd").textContent = "The answer";
+        b.setAttribute("aria-label", labelOf(id) + " This is the answer." + (id === mine ? " You chose this." : ""));
+      } else {
+        b.classList.add("out","dim");
+        b.querySelector(".dot").textContent = GLYPH.no;
+        b.querySelector(".vd").textContent = "Not the answer";
+        b.setAttribute("aria-label", labelOf(id) + " Not the answer." + (id === mine ? " You chose this." : ""));
+      }
+    });
+  }
+  function labelOf(id){
+    for(var i=0;i<OPTS.length;i++){ if(OPTS[i].id === id) return OPTS[i].label; }
+    return id;
+  }
+
+  function clearReason(){
+    el.reason.hidden = true;
+    el.reason.classList.remove("on");
+    el.rwhy.innerHTML = "";
+    el.rcarry.innerHTML = "";
+    el.rlead.innerHTML = "";
+    el.rmore.hidden = true;
+  }
+
+  function paintReason(){
+    var c = cur(), mine = pick(ci);
+    if(!mine){ clearReason(); return; }
+    var ok = (mine === c.answer);
+    el.rlead.innerHTML = ok
+      ? "<b>You had it.</b> " + (c.answer === "keep" ? "This chain holds up" : "This chain has to come out")
+      : "<b>Not this one.</b> " + (c.answer === "keep" ? "This chain holds up" : "This chain has to come out");
+    el.rwhy.innerHTML = c.why;
+    el.rcarry.innerHTML = c.carry;
+    el.reason.hidden = false;
+    el.rscroll.scrollTop = 0;
+    flag(el.rscroll, el.rmore);
+  }
+
+  function drawFrame(){
+    var c = cur(), mine = pick(ci);
+    el.pc.textContent = "Chain " + (ci+1) + " of " + N;
+    pips(el.segc, ci);
+    el.ctitle.textContent = c.title;
+
+    drawChain();
+    paintChoices();
+    paintReason();
+
+    el.cnext.hidden = !mine;
+    if(mine){
+      el.cnext.textContent = (ci < N-1) ? "Next: chain " + (ci+2) + " of " + N : "Last frame";
+    }
+    el.cback.textContent = (ci === 0) ? "Back to the four words" : "Back";
+
+    el.chint.innerHTML = mine
+      ? "The reasoning is on this frame, under your answer. <span class=\"key\">&larr;</span> and <span class=\"key\">&rarr;</span> move between chains."
+      : "<b>Commit first.</b> Nothing appears until you choose. Keys <span class=\"key\">1</span> for keep and <span class=\"key\">2</span> for kill also work.";
+  }
+
+  function commit(id){
+    var c = cur();
+    store.a[c.slug] = id;
+    save();
+    drawFrame();
+    if(!reduce){
+      el.reason.classList.remove("on");
+      void el.reason.offsetWidth;
+      el.reason.classList.add("on");
+    }
+    /* focus is placed by hand on every state change, so it can never
+       fall back to the body, and the commit buttons have just left the
+       live tab order, so leaving focus on one would be a dead landing */
+    el.reason.focus();
+    var ok = (id === c.answer);
+    announce("You said " + labelOf(id) + " " +
+             (ok ? "That is the answer. " : "Not the answer. The answer is: " + labelOf(c.answer) + " ") +
+             el.rwhy.textContent + " What to carry from this one. " + el.rcarry.textContent);
+  }
+
+  /* ================ the close ================ */
+
+  function drawClose(){
+    el.rows.innerHTML = ROWS.map(function(r){
+      return '<div class="row"><span class="nm">' + r[0] + "</span>" +
+             '<span class="vv ' + (r[1] === "keep" ? "k" : "x") + '">' +
+             (r[1] === "keep" ? GLYPH.ok + " Keep" : GLYPH.no + " Kill") + "</span>" +
+             '<span class="rr">' + r[2] + "</span></div>";
+    }).join("");
+  }
+
+  /* ================ navigation ================
+     Every one of these lands focus on a real control or on a panel
+     that takes focus, so nothing here can leave focus on the body and
+     nothing dead ends: every frame has a way forward and a way back. */
+
+  function goOpen(){
+    show("f0");
+    el.start.focus();
+  }
+  function goChain(i){
+    ci = Math.max(0, Math.min(N-1, i));
+    show("fc");
+    drawFrame();
+    /* an answered chain has its reasoning on screen already, so
+       arriving lands on the way forward. An unanswered one lands on
+       the chain itself and never on a commit button: with only two
+       buttons, landing on one would hand half the answer to whoever
+       presses Enter on arrival. */
+    if(pick(ci)){ el.cnext.focus(); return; }
+    el.fc.focus();
+    announce("Chain " + (ci+1) + " of " + N + ". " + cur().title + ". Read the chain, then commit keep or kill. Nothing is explained until you choose.");
+  }
+  function goClose(){
+    show("fz");
+    drawClose();
+    el.zback.focus();
+  }
+  function nextStep(){
+    if(!pick(ci)) return;
+    if(ci < N-1){ goChain(ci+1); return; }
+    goClose();
+  }
+  function prevStep(){
+    if(ci > 0){ goChain(ci-1); return; }
+    goOpen();
+  }
+
+  el.start.addEventListener("click", function(){ goChain(firstUnanswered()); });
+  el.cback.addEventListener("click", prevStep);
+  el.cnext.addEventListener("click", nextStep);
+  el.zback.addEventListener("click", function(){ goChain(N-1); });
+  el.zreset.addEventListener("click", function(){
+    store.a = {};
+    save();
+    goChain(0);
+    announce("Cleared. Four chains to judge again.");
+  });
+
+  function firstUnanswered(){
+    for(var i=0;i<N;i++){ if(!pick(i)) return i; }
+    return 0;
+  }
+
+  /* Plain Tab and Enter operate every control in this file. The number
+     keys and the arrows below are additions and not a protocol:
+     nothing here is reachable only by keyboard shortcut. */
+  document.addEventListener("keydown", function(e){
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "textarea" || tag === "input") return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if(!el.fc.hidden){
+      if(e.key === "1" || e.key === "2"){
+        var b = choiceButtons()[parseInt(e.key, 10) - 1];
+        if(b && !locked(b)){ e.preventDefault(); commit(b.getAttribute("data-o")); return; }
+      }
+      if(e.key === "ArrowRight"){ if(pick(ci)){ e.preventDefault(); nextStep(); } return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); prevStep(); return; }
+      return;
+    }
+    if(!el.fz.hidden && e.key === "ArrowLeft"){ e.preventDefault(); goChain(N-1); return; }
+    if(!el.f0.hidden && e.key === "ArrowRight"){ e.preventDefault(); goChain(firstUnanswered()); }
+  });
+
+  /* swipe, the third input method. Horizontal only, and it never
+     commits an answer: it does exactly what the visible buttons do. */
+  (function(){
+    var x0 = null, y0 = null;
+    var st = document.getElementById("stage");
+    st.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1){ x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, {passive:true});
+    st.addEventListener("touchend", function(e){
+      if(x0 === null || !e.changedTouches || !e.changedTouches.length) return;
+      var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if(Math.abs(dx) < 55 || Math.abs(dy) > 45) return;
+      if(!el.fc.hidden){
+        if(dx < 0){ nextStep(); } else { prevStep(); }
+      } else if(!el.fz.hidden && dx > 0){
+        goChain(N-1);
+      } else if(!el.f0.hidden && dx < 0){
+        goChain(firstUnanswered());
+      }
+    }, {passive:true});
+  })();
+
+  /* ================ scale the fixed canvas down to fit, never up ================ */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    flag(el.cscroll, el.cmore);
+    flag(el.rscroll, el.rmore);
+  });
+
+  buildChoices();
+  goOpen();
+  fit();
+
+  /* exposed for render QA only: lets a screenshot or an assertion run
+     force a state without hand driving the UI */
+  window.__ex = {
+    open:goOpen, chain:goChain, close:goClose,
+    commit:function(i, id){ goChain(i); commit(id); },
+    answerOf:function(i){ return CHAINS[i].answer; },
+    slugOf:function(i){ return CHAINS[i].slug; },
+    reset:function(){ store.a = {}; save(); },
+    state:function(){ return {ci:ci, answers:store.a}; }
+  };
+})();
+</script>
+</body>
+</html>

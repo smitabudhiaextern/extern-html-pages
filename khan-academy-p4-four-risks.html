@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grade four risk rows</title>
+<style>
+  /* ===============================================================
+     GRADE FOUR RISK ROWS. Substep 4.1.6 of this program.
+
+     Reference implementation and precedent: khan-academy-p3-four-more-checks.html.
+     This build reuses its canvas scaling, its progress header, its
+     commit-before-reveal mechanic, its noscript override, its
+     reduced-motion collapse, and its deliberate decision to name no
+     organization at all. The commit-per-decision wiring, the
+     aria-disabled option handling and the synchronous scroll check come
+     from khan-academy-p3-four-checks.html.
+
+     NOTHING IS NAMED HERE. No real organization appears in any row, in
+     any reveal, or in the fallback. The counterparties are types: a
+     cloud provider, a children's media company, a device manufacturer, a
+     national retailer. The employer is "we". Two reasons, both from the
+     shipped precedent: there is then nothing to fact check and nothing
+     that can go stale, and a badly written risk row attached to a real
+     name grades that organization rather than the row.
+
+     NO FIGURE APPEARS ANYWHERE, and that is deliberate. Because nothing
+     is named, no number in here could carry a source, and a number with
+     no source is the exact defect this project teaches students to
+     catch. Row 2 overstates the strength of a CLAIM, never a figure.
+
+     WHAT THIS BUILD MUST NOT CARRY, because the module prose owns it:
+     which failure mode belongs to which money model, any named peer
+     organization's finances, and anything about one time school
+     funding. The rows here are generic and are graded on their FORM.
+
+     Zero external requests: no stylesheet, no script, no webfont, no
+     image, no favicon leaves this file. Zero HTML comments: every note
+     in this file sits inside a CSS or a script comment, because the
+     content ships as raw HTML and a stray comment delimiter would sit
+     in the text. No em dash and no doubled hyphen anywhere in prose or
+     comment. The only doubled hyphens in the file are CSS custom
+     property tokens.
+     =============================================================== */
+
+  /* ===============================================================
+     PALETTE. These five values are the entire palette. There is no
+     sixth. Every tint below is an rgba() of #001D69 and never a new hex.
+
+     COLOUR DECISION, recorded so it is not relitigated: a three way
+     grade is not a right or wrong quiz, so the program's two measured
+     state colours, the green and the red, are NOT used in this file at
+     all, and neither hex value appears anywhere in it. The shipped
+     khan-academy-p3-four-more-checks.html carries no verdict colour
+     either, and it is the guide here. A graded option carries three
+     signals and none of them is colour: a glyph in the dot, a struck or
+     changed label, and a border change from solid to dashed. The
+     reveal names in words both the grade and whether the student's own
+     grade matched it.
+
+     MEASURED CONTRAST RATIOS, sRGB, computed for the pairs this file
+     actually paints:
+       #1C1B1B on #FDF8F8                     16.33:1   titles on canvas
+       #484646 on #FDF8F8                      8.91:1   body on canvas
+       #001D69 on #FDF8F8                     14.47:1   kickers on canvas
+       #1C1B1B on #DCE1FF                     13.30:1   titles in a card
+       #001D69 on #DCE1FF                     11.78:1   kickers in a card
+       #484646 on #DCE1FF                      7.26:1   body in a card
+       #FDF8F8 on #001D69                     14.47:1   solid button label
+       #1C1B1B on tint  rgba(0,29,105,.055)   14.67:1   titles on tint
+       #484646 on tint  rgba(0,29,105,.055)    8.01:1   body on tint
+       #001D69 on tint  rgba(0,29,105,.055)   12.99:1   kickers on tint
+       #1C1B1B on tint2 rgba(0,29,105,.13)    12.50:1   titles on tint2
+       #001D69 on tint2 rgba(0,29,105,.13)    11.08:1   kickers on tint2
+       #484646 at 85% over #FDF8F8             5.87:1   ruled out label
+     Every pair clears 4.5:1, so the body minimum holds even on the one
+     dimmed state. Nothing in this file relies on a ratio below that.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* One focus ring, everywhere, on every focusable thing. */
+  :focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ===============================================================
+     THE 960x540 CANVAS. Scales DOWN only, never up.
+     flex:0 0 auto is load bearing. As a shrinkable flex item the canvas
+     lays out at the viewport width between 600 and 899px and the JS
+     transform then scales it a second time, shrinking the design twice.
+     getComputedStyle(stage).width must always read 960px.
+     =============================================================== */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;overflow:hidden;
+  }
+
+  /* ===============================================================
+     HEIGHT BUDGET, and nothing in this file reflows.
+     A min-height reason box grew on the first answer in an earlier build
+     in this program and pushed the options the reader was part way
+     through down the panel. So every band below is a FIXED height, the
+     two text heavy bands scroll inside themselves, and the footer sits
+     on margin-top:auto with flex:0 0 auto so overflow above it can
+     never displace it.
+
+     Frame padding is 16px top and 12px bottom, so the content box is
+       540 - 16 - 12 = 512px.
+
+     The row frame spends it like this:
+       .top          progress line and pips             30
+       .deal         the deal on the table, one line    24
+       .cwrap        the row somebody else wrote       108   fixed, scrolls
+                     plus its margin below               8
+       .ask          the question put to the student     20
+       .grades       three grade buttons                 70
+       .rwrap        the reveal                        210   fixed, scrolls
+       .foot         back, hint, next                    40
+                                                       ____
+                                       total           510   of 512
+
+     Inside .cwrap, 108px: card padding is 9 top and 27 bottom, because
+     18px of the bottom is reserved at all times for the scroll notice,
+     whether or not it shows, so the notice can never push anything.
+     Inner text height is therefore 72px, and it holds an 11px label at
+     1.3 with a 3px margin plus three lines of 13px at 1.35:
+       (11 x 1.3) + 3 + (3 x 17.55) = 70.4px, inside 72.
+     Two columns of 428px at 13px take about 64 characters a line, so
+     three lines is about 192 characters. The longest risk line in the
+     file is 139 characters and the longest answer is 162.
+
+     Inside .rwrap, 210px: the same 9 and 27 padding leaves 174px.
+       lead line, 12px at 1.35, plus 5 margin        =  21.2
+       part one label, 11px at 1.3, plus 3 margin    =  17.3
+       part one body, 4 lines of 12.5px at 1.4       =  70.0
+       gap between the two parts                     =   7.0
+       part two label                                =  17.3
+       part two body, 2 lines of 12.5px at 1.4       =  35.0
+                                                       ______
+                                        total           167.8  of 174
+     At 12.5px across 880px a line holds about 118 characters, so part
+     one has room for about 472 characters and part two for about 236.
+     The longest in the file are 415 and 190.
+
+     Inside .grades, 70px: 8px of it is padding below the buttons, so a
+     button is 58 tall. Border and padding take 4 and 16, leaving 38 for
+       the grade name, 12px at 1.2, plus a 3px margin  =  17.4
+       the one line under it, 12.5px at 1.35           =  16.9
+                                                          ____
+                                          total            34.3  of 38
+     Both of those lines have to hold at ONE line each inside a column
+     of 235px, which is why the grade names are short, the line under
+     each is under 35 characters, and the marker appended to a chosen
+     grade in CSS is three words and not five. The button also carries
+     overflow:hidden as a floor, so a wrap on an unusual font stack can
+     never spill outside the button box.
+
+     Both scrolling bands still get a notice in words, because a reader
+     on a smaller default font size or a different font stack can push
+     past these numbers, and a sentence that just stops at a panel edge
+     with no affordance is the failure this notice exists to prevent.
+     =============================================================== */
+  .frame{position:absolute;inset:0;padding:16px 40px 12px;display:flex;flex-direction:column}
+  /* The frame takes programmatic focus so a screen reader announces a
+     new row. It draws no ring of its own: the ring would trace the
+     whole canvas and tell the reader nothing. */
+  .frame:focus{outline:none}
+  .frame:focus-visible{outline:none}
+  .frame:not([hidden]){animation:framein var(--t-frame) var(--ease-out) both}
+  @keyframes framein{from{opacity:0}to{opacity:1}}
+
+  /* progress line */
+  .top{flex:0 0 auto;height:30px;display:flex;align-items:center;gap:12px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:5px;align-items:center}
+  .segs i{display:block;width:26px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:26px;line-height:1.2;color:var(--title);font-weight:700}
+  .sub{font-size:14.5px;line-height:1.5;max-width:800px}
+  .sub b{color:var(--title)}
+
+  /* intro */
+  .introwrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:13px;min-height:0}
+  .rules{display:flex;gap:11px}
+  .rule{flex:1 1 0;border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;background:var(--tint)}
+  .rule .n{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:5px}
+  .rule p{font-size:13px;line-height:1.42}
+  .defs{display:flex;gap:11px;background:var(--highlight);border-radius:10px;padding:9px 13px}
+  .defs div{flex:1 1 0}
+  .defs dt{font-size:12px;font-weight:700;color:var(--on-highlight);margin-bottom:3px}
+  .defs dd{font-size:11.5px;line-height:1.4;color:var(--body)}
+
+  /* the deal line above the row */
+  .deal{flex:0 0 auto;height:24px;font-size:13.5px;line-height:1.4;padding-top:3px;color:var(--body)}
+  .deal b{color:var(--title);font-weight:600}
+
+  /* ===============================================================
+     THE ROW SOMEBODY ELSE WROTE. Fixed box, its own scroller, its own
+     notice. The notice is absolutely positioned over reserved padding
+     so it can never push anything.
+     =============================================================== */
+  .cwrap{flex:0 0 auto;position:relative;height:108px;margin-bottom:8px}
+  .card{
+    position:absolute;inset:0;overflow:auto;
+    background:var(--highlight);border:1.5px solid var(--line);border-radius:11px;
+    padding:9px 14px 27px;
+  }
+  .card:focus{outline:none}
+  .card .who{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}
+  .pair .lab{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:3px}
+  .pair p{font-size:13px;line-height:1.35;color:var(--title)}
+  .more{
+    position:absolute;left:1px;right:1px;bottom:1px;
+    font-size:10.5px;line-height:1.3;font-weight:600;color:var(--on-highlight);
+    padding:1px 13px 2px;border-radius:0 0 10px 10px;
+    background:var(--highlight);border-top:1.5px solid var(--line);
+  }
+
+  .ask{flex:0 0 auto;height:20px;font-size:13.5px;line-height:1.4;font-weight:600;color:var(--title)}
+  .ask span{font-weight:400;color:var(--body)}
+
+  /* ===============================================================
+     THE THREE GRADES. Real buttons, tab and Enter, no key protocol.
+     A settled option is aria-disabled and NOT disabled, so a keyboard
+     screen reader user can still land on it and hear its state. It is
+     held inert by two guards in the script, one pointer and one
+     keyboard.
+     =============================================================== */
+  .grades{flex:0 0 auto;height:70px;display:flex;gap:10px;padding-bottom:8px}
+  button.ch{
+    flex:1 1 0;display:flex;align-items:flex-start;gap:9px;text-align:left;overflow:hidden;
+    font-family:inherit;color:var(--title);cursor:pointer;
+    background:var(--bg);border:2px solid var(--line);border-radius:10px;padding:8px 11px;
+    transition:border-color var(--t-fast) var(--ease-out),background var(--t-fast) var(--ease-out);
+  }
+  button.ch .dot{
+    flex:0 0 auto;width:16px;height:16px;border-radius:50%;margin-top:1px;
+    border:2px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:10px;font-weight:700;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  button.ch .k{display:block;font-size:12px;font-weight:700;line-height:1.2;color:var(--on-highlight);margin-bottom:3px}
+  button.ch .t{display:block;font-size:12.5px;line-height:1.35}
+  button.ch:hover:not([aria-disabled="true"]){border-color:var(--on-highlight);background:var(--tint)}
+  button.ch[aria-disabled="true"]{cursor:default}
+  /* the grade this row actually gets: filled dot with a tick, solid
+     border. The glyph reports the fact, not the student's pick. */
+  button.ch.isgrade{border-color:var(--on-highlight);background:var(--highlight)}
+  button.ch.isgrade .dot{background:var(--on-highlight);color:var(--bg)}
+  /* a grade this row does not get: glyph, struck label, dashed border.
+     Three signals and not one of them is colour. */
+  button.ch.ruled{background:transparent;border:2px dashed var(--line);opacity:.85}
+  button.ch.ruled .t{text-decoration:line-through;text-decoration-thickness:1px;color:var(--body)}
+  button.ch.ruled .k{font-weight:600}
+  button.ch.ruled .dot{border-style:dashed}
+  /* the student's own grade keeps a solid border whatever the verdict on
+     it, so a struck option they chose never reads as one they did not.
+     Border style plus a label, never colour, and the reveal says it in
+     words as well. */
+  button.ch.mine{border-style:solid;border-color:var(--on-highlight)}
+  button.ch.mine .k::after{content:" \00b7 your grade"}
+
+  /* ===============================================================
+     THE REVEAL. Two labelled parts, fixed box, own scroller, own
+     notice. Nothing of it exists in the DOM before the student grades
+     the row, so there is nothing to read by scrolling ahead.
+     =============================================================== */
+  .rwrap{flex:0 0 auto;position:relative;height:210px}
+  .reason{
+    position:absolute;inset:0;overflow:auto;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:11px;
+    padding:9px 14px 27px;
+  }
+  .reason:focus{outline:none}
+  .reason.on{animation:rise var(--t-reveal) var(--ease-out) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .waiting{font-size:12.5px;line-height:1.45}
+  .lead{font-size:12px;line-height:1.35;color:var(--on-highlight);margin-bottom:5px}
+  .lead b{color:var(--title);font-weight:700}
+  .part{margin-bottom:7px}
+  .part:last-child{margin-bottom:0}
+  .plab{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:3px}
+  .pbody{font-size:12.5px;line-height:1.4}
+  .pbody b{color:var(--title);font-weight:600}
+  .rmore{
+    position:absolute;left:1px;right:1px;bottom:1px;
+    font-size:10.5px;line-height:1.3;font-weight:600;color:var(--on-highlight);
+    padding:1px 13px 2px;border-radius:0 0 10px 10px;
+    background:var(--bg);border-top:1.5px solid var(--line);
+  }
+
+  /* footer. margin-top:auto plus flex:0 0 auto means nothing above can
+     ever displace it. */
+  .foot{flex:0 0 auto;height:40px;margin-top:auto;display:flex;align-items:center;gap:10px;padding-top:6px}
+  .hint{flex:1 1 auto;min-width:0;font-size:11.5px;line-height:1.4}
+  .hint b{color:var(--title);font-weight:600}
+  .key{border:1px solid var(--on-highlight);border-radius:4px;padding:0 4px;font-size:10.5px;font-weight:600;color:var(--on-highlight)}
+  button.nav{
+    flex:0 0 auto;font-family:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;
+    background:var(--on-highlight);color:var(--bg);border:2px solid var(--on-highlight);
+    border-radius:8px;padding:7px 15px;transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:hover{opacity:.85}
+
+  /* closing frame */
+  .grid{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:center;min-height:0}
+  .r{border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;background:var(--tint)}
+  .r .n{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .r h2{font-size:15px;line-height:1.3;color:var(--title);font-weight:700;margin-bottom:4px}
+  .r p{font-size:12.5px;line-height:1.4}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+
+  /* ===============================================================
+     Under 600px the design restacks for real portrait reading. Two
+     things have to happen and both have shipped broken in this program
+     before. The body drops out of flex, because as a flex item #stage
+     inherits min-width:auto and refuses to shrink below its content
+     width, which pushes the canvas off screen where it cannot be
+     scrolled back to. And the JS transform is cleared, or it fights
+     the restack. Every fixed height band is released here, because on
+     a phone there is no 540px ceiling to protect.
+     =============================================================== */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{
+      width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important;overflow:visible;
+    }
+    .frame{position:relative;inset:auto;padding:18px 16px 34px;min-height:100vh}
+    .top{flex-wrap:wrap;height:auto;gap:8px;margin-bottom:10px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .rules,.defs{flex-direction:column}
+    .deal{height:auto;font-size:15px;margin-bottom:10px}
+    .cwrap,.rwrap{height:auto;position:static}
+    .card,.reason{position:static;overflow:visible;padding:12px 14px}
+    .pair{grid-template-columns:1fr;gap:12px 0}
+    .pair p,.ask,.pbody,.waiting{font-size:15px}
+    .more,.rmore{display:none}
+    .ask{height:auto;margin:12px 0 10px}
+    .grades{height:auto;flex-direction:column;padding-bottom:12px}
+    button.ch .t{font-size:14.5px}
+    .grid{grid-template-columns:1fr}
+    .foot{height:auto;flex-wrap:wrap;margin-top:14px}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <section class="frame" id="f-intro" tabindex="-1">
+    <div class="top">
+      <span class="prog">Before you start</span>
+    </div>
+    <div class="introwrap">
+      <div>
+        <h1>Grade four risk rows</h1>
+        <p class="sub" style="margin-top:7px">Somebody else on your team has written four risk rows, one for each of four different deals. Every row is a stated risk paired with their stated answer to it. Your job is to grade each row before the page tells you anything. In these rows, <b>we</b> means the team you work on.</p>
+      </div>
+      <div class="rules">
+        <div class="rule">
+          <div class="n">Commit first</div>
+          <p>Grade the row before you see any reasoning. A grade you committed to teaches you more than a verdict you read.</p>
+        </div>
+        <div class="rule">
+          <div class="n">Three grades, not two</div>
+          <p>Keep as written, fix, or not a risk at all. Nothing here is scored and nothing is timed.</p>
+        </div>
+        <div class="rule">
+          <div class="n">One row is finished</div>
+          <p>One of the four needs nothing done to it. Watch for which one, so you do not assume every row is broken.</p>
+        </div>
+      </div>
+      <dl class="defs">
+        <div><dt>Risk</dt><dd>Something that could go wrong inside this deal after both sides say yes.</dd></div>
+        <div><dt>Alternative</dt><dd>Something that could happen instead of this deal. A real thing, on a different line.</dd></div>
+        <div><dt>Mitigation</dt><dd>The specific thing you would do to make a risk less likely, or less damaging.</dd></div>
+        <div><dt>Renewal</dt><dd>The partner agreeing to carry on for another period once the first one ends.</dd></div>
+      </dl>
+    </div>
+    <div class="foot">
+      <span class="hint">Four rows. Grade each one, then the page names the four rules you were using.</span>
+      <button class="nav" type="button" id="start">Start</button>
+    </div>
+  </section>
+
+  <section class="frame" id="f-row" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog" id="pc">Row 1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <p class="deal" id="deal"></p>
+
+    <div class="cwrap">
+      <div class="card" id="card" tabindex="-1" role="region" aria-label="The risk row somebody else wrote">
+        <div class="who">The row somebody else wrote</div>
+        <div class="pair">
+          <div>
+            <div class="lab">The risk, as written</div>
+            <p id="risk"></p>
+          </div>
+          <div>
+            <div class="lab">Their answer to it, as written</div>
+            <p id="answer"></p>
+          </div>
+        </div>
+      </div>
+      <p class="more" id="cmore" hidden>This row scrolls. There is more text below inside this panel.</p>
+    </div>
+
+    <p class="ask" id="ask">How do you grade this row? <span>Pick one. Nothing appears until you do.</span></p>
+
+    <div class="grades" id="grades" role="group" aria-labelledby="ask"></div>
+
+    <div class="rwrap">
+      <div class="reason" id="reason" tabindex="-1" role="region" aria-label="The reasoning on this row">
+        <p class="waiting" id="waiting">Grade the row and the reasoning appears here, in two parts: why that is the grade, and the one thing to carry from this row.</p>
+      </div>
+      <p class="rmore" id="rmore" hidden>The reasoning scrolls. There is more text below inside this panel.</p>
+    </div>
+
+    <div class="foot">
+      <button class="nav ghost" type="button" id="back">Back</button>
+      <span class="hint" id="hint"></span>
+      <button class="nav" type="button" id="next" hidden>Next</button>
+    </div>
+  </section>
+
+  <section class="frame" id="f-end" tabindex="-1" hidden>
+    <div class="top">
+      <span class="prog" id="pz">Done. Four rows graded</span>
+      <span class="segs" id="segz" aria-hidden="true"></span>
+    </div>
+    <h1>Four ways to grade a risk row</h1>
+    <p class="sub" style="margin:7px 0 11px">Each row turned on a different one of these. Run all four on every risk row you write, in this order, including the ones you wrote yourself.</p>
+    <div class="grid">
+      <div class="r">
+        <div class="n">Rule one</div>
+        <h2>Is it a risk at all?</h2>
+        <p>A risk goes wrong inside the deal after both sides say yes. Something that could happen instead of the deal is an alternative, and it belongs on the line about who else could take this seat.</p>
+      </div>
+      <div class="r">
+        <div class="n">Rule two</div>
+        <h2>Could you put a link next to it?</h2>
+        <p>A risk is a claim, and a claim needs the same sourcing as a number. Cut the words that make the sentence bigger than your evidence.</p>
+      </div>
+      <div class="r">
+        <div class="n">Rule three</div>
+        <h2>Does the answer name who does what before the meeting?</h2>
+        <p>A person, an action, and a time. A reason to hurry is not a mitigation, however good a reason it is.</p>
+      </div>
+      <div class="r">
+        <div class="n">Rule four</div>
+        <h2>Does the risk fit this deal rather than any deal?</h2>
+        <p>The row worth writing down is the one this particular arrangement brings with it, not a worry you could paste onto anything.</p>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="nav ghost" type="button" id="rewind">Back to row four</button>
+      <span class="hint">Now write your own rows, two or three per deal, and grade each one four ways before it goes in.</span>
+      <button class="nav ghost" type="button" id="again">Start again</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="sr" id="live" role="status" aria-live="polite"></div>
+
+<noscript>
+  <style>
+    /* This block has to live INSIDE the noscript element. In <head> it
+       would sit before the main sheet and lose on source order, and the
+       fallback would silently fail. Two things must happen and both
+       have shipped broken in this program before. The dead canvas is
+       hidden, so nobody is offered controls that cannot work. And the
+       flex centred body goes back to block flow, or this text lays out
+       as a narrow column beside a 960px sibling and is pushed off the
+       centred overflow, where it cannot be scrolled back to. */
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{
+      display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;
+    }
+    .nsf{max-width:700px;margin:0 auto;padding:28px 22px 48px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:25px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:24px 0 8px}
+    .nsf h3{font-size:16px;line-height:1.3;color:#1C1B1B;margin:16px 0 6px}
+    .nsf p{margin-bottom:11px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:9px}
+    .nsf dl{margin:0 0 14px 0}
+    .nsf dt{font-weight:700;color:#001D69;margin-top:8px}
+    .nsf dd{margin:2px 0 0 0}
+    .nsf strong{color:#1C1B1B}
+    .nsf details{border:1.5px solid rgba(0,29,105,.26);border-radius:9px;padding:9px 12px;margin:8px 0 0}
+    .nsf summary{font-weight:600;color:#001D69;cursor:pointer}
+    .nsf details p{margin:9px 0 0}
+    .nsf .box{background:#DCE1FF;border-radius:9px;padding:11px 13px;margin-bottom:10px}
+    .nsf .box p:last-child{margin-bottom:0}
+  </style>
+  <div class="nsf">
+    <h1>Grade four risk rows</h1>
+    <p>With scripts blocked, here is the same lesson as a document. Somebody else on your team has written four risk rows, one for each of four different deals. Every row is a stated risk paired with their stated answer to it. In these rows, <strong>we</strong> means the team you work on.</p>
+    <p>Grade each row yourself before you open the reasoning under it. There are three grades: <strong>keep as written</strong>, <strong>fix</strong>, or <strong>not a risk at all</strong>. One of the four rows needs nothing done to it, so do not assume every row is broken. Nothing here is scored.</p>
+
+    <h2>Four words this page uses</h2>
+    <dl>
+      <dt>Risk</dt>
+      <dd>Something that could go wrong inside this deal after both sides say yes.</dd>
+      <dt>Alternative</dt>
+      <dd>Something that could happen instead of this deal. A real thing, on a different line.</dd>
+      <dt>Mitigation</dt>
+      <dd>The specific thing you would do to make a risk less likely, or less damaging.</dd>
+      <dt>Renewal</dt>
+      <dd>The partner agreeing to carry on for another period once the first one ends.</dd>
+    </dl>
+
+    <h2>The four rows</h2>
+    <ol>
+      <li>
+        <p><strong>The deal on the table.</strong> A cloud provider would give us free computing capacity for a year.</p>
+        <div class="box">
+          <p><strong>The risk, as written.</strong> Another education organization could take this seat with the cloud provider instead of us.</p>
+          <p><strong>Their answer to it, as written.</strong> We would go and find a different cloud provider.</p>
+        </div>
+        <details>
+          <summary>Show the grade and the reasoning</summary>
+          <p><strong>The grade is not a risk at all.</strong> Ask when this happens. It happens instead of the deal, not inside it, so what has been written here is an alternative and not a risk. Write it down anyway, just not on this line: who else could take this seat if we do not move is its own line in the deck, and it is a real one. There is a third line again, and it is different from both: whether anybody has already built a deal in this shape. Three lines, three questions, and this sentence belongs on the second.</p>
+          <p><strong>What to carry from this one.</strong> Before you write a risk, ask what goes wrong after everybody says yes. If the sentence describes a world where this deal never happened, you have written an alternative.</p>
+        </details>
+      </li>
+      <li>
+        <p><strong>The deal on the table.</strong> A children's media company would put our lessons inside its own app.</p>
+        <div class="box">
+          <p><strong>The risk, as written.</strong> The one person championing this on their side will be gone within a year, and arrangements like this never survive their champion.</p>
+          <p><strong>Their answer to it, as written.</strong> Before the meeting, I will ask who else on their side has to sign this off, and put both names in the deck.</p>
+        </div>
+        <details>
+          <summary>Show the grade and the reasoning</summary>
+          <p><strong>The grade is fix.</strong> The worry is real, and a deal resting on one person's enthusiasm is worth writing down. The sentence is not, because two of its words are doing work no source can back. Nobody knows when one person will leave a job, and <strong>never</strong> is a claim about every arrangement of this kind. A risk is a claim, and a claim needs the same sourcing as a number. Keep the part you could hand somebody a link for, and cut the rest.</p>
+          <p><strong>What to carry from this one.</strong> Strip out the words that make the sentence bigger than your evidence. Never, always, everyone and nobody are the four to search for. The narrower sentence is the one you can defend in the room.</p>
+        </details>
+      </li>
+      <li>
+        <p><strong>The deal on the table.</strong> A device manufacturer would load our lessons onto every tablet it sells.</p>
+        <div class="box">
+          <p><strong>The risk, as written.</strong> Making our lessons work inside their product will take our engineers far longer than the two weeks their team has assumed.</p>
+          <p><strong>Their answer to it, as written.</strong> We should move first and shape the terms before anyone else gets there.</p>
+        </div>
+        <details>
+          <summary>Show the grade and the reasoning</summary>
+          <p><strong>The grade is fix.</strong> The risk half is well written: it is specific, it sits inside the deal, and somebody could go and check it. The answer half is not an answer. Moving first tells you when to act. It does not say what we would do if the work turns out to be four times the size their team thinks. A mitigation is the specific thing you would do to make a risk less likely or less damaging, and an answer to a risk names who does what before the meeting.</p>
+          <p><strong>What to carry from this one.</strong> Read the answer and look for three things: a person, an action, and a time before the meeting. If any of the three is missing, what you have written is a reason to hurry.</p>
+        </details>
+      </li>
+      <li>
+        <p><strong>The deal on the table.</strong> A national retailer would fund a year of new lessons for its own staff.</p>
+        <div class="box">
+          <p><strong>The risk, as written.</strong> The arrangement runs for one year and nothing in it commits them to a second, so everything we build on top of it could stop at month twelve.</p>
+          <p><strong>Their answer to it, as written.</strong> Before the meeting, I will ask them what they would need to see by month nine to carry on, and put their answer on the last slide as what we owe them by month three.</p>
+        </div>
+        <details>
+          <summary>Show the grade and the reasoning</summary>
+          <p><strong>The grade is keep as written.</strong> This is what a finished row looks like, so read it twice. The risk names one specific thing going wrong inside the deal after it is signed, which is that there is no renewal in it, and it is the thing this particular arrangement brings with it rather than a worry you could paste onto anything. The answer names a person, an action and a time before the meeting. Nothing in either half is a prediction you could not put a source behind.</p>
+          <p><strong>What to carry from this one.</strong> A row is finished when the risk says what goes wrong inside the deal and the answer says who does what before the meeting. Both halves, every time, or it is not ready to go in the deck.</p>
+        </details>
+      </li>
+    </ol>
+
+    <h2>Four ways to grade a risk row</h2>
+    <p>Each row above turned on a different one of these. Run all four on every risk row you write, in this order, including the ones you wrote yourself.</p>
+    <ol>
+      <li><strong>Is it a risk at all?</strong> A risk goes wrong inside the deal after both sides say yes. Something that could happen instead of the deal is an alternative, and it belongs on the line about who else could take this seat.</li>
+      <li><strong>Could you put a link next to it?</strong> A risk is a claim, and a claim needs the same sourcing as a number. Cut the words that make the sentence bigger than your evidence.</li>
+      <li><strong>Does the answer name who does what before the meeting?</strong> A person, an action, and a time. A reason to hurry is not a mitigation, however good a reason it is.</li>
+      <li><strong>Does the risk fit this deal rather than any deal?</strong> The row worth writing down is the one this particular arrangement brings with it, not a worry you could paste onto anything.</li>
+    </ol>
+    <p>Now write your own rows, two or three per deal, and grade each one four ways before it goes in.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ==============================================================
+     THE FOUR ROWS. Generic counterparties only, no organization named
+     anywhere, and no figure anywhere. Each row is graded on its FORM.
+     `slug` is the persistence key. Grades are stored against the slug
+     and never against the array index, so a future reorder of this
+     array cannot restore a grade onto the wrong row.
+     Slugs describe the row's subject and not its defect, so nothing in
+     localStorage or in devtools hands over an answer.
+     ============================================================== */
+  var ROWS = [
+    {
+      slug: "r-seat",
+      deal: "A cloud provider would give us free computing capacity for a year.",
+      risk: "Another education organization could take this seat with the cloud provider instead of us.",
+      answer: "We would go and find a different cloud provider.",
+      grade: "notrisk",
+      why: "Ask when this happens. It happens instead of the deal, not inside it, so what has been written here is an alternative and not a risk. Write it down anyway, just not on this line: who else could take this seat if we do not move is its own line in the deck, and it is a real one. There is a third line again, and it is different from both: whether anybody has already built a deal in this shape. Three lines, three questions, and this sentence belongs on the second.",
+      carry: "Before you write a risk, ask what goes wrong after everybody says yes. If the sentence describes a world where this deal never happened, you have written an alternative."
+    },
+    {
+      slug: "r-champion",
+      deal: "A children's media company would put our lessons inside its own app.",
+      risk: "The one person championing this on their side will be gone within a year, and arrangements like this never survive their champion.",
+      answer: "Before the meeting, I will ask who else on their side has to sign this off, and put both names in the deck.",
+      grade: "fix",
+      why: "The worry is real, and a deal resting on one person's enthusiasm is worth writing down. The sentence is not, because two of its words are doing work no source can back. Nobody knows when one person will leave a job, and <b>never</b> is a claim about every arrangement of this kind. A risk is a claim, and a claim needs the same sourcing as a number. Keep the part you could hand somebody a link for, and cut the rest.",
+      carry: "Strip out the words that make the sentence bigger than your evidence. Never, always, everyone and nobody are the four to search for. The narrower sentence is the one you can defend in the room."
+    },
+    {
+      slug: "r-build",
+      deal: "A device manufacturer would load our lessons onto every tablet it sells.",
+      risk: "Making our lessons work inside their product will take our engineers far longer than the two weeks their team has assumed.",
+      answer: "We should move first and shape the terms before anyone else gets there.",
+      grade: "fix",
+      why: "The risk half is well written: it is specific, it sits inside the deal, and somebody could go and check it. The answer half is not an answer. Moving first tells you when to act. It does not say what we would do if the work turns out to be four times the size their team thinks. A <b>mitigation</b> is the specific thing you would do to make a risk less likely or less damaging, and an answer to a risk names who does what before the meeting.",
+      carry: "Read the answer and look for three things: a person, an action, and a time before the meeting. If any of the three is missing, what you have written is a reason to hurry."
+    },
+    {
+      slug: "r-year",
+      deal: "A national retailer would fund a year of new lessons for its own staff.",
+      risk: "The arrangement runs for one year and nothing in it commits them to a second, so everything we build on top of it could stop at month twelve.",
+      answer: "Before the meeting, I will ask them what they would need to see by month nine to carry on, and put their answer on the last slide as what we owe them by month three.",
+      grade: "keep",
+      why: "This is what a finished row looks like, so read it twice. The risk names one specific thing going wrong inside the deal after it is signed, which is that there is no <b>renewal</b> in it, and it is the thing this particular arrangement brings with it rather than a worry you could paste onto anything. The answer names a person, an action and a time before the meeting. Nothing in either half is a prediction you could not put a source behind.",
+      carry: "A row is finished when the risk says what goes wrong inside the deal and the answer says who does what before the meeting. Both halves, every time, or it is not ready to go in the deck."
+    }
+  ];
+
+  /* The three grades, in one fixed order on every row, so the position
+     of an option never carries information. */
+  var GRADES = [
+    {id:"keep",    k:"Keep as written",   t:"Goes in the deck as it is."},
+    {id:"fix",     k:"Fix",               t:"Something has to change first."},
+    {id:"notrisk", k:"Not a risk at all", t:"Does not belong on the risk line."}
+  ];
+
+  var OK = "✓";
+  var NO = "✕";
+  var STORE = "ka-p4-four-risks-v1";
+
+  var el = {};
+  ["pc","segs","segz","pz","deal","card","cmore","risk","answer","ask","grades",
+   "reason","rmore","waiting","hint","back","next","start","again","rewind","live"].forEach(function(k){
+    el[k] = document.getElementById(k);
+  });
+  var stage  = document.getElementById("stage");
+  var fIntro = document.getElementById("f-intro");
+  var fRow   = document.getElementById("f-row");
+  var fEnd   = document.getElementById("f-end");
+
+  var i = 0;
+  var view = "intro";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+  /* ==============================================================
+     PERSISTENCE. Keyed by row slug, never by index. Every read and
+     every write is wrapped, because localStorage throws outright in a
+     private window, in a sandboxed frame, and wherever site data is
+     blocked, and an unguarded read there would take the whole page down
+     before the first frame paints.
+     ============================================================== */
+  var picks = {};
+  function load(){
+    try{
+      var raw = window.localStorage.getItem(STORE);
+      if(!raw) return;
+      var o = JSON.parse(raw);
+      if(!o || typeof o !== "object") return;
+      ROWS.forEach(function(r){
+        var v = o[r.slug];
+        if(v === "keep" || v === "fix" || v === "notrisk") picks[r.slug] = v;
+      });
+    }catch(e){ picks = {}; }
+  }
+  function save(){
+    try{ window.localStorage.setItem(STORE, JSON.stringify(picks)); }catch(e){}
+  }
+  function clear(){
+    picks = {};
+    try{ window.localStorage.removeItem(STORE); }catch(e){}
+  }
+  function pickOf(n){ return picks[ROWS[n].slug] || null; }
+
+  function say(t){ el.live.textContent = t; }
+  function gradeLabel(id){
+    for(var n=0;n<GRADES.length;n++){ if(GRADES[n].id === id) return GRADES[n].k; }
+    return "";
+  }
+
+  /* Every scrolling region says so in words, rather than letting a
+     sentence stop at a panel edge with no affordance. MEASURED
+     SYNCHRONOUSLY: reading scrollHeight forces layout here and now.
+     An earlier build in this program deferred this to
+     requestAnimationFrame, which never fired under headless rendering,
+     so the notice never appeared. The notice is hidden before the read
+     so its own height is never counted, and the panel it sits on
+     already reserves 18px of bottom padding at all times, so showing it
+     cannot reflow anything. */
+  function flag(scroller, flagEl){
+    if(!scroller || !flagEl) return;
+    flagEl.hidden = true;
+    var over = (scroller.scrollHeight - scroller.clientHeight) > 4;
+    flagEl.hidden = !over;
+    /* A region that scrolls has to be reachable by keyboard, so it takes
+       a real tab stop while it is scrolling and gives it back when it is
+       not. The reveal keeps tabindex either way, because it also takes
+       focus by hand after a commit. */
+    scroller.setAttribute("tabindex", over ? "0" : "-1");
+  }
+
+  function pips(node, at, total){
+    var out = "";
+    for(var n=0;n<total;n++){
+      out += '<i class="' + (n === at ? "here" : (n < at ? "on" : "")) + '"></i>';
+    }
+    node.innerHTML = out;
+  }
+
+  function show(which){
+    view = which;
+    fIntro.hidden = which !== "intro";
+    fRow.hidden   = which !== "row";
+    fEnd.hidden   = which !== "end";
+  }
+
+  /* ==============================================================
+     THE GRADE BUTTONS. Rebuilt per row so no stale state survives.
+     A settled option gets aria-disabled and keeps `disabled` off, so a
+     keyboard screen reader user can land on it and hear its state. It
+     is held inert by the two guards below, one pointer and one
+     keyboard. An aria-disabled button still fires click on Enter, which
+     is exactly why both guards are needed and not just one.
+     ============================================================== */
+  function buildGrades(){
+    var out = "";
+    GRADES.forEach(function(g){
+      out += '<button class="ch" type="button" data-g="' + g.id + '" aria-pressed="false" aria-disabled="false">' +
+               '<span class="dot" aria-hidden="true"></span>' +
+               '<span><span class="k">' + g.k + '</span><span class="t">' + g.t + '</span></span>' +
+             '</button>';
+    });
+    el.grades.innerHTML = out;
+    gradeButtons().forEach(function(b){
+      b.addEventListener("click", function(){
+        if(locked(b)) return;
+        commit(b.getAttribute("data-g"));
+      });
+      b.addEventListener("keydown", function(e){
+        if(!locked(b)) return;
+        if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+      });
+    });
+  }
+  function gradeButtons(){
+    return Array.prototype.slice.call(el.grades.querySelectorAll("button.ch"));
+  }
+  function locked(b){ return b.getAttribute("aria-disabled") === "true"; }
+
+  function paintGrades(){
+    var r = ROWS[i], mine = pickOf(i), settled = !!mine;
+    gradeButtons().forEach(function(b){
+      var id = b.getAttribute("data-g");
+      b.classList.remove("isgrade","ruled","mine");
+      b.querySelector(".dot").textContent = "";
+      b.removeAttribute("aria-label");
+      b.setAttribute("aria-pressed", id === mine ? "true" : "false");
+      b.setAttribute("aria-disabled", settled ? "true" : "false");
+      if(!settled) return;
+      if(id === mine) b.classList.add("mine");
+      /* The glyph reports the fact and not the pick. A tick sits on the
+         grade this row actually gets, whether or not the student chose
+         it, and a cross on the two it does not. Which one they chose is
+         carried by the solid border, by the label appended in CSS, and
+         by the reveal in words, so no glyph ever has two meanings. */
+      if(id === r.grade){
+        b.classList.add("isgrade");
+        b.querySelector(".dot").textContent = OK;
+        b.setAttribute("aria-label", gradeLabel(id) + ". This is the grade on this row." + (id === mine ? " You said this." : ""));
+      }else{
+        b.classList.add("ruled");
+        b.querySelector(".dot").textContent = NO;
+        b.setAttribute("aria-label", gradeLabel(id) + ". Ruled out on this row." + (id === mine ? " You said this." : ""));
+      }
+    });
+  }
+
+  function paintReason(){
+    var r = ROWS[i], mine = pickOf(i);
+    if(!mine){
+      el.reason.innerHTML = '<p class="waiting">Grade the row and the reasoning appears here, in two parts: why that is the grade, and the one thing to carry from this row.</p>';
+      el.reason.classList.remove("on");
+      el.reason.scrollTop = 0;
+      flag(el.reason, el.rmore);
+      return;
+    }
+    var lead = mine === r.grade
+      ? "<b>You had it.</b> The grade on this row is <b>" + gradeLabel(r.grade) + "</b>."
+      : "<b>Not this one.</b> The grade on this row is <b>" + gradeLabel(r.grade) + "</b>, and you said <b>" + gradeLabel(mine) + "</b>.";
+    el.reason.innerHTML =
+      '<p class="lead">' + lead + '</p>' +
+      '<div class="part"><div class="plab">Why this grade is right</div><div class="pbody">' + r.why + '</div></div>' +
+      '<div class="part"><div class="plab">What to carry from this one</div><div class="pbody">' + r.carry + '</div></div>';
+    el.reason.scrollTop = 0;
+    flag(el.reason, el.rmore);
+  }
+
+  function render(){
+    var r = ROWS[i], mine = pickOf(i);
+    el.pc.textContent = "Row " + (i+1) + " of " + ROWS.length;
+    pips(el.segs, i, ROWS.length);
+
+    el.deal.innerHTML = "<b>The deal on the table.</b> " + r.deal;
+    el.risk.textContent = r.risk;
+    el.answer.textContent = r.answer;
+    el.card.scrollTop = 0;
+    flag(el.card, el.cmore);
+
+    buildGrades();
+    paintGrades();
+    paintReason();
+
+    el.next.hidden = !mine;
+    el.next.textContent = (i === ROWS.length - 1) ? "See the four rules" : "Next row";
+    el.hint.innerHTML = mine
+      ? "The reasoning is on this frame, under the grades. <span class=\"key\">&larr;</span> and <span class=\"key\">&rarr;</span> move between rows."
+      : "<b>Commit first.</b> Nothing appears until you grade the row. Keys <span class=\"key\">1</span> to <span class=\"key\">3</span> also work.";
+  }
+
+  function commit(g){
+    if(pickOf(i)) return;
+    picks[ROWS[i].slug] = g;
+    save();
+    render();
+    if(!reduce){
+      el.reason.classList.remove("on");
+      void el.reason.offsetWidth;
+      el.reason.classList.add("on");
+    }
+    /* Focus is moved by hand on every state change. The pressed button
+       is now aria-disabled and inert, and Next has just appeared, so
+       leaving focus where it was would leave a reader parked on a dead
+       control. The reveal takes it, because the reveal is the new
+       thing on the frame. */
+    el.reason.focus();
+    var r = ROWS[i];
+    say((g === r.grade ? "You had it. " : "Not this one. ") +
+        "The grade on this row is " + gradeLabel(r.grade) + ". " +
+        el.reason.textContent);
+  }
+
+  function goRow(n){
+    i = Math.max(0, Math.min(ROWS.length - 1, n));
+    show("row");
+    render();
+    /* The frame takes focus rather than a control, so a screen reader
+       announces the whole new row from the top. It draws no ring. */
+    fRow.focus();
+  }
+  function goEnd(){
+    show("end");
+    pips(el.segz, ROWS.length, ROWS.length);
+    fEnd.focus();
+    say("All four rows graded. Four ways to grade a risk row.");
+  }
+  function nextStep(){
+    if(!pickOf(i)) return;
+    if(i < ROWS.length - 1){ goRow(i+1); return; }
+    goEnd();
+  }
+  function prevStep(){
+    if(i > 0){ goRow(i-1); return; }
+    show("intro");
+    fIntro.focus();
+  }
+
+  el.start.addEventListener("click", function(){ goRow(0); });
+  el.next.addEventListener("click", nextStep);
+  el.back.addEventListener("click", prevStep);
+  el.rewind.addEventListener("click", function(){ goRow(ROWS.length - 1); });
+  el.again.addEventListener("click", function(){
+    clear();
+    i = 0;
+    show("intro");
+    fIntro.focus();
+    say("Cleared. Four rows to grade again.");
+  });
+
+  /* Plain Tab and Enter operate every control in this file. The number
+     keys and the arrows are additions and not a protocol: nothing here
+     is reachable only by shortcut. */
+  document.addEventListener("keydown", function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea") return;
+
+    if(view === "intro"){
+      if(e.key === "ArrowRight"){ e.preventDefault(); goRow(0); }
+      return;
+    }
+    if(view === "row"){
+      if(e.key >= "1" && e.key <= "3"){
+        var b = gradeButtons()[parseInt(e.key, 10) - 1];
+        if(b && !locked(b)){ e.preventDefault(); commit(b.getAttribute("data-g")); }
+        return;
+      }
+      if(e.key === "ArrowRight"){ if(pickOf(i)){ e.preventDefault(); nextStep(); } return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); prevStep(); return; }
+      return;
+    }
+    if(view === "end"){
+      if(e.key === "ArrowLeft"){ e.preventDefault(); goRow(ROWS.length - 1); }
+    }
+  });
+
+  /* Canvas fit. Scales DOWN only, never up. Under 600px the CSS
+     restacks for portrait and the transform is cleared, or the two
+     fight each other. */
+  function fit(){
+    if(window.matchMedia && window.matchMedia("(max-width:599px)").matches){
+      stage.style.transform = "";
+      return;
+    }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){
+    fit();
+    if(view === "row"){ flag(el.card, el.cmore); flag(el.reason, el.rmore); }
+  });
+
+  load();
+  buildGrades();
+  show("intro");
+  fit();
+
+  /* Exposed for render QA only: lets a screenshot or an assertion force
+     a state without hand driving the UI. */
+  window.__ex = {
+    go: function(n){ goRow(n); },
+    commit: function(n,g){ i = n; delete picks[ROWS[n].slug]; goRow(n); commit(g); },
+    end: function(){ goEnd(); },
+    gradeOf: function(n){ return ROWS[n].grade; },
+    slugOf: function(n){ return ROWS[n].slug; }
+  };
+})();
+</script>
+</body>
+</html>

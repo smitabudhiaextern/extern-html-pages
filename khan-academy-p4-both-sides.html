@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The benefit line: five rounds</title>
+<style>
+  /* ===============================================================
+     BUILD NOTES. Every note in this file lives inside a style comment
+     or a script comment. There is not one HTML comment anywhere in it,
+     because an HTML comment closer carries two hyphens and this program
+     bans that sequence in text outright. For the same reason no note
+     below ever spells a custom property name: the declarations in the
+     root block are code, and the prose around them says "highlight",
+     "on highlight", "the fast timing" and so on instead.
+
+     PALETTE. Five values, the whole Extern design system for this
+     program. There is no sixth hue. The one translucent value is an
+     rgba of the on highlight navy, never a new hex.
+
+       highlight     #DCE1FF  cards, panels, the stronger version once
+                              it is revealed, the closing checklist
+       on highlight  #001D69  borders, glyphs, focus rings, the primary
+                              button, and the ink on anything the
+                              student did
+       background    #FDF8F8  canvas, negative space, unselected fill
+       body          #484646  body copy, guidance lines, captions
+       title         #1C1B1B  headings, partner labels, the version
+                              text itself
+
+     MEASURED CONTRAST, computed from the sRGB relative luminance
+     formula rather than eyeballed. Body copy needs 4.5 to 1 and large
+     text needs 3 to 1, so every pair here clears its bar with room.
+
+       title on background          16.33 to 1
+       on highlight on background   14.47 to 1
+       body on background            8.91 to 1
+       title on highlight           13.30 to 1
+       on highlight on highlight    11.78 to 1
+       body on highlight             7.26 to 1
+       background on on highlight   14.47 to 1   (the primary button)
+
+     The single translucent value composites to #BBBFD3 over the
+     background, which is 1.73 to 1. It is therefore decorative only.
+     It draws the hairline between the two reason columns, where the
+     grid gutter already separates them and the two column headings
+     already name them, so it carries no meaning on its own. Every
+     border that means something is solid on highlight at 14.47 to 1.
+
+     NEVER COLOUR ALONE. Three signals on the revealed pair, every
+     round. The stronger version is FILLED with the highlight, AND
+     carries a tick glyph, AND is labelled "Stronger" in words. The
+     weaker one keeps the background fill, AND has a dashed edge, AND
+     carries a slashed circle glyph, AND is labelled "Weaker". The one
+     the student actually pressed says "You picked this" underneath,
+     whichever of the two it turned out to be.
+
+     ZERO EXTERNAL REQUESTS. No stylesheet, script, webfont or image
+     leaves this file. The glyphs are inline SVG paths.
+
+     NO REAL ORGANIZATION IS NAMED. The five partners are invented
+     generic types: a children's media company, a cloud provider, a
+     national bank, a device manufacturer, a testing organization.
+     Two reasons, both deliberate. A hollow benefit line attached to a
+     real logo grades that organization rather than the line. And a
+     generic build cannot go stale and never needs fact checking. For
+     the same reason there is no money figure anywhere on screen: a
+     number with no source is the exact defect this project teaches
+     students to catch, so units and orders of magnitude are written
+     in words instead.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --rule:rgba(0,29,105,.26);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===== the 960 by 540 canvas, scaled down only, never up =====
+     The flex shorthand of zero zero auto is load bearing. As a
+     shrinkable flex item the canvas lays out at the viewport width
+     between 600 and 899px, and the script transform then scales it a
+     second time, shrinking the design twice over. The canvas must
+     always hold 960 in layout and let the transform do all of the
+     fitting. A computed width read off the stage must say 960px. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  /* the frame takes programmatic focus so a screen reader announces a
+     new round. It is not a control, so it draws no ring of its own.
+     Every real control keeps its own visible ring. */
+  .frame{position:absolute;inset:0;padding:18px 30px 14px;display:flex;flex-direction:column}
+  .frame:focus,.frame:focus-visible{outline:none}
+
+  /* ========== THE HEIGHT BUDGET, and nothing reflows, ever ==========
+     Every box below has a fixed height set here once. None of it is
+     inferred from content, because a min height box in an earlier
+     build in this repo grew on the first press and pushed the options
+     the reader was midway through reading down the panel.
+
+     The content box is 508px tall, which is 540 less the 18 of top
+     padding and the 14 of bottom padding. It is spent like this:
+
+        top row                   20
+        margin under it            6
+        heading                   29     (24px at 1.2 line height)
+        margin under it            4
+        the instruction line      18     (13px at 1.4)
+        margin under it            8
+        the two versions         186
+        gap                        9
+        the reason panel         176
+        margin above the bar       4
+        the bar                   48
+                                 ===
+                                 508
+
+     The version buttons and the reason panel are both scroll
+     containers with fixed outer heights, so an over long string
+     scrolls inside its own box rather than clipping against the canvas
+     edge or moving anything next to it. Do not try to work out whether
+     a string fits by counting its characters. Note also that a
+     scrollHeight read on the absolutely positioned frame reports the
+     canvas height in every state, so it tells you nothing about
+     overflow here. Reason about the laid out heights above instead. */
+
+  .top{flex:0 0 auto;height:20px;display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .pips{flex:0 0 auto;display:flex;gap:4px}
+  .pip{display:block;width:26px;height:5px;border-radius:3px;background:var(--highlight)}
+  .pip.on{background:var(--on-highlight)}
+  .pip.here{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--on-highlight)}
+  .prog{flex:0 0 auto;font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  /* the invented partner reminder, on every single frame on purpose.
+     The student meets real organizations elsewhere in this same
+     project, and the two must never blur together. */
+  .fic{font-size:12px;line-height:1.35;color:var(--body);min-width:0;overflow:hidden;white-space:nowrap}
+  .fic b{color:var(--title);font-weight:600}
+
+  h1{font-size:24px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:4px}
+  .q{flex:0 0 auto;font-size:13px;line-height:1.4;color:var(--body);margin-bottom:8px}
+  .q b{color:var(--title);font-weight:600}
+
+  /* ========== the two versions, side by side ==========
+     Fixed tracks, not fractions: 440 plus a 20px gutter plus 440 is
+     exactly the 900px of content width. */
+  .pair{flex:0 0 auto;height:186px;display:grid;grid-template-columns:440px 440px;column-gap:20px}
+  button.opt{
+    display:flex;flex-direction:column;text-align:left;min-width:0;height:186px;
+    font-family:inherit;cursor:pointer;overflow:hidden;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:10px 13px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out);
+  }
+  button.opt:hover{background:var(--highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .ohead{
+    flex:0 0 auto;display:flex;align-items:center;gap:7px;margin-bottom:6px;
+    font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);
+  }
+  .ohead .g{flex:0 0 auto;width:15px;height:15px;display:none}
+  .ohead .g svg{width:15px;height:15px;display:block}
+  .ohead .g svg path,.ohead .g svg circle{
+    fill:none;stroke:var(--on-highlight);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
+  }
+  .overd{font-weight:700;letter-spacing:.06em}
+  /* the verdict in one word. The fill behind it and the glyph beside it
+     say the same thing, so the state never rests on colour alone and
+     never rests on an icon a student has to decode. Hidden until a
+     press lands. */
+  .ostate{flex:0 0 auto;font-weight:700;letter-spacing:.06em;display:none}
+  .opick{
+    flex:0 0 auto;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:none;
+    color:var(--body);display:none;
+  }
+  .otx{
+    flex:1 1 auto;min-height:0;overflow-y:auto;
+    font-size:14px;line-height:1.5;color:var(--title);
+  }
+  /* the three answered states. Fill, glyph and word move together. */
+  .pair.answered button.opt{cursor:default}
+  button.opt.strong{background:var(--highlight);border-width:2px;padding:9px 12px}
+  button.opt.strong .ohead .g.gcheck{display:block}
+  button.opt.strong .ostate,button.opt.weak .ostate{display:block}
+  button.opt.weak{background:var(--bg);border-style:dashed}
+  button.opt.weak .ohead .g.gno{display:block}
+  button.opt.picked .opick{display:block}
+
+  /* ========== the reason panel, fixed at 176 ==========
+     It carries four things: the verdict line, the name of the failure
+     this round is about, and the two reason columns. It takes
+     programmatic focus after a press, so a keyboard reader lands on
+     the reason rather than having to hunt for it. */
+  .fb{
+    flex:0 0 auto;height:176px;margin-top:9px;overflow-y:auto;
+    background:var(--highlight);border-radius:11px;padding:12px 14px;
+  }
+  .fb:focus,.fb:focus-visible{outline:none}
+  .fbwait{font-size:13.5px;line-height:1.5;color:var(--body)}
+  .fbwait b{color:var(--on-highlight);font-weight:600}
+  .fblead{font-size:14px;line-height:1.4;font-weight:600;color:var(--on-highlight);margin-bottom:6px}
+  .fbfail{font-size:13.5px;line-height:1.45;color:var(--title);font-weight:600;margin-bottom:8px}
+  .fbcols{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}
+  .fbcol{min-width:0}
+  .fbcol+.fbcol{border-left:1px solid var(--rule);padding-left:20px}
+  .fblab{
+    font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-highlight);margin-bottom:3px;
+  }
+  .fbtx{font-size:13.5px;line-height:1.5;color:var(--body)}
+
+  /* ========== the bar ==========
+     A top margin of auto pins the bar to the foot of the canvas on the
+     two frames whose content does not fill it. On a round frame the
+     budget above leaves exactly 4px of slack, so auto resolves to 4px
+     there and the measured layout is unchanged. */
+  .bar{flex:0 0 auto;height:48px;margin-top:auto;display:flex;align-items:center;gap:11px}
+  button.nav{
+    flex:0 0 auto;font-family:inherit;font-size:14.5px;font-weight:600;line-height:1.2;
+    padding:10px 16px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.ghost:hover{background:var(--on-highlight);color:var(--bg)}
+  button.nav:hover{background:var(--bg);color:var(--on-highlight)}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  /* Held, not locked out. Every inert control in this build is marked
+     with the aria disabled attribute and never with the disabled
+     property, because a disabled button drops out of the tab order and
+     a keyboard screen reader user can then never land on it and hear
+     that it is held. So it keeps its tab stop and its focus ring, and
+     two guards in the script hold it inert, one for pointer and one
+     for keyboard. Pressing it says what is still needed rather than
+     doing nothing, so it is never a dead end. The dashed edge pairs
+     with the sentence beside it, so the held state is never colour
+     alone. */
+  button.nav[aria-disabled="true"]{
+    background:transparent;color:var(--body);border-style:dashed;border-color:var(--body);
+  }
+  button.nav[aria-disabled="true"]:hover{background:transparent;color:var(--body)}
+  .hint{font-size:12.5px;line-height:1.4;color:var(--body);min-width:0}
+  .hint b{color:var(--title);font-weight:600}
+
+  /* ========== the opening frame ========== */
+  .lead{font-size:15.5px;line-height:1.55;color:var(--body);max-width:74ch;flex:0 0 auto}
+  .lead b{color:var(--title);font-weight:600}
+  .defs{
+    flex:0 0 auto;margin-top:12px;background:var(--highlight);border-radius:11px;padding:12px 15px;
+    display:flex;gap:11px;align-items:flex-start;max-width:80ch;
+  }
+  .defs .wg{flex:0 0 auto;width:20px;height:20px;margin-top:2px}
+  .defs .wg svg{width:20px;height:20px;display:block}
+  .defs .wg svg path,.defs .wg svg circle{
+    fill:none;stroke:var(--on-highlight);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;
+  }
+  .defs p{font-size:14px;line-height:1.5;color:var(--body)}
+  .defs p+p{margin-top:7px}
+  .defs p b{color:var(--on-highlight);font-weight:600}
+  .how{flex:0 0 auto;margin-top:12px;font-size:14px;line-height:1.55;color:var(--body);max-width:80ch}
+  .how b{color:var(--title);font-weight:600}
+
+  /* ========== the closing frame ==========
+     Five checks, one line each, each one naming the failure its round
+     was built around. Deliberately no partner wording from any round:
+     restating a line here would hand the student a sentence to copy
+     into a field they have not written yet. */
+  .stds{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:2px}
+  .std{
+    display:flex;gap:12px;align-items:flex-start;
+    background:var(--highlight);border-radius:10px;padding:9px 13px;margin-bottom:7px;
+  }
+  .std:last-child{margin-bottom:0}
+  .std .n{
+    flex:0 0 auto;width:23px;height:23px;border-radius:6px;background:var(--on-highlight);color:var(--bg);
+    font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+  .std .t{min-width:0}
+  .std .sn{display:block;font-size:14px;font-weight:600;color:var(--title);line-height:1.3}
+  .std .sd{display:block;font-size:13.5px;line-height:1.45;color:var(--body);margin-top:2px}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ===== motion, three named timings and nothing else =====
+     The fast timing is UI feedback on a hover or a press. The frame
+     timing carries a change of round. The reveal timing carries the
+     reason panel resolving. Both animations move opacity only, so
+     neither of them reflows anything, and the base opacity of every
+     element in this file is 1, which means switching motion off leaves
+     no half faded residue behind. */
+  @keyframes rise{from{opacity:0}to{opacity:1}}
+  .anim-frame{animation:rise var(--t-frame) var(--ease-out)}
+  .anim-reveal{animation:rise var(--t-reveal) var(--ease-out)}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+
+  /* ===== under 600px: a genuine portrait restack =====
+     Not a shrunken slide. The body goes back to block flow and the
+     transform is dropped entirely, the two versions stop being a side
+     by side pair and become a sequence, which is the honest
+     arrangement on a phone and also the safer one because it removes
+     any chance of a reader taking in half of each. Every internal
+     scroll box is released to its natural height and the page itself
+     scrolls. Body type goes to the 16px floor. */
+  @media (max-width:599px){
+    html,body{height:auto;overflow:visible}
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+           height:auto!important;transform:none!important;position:static}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+
+    .top{height:auto;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+    .fic{white-space:normal;overflow:visible;flex:1 0 100%;font-size:13px}
+    h1{font-size:22px}
+    .q{font-size:15px;margin-bottom:12px}
+
+    .pair{height:auto;display:block}
+    button.opt{height:auto;width:100%;margin-bottom:12px;padding:13px 14px}
+    button.opt.strong{padding:12px 13px}
+    .otx{overflow:visible;font-size:16px}
+
+    .fb{height:auto;margin-top:4px;padding:14px}
+    .fbwait,.fbtx{font-size:15px}
+    .fblead{font-size:16px}
+    .fbfail{font-size:15px}
+    .fbcols{display:block}
+    .fbcol+.fbcol{margin-top:12px;border-left:0;padding-left:0}
+
+    .bar{height:auto;margin-top:16px;flex-wrap:wrap;gap:10px}
+    button.nav{font-size:16px;padding:13px 17px}
+    .hint{font-size:14px;flex:1 0 100%}
+
+    .lead{font-size:16px}
+    .defs{margin-top:14px;padding:13px}
+    .defs p{font-size:15px}
+    .how{font-size:15px}
+
+    .stds{overflow:visible}
+    .std .sn{font-size:15px}
+    .std .sd{font-size:14px}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="The benefit line: five rounds">
+
+    <div class="top">
+      <span class="pips" id="pips" aria-hidden="true"></span>
+      <span class="prog" id="prog">Before you start</span>
+      <span class="fic"><b>Five invented partner types.</b> No real company is named anywhere in here.</span>
+    </div>
+
+    <div id="intro">
+      <h1>The benefit line: five rounds</h1>
+      <p class="lead">Soon you will write the both sides field for two deals of your own. <b>This is where you work out what a good benefit line looks like first.</b> Five rounds. Two versions of the same benefit line, for the same partner, and you press the one you think is stronger.</p>
+
+      <div class="defs">
+        <span class="wg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.6v5.2M12 16.4h.01"/></svg></span>
+        <div>
+          <p><b>Two words first.</b> A <b>value proposition</b> is the plain answer to one question: what does each side actually get out of this. A <b>unit</b> is the thing a benefit is counted in. Learners. Dollars. Compute hours. Staff hours saved. Schools reached.</p>
+          <p>Every line you are about to read either has a unit on it or does not, and which one it is turns out to matter more than how it sounds.</p>
+        </div>
+      </div>
+
+      <p class="how">The reason appears either way, whichever one you press, so there is nothing to lose by guessing. <b>Nothing here is scored.</b></p>
+    </div>
+
+    <div id="round" hidden>
+      <h1 id="fname">The partner</h1>
+      <p class="q" id="qline"><b>Which of these two is the stronger benefit line?</b> Press one. The reason lands underneath either way.</p>
+
+      <div class="pair" id="pair">
+        <button class="opt" type="button" id="optA">
+          <span class="ohead">
+            <span class="g gcheck" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span>
+            <span class="g gno" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/></svg></span>
+            <span class="overd">Version A</span>
+            <span class="ostate" id="stA"></span>
+            <span class="opick">You picked this</span>
+          </span>
+          <span class="otx" id="txA"></span>
+        </button>
+
+        <button class="opt" type="button" id="optB">
+          <span class="ohead">
+            <span class="g gcheck" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span>
+            <span class="g gno" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/></svg></span>
+            <span class="overd">Version B</span>
+            <span class="ostate" id="stB"></span>
+            <span class="opick">You picked this</span>
+          </span>
+          <span class="otx" id="txB"></span>
+        </button>
+      </div>
+
+      <div class="fb" id="fb" tabindex="-1">
+        <p class="fbwait" id="fbwait"><b>Press Version A or Version B above.</b> The name of the failure this round is about, the reason the stronger line works, and the reason the other one falls short all land here.</p>
+        <div id="fbfull" hidden>
+          <p class="fblead" id="fblead"></p>
+          <p class="fbfail" id="fbfail"></p>
+          <div class="fbcols">
+            <div class="fbcol">
+              <p class="fblab">Why the stronger one works</p>
+              <p class="fbtx" id="fbs"></p>
+            </div>
+            <div class="fbcol">
+              <p class="fblab">Why the other one falls short</p>
+              <p class="fbtx" id="fbw"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="out" hidden>
+      <h1>Five checks to write your own against</h1>
+      <p class="q">One line each, and each one names a way a benefit line fails. <b>Nothing you write next is scored either.</b></p>
+      <div class="stds">
+        <div class="std">
+          <span class="n" aria-hidden="true">1</span>
+          <span class="t"><span class="sn">Exposure is not a benefit, it is a hope</span>
+          <span class="sd">Say what the partner can do with those learners. Being seen is not a thing anybody can approve.</span></span>
+        </div>
+        <div class="std">
+          <span class="n" aria-hidden="true">2</span>
+          <span class="t"><span class="sn">A benefit with no unit cannot be sized</span>
+          <span class="sd">Name the unit it arrives in. The estimate you write later in this step can only count a unit that was named here.</span></span>
+        </div>
+        <div class="std">
+          <span class="n" aria-hidden="true">3</span>
+          <span class="t"><span class="sn">Write it from their chair, not yours</span>
+          <span class="sd">If the line only says what Khan Academy needs, it has not yet said why this partner is the one.</span></span>
+        </div>
+        <div class="std">
+          <span class="n" aria-hidden="true">4</span>
+          <span class="t"><span class="sn">Alignment and value are not benefits</span>
+          <span class="sd">They are labels you put on a benefit once you have one. Cross out the abstract nouns and see what is left.</span></span>
+        </div>
+        <div class="std">
+          <span class="n" aria-hidden="true">5</span>
+          <span class="t"><span class="sn">It has to beat what they already do</span>
+          <span class="sd">Name the thing they do today. If its cost is not published, write that, and write where you looked.</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="nav ghost" type="button" id="prev">Back</button>
+      <button class="nav" type="button" id="next">Start round 1</button>
+      <span class="hint" id="hint">Five rounds, about five minutes.</span>
+    </div>
+
+  </div>
+</div>
+
+<div class="sr" id="live" role="status" aria-live="polite"></div>
+
+<noscript>
+  <style>
+    /* This block has to sit inside the noscript element so that it
+       lands after the head sheet and wins on source order. Three
+       things have to happen. The dead canvas is hidden. The flex
+       centred body goes back to block flow with scrolling restored,
+       or this text lays out as a narrow strip beside a 960px sibling.
+       And every colour is pinned to the palette so no browser default
+       introduces a sixth one. */
+    #stage{display:none!important}
+    html,body{height:auto;overflow:visible}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin-bottom:10px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:26px 0 4px}
+    .nsf h3{font-size:15px;line-height:1.3;color:#001D69;margin:14px 0 4px;
+            letter-spacing:.04em;text-transform:uppercase}
+    .nsf p{margin-bottom:10px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+    .nsf .box p:last-child{margin-bottom:0}
+    .nsf .fail{font-size:15px;color:#001D69;margin-bottom:10px}
+    .nsf .fail strong{color:#001D69}
+    .nsf .v{background:#DCE1FF;border-radius:9px;padding:12px 14px;margin-bottom:8px}
+    .nsf .v p{margin-bottom:0;color:#1C1B1B}
+    .nsf .w{border:1.5px dashed #001D69;border-radius:9px;padding:12px 14px;margin-bottom:8px}
+    .nsf .w p{margin-bottom:0;color:#1C1B1B}
+    .nsf .why{font-size:15px;margin-bottom:16px}
+    .nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+  </style>
+  <div class="nsf">
+    <h1>The benefit line: five rounds</h1>
+    <p>Soon you will write the both sides field for two deals of your own. This is where you work out what a good benefit line looks like first. The interactive version of this page runs it as five rounds: two versions of the same benefit line for the same partner, and you press the one you think is stronger. With scripting switched off it cannot do that, so both versions of all five are below, with the failure named and both reasons underneath each pair. <strong>Nothing here is scored.</strong></p>
+
+    <div class="box">
+      <p><strong>Two words first.</strong> A <strong>value proposition</strong> is the plain answer to one question: what does each side actually get out of this. A <strong>unit</strong> is the thing a benefit is counted in. Learners. Dollars. Compute hours. Staff hours saved. Schools reached.</p>
+      <p><strong>Five invented partner types, and no real company is named anywhere here.</strong> A hollow benefit line attached to a real logo would be grading that organization rather than the line. There is no money figure on any line below either, on purpose: a number with no source is exactly the defect this project teaches you to catch.</p>
+    </div>
+
+    <h2>Round 1. A children's media company</h2>
+    <p class="fail"><strong>The failure this round is about:</strong> exposure is not a benefit, it is a hope.</p>
+    <h3>The stronger version</h3>
+    <div class="v"><p>Families who finish an early reading exercise are shown the partner's own free story app, so the partner reaches families who are already sitting down to read together. The unit is learners who arrive at their app, which is a number the partner already counts every month.</p></div>
+    <h3>The weaker version</h3>
+    <div class="w"><p>The partner gets exposure to millions of learners on Khan Academy, which is a level of visibility they could not buy on their own. It puts their name in front of an audience that trusts what it is looking at.</p></div>
+    <p class="why"><strong>Why the stronger one works:</strong> it names something the partner can do with those learners, and it lands in a unit their own team already counts. Their boss can approve that or refuse it. <strong>Why the other one falls short:</strong> exposure only says the partner will be seen. Their boss still has to work out on their own what being seen is worth, and a boss who is asked to guess says no.</p>
+
+    <h2>Round 2. A cloud provider</h2>
+    <p class="fail"><strong>The failure this round is about:</strong> a benefit with no unit cannot be sized.</p>
+    <h3>The stronger version</h3>
+    <div class="v"><p>The partner gets the practice exercise traffic of a very large learning platform running on their infrastructure, measured in compute hours per school month, and it climbs every September. Compute hours is what their capacity team plans in.</p></div>
+    <h3>The weaker version</h3>
+    <div class="w"><p>The partner gets the practice exercise traffic of a very large learning platform running on their infrastructure, and it grows every school year. It is a serious amount of work for their systems to carry, and a strong story for them to tell.</p></div>
+    <p class="why"><strong>Why the stronger one works:</strong> one unit added and nothing else changed. Compute hours is a number their capacity team already plans in, so the benefit can be forecast, argued over, and checked a year later. <strong>Why the other one falls short:</strong> a serious amount cannot be multiplied by anything. The estimate you write later in this step has to count something, and it can only count a unit that was named here. No unit on this line means no denominator there.</p>
+
+    <h2>Round 3. A national bank</h2>
+    <p class="fail"><strong>The failure this round is about:</strong> one of these is written from your chair and one is written from theirs.</p>
+    <h3>The stronger version</h3>
+    <div class="v"><p>The bank's community lending team has to show school age money education in the districts it lends in. This deal puts a free money skills course into those districts by name. Their unit is schools reached inside their own lending area, which is the number that team reports upward already.</p></div>
+    <h3>The weaker version</h3>
+    <div class="w"><p>This deal would fund the money skills course this team has wanted to build for two years, and it would cover the staff time the build needs. It is the clearest route we have to getting that course made.</p></div>
+    <p class="why"><strong>Why the stronger one works:</strong> the same facts, moved into the partner's seat. It names who inside the bank has the problem, what that person is measured on, and how this deal moves that number. <strong>Why the other one falls short:</strong> every word of it is true and all of it is about us. It says what Khan Academy needs and never says why this partner is the one who should pay for it. Read it as their boss would: nothing in it is theirs.</p>
+
+    <h2>Round 4. A device manufacturer</h2>
+    <p class="fail"><strong>The failure this round is about:</strong> alignment and value are not benefits.</p>
+    <h3>The stronger version</h3>
+    <div class="v"><p>The partner sells low cost laptops to schools and has no learning software of its own, so buyers keep asking what comes on the machine. This deal gives them a full math and reading library preloaded, which is a product capability they do not have today and could not build this year.</p></div>
+    <h3>The weaker version</h3>
+    <div class="w"><p>There is strong strategic alignment between the two organizations and clear value on both sides. Both care about learner outcomes, and a partnership here would deepen a shared commitment to access.</p></div>
+    <p class="why"><strong>Why the stronger one works:</strong> it names a capability the partner does not have and a question their buyers keep asking. Both of those can be checked. It also says what the partner cannot do alone, which is the reason to sign. <strong>Why the other one falls short:</strong> alignment and value are labels you put on a benefit once you have one. Cross out every abstract noun in that line and nothing is left underneath, which means there was never a benefit in it.</p>
+
+    <h2>Round 5. A testing organization</h2>
+    <p class="fail"><strong>The failure this round is about:</strong> the partner's benefit has to beat what they already do.</p>
+    <h3>The stronger version</h3>
+    <div class="v"><p>The partner already pays an outside vendor to run its practice question bank, and that contract renews every year. What the vendor charges is not published, and I looked in their annual report and their supplier list. So this line has to beat that arrangement on support staff hours, not just sound good.</p></div>
+    <h3>The weaker version</h3>
+    <div class="w"><p>This is clearly a good deal for the partner. Once they see the size of the audience it puts them in front of, it should be a straightforward yes for them.</p></div>
+    <p class="why"><strong>Why the stronger one works:</strong> it names the thing this deal has to beat, and where a cost is not published it says so and says where you looked. That beats a blank line, which reads as though you never checked. <strong>Why the other one falls short:</strong> the partner is not choosing between this and nothing. They are choosing between this and what they already do, and this line never mentions what that is.</p>
+
+    <h2>Five checks to write your own against</h2>
+    <ol>
+      <li><strong>Exposure is not a benefit, it is a hope.</strong> Say what the partner can do with those learners. Being seen is not a thing anybody can approve.</li>
+      <li><strong>A benefit with no unit cannot be sized.</strong> Name the unit it arrives in. The estimate you write later in this step can only count a unit that was named here.</li>
+      <li><strong>Write it from their chair, not yours.</strong> If the line only says what Khan Academy needs, it has not yet said why this partner is the one.</li>
+      <li><strong>Alignment and value are not benefits.</strong> They are labels you put on a benefit once you have one. Cross out the abstract nouns and see what is left.</li>
+      <li><strong>It has to beat what they already do.</strong> Name the thing they do today. If its cost is not published, write that, and write where you looked.</li>
+    </ol>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===============================================================
+     THE FIVE ROUNDS.
+
+     Each round is one benefit line in two versions. The weaker one is
+     written from Khan Academy's own chair, or has no unit on it, or
+     both. The stronger one is written from the partner's chair and
+     states the benefit in the unit the deal actually moves. Both are
+     written for this build. The weaker one is never a strawman: it is
+     the version a capable person writes on a first attempt, and it
+     fails for exactly the reason its counterpart succeeds.
+
+     The five failures, one per round, in order: exposure, no unit,
+     whose chair, abstract nouns, and beating what they already do.
+     The name of the failure is part of the reveal, so a student who
+     guesses still learns which thing this round was about.
+
+     NO REAL ORGANIZATION IS NAMED, and there is no money figure on
+     any line. Units and orders of magnitude are written in words. See
+     the note at the head of the style sheet for why both of those
+     rules are here.
+
+     The side field decides which button the stronger version lands
+     on. It is FIXED IN THE SOURCE AND ALTERNATES, A then B then A
+     then B then A. Two reasons, both borrowed from the shipped one
+     screener builder whose mechanic this copies. Fixed, so that a
+     screenshot run and a bug report describe the same screen. And
+     alternating, so no student can pass the exercise by noticing that
+     one side always wins. DO NOT RANDOMISE IT.
+
+     Slugs are the storage keys. If you reorder these rounds, the
+     slugs travel with them and an answer can never be restored onto
+     the wrong round. Never key stored state by index here.
+     =============================================================== */
+  var R = [
+    {
+      slug:"exposure",
+      partner:"A children's media company",
+      side:"A",
+      fail:"Exposure is not a benefit, it is a hope.",
+      strong:"Families who finish an early reading exercise are shown the partner's own free story app, so the partner reaches families who are already sitting down to read together. The unit is learners who arrive at their app, which is a number the partner already counts every month.",
+      weak:"The partner gets exposure to millions of learners on Khan Academy, which is a level of visibility they could not buy on their own. It puts their name in front of an audience that trusts what it is looking at.",
+      whyStrong:"It names something the partner can do with those learners, and it lands in a unit their own team already counts. Their boss can approve that or refuse it.",
+      whyWeak:"Exposure only says the partner will be seen. Their boss still has to work out on their own what being seen is worth, and a boss who is asked to guess says no."
+    },
+    {
+      slug:"no-unit",
+      partner:"A cloud provider",
+      side:"B",
+      fail:"A benefit with no unit cannot be sized.",
+      strong:"The partner gets the practice exercise traffic of a very large learning platform running on their infrastructure, measured in compute hours per school month, and it climbs every September. Compute hours is what their capacity team plans in.",
+      weak:"The partner gets the practice exercise traffic of a very large learning platform running on their infrastructure, and it grows every school year. It is a serious amount of work for their systems to carry, and a strong story for them to tell.",
+      whyStrong:"One unit added and nothing else changed. Compute hours is a number their capacity team already plans in, so the benefit can be forecast, argued over, and checked a year later.",
+      whyWeak:"A serious amount cannot be multiplied by anything. The estimate you write later in this step has to count something, and it can only count a unit that was named here. No unit on this line means no denominator there."
+    },
+    {
+      slug:"whose-chair",
+      partner:"A national bank",
+      side:"A",
+      fail:"One of these is written from your chair and one is written from theirs.",
+      strong:"The bank's community lending team has to show school age money education in the districts it lends in. This deal puts a free money skills course into those districts by name. Their unit is schools reached inside their own lending area, which is the number that team reports upward already.",
+      weak:"This deal would fund the money skills course this team has wanted to build for two years, and it would cover the staff time the build needs. It is the clearest route we have to getting that course made.",
+      whyStrong:"The same facts, moved into the partner's seat. It names who inside the bank has the problem, what that person is measured on, and how this deal moves that number.",
+      whyWeak:"Every word of it is true and all of it is about us. It says what Khan Academy needs and never says why this partner is the one who should pay for it. Read it as their boss would: nothing in it is theirs."
+    },
+    {
+      slug:"abstract-nouns",
+      partner:"A device manufacturer",
+      side:"B",
+      fail:"Alignment and value are not benefits.",
+      strong:"The partner sells low cost laptops to schools and has no learning software of its own, so buyers keep asking what comes on the machine. This deal gives them a full math and reading library preloaded, which is a product capability they do not have today and could not build this year.",
+      weak:"There is strong strategic alignment between the two organizations and clear value on both sides. Both care about learner outcomes, and a partnership here would deepen a shared commitment to access.",
+      whyStrong:"It names a capability the partner does not have and a question their buyers keep asking. Both of those can be checked. It also says what the partner cannot do alone, which is the reason to sign.",
+      whyWeak:"Alignment and value are labels you put on a benefit once you have one. Cross out every abstract noun in that line and nothing is left underneath, which means there was never a benefit in it."
+    },
+    {
+      slug:"beats-today",
+      partner:"A testing organization",
+      side:"A",
+      fail:"The partner's benefit has to beat what they already do.",
+      strong:"The partner already pays an outside vendor to run its practice question bank, and that contract renews every year. What the vendor charges is not published, and I looked in their annual report and their supplier list. So this line has to beat that arrangement on support staff hours, not just sound good.",
+      weak:"This is clearly a good deal for the partner. Once they see the size of the audience it puts them in front of, it should be a straightforward yes for them.",
+      whyStrong:"It names the thing this deal has to beat, and where a cost is not published it says so and says where you looked. That beats a blank line, which reads as though you never checked.",
+      whyWeak:"The partner is not choosing between this and nothing. They are choosing between this and what they already do, and this line never mentions what that is."
+    }
+  ];
+
+  var LAST = R.length + 1;   /* frame 0 is the intro, 1 to 5 the rounds, 6 the closing */
+
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {};
+  ["frame","pips","prog","intro","round","out","fname","qline","pair","optA","optB",
+   "txA","txB","stA","stB","fb","fbwait","fbfull","fblead","fbfail","fbs","fbw",
+   "prev","next","hint","live"].forEach(function(k){ el[k] = $(k); });
+
+  /* ===============================================================
+     STATE, and a failure tolerant store under it. A refresh or an
+     accidental navigation should not throw away rounds already worked
+     through. Storage switched off, a private window that throws on
+     write, and a stored value of the wrong shape all land on the same
+     safe path: a fresh run, no exception, nothing broken on screen.
+
+     Answers live in an object KEYED BY ROUND SLUG, never by index, so
+     a reorder of the array above can never restore an answer onto the
+     wrong round. The frame position is stored as a number because it
+     is navigation rather than an answer, and it is clamped on read.
+     =============================================================== */
+  var KEY = "ka-p4-both-sides-v1";
+  var storeOK = true;
+  (function(){
+    try{
+      window.localStorage.setItem(KEY + ".probe", "1");
+      window.localStorage.removeItem(KEY + ".probe");
+    }catch(e){ storeOK = false; }
+  })();
+
+  var picks = {};   /* slug to "A", "B", or absent */
+  var at = 0;
+
+  function load(){
+    if(!storeOK) return;
+    try{
+      var o = JSON.parse(window.localStorage.getItem(KEY) || "null");
+      if(!o || typeof o !== "object") return;
+      if(o.picks && typeof o.picks === "object"){
+        for(var i = 0; i < R.length; i++){
+          var v = o.picks[R[i].slug];
+          if(v === "A" || v === "B") picks[R[i].slug] = v;
+        }
+      }
+      if(typeof o.at === "number" && o.at >= 0 && o.at <= LAST) at = Math.floor(o.at);
+    }catch(e){ storeOK = false; }
+  }
+  function save(){
+    if(!storeOK) return;
+    try{
+      window.localStorage.setItem(KEY, JSON.stringify({ picks:picks, at:at }));
+    }catch(e){ storeOK = false; }
+  }
+  load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function animate(node, cls){
+    if(reduce || !node) return;
+    node.classList.remove(cls);
+    void node.offsetWidth;      /* restart the animation on a repeat state */
+    node.classList.add(cls);
+  }
+
+  /* ========== the progress pips, written once ========== */
+  (function(){
+    var s = "";
+    for(var i = 0; i < R.length; i++) s += '<span class="pip"></span>';
+    el.pips.innerHTML = s;
+  })();
+
+  function pickOf(n){ return picks[R[n - 1].slug] || null; }
+  function answered(n){ return pickOf(n) !== null; }
+
+  /* ========== painting ==========
+     The two option buttons are persistent elements. Their text, their
+     classes and their aria attributes move; the buttons themselves are
+     never replaced, so a focused control is never destroyed underneath
+     a keyboard user and focus can never fall back to the document
+     body. */
+
+  function paintPips(){
+    var k = el.pips.children;
+    for(var i = 0; i < R.length; i++){
+      k[i].className = "pip" +
+        (answered(i + 1) ? " on" : "") +
+        (at === i + 1 ? " here" : "");
+    }
+  }
+
+  function paintRound(){
+    var r = R[at - 1];
+    var pick = pickOf(at);
+    var strongIsA = (r.side === "A");
+
+    el.fname.textContent = r.partner;
+    el.txA.textContent = strongIsA ? r.strong : r.weak;
+    el.txB.textContent = strongIsA ? r.weak : r.strong;
+
+    /* both option scroll boxes go back to the top on a round change, so
+       a long previous round never leaves the next one opening halfway
+       down its own text */
+    el.txA.scrollTop = 0;
+    el.txB.scrollTop = 0;
+    el.fb.scrollTop = 0;
+
+    var two = [
+      { b:el.optA, id:"A", isStrong:strongIsA, st:el.stA },
+      { b:el.optB, id:"B", isStrong:!strongIsA, st:el.stB }
+    ];
+
+    two.forEach(function(p){
+      p.b.classList.remove("strong", "weak", "picked");
+      p.st.textContent = pick ? (p.isStrong ? "Stronger" : "Weaker") : "";
+      if(pick){
+        p.b.classList.add(p.isStrong ? "strong" : "weak");
+        if(p.id === pick) p.b.classList.add("picked");
+        /* Already pressed, so held with the aria attribute and NEVER
+           with the disabled property. It keeps its tab stop, so a
+           keyboard screen reader user can still land on it and hear
+           both the verdict and the line itself. */
+        p.b.setAttribute("aria-disabled", "true");
+        p.b.setAttribute("aria-pressed", p.id === pick ? "true" : "false");
+        p.b.setAttribute("aria-label",
+          "Version " + p.id + ". " + (p.isStrong ? "Stronger." : "Weaker.") +
+          (p.id === pick ? " You picked this." : "") +
+          " This round is answered. " +
+          (p.isStrong ? r.strong : r.weak));
+      }else{
+        p.b.removeAttribute("aria-disabled");
+        p.b.removeAttribute("aria-pressed");
+        p.b.setAttribute("aria-label",
+          "Version " + p.id + ". Press to pick this one as the stronger benefit line. " +
+          (p.isStrong ? r.strong : r.weak));
+      }
+    });
+
+    el.pair.classList.toggle("answered", !!pick);
+
+    if(pick){
+      var gotIt = (pick === r.side);
+      el.fbwait.hidden = true;
+      el.fbfull.hidden = false;
+      el.fblead.textContent = gotIt
+        ? "That is the stronger one."
+        : "The other one is stronger. Here is why.";
+      el.fbfail.textContent = "The failure this round is about: " + r.fail;
+      el.fbs.textContent = r.whyStrong;
+      el.fbw.textContent = r.whyWeak;
+    }else{
+      el.fbwait.hidden = false;
+      el.fbfull.hidden = true;
+      el.fblead.textContent = "";
+      el.fbfail.textContent = "";
+      el.fbs.textContent = "";
+      el.fbw.textContent = "";
+    }
+  }
+
+  function paint(){
+    el.intro.hidden = (at !== 0);
+    el.round.hidden = (at < 1 || at > R.length);
+    el.out.hidden   = (at !== LAST);
+
+    if(at >= 1 && at <= R.length) paintRound();
+    paintPips();
+
+    if(at === 0){
+      el.prog.textContent = "Before you start";
+    }else if(at === LAST){
+      el.prog.textContent = "All " + R.length + " done";
+    }else{
+      el.prog.textContent = "Round " + at + " of " + R.length;
+    }
+
+    /* the back control. Never removed and never held anywhere it could
+       be pressed: on the first frame it simply is not there, which is
+       the one place with nothing behind you. */
+    el.prev.hidden = (at === 0);
+
+    if(at === 0){
+      el.next.textContent = "Start round 1";
+      el.next.removeAttribute("aria-disabled");
+      el.hint.innerHTML = "Five rounds, about five minutes. The buttons or the arrow keys move between them.";
+    }else if(at === LAST){
+      el.next.textContent = "Start again";
+      el.next.removeAttribute("aria-disabled");
+      el.hint.innerHTML = "<b>That is the exercise.</b> Take these five checks into the two lines you write next.";
+    }else if(!answered(at)){
+      el.next.textContent = (at === R.length) ? "See the five checks" : "Next round";
+      el.next.setAttribute("aria-disabled", "true");
+      el.hint.innerHTML = "<b>Pick one of the two above to carry on.</b> Whichever you press, the reason appears, and nothing here is scored.";
+    }else{
+      el.next.textContent = (at === R.length) ? "See the five checks" : "Next round";
+      el.next.removeAttribute("aria-disabled");
+      el.hint.innerHTML = (at === R.length)
+        ? "Last one. The five checks are next."
+        : "Round " + at + " done. " + (R.length - at) + " to go.";
+    }
+  }
+
+  /* ========== announcements ==========
+     One live region, one message per state change, never a running
+     commentary. A round change says where you are and what to do. A
+     press says which one was stronger, names the failure, and reads
+     both reasons, because a screen reader user cannot see the two
+     panels change state. */
+
+  function sayFrame(){
+    if(at === 0){
+      el.live.textContent = "Start screen. Five rounds. The five partners are invented types and no real company is named.";
+    }else if(at === LAST){
+      el.live.textContent = "Last screen. Five checks to write your own benefit lines against.";
+    }else{
+      var r = R[at - 1];
+      el.live.textContent = "Round " + at + " of " + R.length + ". " + r.partner +
+        ". Two versions of one benefit line below. Press the one you think is stronger." +
+        (answered(at) ? " You have already answered this round." : "");
+    }
+  }
+
+  function sayPick(){
+    var r = R[at - 1];
+    var gotIt = (pickOf(at) === r.side);
+    el.live.textContent =
+      (gotIt ? "That is the stronger one. " : "The other one is stronger. ") +
+      "The failure this round is about: " + r.fail + " " +
+      "Why the stronger one works: " + r.whyStrong + " " +
+      "Why the other one falls short: " + r.whyWeak + " " +
+      (at === R.length ? "Last round done." : "Round " + at + " done.");
+  }
+
+  /* ========== the one decision per round ==========
+     One press, real buttons only, no drag and no custom key protocol.
+     A round already answered ignores further presses rather than
+     flipping, because the answer stops being a preference once the
+     reasoning is on screen. Nothing here is scored either way. */
+  function choose(id){
+    if(at < 1 || at > R.length) return;
+    if(pickOf(at) !== null) return;
+    picks[R[at - 1].slug] = id;
+    save();
+    paint();
+    animate(el.fbfull, "anim-reveal");
+    sayPick();
+    /* The press has changed the tab order: the two options are now
+       held and the next control has been released. Move focus
+       deliberately rather than leaving it on a button that is now
+       inert, and land it on the reason itself. */
+    el.fb.focus();
+  }
+
+  /* Two guards on each option, one for pointer and one for keyboard.
+     The click guard alone would in fact cover both, because Enter and
+     Space on a real button raise a click. The keyboard guard is here
+     anyway so that a held option never even scrolls the page out from
+     under the reader on a Space press. */
+  function wire(btn, id){
+    btn.addEventListener("click", function(e){
+      if(btn.getAttribute("aria-disabled") === "true"){ e.preventDefault(); return; }
+      choose(id);
+    });
+    btn.addEventListener("keydown", function(e){
+      if(btn.getAttribute("aria-disabled") !== "true") return;
+      if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+    });
+  }
+  wire(el.optA, "A");
+  wire(el.optB, "B");
+
+  /* ========== moving between frames ========== */
+  function go(n){
+    if(n < 0 || n > LAST) return;
+    at = n;
+    save();
+    paint();
+    animate(el.frame, "anim-frame");
+    sayFrame();
+    el.frame.focus();
+  }
+
+  el.next.addEventListener("click", function(e){
+    if(at === LAST){
+      picks = {};
+      go(0);
+      return;
+    }
+    if(el.next.getAttribute("aria-disabled") === "true"){
+      /* held, not dead. Say what is still needed rather than doing
+         nothing at all, so the control is never a dead end. */
+      e.preventDefault();
+      el.live.textContent = "Pick Version A or Version B first. The reason appears either way, and nothing here is scored.";
+      el.hint.innerHTML = "<b>Pick one of the two above first.</b> Whichever you press, the reason appears, and nothing here is scored.";
+      return;
+    }
+    go(at + 1);
+  });
+
+  el.next.addEventListener("keydown", function(e){
+    if(el.next.getAttribute("aria-disabled") !== "true") return;
+    if(e.key === " " || e.key === "Spacebar"){ e.preventDefault(); }
+  });
+
+  el.prev.addEventListener("click", function(){ go(at - 1); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.defaultPrevented) return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea" || tag === "a") return;
+    /* Buttons are deliberately NOT excluded here. Enter and Space
+       belong to the focused control and are untouched, so the arrows
+       stay free to move between rounds no matter where focus is
+       sitting. That matters after a press, because focus has moved
+       onto the reason panel and the reader should be able to carry on
+       without reaching for the mouse. */
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault(); el.next.click();
+    }else if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      if(at === 0) return;
+      e.preventDefault(); el.prev.click();
+    }
+  });
+
+  /* ========== first paint ========== */
+  paint();
+
+  /* ==== scale the fixed canvas down to fit, never up ====
+     Under 600px the transform is dropped entirely and the style sheet
+     restacks the page into portrait, so this must not fight it. */
+  var stage = $("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  /* exposed for render QA only: lets a screenshot run force any frame
+     and any answered state without clicking through the build. */
+  window.__bs = {
+    rounds:R,
+    go:go,
+    pick:choose,
+    answerAll:function(useStrong){
+      for(var i = 0; i < R.length; i++){
+        picks[R[i].slug] = useStrong ? R[i].side : (R[i].side === "A" ? "B" : "A");
+      }
+      paint();
+    },
+    state:function(){ return { at:at, picks:picks, storeOK:storeOK }; }
+  };
+})();
+</script>
+</body>
+</html>
