@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copy the prompts</title>
+<!--
+  Khan Academy, Project 3, Step 1, substep 3.1.4. Copy the prompts.
+
+  WHAT THIS IS. Three screens, one per prompt, each carrying the whole prompt
+  in a monospace block with a copy button over it. It exists so a student can
+  put the prompt into Claude or ChatGPT without retyping eighty lines of it,
+  and without the line breaks going wherever a browser feels like putting them.
+
+  THE PROMPT TEXT IS THE SOURCE FILE'S, CHARACTER FOR CHARACTER. It was
+  extracted mechanically from the three fenced blocks in
+    06-content/project-03/step-01/substep-3.1.4-training-run-the-same-hunt-in-claude-and-chatgpt.md
+  and never retyped, and the copy button puts exactly the string in the P array
+  on the clipboard. Verified in a real browser after the build by reading back
+  window.__ex.copyText(n) and comparing sha256 against the substep:
+    prompt 1  3348 bytes  81 lines  ce4524952b3373be4ada51c66680ef9539628ba92a5357fd4395cc54c413201e
+    prompt 2  2716 bytes  55 lines  68585cea876ae192f957d9f57d54a7d13273110f1129925c4b6af33b512d06bc
+    prompt 3  2096 bytes  46 lines  bfc3b5ef0cdf05297de2e61961489b07c2d262e5d2feeb051514ae270b5d5277
+  THE ONLY LEGITIMATE WAY TO CHANGE A PROMPT IS TO CHANGE THE SUBSTEP AND
+  RE-EXTRACT. Edit the array here and the page and the module say different
+  things, with nothing to catch it. Redo the sha256 check after any edit to
+  either file.
+    Lines wrap where the source wraps. They are hard breaks in the prompt, not
+    a rendering accident, so the block is white-space:pre and never pre-wrap.
+    The bracketed fill-ins ([Write your description here...], [paste the clean
+    list...], [paste the table]) are part of the prompt and stay as they are.
+    The fourteen partner names in prompt 1's context section are part of the
+    prompt too. Do not shorten that list, and do not sort it.
+
+  THE ROW OF DASHES IN PROMPT 1 IS DELIBERATE and it is what separates the
+  context from the task. scripts/lint-deck.mjs and scripts/measure-fit.mjs both
+  flag it as a hyphen run, which is the em dash rule catching a false positive:
+  the rule bans "--" used as punctuation in prose, and this is a separator
+  inside a verbatim prompt that has to reach the clipboard unchanged. Do not
+  "fix" it. Report it as a known, accepted flag instead.
+
+  THE MONOSPACE BLOCK SCROLLS, and the fit gate reports that too. Prompt 1 is
+  eighty one lines. There is no size at which eighty one lines of monospace sit
+  inside 540px and stay readable, and the house rule is split rather than
+  shrink, but this page cannot split a prompt: a copy button that copies half a
+  prompt is worse than a scrollbar. So the block scrolls inside its own box,
+  the page never does, and the copy button copies the whole string from the
+  data rather than from what happens to be visible. That last point is the one
+  that matters: DO NOT rewrite the copy handler to read the DOM selection.
+
+  TWO WAYS TO COPY, because this page runs inside an iframe. The async
+  clipboard API is not always permitted there, so navigator.clipboard is tried
+  first and a hidden textarea plus document.execCommand("copy") catches it when
+  it is refused. If both fail the button says so and selects the prompt, so the
+  student can copy it by hand. Silence on failure is the one behaviour that is
+  not allowed here: a student who thinks they copied and pasted nothing has no
+  way of telling what went wrong.
+
+  ONE GROUND PER PROMPT, the same convention the six-categories deck uses.
+  Order: paper, wash, deep. Extern's five and nothing else.
+
+  NO ANIMATION beyond the copy button's own label change. Reduced motion is
+  honoured.
+-->
+<style>
+  /* ===============================================================
+     THE EXTERN FIVE, AND NOTHING ELSE.
+       paper #FDF8F8   deep #001D69   wash #DCE1FF
+       slate #484646   ink  #1C1B1B
+     Measured contrast, every pair this page paints:
+       paper ground: ink title 16.33, slate lede 8.91, deep mark 14.47
+       wash  ground: ink title 13.30, slate lede 7.26, deep mark 11.78
+       deep  ground: paper title 14.47, wash lede 11.78, wash mark 11.78
+       code on wash panel 13.30, code on paper panel 16.33
+       copy button paper on deep 14.47, deep on wash 11.78
+       nav border and label: 14.47 paper, 11.78 wash, 11.78 deep
+       panel edge rgba(0,29,105,.6): 4.32 against paper, 4.00 against wash.
+     THE PANEL EDGE IS LOAD BEARING. A wash panel on a paper ground measures
+     1.23:1 and a paper panel on a wash ground the same, which is under the
+     3:1 non-text minimum, so on both light grounds the panel is drawn with a
+     .6 tint border and the border is what carries the boundary. On the deep
+     ground the panel is 14.47:1 against it and needs no line. Re-measure if
+     you touch a ground.
+     =============================================================== */
+  :root{
+    --t-fast:160ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+  }
+  body{
+    --ground:#FDF8F8; --ink:#1C1B1B; --ink2:#484646; --mark:#001D69;
+    --panel:#DCE1FF; --panel-ink:#1C1B1B; --edge:rgba(0,29,105,.6);
+    --btn-bg:#001D69; --btn-ink:#FDF8F8;
+    --line:rgba(0,29,105,.6);
+  }
+  body[data-t="wash"]{
+    --ground:#DCE1FF; --ink:#1C1B1B; --ink2:#484646; --mark:#001D69;
+    --panel:#FDF8F8; --panel-ink:#1C1B1B; --edge:rgba(0,29,105,.6);
+    --btn-bg:#001D69; --btn-ink:#FDF8F8;
+    --line:rgba(0,29,105,.6);
+  }
+  body[data-t="deep"]{
+    --ground:#001D69; --ink:#FDF8F8; --ink2:#DCE1FF; --mark:#DCE1FF;
+    --panel:#FDF8F8; --panel-ink:#1C1B1B; --edge:#FDF8F8;
+    --btn-bg:#DCE1FF; --btn-ink:#001D69;
+    --line:#DCE1FF;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  html{background:#FDF8F8}
+  body{
+    background:var(--ground);
+    /* NO TRANSITION ON THE GROUND. The custom properties carrying the text
+       colour swap in a single frame and cannot be interpolated, so a
+       background crossfade leaves the type at a low ratio against a
+       half changed ground for the length of the fade. Same finding as the
+       six categories deck, 8 September 2026. Ground and type change together. */
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink2);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:13px 34px 11px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:7px}
+  .prog{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mark);white-space:nowrap}
+  .segs{display:flex;gap:3px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--mark);opacity:.28;
+    transition:opacity var(--t-fast) var(--ease-out),height var(--t-fast) var(--ease-out)}
+  .segs i.on{opacity:1}
+  .segs i.here{opacity:1;height:6px;margin-top:-1px}
+
+  /* ---- title row. The copy button sits up here rather than in the bar,
+         so it is above the block it copies and never scrolls away. ---- */
+  .titlerow{flex:0 0 auto;display:flex;align-items:center;gap:16px;margin-bottom:5px}
+  h1{font-size:19px;line-height:1.24;font-weight:600;color:var(--ink);flex:1 1 auto;min-width:0}
+  h1:focus{outline:none}
+  h1:focus-visible{outline:3px solid var(--mark);outline-offset:5px}
+  .lede{flex:0 0 auto;font-size:14.5px;line-height:1.42;color:var(--ink2);margin-bottom:7px}
+
+  /* ---- the prompt block ----
+     white-space:pre, never pre-wrap. The line breaks are the prompt's own. */
+  #code{
+    flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;
+    background:var(--panel);color:var(--panel-ink);
+    border:1.5px solid var(--edge);border-radius:8px;padding:11px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:13px;line-height:1.38;white-space:pre;tab-size:4;
+    -webkit-user-select:text;user-select:text;
+  }
+  #code:focus{outline:none}
+  #code:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+
+  /* ---- the bar ---- */
+  .bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:42px;padding-top:7px}
+  button.nav,button.copy{font-family:inherit;font-weight:600;border-radius:8px;cursor:pointer;
+    flex:0 0 auto;display:flex;align-items:center;gap:7px}
+  button.nav{font-size:14px;padding:9px 16px;border:2px solid var(--mark);
+    background:transparent;color:var(--mark);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav svg{width:14px;height:14px;flex:0 0 auto;display:block}
+  button.nav.ghost{border-width:1.5px;color:var(--ink2);border-color:var(--line)}
+  button.nav:disabled{opacity:.42;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--mark);outline-offset:3px}
+  /* The copy button is filled, because it is the one thing on the page a
+     student is here to press. Its state is carried by its WORDS, never by a
+     colour: "Copied" and "Not copied" are the signal, and the fill does not
+     change. Colour alone is not an accessible signal and this palette has no
+     green or red in it to reach for anyway. */
+  button.copy{font-size:14.5px;padding:8px 16px;border:2px solid var(--btn-bg);
+    background:var(--btn-bg);color:var(--btn-ink)}
+  button.copy svg{width:15px;height:15px;flex:0 0 auto;display:block}
+  button.copy:focus-visible{outline:3px solid var(--mark);outline-offset:3px}
+  button.copy.done{background:transparent;color:var(--mark);border-color:var(--mark)}
+  .status{font-size:13px;line-height:1.4;color:var(--ink2);flex:1 1 auto;min-width:0}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 14px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .segs{display:none}
+    .titlerow{flex-direction:column;gap:12px}
+    h1{font-size:21px}
+    .lede{font-size:16px}
+    /* 12px is the floor here rather than 16px: this is a code block, the line
+       breaks are fixed, and the widest line is 73 characters, so raising the
+       type only makes it scroll sideways on a phone. It stays selectable and
+       the copy button is the intended route anyway. */
+    #code{font-size:12px;max-height:58vh}
+    .bar{margin-top:16px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:12px 18px}
+    button.copy{font-size:16px;padding:12px 18px}
+    .status{font-size:15px;flex-basis:100%}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" role="group" aria-label="Copy the prompts">
+
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <div class="titlerow">
+      <h1 id="h1" tabindex="-1"></h1>
+      <button class="copy" id="copy" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 3.2A1.7 1.7 0 0 0 8.8 2.5H3.9a1.7 1.7 0 0 0-1.7 1.7v4.9c0 .7.4 1.3 1 1.6"/></svg>
+        <span id="copylab">Copy this prompt</span>
+      </button>
+    </div>
+
+    <p class="lede" id="lede"></p>
+
+    <pre id="code" tabindex="0" role="region" aria-label="The prompt, in full"></pre>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2 5.2 8l4.8 4.8"/></svg>
+        <span>Back</span></button>
+      <button class="nav" id="next" type="button">
+        <span id="nextlab">Next prompt</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.2 10.8 8 6 12.8"/></svg>
+      </button>
+      <span class="status" id="status"></span>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <!-- The static version. All three prompts, in order, in full, with the same
+       line breaks. The test is reading the substep with the embed blocked,
+       which is a real thing that happens inside an iframe. A student who
+       cannot see the prompts cannot do the module, so this is not a courtesy,
+       it is the page's floor. There is no copy button here: select the block
+       and copy it by hand.
+       The same three strings the P array holds, byte for byte, from the same
+       extraction. Never hand edit one of them on its own: if these and the
+       array ever disagree, a student with JavaScript off gets a different
+       prompt from a student with it on. Re-extract both together. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;
+      overflow-x:hidden;background:#FDF8F8}
+    .nsf{max-width:820px;margin:0 auto;padding:26px 20px 46px;font-size:16px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:26px 0 4px}
+    .nsf p{margin-bottom:10px}
+    .nsf pre{background:#DCE1FF;color:#1C1B1B;border:1.5px solid rgba(0,29,105,.6);border-radius:8px;
+      padding:12px 14px;overflow-x:auto;white-space:pre;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+      font-size:12.5px;line-height:1.42}
+  </style>
+  <div class="nsf">
+    <h2>Copy the prompts</h2>
+    <p>The three prompts from this module, in the order you send them. They go into one
+       conversation, one after the other. Select a block and copy it.</p>
+    <!-- NSF:START -->
+      <h3>Prompt 1: Ask AI for a List of Probable Partners</h3>
+      <p>Turning your description into a list of organizations to look at.</p>
+      <pre>CONTEXT. This applies to everything below it. Read it before you answer.
+
+This is for the strategic partnerships team at Khan Academy. Khan Academy
+is a nonprofit and its learning material is free to use. My job is to
+find organizations that will pay us, or trade with us, so it stays free.
+I am not looking for organizations to ask for a grant.
+
+Rules about what you return. Apply all four to every answer.
+1. Do not return an organization whose only way in would be a grant
+   application. A grant is somebody handing us money and us reporting
+   back on how we spent it. I am looking for a trade, where both sides
+   walk away with something they can name.
+2. Do not return schools, school districts or anything that amounts to
+   us selling something we already sell. That is a sale, not a
+   partnership.
+3. Do not return anything aimed at university or college students. This
+   team works on K-12, meaning school from about age five to eighteen.
+4. Do not return the owner of a rival college-admissions test. Khan
+   Academy already builds the official practice for one admissions
+   test, so a rival one is a conflict rather than an opening.
+
+Organizations Khan Academy already works with. Do not return any of
+these, and do not return a subsidiary, a foundation or a brand
+belonging to one of them:
+Microsoft
+Google and Google.org
+College Board
+AAMC
+NWEA, a division of HMH
+ETS
+Clever
+ClassLink
+Walmart
+Intuit
+Capital One
+Disney and Pixar
+General Motors
+Salesforce Foundation
+
+If you come across another one while you work, add it to that list.
+
+Two things I will check your answer for.
+- DROPPED. If you were about to include an organization and then left
+  it out because of one of the four rules, list it at the end under
+  DROPPED, with the number of the rule that dropped it. Up to five.
+- Do not invent a URL. Where you have no link, write NO SOURCE FOUND in
+  place of it rather than a link you are not sure of.
+
+------------------------------------------------------------------
+
+The task: name organizations that fit this description.
+
+[Write your description here, one or two sentences, using the four
+kinds of constraint from the last page: what business they are in, what
+they have already shown they will pay for, where they are, and how big
+they need to be.]
+
+Do it in two passes and show me both.
+
+Pass 1. Before you name anybody, list the kinds of organization that
+would fit that description and get past the four rules. Six to ten
+kinds, one line each on why the kind fits. Do not name a single company
+in this pass.
+
+Pass 2. For each kind, name up to two real organizations. One row each,
+with these four columns and no others: organization, the kind it
+belongs to, one line on why it is a candidate, and SOURCED or INFERRED.
+
+Write SOURCED where you are working from a public page you have
+actually read about that organization. Write INFERRED where it is a
+name you reasoned your way to. I am not asking you for links yet.
+
+Do not tell me how big any of them are and do not tell me what they
+have paid for. I am asking that next.
+
+If you are not certain an organization exists or fits, leave it out and
+tell me at the end what you left out and why.
+
+Last, print one clean list of every organization you named in pass 2.
+One name per line, nothing else on the line. That list is what I am
+pasting into my next question.</pre>
+      <h3>Prompt 2: Build the Same Sheet for Your Own Names</h3>
+      <p>Copying the sample's shape onto every name, so the rows can be compared.</p>
+      <pre>Same conversation as before. Keep applying everything I told you in my
+first message: the four rules about what not to return, the list of
+organizations we already work with, and NO SOURCE FOUND instead of an
+invented link.
+
+I have attached a sheet called "Probable partners for Scratch". It is
+this exact job, already finished, for a different organization. Read
+it before you answer me.
+
+Here is my own list of organizations, from your last answer.
+
+[paste the clean list, one name per line]
+
+Do for my list what that sheet does for Scratch. Same six columns,
+same shape, same level of detail in each cell. Look at row 2, Ally
+Financial, and match how long each of its cells is and how plainly it
+is written.
+
+Do not add an organization that is not on my list, and do not quietly
+drop one because you know little about it. Give it back to me as a
+table, one row per organization.
+
+Six rules about the columns. The attached sheet follows all six and I
+want yours to as well.
+1. WHAT THEY DO. Two or three plain sentences, as if I had never heard
+   of them. No jargon. If you use a term a fifteen-year-old would not
+   know, explain it in the same sentence.
+2. WHAT THE DEAL WOULD BE. Both directions, every time: what we would
+   give them, and what they would give us. If you can only think of one
+   direction, say so plainly instead of inventing the other.
+3. WHICH OF THE FOUR KINDS. Exactly one word from this list and nothing
+   else in the column: Licensing, In-kind, Sponsorship, Co-creation.
+4. EVIDENCE, AND WHERE IT CAME FROM. The plain fact in your own words
+   first, then the page quoted word for word. Do not tidy the wording
+   up. Each link on its own line with the date printed on that page. If
+   the page carries no date, say so and give the date you read it.
+5. WHAT STANDS IN THE WAY. The reason this might not happen. Every
+   organization has one. End the column with the one thing I would have
+   to go and find out to know whether it is fatal.
+6. Where you have no page for EVIDENCE or WHAT STANDS IN THE WAY,
+   write NO SOURCE FOUND in that cell and leave the row where it is.
+   NO SOURCE FOUND is a useful answer. A quote you are not sure of is
+   not.
+
+Two things about the attached sheet that are not instructions to you.
+Ignore its Rank column and ignore its How strong the proof is column.
+Do not produce either one.
+
+Do not rank the rows and do not tell me which of them look strongest.
+Keep them in the order I gave them to you. Ranking is the next
+question, and it will not work if you have already done it badly here.
+
+Last, do not reuse anything from the attached sheet in your answer. No
+organization on it belongs on my list, and Scratch is not the
+organization I work for.</pre>
+      <h3>Prompt 3: Rank Them, Then Pick Two</h3>
+      <p>Ordering the list by how much public proof sits behind each name, then naming the first two to go after.</p>
+      <pre>Same conversation again. Everything from my first message still applies.
+
+Here is the table from your last answer.
+
+[paste the table]
+
+I asked you not to rank this last time. Now rank it.
+
+Sort it by one thing only: how much public proof there is that this
+organization already pays for something like the thing we would
+propose. Do not sort by how big they are and do not sort by how good a
+fit you think they are.
+
+Judge every row on that same one thing. Start with one word, and use
+only these three: Strong, Medium, Weak.
+Then one sentence saying what earned that word. Here is what each one
+means.
+  Strong. There is a page naming something like this that the
+  organization has paid for, run or sponsored, and that page carries a
+  number, such as money, students, schools or years.
+  Medium. There is a page like that, and it carries no number.
+  Weak. You found no page. Anything you believe about this
+  organization is a guess about how organizations of its kind behave.
+
+Add that as a new column at the end, called HOW STRONG THE PROOF IS.
+Then add a RANK column at the front, numbered from 1. Every Strong row
+first, then every Medium row, then every Weak row. Inside a group, put
+the most recent page first. That gives me eight columns.
+
+Print the whole table again in that order, with every column it already
+had, plus the rank at the front. Do not shorten the columns you are
+carrying over and do not reword them.
+
+Then three or four lines in plain words on why the top of that list is
+the top. Say what those rows have that the rows underneath them do not.
+
+Last, pick two. Out of the whole table, name the two organizations you
+would go after first. For each of the two, give me three things:
+  - Why this one, in two or three sentences, and say which row in the
+    table you are leaning on.
+  - The one thing that would change your mind, and where I would go to
+    check it.
+  - What I would open the conversation with, in one sentence.
+
+Then name the one you nearly picked and did not, and say what it was
+missing. That is the row I am most likely to disagree with you about.</pre>
+    <!-- NSF:END -->
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =================================================================
+     THE THREE PROMPTS. One record each, and the record is the whole
+     screen: its ground, its heading, its one line of what it is for,
+     and the prompt itself as an array of lines.
+
+     LINES, NOT ONE STRING, and not by accident. Every element of
+     `lines` is one line of the fenced block in the substep, in order,
+     joined back together with "\n" below. A wrap that moves is then a
+     visible diff on one array element rather than an invisible change
+     inside a paragraph sized string literal. The array is GENERATED
+     from the substep, never typed. Do not reflow it, do not merge two
+     elements, and do not sort the partner names in prompt 1.
+     ================================================================= */
+  var P = [
+    { id:"p1", theme:"paper", tag:"Get the names",
+      title:"Prompt 1: Ask AI for a List of Probable Partners",
+      lede:"Turning your description into a list of organizations to look at.",
+      lines:[
+      "CONTEXT. This applies to everything below it. Read it before you answer.",
+      "",
+      "This is for the strategic partnerships team at Khan Academy. Khan Academy",
+      "is a nonprofit and its learning material is free to use. My job is to",
+      "find organizations that will pay us, or trade with us, so it stays free.",
+      "I am not looking for organizations to ask for a grant.",
+      "",
+      "Rules about what you return. Apply all four to every answer.",
+      "1. Do not return an organization whose only way in would be a grant",
+      "   application. A grant is somebody handing us money and us reporting",
+      "   back on how we spent it. I am looking for a trade, where both sides",
+      "   walk away with something they can name.",
+      "2. Do not return schools, school districts or anything that amounts to",
+      "   us selling something we already sell. That is a sale, not a",
+      "   partnership.",
+      "3. Do not return anything aimed at university or college students. This",
+      "   team works on K-12, meaning school from about age five to eighteen.",
+      "4. Do not return the owner of a rival college-admissions test. Khan",
+      "   Academy already builds the official practice for one admissions",
+      "   test, so a rival one is a conflict rather than an opening.",
+      "",
+      "Organizations Khan Academy already works with. Do not return any of",
+      "these, and do not return a subsidiary, a foundation or a brand",
+      "belonging to one of them:",
+      "Microsoft",
+      "Google and Google.org",
+      "College Board",
+      "AAMC",
+      "NWEA, a division of HMH",
+      "ETS",
+      "Clever",
+      "ClassLink",
+      "Walmart",
+      "Intuit",
+      "Capital One",
+      "Disney and Pixar",
+      "General Motors",
+      "Salesforce Foundation",
+      "",
+      "If you come across another one while you work, add it to that list.",
+      "",
+      "Two things I will check your answer for.",
+      "- DROPPED. If you were about to include an organization and then left",
+      "  it out because of one of the four rules, list it at the end under",
+      "  DROPPED, with the number of the rule that dropped it. Up to five.",
+      "- Do not invent a URL. Where you have no link, write NO SOURCE FOUND in",
+      "  place of it rather than a link you are not sure of.",
+      "",
+      "------------------------------------------------------------------",
+      "",
+      "The task: name organizations that fit this description.",
+      "",
+      "[Write your description here, one or two sentences, using the four",
+      "kinds of constraint from the last page: what business they are in, what",
+      "they have already shown they will pay for, where they are, and how big",
+      "they need to be.]",
+      "",
+      "Do it in two passes and show me both.",
+      "",
+      "Pass 1. Before you name anybody, list the kinds of organization that",
+      "would fit that description and get past the four rules. Six to ten",
+      "kinds, one line each on why the kind fits. Do not name a single company",
+      "in this pass.",
+      "",
+      "Pass 2. For each kind, name up to two real organizations. One row each,",
+      "with these four columns and no others: organization, the kind it",
+      "belongs to, one line on why it is a candidate, and SOURCED or INFERRED.",
+      "",
+      "Write SOURCED where you are working from a public page you have",
+      "actually read about that organization. Write INFERRED where it is a",
+      "name you reasoned your way to. I am not asking you for links yet.",
+      "",
+      "Do not tell me how big any of them are and do not tell me what they",
+      "have paid for. I am asking that next.",
+      "",
+      "If you are not certain an organization exists or fits, leave it out and",
+      "tell me at the end what you left out and why.",
+      "",
+      "Last, print one clean list of every organization you named in pass 2.",
+      "One name per line, nothing else on the line. That list is what I am",
+      "pasting into my next question."
+      ] },
+
+    { id:"p2", theme:"wash", tag:"Fill the row in",
+      title:"Prompt 2: Build the Same Sheet for Your Own Names",
+      lede:"Copying the sample's shape onto every name, so the rows can be compared.",
+      lines:[
+      "Same conversation as before. Keep applying everything I told you in my",
+      "first message: the four rules about what not to return, the list of",
+      "organizations we already work with, and NO SOURCE FOUND instead of an",
+      "invented link.",
+      "",
+      "I have attached a sheet called \"Probable partners for Scratch\". It is",
+      "this exact job, already finished, for a different organization. Read",
+      "it before you answer me.",
+      "",
+      "Here is my own list of organizations, from your last answer.",
+      "",
+      "[paste the clean list, one name per line]",
+      "",
+      "Do for my list what that sheet does for Scratch. Same six columns,",
+      "same shape, same level of detail in each cell. Look at row 2, Ally",
+      "Financial, and match how long each of its cells is and how plainly it",
+      "is written.",
+      "",
+      "Do not add an organization that is not on my list, and do not quietly",
+      "drop one because you know little about it. Give it back to me as a",
+      "table, one row per organization.",
+      "",
+      "Six rules about the columns. The attached sheet follows all six and I",
+      "want yours to as well.",
+      "1. WHAT THEY DO. Two or three plain sentences, as if I had never heard",
+      "   of them. No jargon. If you use a term a fifteen-year-old would not",
+      "   know, explain it in the same sentence.",
+      "2. WHAT THE DEAL WOULD BE. Both directions, every time: what we would",
+      "   give them, and what they would give us. If you can only think of one",
+      "   direction, say so plainly instead of inventing the other.",
+      "3. WHICH OF THE FOUR KINDS. Exactly one word from this list and nothing",
+      "   else in the column: Licensing, In-kind, Sponsorship, Co-creation.",
+      "4. EVIDENCE, AND WHERE IT CAME FROM. The plain fact in your own words",
+      "   first, then the page quoted word for word. Do not tidy the wording",
+      "   up. Each link on its own line with the date printed on that page. If",
+      "   the page carries no date, say so and give the date you read it.",
+      "5. WHAT STANDS IN THE WAY. The reason this might not happen. Every",
+      "   organization has one. End the column with the one thing I would have",
+      "   to go and find out to know whether it is fatal.",
+      "6. Where you have no page for EVIDENCE or WHAT STANDS IN THE WAY,",
+      "   write NO SOURCE FOUND in that cell and leave the row where it is.",
+      "   NO SOURCE FOUND is a useful answer. A quote you are not sure of is",
+      "   not.",
+      "",
+      "Two things about the attached sheet that are not instructions to you.",
+      "Ignore its Rank column and ignore its How strong the proof is column.",
+      "Do not produce either one.",
+      "",
+      "Do not rank the rows and do not tell me which of them look strongest.",
+      "Keep them in the order I gave them to you. Ranking is the next",
+      "question, and it will not work if you have already done it badly here.",
+      "",
+      "Last, do not reuse anything from the attached sheet in your answer. No",
+      "organization on it belongs on my list, and Scratch is not the",
+      "organization I work for."
+      ] },
+
+    { id:"p3", theme:"deep", tag:"Rank, then pick two",
+      title:"Prompt 3: Rank Them, Then Pick Two",
+      lede:"Ordering the list by how much public proof sits behind each name, then naming the first two to go after.",
+      lines:[
+      "Same conversation again. Everything from my first message still applies.",
+      "",
+      "Here is the table from your last answer.",
+      "",
+      "[paste the table]",
+      "",
+      "I asked you not to rank this last time. Now rank it.",
+      "",
+      "Sort it by one thing only: how much public proof there is that this",
+      "organization already pays for something like the thing we would",
+      "propose. Do not sort by how big they are and do not sort by how good a",
+      "fit you think they are.",
+      "",
+      "Judge every row on that same one thing. Start with one word, and use",
+      "only these three: Strong, Medium, Weak.",
+      "Then one sentence saying what earned that word. Here is what each one",
+      "means.",
+      "  Strong. There is a page naming something like this that the",
+      "  organization has paid for, run or sponsored, and that page carries a",
+      "  number, such as money, students, schools or years.",
+      "  Medium. There is a page like that, and it carries no number.",
+      "  Weak. You found no page. Anything you believe about this",
+      "  organization is a guess about how organizations of its kind behave.",
+      "",
+      "Add that as a new column at the end, called HOW STRONG THE PROOF IS.",
+      "Then add a RANK column at the front, numbered from 1. Every Strong row",
+      "first, then every Medium row, then every Weak row. Inside a group, put",
+      "the most recent page first. That gives me eight columns.",
+      "",
+      "Print the whole table again in that order, with every column it already",
+      "had, plus the rank at the front. Do not shorten the columns you are",
+      "carrying over and do not reword them.",
+      "",
+      "Then three or four lines in plain words on why the top of that list is",
+      "the top. Say what those rows have that the rows underneath them do not.",
+      "",
+      "Last, pick two. Out of the whole table, name the two organizations you",
+      "would go after first. For each of the two, give me three things:",
+      "  - Why this one, in two or three sentences, and say which row in the",
+      "    table you are leaning on.",
+      "  - The one thing that would change your mind, and where I would go to",
+      "    check it.",
+      "  - What I would open the conversation with, in one sentence.",
+      "",
+      "Then name the one you nearly picked and did not, and say what it was",
+      "missing. That is the row I am most likely to disagree with you about."
+      ] }
+  ];
+
+  /* Join once, up front. Everything downstream, the block on screen, the
+     clipboard, the QA hook, reads this one string, so there is exactly one
+     definition of what a prompt is. */
+  P.forEach(function(p){ p.text = p.lines.join("\n"); });
+
+  /* U+2014, the em dash, by code point. See the note in pass one. */
+  var BANNED = 8212;
+  function hasBanned(t){
+    for(var j=0;j<t.length;j++) if(t.charCodeAt(j) === BANNED) return true;
+    return false;
+  }
+
+  var THEMES = { paper:1, wash:1, deep:1 };
+  var KINDS  = { prompt:1 };
+
+  /* One reporter for both validation passes. It paints the problems where the
+     prompt goes and then throws, so an authoring error is loud on screen
+     rather than looking like a styling bug. */
+  function fail(problems){
+    if(!problems.length) return;
+    var node = document.getElementById("code");
+    if(node) node.textContent =
+      "This page has authoring errors and will not behave correctly:\n\n"
+      + problems.map(function(x){ return "  " + x; }).join("\n");
+    throw new Error("prompt data invalid: " + problems.join("; "));
+  }
+
+  /* ---- PASS ONE: the authored records, checked before anything reads them.
+     THIS MUST RUN BEFORE THE EXPANSION BELOW, because the expansion
+     dereferences fields these checks are the only guard on. ---- */
+  (function validatePrompts(){
+    var problems = [], ids = {};
+    if(!P.length) problems.push("there are no prompts");
+    P.forEach(function(p, k){
+      var who = "prompt " + (k+1) + (p && p.id ? ' ("' + p.id + '")' : "");
+      if(!p || typeof p !== "object"){ problems.push(who + " is not a record"); return; }
+      if(!p.id) problems.push(who + " has no id");
+      if(ids[p.id]) problems.push('duplicate prompt id "' + p.id + '"');
+      ids[p.id] = 1;
+      if(!p.theme || !THEMES[p.theme]) problems.push(who + " has no known ground");
+      if(k > 0 && P[k-1].theme === p.theme)
+        problems.push(who + " shares a ground with the prompt before it");
+      if(!p.title) problems.push(who + " has no heading");
+      if(!p.tag)   problems.push(who + " has no short label for the progress row");
+      if(!p.lede)  problems.push(who + " has no line saying what it is for");
+      if(!p.lines || !p.lines.length) problems.push(who + " has no prompt text");
+      else {
+        p.lines.forEach(function(ln, j){
+          if(typeof ln !== "string") problems.push(who + " line " + (j+1) + " is not a string");
+        });
+        /* The em dash ban, checked in the data rather than trusted, because a
+           prompt is copied into somebody else's tool and a stray U+2014
+           travels with it. Tested by CODE POINT: writing the character in
+           this file, even inside a regular expression, would itself be the
+           defect the check exists to catch, and scripts/lint-deck.mjs would
+           report this line as the violation. */
+        if(hasBanned(p.text)) problems.push(who + " contains an em dash");
+        if(!p.text.length) problems.push(who + " is empty");
+      }
+    });
+    fail(problems);
+  })();
+
+  /* =================================================================
+     Expand the records into screens. Nothing below this line knows
+     how many prompts there are.
+     ================================================================= */
+  var S = [];
+  P.forEach(function(p){
+    S.push({ kind:"prompt", id:p.id, theme:p.theme, h1:p.title, lede:p.lede,
+             tag:p.tag, text:p.text });
+  });
+
+  /* ---- PASS TWO: the expanded screens. ---- */
+  (function validateScreens(){
+    var problems = [], ids = {};
+    S.forEach(function(x, k){
+      if(ids[x.id]) problems.push('duplicate screen id "' + x.id + '"');
+      ids[x.id] = 1;
+      if(!x.kind || !KINDS[x.kind])
+        problems.push("screen " + (k+1) + ' ("' + x.id + '") has an unknown kind "' + x.kind + '"');
+      if(!x.h1)   problems.push("screen " + (k+1) + ' ("' + x.id + '") has no heading');
+      if(!x.text) problems.push("screen " + (k+1) + ' ("' + x.id + '") has no prompt text');
+    });
+    fail(problems);
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), h1:document.getElementById("h1"),
+    lede:document.getElementById("lede"), code:document.getElementById("code"),
+    copy:document.getElementById("copy"), copylab:document.getElementById("copylab"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    nextlab:document.getElementById("nextlab"), status:document.getElementById("status"),
+    live:document.getElementById("live")
+  };
+  var i = 0;
+  var revert = null;
+
+  function say(m){ el.live.textContent = m; }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.setAttribute("data-t", s.theme);
+
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.tag;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'><\/i>";
+    el.segs.innerHTML = h;
+
+    el.h1.textContent = s.h1;
+    el.lede.textContent = s.lede;
+    /* textContent, never innerHTML. The prompt is data and it is the one thing
+       on this page that must reach the clipboard unaltered, so it is never
+       parsed as markup on the way in or on the way out. */
+    el.code.textContent = s.text;
+    el.code.scrollTop = 0;
+    el.code.setAttribute("aria-label", s.h1 + ", in full");
+
+    el.back.disabled = (i === 0);
+    if(i === S.length-1){ el.next.disabled = true; el.nextlab.textContent = "You are at the end"; }
+    else { el.next.disabled = false; el.nextlab.textContent = "Next prompt"; }
+
+    resetButton();
+  }
+
+  function resetButton(){
+    if(revert){ clearTimeout(revert); revert = null; }
+    el.copy.classList.remove("done");
+    el.copylab.textContent = "Copy this prompt";
+    el.status.textContent = "";
+  }
+
+  /* ---------------- the clipboard ----------------
+     TWO ROUTES, TRIED IN ORDER, and the order is not arbitrary. This page is
+     embedded in an iframe, where navigator.clipboard.writeText is permitted
+     only some of the time: it needs a secure context, and the embedding page
+     has to allow it. So the async API goes first because it is the one that
+     works without a selection, and the hidden textarea plus execCommand
+     catches every case where it is refused. Both are wrapped, because a
+     rejected clipboard promise with no handler is an unhandled rejection and
+     the student sees nothing at all.
+     WHAT IS COPIED IS S[i].text, NOT THE DOM. The block scrolls, and reading
+     a selection out of it would copy what happens to be on screen. Prompt 1
+     is eighty one lines. Copying twenty of them silently is the worst failure
+     this page could have. */
+  function legacyCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.setAttribute("aria-hidden", "true");
+    ta.tabIndex = -1;
+    /* In the viewport, not off it. A textarea parked at left:-9999px is not
+       selectable on iOS, and scrolling the page to reach an off screen node is
+       a visible jump on the rest. 1px in the corner with no chrome is neither. */
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;" +
+                       "border:none;outline:none;box-shadow:none;background:transparent;" +
+                       "font-size:12pt;";
+    document.body.appendChild(ta);
+    var ok = false;
+    try{
+      ta.focus({ preventScroll:true });
+      ta.select();
+      /* iOS ignores select() on a readonly textarea and needs the range. */
+      if(ta.setSelectionRange) ta.setSelectionRange(0, text.length);
+      ok = document.execCommand("copy");
+    }catch(e){ ok = false; }
+    if(ta.parentNode) ta.parentNode.removeChild(ta);
+    return !!ok;
+  }
+
+  /* The honest failure. Nothing pretends to have worked: the button says it
+     did not, the bar says what to do instead, and the prompt is selected so
+     the next keystroke can be the copy. Do not replace this with a silent
+     retry or with a "Copied" that was never true. */
+  function selectPrompt(){
+    try{
+      var r = document.createRange();
+      r.selectNodeContents(el.code);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      el.code.focus({ preventScroll:true });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function finish(ok){
+    if(revert){ clearTimeout(revert); revert = null; }
+    if(ok){
+      el.copy.classList.add("done");
+      el.copylab.textContent = "Copied";
+      el.status.textContent = "Paste it into Claude or ChatGPT.";
+      say("Copied. The whole prompt is on your clipboard.");
+      revert = setTimeout(resetButton, 2000);
+    } else {
+      var selected = selectPrompt();
+      el.copy.classList.remove("done");
+      el.copylab.textContent = "Not copied";
+      el.status.textContent = selected
+        ? "Your browser blocked the copy. The prompt is selected: press Cmd C or Ctrl C."
+        : "Your browser blocked the copy. Select the prompt and press Cmd C or Ctrl C.";
+      say(el.status.textContent);
+    }
+  }
+
+  function doCopy(){
+    var text = S[i].text;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      var pr;
+      try{ pr = navigator.clipboard.writeText(text); }catch(e){ pr = null; }
+      if(pr && typeof pr.then === "function"){
+        pr.then(function(){ finish(true); }, function(){ finish(legacyCopy(text)); });
+        return;
+      }
+    }
+    finish(legacyCopy(text));
+  }
+  el.copy.addEventListener("click", doCopy);
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.h1.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  /* The prompt block is in this list on purpose. It is focusable so a keyboard
+     user can scroll eighty one lines, and a student who tabbed into it to read
+     should not lose the screen by pressing an arrow key. */
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.id === "code") return true;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  /* MIN_SCALE IS A READABILITY FLOOR, NOT A STYLE CHOICE. fit() takes the
+     window height into account, and a Notion embed's height is dragged by
+     whoever placed it. Below the floor the page stops shrinking and the embed
+     scrolls, which is recoverable. Unreadable is not. 0.72 keeps the 13px
+     monospace at 9.4px, which is the smallest this page is allowed to get,
+     and it is why the block is 13px rather than smaller to begin with. */
+  var MIN_SCALE = 0.72;
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){
+      stage.style.transform = "";
+      document.body.style.overflowY = "";
+      return;
+    }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    if(s < MIN_SCALE) s = MIN_SCALE;
+    stage.style.transform = "scale(" + s + ")";
+    /* Only when the floor bites does the frame need to scroll. */
+    document.body.style.overflowY = (540 * s > window.innerHeight) ? "auto" : "";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps the page with goto/slides/reset. copyText is for the
+     byte equality check: it hands back the exact string the copy button puts
+     on the clipboard, so a diff against the substep's fenced blocks is a diff
+     against the real payload rather than against the source that produced it. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ i = 0; render(); },
+    copyText:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return null;
+      return S[n].text;
+    },
+    state:function(){ return { i:i, theme:S[i].theme, kind:S[i].kind,
+                               chars:S[i].text.length, lines:S[i].text.split("\n").length }; }
+  };
+})();
+</script>
+</body>
+</html>
