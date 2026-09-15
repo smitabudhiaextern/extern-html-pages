@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two last messages</title>
+<style>
+  /* ===============================================================
+     Extern design system. These five values are the entire palette.
+     Do not add a sixth. Every tint below is an rgba() of #001D69,
+     not a new hue.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, the thread ground     */
+    --on-highlight:#001D69; /* accents, avatars, buttons            */
+    --bg:#FDF8F8;           /* canvas background, negative space    */
+    --body:#484646;         /* body copy, captions                  */
+    --title:#1C1B1B;        /* headings, primary text               */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--body);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing. The canvas must always hold 960
+     in layout and let the transform do all of the fitting. ---- */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    padding:26px 36px 20px;
+  }
+  .frame:focus{outline:none}
+
+  /* ---- header: progress ---- */
+  .top{display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-bottom:14px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{
+    display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out);
+  }
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{
+    font-size:29px;line-height:1.14;font-weight:600;color:var(--title);
+    margin:0 0 10px;letter-spacing:-.01em;flex:0 0 auto;
+  }
+
+  /* ---- narration frames ---- */
+  .say{max-width:62ch}
+  .say p{font-size:17px;line-height:1.5;color:var(--body);margin:0 0 11px}
+  .say p:last-child{margin-bottom:0}
+  .say strong{color:var(--title);font-weight:600}
+  .say .lead{font-size:18px;color:var(--title)}
+  .arc{
+    background:var(--highlight);border-radius:11px;padding:13px 16px;
+    font-size:15.5px;line-height:1.5;color:var(--body);margin:2px 0 0;max-width:70ch;
+  }
+  .arc strong{color:var(--on-highlight);font-weight:600}
+
+  /* ---- closing frame ---- */
+  .close{display:flex;flex-direction:column;justify-content:center;flex:1 1 auto;max-width:60ch}
+  .close .big{font-size:23px;line-height:1.3;color:var(--title);font-weight:600;margin:0 0 14px}
+  .close p{font-size:17px;line-height:1.5;margin:0 0 11px}
+  .close .last{
+    font-size:20px;font-weight:600;color:var(--on-highlight);margin-top:6px;
+  }
+
+  /* ---- the thread ---- */
+  .who{
+    display:flex;align-items:center;gap:9px;flex:0 0 auto;margin-bottom:9px;
+  }
+  .who .av{
+    flex:0 0 auto;width:30px;height:30px;border-radius:7px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  .who .nmx{font-size:14.5px;font-weight:600;color:var(--title);line-height:1.2}
+  .who .role{font-size:12.5px;color:var(--body);line-height:1.2;margin-top:1px}
+
+  .threadwrap{position:relative;flex:1 1 auto;min-height:0;display:flex}
+  .thread{
+    flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
+    background:var(--highlight);border-radius:11px;padding:11px 15px 12px;
+    scroll-behavior:smooth;
+  }
+  .threadwrap::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
+    border-radius:0 0 11px 11px;
+    background:linear-gradient(to bottom,rgba(220,225,255,0),rgba(220,225,255,.98));
+    opacity:0;transition:opacity var(--t-fast) var(--ease-out);
+  }
+  .threadwrap.more::after{opacity:1}
+
+  .blk{display:flex;gap:9px;margin-bottom:7px}
+  .blk:last-child{margin-bottom:0}
+  .av2{
+    flex:0 0 auto;width:24px;height:24px;border-radius:6px;margin-top:1px;
+    background:var(--on-highlight);color:var(--bg);
+    font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  .msgs{min-width:0;flex:1 1 auto}
+  .nm{font-size:12.5px;font-weight:600;color:var(--title);margin-bottom:2px}
+  .nm .tm{font-size:11.5px;font-weight:500;color:var(--body);margin-left:6px}
+  .msg{
+    font-size:14px;line-height:1.42;color:var(--body);margin:0 0 4px;
+    overflow-wrap:break-word;
+    animation:din var(--t-frame) var(--ease-out) both;
+  }
+  .msg:last-child{margin-bottom:0}
+  @keyframes din{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+  /* typing indicator. Bounded, never infinite: it is removed the
+     moment its message lands, and the iteration count is finite. */
+  .typing{display:flex;gap:4px;align-items:center;padding:4px 0 6px;height:18px}
+  .typing i{
+    display:block;width:5px;height:5px;border-radius:50%;background:var(--on-highlight);
+    opacity:.25;animation:blip 1.15s ease-in-out 6;
+  }
+  .typing i:nth-child(2){animation-delay:.16s}
+  .typing i:nth-child(3){animation-delay:.32s}
+  @keyframes blip{0%,100%{opacity:.25}45%{opacity:.95}}
+
+  /* ---- bottom bar ---- */
+  .bar{
+    flex:0 0 auto;display:flex;align-items:center;gap:9px;margin-top:14px;
+  }
+  button.nav{
+    font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+    background:var(--on-highlight);color:var(--bg);
+    border:2px solid var(--on-highlight);border-radius:9px;padding:9px 18px;
+    transition:opacity var(--t-fast) var(--ease-out);
+  }
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:default}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.skip{
+    font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+    background:transparent;color:var(--on-highlight);
+    border:0;border-bottom:1.5px solid var(--line);border-radius:0;padding:2px 0;
+    margin-left:auto;
+  }
+  button.skip:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .thread{scroll-behavior:auto}
+  }
+
+  /* ---- under 600px: restack, no transform ---- */
+  @media (max-width:599px){
+    html,body{height:auto;overflow:auto}
+    body{display:block}
+    #stage{width:100%!important;height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;min-height:100vh;padding:20px 16px 26px}
+    h1{font-size:23px}
+    .say p{font-size:16px}
+    .close .big{font-size:20px}
+    .threadwrap{display:block;flex:0 0 auto}
+    .threadwrap::after{display:none}
+    .thread{overflow-y:visible;max-height:none}
+    .msg{font-size:15px;line-height:1.5}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Two last messages">
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs"></span>
+    </div>
+    <h1 id="h1"></h1>
+    <div id="board" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column"></div>
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="skip" id="skip" type="button" hidden>Show all messages</button>
+    </div>
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <!-- This style block has to sit INSIDE noscript so it lands after the main
+       sheet and wins on source order. The dead canvas is hidden and the flex
+       centred body goes back to block flow. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto;overflow:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important}
+    .nsf{max-width:720px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h1{font-size:26px;line-height:1.2;color:#1C1B1B;margin:0 0 12px}
+    .nsf h2{font-size:19px;line-height:1.25;color:#1C1B1B;margin:24px 0 4px}
+    .nsf .role{font-size:14px;color:#484646;margin:0 0 10px}
+    .nsf p{margin:0 0 12px}
+    .nsf .thread{background:#DCE1FF;border-radius:11px;padding:13px 16px;margin:0 0 14px}
+    .nsf .thread p{margin:0 0 9px;font-size:15.5px;line-height:1.45}
+    .nsf .thread p:last-child{margin:0}
+    .nsf .thread strong{color:#001D69}
+    .nsf .arc{background:#DCE1FF;border-radius:11px;padding:12px 15px;margin:0 0 14px;font-size:15.5px}
+    .nsf .last{font-size:19px;font-weight:600;color:#001D69}
+  </style>
+  <div class="nsf">
+    <h1>Two last messages</h1>
+    <p>You have reached the end of this externship. We hope the experience has been a good one.</p>
+    <p>Seven weeks ago you were asked to guess what a year of Khan Academy costs to run, and then who pays for it.</p>
+    <div class="arc">Since then you have taken apart the College Board partnership, learned the four kinds of deal this team has already done and the ones it will not go near, studied how Wikimedia, Coursera, Duolingo and Mozilla all earn money from something they give away free, used AI to find partners nobody handed you, cut a long list down to two, worked out what each one is worth, and built a deck that makes the case for them.</div>
+    <p>Before you close this, here is what Wes and Kian want to say to you.</p>
+
+    <h2>Wes Okafor</h2>
+    <p class="role">Runs the day to day on partnerships</p>
+    <div class="thread">
+      <p><strong>Wes, 6:58 PM</strong><br>Before you close the laptop. You were a great addition to this team, and I mean that properly, not as a sign-off line.</p>
+      <p><strong>Wes, 6:59 PM</strong><br>Here is what I actually noticed. You checked your numbers. You said so when you were not sure instead of covering for it. And you wrote down what could go wrong with your own deal before anybody asked you to.</p>
+      <p><strong>Wes, 7:00 PM</strong><br>That last one is rarer than it should be. Most people avoid it because it feels like handing someone a reason to say no. It is the opposite. A recommendation that already names its own weak points is the one that gets taken seriously.</p>
+      <p><strong>Wes, 7:01 PM</strong><br>Keep working the way you worked here and you will be fine anywhere you go.</p>
+      <p><strong>Wes, 7:02 PM</strong><br>On what comes next, since you will probably wonder. The titles to look for are partnerships associate and business development associate. Strategy and operations works too, and corporate development if you liked the sizing more than the pitching.</p>
+      <p><strong>Wes, 7:03 PM</strong><br>Do not wait until you feel ready. Nobody in this job felt ready. Apply to three of them this month.</p>
+      <p><strong>Wes, 7:04 PM</strong><br>Two things that will actually help you. Put your deck somewhere people can see it, LinkedIn is fine, because most applicants have nothing to show. And pick five people who do partnerships at companies you like, and message them about a specific deal they did. Not asking for anything. Just a real question about the deal.</p>
+      <p><strong>Wes, 7:05 PM</strong><br>That is how most people in this field got their first job, including me.</p>
+      <p><strong>Wes, 7:06 PM</strong><br>Good luck out there. And find me a good one someday.</p>
+    </div>
+
+    <h2>Kian Rostami</h2>
+    <p class="role">Started the same morning you did</p>
+    <div class="thread">
+      <p><strong>Kian, 7:09 PM</strong><br>So that is it then. I am going to miss you, honestly.</p>
+      <p><strong>Kian, 7:10 PM</strong><br>Do you remember that lunch where neither of us could remember which ideas were off the table, so we turned it into a game? You got more of them right than I did. I did not say so at the time.</p>
+      <p><strong>Kian, 7:11 PM</strong><br>And you actually used my six categories. I wrote those down for myself and half expected them to sit in my notes forever.</p>
+      <p><strong>Kian, 7:12 PM</strong><br>Let me know where you land. I mean it. Do not just disappear.</p>
+    </div>
+
+    <h2>That is the end of the program</h2>
+    <p>You came in guessing who pays for Khan Academy. You are leaving with a proposal for who could pay next. That is a real distance to have covered in seven weeks.</p>
+    <p class="last">Go and find the next one.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+  var d = document;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    frame: d.getElementById("frame"),
+    prog:  d.getElementById("prog"),
+    segs:  d.getElementById("segs"),
+    h1:    d.getElementById("h1"),
+    board: d.getElementById("board"),
+    back:  d.getElementById("back"),
+    next:  d.getElementById("next"),
+    skip:  d.getElementById("skip"),
+    live:  d.getElementById("live")
+  };
+
+  /* ---------------- content ---------------- */
+  var F = [
+    {
+      label: "The end",
+      kind: "say",
+      title: "You have reached the end of this externship",
+      html:
+        '<div class="say">' +
+        '<p class="lead">We hope the experience has been a good one.</p>' +
+        '<p>Seven weeks ago you were asked to guess what a year of Khan Academy costs to run, and then who pays for it.</p>' +
+        '<div class="arc">Since then you have taken apart the College Board partnership, learned the four kinds of deal this team has already done and the ones it will not go near, studied how <strong>Wikimedia, Coursera, Duolingo and Mozilla</strong> all earn money from something they give away free, used AI to find partners nobody handed you, cut a long list down to two, worked out what each one is worth, and built a deck that makes the case for them.</div>' +
+        '<p style="margin-top:11px">Before you close this, here is what Wes and Kian want to say to you.</p>' +
+        '</div>'
+    },
+    {
+      label: "Wes",
+      kind: "thread",
+      title: "A message from Wes",
+      who: { initial: "W", name: "Wes Okafor", role: "Runs the day to day on partnerships" },
+      msgs: [
+        { t: "6:58 PM", s: "Before you close the laptop. You were a great addition to this team, and I mean that properly, not as a sign-off line." },
+        { t: "6:59 PM", s: "Here is what I actually noticed. You checked your numbers. You said so when you were not sure instead of covering for it. And you wrote down what could go wrong with your own deal before anybody asked you to." },
+        { t: "7:00 PM", s: "That last one is rarer than it should be. Most people avoid it because it feels like handing someone a reason to say no. It is the opposite. A recommendation that already names its own weak points is the one that gets taken seriously." },
+        { t: "7:01 PM", s: "Keep working the way you worked here and you will be fine anywhere you go." },
+        { t: "7:02 PM", s: "On what comes next, since you will probably wonder. The titles to look for are partnerships associate and business development associate. Strategy and operations works too, and corporate development if you liked the sizing more than the pitching." },
+        { t: "7:03 PM", s: "Do not wait until you feel ready. Nobody in this job felt ready. Apply to three of them this month." },
+        { t: "7:04 PM", s: "Two things that will actually help you. Put your deck somewhere people can see it, LinkedIn is fine, because most applicants have nothing to show. And pick five people who do partnerships at companies you like, and message them about a specific deal they did. Not asking for anything. Just a real question about the deal." },
+        { t: "7:05 PM", s: "That is how most people in this field got their first job, including me." },
+        { t: "7:06 PM", s: "Good luck out there. And find me a good one someday." }
+      ]
+    },
+    {
+      label: "Kian",
+      kind: "thread",
+      title: "A message from Kian",
+      who: { initial: "K", name: "Kian Rostami", role: "Started the same morning you did" },
+      msgs: [
+        { t: "7:09 PM", s: "So that is it then. I am going to miss you, honestly." },
+        { t: "7:10 PM", s: "Do you remember that lunch where neither of us could remember which ideas were off the table, so we turned it into a game? You got more of them right than I did. I did not say so at the time." },
+        { t: "7:11 PM", s: "And you actually used my six categories. I wrote those down for myself and half expected them to sit in my notes forever." },
+        { t: "7:12 PM", s: "Let me know where you land. I mean it. Do not just disappear." }
+      ]
+    },
+    {
+      label: "Go",
+      kind: "close",
+      title: "That is the end of the program",
+      html:
+        '<div class="close">' +
+        '<p class="big">You came in guessing who pays for Khan Academy. You are leaving with a proposal for who could pay next.</p>' +
+        '<p>That is a real distance to have covered in seven weeks.</p>' +
+        '<p class="last">Go and find the next one.</p>' +
+        '</div>'
+    }
+  ];
+
+  var i = 0;
+  var timers = [];
+  var playing = false;
+
+  function clearTimers(){
+    for (var k = 0; k < timers.length; k++) clearTimeout(timers[k]);
+    timers = [];
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function header(){
+    var f = F[i];
+    el.prog.textContent = (i+1) + " of " + F.length + " · " + f.label;
+    var out = "";
+    for (var k = 0; k < F.length; k++){
+      out += '<i class="' + (k === i ? "here" : (k < i ? "on" : "")) + '"></i>';
+    }
+    el.segs.innerHTML = out;
+    el.back.disabled = (i === 0);
+    el.next.disabled = (i === F.length - 1);
+    el.next.textContent = (i === F.length - 1) ? "You are at the end" : "Continue";
+  }
+
+  /* scroll affordance on the thread panel */
+  function moreCue(wrap, thread){
+    if (!wrap || !thread) return;
+    var atEnd = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 4;
+    if (thread.scrollHeight > thread.clientHeight + 4 && !atEnd) wrap.className = "threadwrap more";
+    else wrap.className = "threadwrap";
+  }
+
+  function renderThread(f){
+    el.board.innerHTML =
+      '<div class="who">' +
+        '<span class="av" aria-hidden="true">' + esc(f.who.initial) + '</span>' +
+        '<span><span class="nmx">' + esc(f.who.name) + '</span>' +
+        '<span class="role" style="display:block">' + esc(f.who.role) + '</span></span>' +
+      '</div>' +
+      '<div class="threadwrap" id="tw"><div class="thread" id="th">' +
+        '<div class="blk">' +
+          '<span class="av2" aria-hidden="true">' + esc(f.who.initial) + '</span>' +
+          '<div class="msgs" id="ms">' +
+            '<div class="nm">' + esc(f.who.name.split(" ")[0]) + ' <span class="tm" id="tmx"></span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div></div>';
+
+    var wrap = d.getElementById("tw");
+    var thread = d.getElementById("th");
+    var ms = d.getElementById("ms");
+    var tmx = d.getElementById("tmx");
+
+    thread.addEventListener("scroll", function(){ moreCue(wrap, thread); });
+
+    var n = 0;
+    function place(k){
+      var m = f.msgs[k];
+      var p = d.createElement("p");
+      p.className = "msg";
+      p.textContent = m.s;
+      ms.appendChild(p);
+      tmx.textContent = m.t;
+      thread.scrollTop = thread.scrollHeight;
+      moreCue(wrap, thread);
+    }
+
+    function showAll(){
+      clearTimers();
+      var ty = d.getElementById("ty");
+      if (ty) ty.parentNode.removeChild(ty);
+      while (n < f.msgs.length){ place(n); n++; }
+      playing = false;
+      el.skip.hidden = true;
+      el.live.textContent = "All messages shown.";
+    }
+    el.skip.onclick = showAll;
+
+    if (reduce){
+      showAll();
+      return;
+    }
+
+    /* messages arrive one at a time, with a typing indicator in the gap */
+    playing = true;
+    el.skip.hidden = false;
+
+    var GAP = 1150;   /* between messages */
+    var TYPE = 620;   /* how long the dots show before a message lands */
+
+    function step(){
+      if (n >= f.msgs.length){
+        playing = false;
+        el.skip.hidden = true;
+        return;
+      }
+      var ty = d.createElement("div");
+      ty.className = "typing";
+      ty.id = "ty";
+      ty.setAttribute("aria-hidden", "true");
+      ty.innerHTML = "<i></i><i></i><i></i>";
+      ms.appendChild(ty);
+      thread.scrollTop = thread.scrollHeight;
+      moreCue(wrap, thread);
+
+      timers.push(setTimeout(function(){
+        var t = d.getElementById("ty");
+        if (t) t.parentNode.removeChild(t);
+        place(n);
+        n++;
+        timers.push(setTimeout(step, GAP - TYPE));
+      }, TYPE));
+    }
+    timers.push(setTimeout(step, 340));
+  }
+
+  function render(){
+    clearTimers();
+    playing = false;
+    el.skip.hidden = true;
+    el.skip.onclick = null;
+
+    var f = F[i];
+    el.h1.textContent = f.title;
+    header();
+
+    if (f.kind === "thread"){
+      renderThread(f);
+      el.live.textContent = f.title + ". Messages are arriving.";
+    } else {
+      el.board.innerHTML = f.html;
+      el.live.textContent = f.title;
+    }
+  }
+
+  function go(delta){
+    var n = i + delta;
+    if (n < 0 || n >= F.length) return;
+    i = n;
+    render();
+    el.frame.focus();
+  }
+
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  d.addEventListener("keydown", function(e){
+    if (e.target && e.target.tagName === "BUTTON" && e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    if (e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    if (e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = d.getElementById("stage");
+  function fit(){
+    if (window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+})();
+</script>
+</body>
+</html>
