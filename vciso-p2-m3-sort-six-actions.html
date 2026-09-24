@@ -192,7 +192,6 @@
   .scard:hover:not(.locked){border-color:var(--on-highlight)}
   .scard:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
   .scard.sel{background:var(--highlight);border-color:var(--on-highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
-  .scard.drag{opacity:.55}
   .scard.locked{cursor:default}
   .scard.bad{border-style:dashed;border-color:var(--on-highlight)}
   .scard .cn{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--on-highlight);
@@ -219,6 +218,11 @@
     background:var(--highlight);font-size:13px;font-weight:600;color:var(--on-highlight);
     display:flex;align-items:center;justify-content:center;margin-top:-1px}
   button.bin .bh{font-size:14px;line-height:1.4;color:var(--body)}
+  .tally{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .tbox{flex:1 1 auto;background:var(--tint);border:1.5px dashed var(--line);border-radius:9px;padding:12px 14px}
+  .tbox.on{background:var(--highlight);border:1.5px solid var(--on-highlight)}
+  .tbox .bl{font-size:16px;font-weight:600;line-height:1.3;color:var(--title)}
+  .tbox .bh{font-size:14px;line-height:1.4;color:var(--body);margin-top:4px}
   .chk{flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
   .chk .cc{font-size:13px;line-height:1.3;color:var(--body)}
   button.nav.full{width:100%}
@@ -607,19 +611,20 @@
 
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function say(m){ el.live.textContent = m; }
+  function placeOf(id){ return st.place[id] === "fine" ? "fine" : "perm"; }
   function binOf(id){ for(var k=0;k<BINS.length;k++) if(BINS[k].id === id) return BINS[k]; return null; }
   function slideById(id){ for(var k=0;k<S.length;k++) if(S[k].id === id) return S[k]; return null; }
   function sortScore(){
     var s = slideById("sort"), right = 0;
-    s.cards.forEach(function(c){ if(st.place[c.id] === c.bin) right++; });
-    return "You placed " + right + " of " + s.cards.length + " in the right column.";
+    s.cards.forEach(function(c){ if(placeOf(c.id) === c.bin) right++; });
+    return "You got " + right + " of " + s.cards.length + " right.";
   }
 
   /* ---------------- chrome ---------------- */
   var GATED = { ask:1, sort:1, verdict:1 };
   var GATE_HINT = {
     ask:"Make a call to carry on. Ruling out the options you can also gets you there.",
-    sort:"Keyboard: pick a card, then press 1 or 2 to place it.",
+    sort:"Click a card again to unmark it. Press Check my answers when you are done.",
     verdict:"Call all four to carry on. Keys 1 and 2 call the next open one."
   };
   function header(){
@@ -784,46 +789,40 @@
     say((how === "right" ? "Correct. " : "") + s.reveal.lab + ". " + (body ? body.textContent : ""));
   }
 
-  /* ---------------- sort (pattern 4, two bins) ----------------
-     Three input paths, all live: drag a card onto a column; pick a card and
-     then pick a column; or on the keyboard, Up and Down move between cards,
-     Enter picks one, and 1 or 2 places it. A placed card stays placeable
-     until the sort is checked. Checking happens on an explicit button, only
-     once all six are placed, so it cannot be brute-forced. */
-  var sel = null;      // the picked card id, not persisted
-
+  /* ---------------- sort (click to mark) ----------------
+     The student clicks every action that is fine to do. Anything left
+     unmarked counts as needs written permission first. A click or Enter
+     toggles a card until the sort is checked. Checking is an explicit
+     button, and every card is then marked right or wrong. */
   function tagHTML(s, c, checked){
-    var p = st.place[c.id], b = binOf(p);
-    if(!b) return '<span class="tg" aria-hidden="true"></span>';
-    if(!checked) return '<span class="tg on" aria-hidden="true">' + b.key + "</span>";
+    var p = placeOf(c.id);
+    if(!checked) return p === "fine" ? '<span class="tg on" aria-hidden="true">' + GLYPH.ok + "</span>" : '<span class="tg" aria-hidden="true"></span>';
     if(p === c.bin) return '<span class="tg on" aria-hidden="true">' + GLYPH.ok + "</span>";
     return '<span class="tg x" aria-hidden="true">' + GLYPH.out + "</span>";
   }
 
   function cardLabel(c, checked){
-    var p = st.place[c.id], b = binOf(p);
+    var p = placeOf(c.id);
     var base = "Action " + c.n + ": " + c.txt + " ";
     if(checked){
-      if(p === c.bin) return base + "Right column: " + b.label + ".";
-      return base + "Wrong column. You put it in " + b.label + ". It belongs in " + binOf(c.bin).label + ".";
+      var you = p === "fine" ? "You marked it fine to do." : "You left it unmarked.";
+      if(p === c.bin) return base + you + " Right. It is " + binOf(c.bin).label + ".";
+      return base + you + " Not right. It is " + binOf(c.bin).label + ".";
     }
-    if(!b) return base + "Not placed yet. Press Enter to pick it.";
-    return base + "Placed in " + b.label + ". Press Enter to pick it and move it.";
+    return base + (p === "fine" ? "Marked fine to do. Press Enter to unmark it." : "Not marked. Press Enter to mark it fine to do.");
   }
 
-  function placedCount(s){
-    var n = 0;
-    s.cards.forEach(function(c){ if(binOf(st.place[c.id])) n++; });
-    return n;
+  function markedList(s){
+    return s.cards.filter(function(c){ return placeOf(c.id) === "fine"; }).map(function(c){ return c.n; });
   }
 
   /* After checking, every wrong card's reason is on screen at once, grouped
      where cards share a reason, so nothing hides behind a second click. */
   function resultHTML(s){
-    var wrong = s.cards.filter(function(c){ return st.place[c.id] !== c.bin; });
+    var wrong = s.cards.filter(function(c){ return placeOf(c.id) !== c.bin; });
     var right = s.cards.length - wrong.length;
     if(!wrong.length){
-      return '<div class="sc">' + GLYPH.ok + " All six are in the right column.</div>" +
+      return '<div class="sc">' + GLYPH.ok + " All six are right.</div>" +
         "<div>Continue to work out what separates the two columns.</div>";
     }
     /* One group per column the wrong cards belong in, with each distinct
@@ -840,10 +839,9 @@
       if(ns.length === 1) return String(ns[0]);
       return ns.slice(0, -1).join(", ") + " and " + ns[ns.length-1];
     }
-    return '<div class="sc">' + right + " of " + s.cards.length + " in the right column.</div>" +
+    return '<div class="sc">' + right + " of " + s.cards.length + " right.</div>" +
       groups.map(function(g){
-        return "<div><b>" + GLYPH.out + " " + names(g.ns) + (g.ns.length > 1 ? " belong" : " belongs") + " in " +
-          esc(binOf(g.bin).label) + ".</b> " + g.whys.map(esc).join(" ") + "</div>";
+        return "<div><b>" + GLYPH.out + " " + names(g.ns) + (g.bin === "fine" ? (g.ns.length > 1 ? " are fine to do" : " is fine to do") : (g.ns.length > 1 ? " need written permission first" : " needs written permission first")) + ".</b> " + g.whys.map(esc).join(" ") + "</div>";
       }).join("");
   }
 
@@ -851,11 +849,11 @@
     var checked = !!st.answers[s.id];
 
     var cards = s.cards.map(function(c){
-      var isWrong = checked && st.place[c.id] !== c.bin;
-      var picked = !checked && sel === c.id;
+      var isWrong = checked && placeOf(c.id) !== c.bin;
+      var picked = !checked && placeOf(c.id) === "fine";
       return '<div class="scard' + (picked ? " sel" : "") + (checked ? " locked" : "") + (isWrong ? " bad" : "") + '"' +
         ' role="button" data-c="' + c.id + '"' +
-        (checked ? ' tabindex="-1" aria-disabled="true"' : ' tabindex="0" aria-pressed="' + (picked ? "true" : "false") + '" draggable="true"') +
+        (checked ? ' tabindex="-1" aria-disabled="true"' : ' tabindex="0" aria-pressed="' + (picked ? "true" : "false") + '"') +
         ' aria-label="' + esc(cardLabel(c, checked)).replace(/"/g, "&quot;") + '">' +
         '<span class="cn" aria-hidden="true">' + c.n + '</span>' +
         '<span class="ct" aria-hidden="true">' + esc(c.txt) + '</span>' +
@@ -864,21 +862,17 @@
 
     var side;
     if(!checked){
-      var n = placedCount(s);
-      side = '<div class="bins">' + BINS.map(function(b){
-        var holds = s.cards.filter(function(c){ return st.place[c.id] === b.id; }).map(function(c){ return c.n; });
-        return '<button class="bin" type="button" data-b="' + b.id + '"' +
-          ' aria-label="' + esc(b.label) + ". " + (holds.length ? "Holds " + holds.join(", ") : "Empty") + '. Press to place the picked card here.">' +
-          '<span class="bl"><span class="bk" aria-hidden="true">' + b.key + '</span>' + esc(b.label) + '</span>' +
-          '<span class="bh" aria-hidden="true">' + (holds.length ? "Holds " + holds.join(", ") : "Empty") + "</span></button>";
-      }).join("") +
-      '<div class="chk"><button class="nav full" id="chk" type="button"' + (n < s.cards.length ? " disabled" : "") + '>Check my sort</button>' +
-      '<span class="cc">Placed ' + n + " of " + s.cards.length + (n < s.cards.length ? ". Check opens once all six are placed." : ".") + "</span></div></div>";
+      var m = markedList(s);
+      side = '<div class="tally">' +
+        '<div class="tbox' + (m.length ? " on" : "") + '"><div class="bl">' + GLYPH.ok + ' Fine to do</div><div class="bh">' +
+          (m.length ? "You marked " + (m.length === 1 ? String(m[0]) : m.slice(0, -1).join(", ") + " and " + m[m.length-1]) + "." : "Nothing marked yet.") + "</div></div>" +
+        '<div class="tbox"><div class="bl">Needs written permission first</div><div class="bh">Every card you leave unmarked.</div></div>' +
+        '<div class="chk"><button class="nav full" id="chk" type="button">Check my answers</button></div></div>';
     } else {
       side = '<div class="res" id="res" tabindex="-1">' + resultHTML(s) + "</div>";
     }
 
-    var how = checked ? "" : '<div class="how"><b>How to sort:</b> drag each card into a column on the right, or click a card and then its column.</div>';
+    var how = checked ? "" : '<div class="how"><b>What to do:</b> click every action that is fine to do. Leave the ones that need written permission first.</div>';
     el.board.innerHTML = how + '<div class="col"><div class="cards" id="cards">' + cards + '</div></div><div class="col">' + side + "</div>";
     wireSort(s, checked);
     if(focusId){
@@ -887,42 +881,18 @@
     }
   }
 
-  /* A click always picks. It never toggles, because after a placement the
-     next card is picked for you, and a toggle would put it back down. */
-  function pickCard(s, id){
+  function toggleCard(s, id){
     if(st.answers[s.id]) return;
-    sel = id;
-    renderSort(s, '.scard[data-c="' + id + '"]');
-    say("Picked action " + id.slice(1) + ". Now pick a column, or press 1 or 2.");
-  }
-
-  function placeCard(s, id, binId, fromKey){
-    if(st.answers[s.id] || !id || !binOf(binId)) return;
-    st.place[id] = binId;
+    if(placeOf(id) === "fine") delete st.place[id]; else st.place[id] = "fine";
     save(st);
-    /* Pick the next card still unplaced, so the next click on a column
-       places it. Nothing moves on screen: the pick is shown on the card. */
-    var ids = s.cards.map(function(c){ return c.id; });
-    var at = ids.indexOf(id), nextSel = null;
-    for(var k=1;k<=ids.length;k++){
-      var cand = ids[(at + k) % ids.length];
-      if(!binOf(st.place[cand])){ nextSel = cand; break; }
-    }
-    sel = nextSel;
-    var n = placedCount(s);
-    var focus = n === s.cards.length ? "#chk" :
-      (fromKey ? '.scard[data-c="' + nextSel + '"]' : 'button.bin[data-b="' + binId + '"]');
-    renderSort(s, focus);
-    say("Placed action " + id.slice(1) + " in " + binOf(binId).label + ". " + n + " of " + s.cards.length + " placed." +
-      (n === s.cards.length ? " All six placed. Check my sort is ready." : " Action " + nextSel.slice(1) + " is picked next."));
+    renderSort(s, '.scard[data-c="' + id + '"]');
+    say("Action " + id.slice(1) + (placeOf(id) === "fine" ? " marked fine to do." : " unmarked."));
   }
 
   function checkSort(s){
-    if(placedCount(s) < s.cards.length) return;
-    var allRight = s.cards.every(function(c){ return st.place[c.id] === c.bin; });
+    var allRight = s.cards.every(function(c){ return placeOf(c.id) === c.bin; });
     st.answers[s.id] = allRight ? "right" : "shown";
     save(st);
-    sel = null;
     el.hint.textContent = "";
     renderSort(s);
     header();
@@ -939,34 +909,14 @@
     Array.prototype.forEach.call(cards, function(card, idx){
       var id = card.dataset.c;
       if(checked) return;
-      card.addEventListener("click", function(){ pickCard(s, id); });
+      card.addEventListener("click", function(){ toggleCard(s, id); });
       card.addEventListener("keydown", function(e){
-        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); pickCard(s, id); }
+        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleCard(s, id); }
         else if(e.key === "ArrowDown" || e.key === "ArrowUp"){
           e.preventDefault();
           var to = cards[(idx + (e.key === "ArrowDown" ? 1 : cards.length - 1)) % cards.length];
           if(to) to.focus();
         }
-      });
-      card.addEventListener("dragstart", function(e){
-        try{ e.dataTransfer.setData("text/plain", id); e.dataTransfer.effectAllowed = "move"; }catch(x){}
-        card.classList.add("drag");
-      });
-      card.addEventListener("dragend", function(){ card.classList.remove("drag"); });
-    });
-    if(checked) return;
-    Array.prototype.forEach.call(el.board.querySelectorAll("button.bin"), function(bin){
-      var b = bin.dataset.b;
-      bin.addEventListener("click", function(){
-        if(!sel){ say("Pick a card first, then a column."); el.hint.textContent = "Pick a card first, then pick its column."; return; }
-        placeCard(s, sel, b, false);
-      });
-      bin.addEventListener("dragover", function(e){ e.preventDefault(); bin.classList.add("over"); });
-      bin.addEventListener("dragleave", function(){ bin.classList.remove("over"); });
-      bin.addEventListener("drop", function(e){
-        e.preventDefault(); bin.classList.remove("over");
-        var id = ""; try{ id = e.dataTransfer.getData("text/plain"); }catch(x){}
-        if(id) placeCard(s, id, b, false);
       });
     });
     var chk = el.board.querySelector("#chk");
@@ -1063,7 +1013,7 @@
   function go(d){
     var n = i + d;
     if(n < 0 || n >= S.length) return;
-    i = n; sel = null; lastCall = null; render(); el.frame.focus();
+    i = n; lastCall = null; render(); el.frame.focus();
   }
   el.back.addEventListener("click", function(){ go(-1); });
   el.next.addEventListener("click", function(){ go(1); });
@@ -1074,21 +1024,8 @@
     if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
     if(e.metaKey || e.ctrlKey || e.altKey) return;
     var s = S[i];
-    /* Number keys: 1 and 2 place the picked card on the sort, and call the
-       next open case on the verdict quiz. */
-    if(s.kind === "sort" && !st.answers[s.id] && e.key === "Escape" && sel){
-      var was = sel; sel = null; renderSort(s, '.scard[data-c="' + was + '"]'); say("Card put down."); return;
-    }
-    if(s.kind === "sort" && !st.answers[s.id]){
-      var b = null; BINS.forEach(function(x){ if(x.key === e.key) b = x; });
-      if(b){
-        e.preventDefault();
-        var fc = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.c : null;
-        if(fc && !sel) sel = fc;
-        if(sel) placeCard(s, sel, b.id, true);
-        else say("Pick a card first. Tab to a card and press Enter.");
-      }
-    } else if(s.kind === "verdict"){
+    /* Number keys 1 and 2 call the next open case on the verdict quiz. */
+    if(s.kind === "verdict"){
       var v = null; s.verdicts.forEach(function(x){ if(x.key === e.key) v = x; });
       if(v){
         var calls = callsFor(s), open = null;
@@ -1139,7 +1076,7 @@
   window.__ex = {
     goto:function(n){
       if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
-      i = n; sel = null; lastCall = null; render(); return true;
+      i = n; lastCall = null; render(); return true;
     },
     slides:S.length,
     pick:function(id){
@@ -1147,7 +1084,7 @@
       if(b) b.click();
       return !!b;
     },
-    reset:function(){ st = fresh(); save(st); sel = null; lastCall = null; i = 0; render(); },
+    reset:function(){ st = fresh(); save(st); lastCall = null; i = 0; render(); },
     state:function(){ return { i:i, answers:st.answers, out:st.out, place:st.place, calls:st.calls }; }
   };
 })();
