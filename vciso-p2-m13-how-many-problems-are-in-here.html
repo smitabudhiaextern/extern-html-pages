@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Many Problems Are In Here?</title>
+<!--
+  vCISO P2 Step 4, Module 13: Triage the Scan Results.
+  Interactive: How Many Problems Are In Here? Per scope.
+  Build spec: 06-content/project-02/step-04/module-13-internal.md.
+  Source: P2-12 in Interactive content sets - P2.md, and the four
+  Scan export - Scope X.csv files, with Chaitanya's 25 Sep corrections applied
+  at build: every Last seen date is 2026-01-15 (item 3a) and the Scope D host
+  LAPTOP-KRAMSEY is DESKTOP-7F2KQ9L (item 8c). No other cell is changed.
+  The false positive and the shadow hosts are not marked in this build (spec).
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:13px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:78ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the scope picker (same as the approved m5 builds) ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:20px 18px 16px;
+    display:flex;flex-direction:column;gap:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:64px;height:64px;border-radius:14px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:36px;height:36px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:20px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto;min-height:50px}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:9px}
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  button.sc.on{background:var(--on-highlight);border:2px solid var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .ss{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- slides 2 and 3: the wall of rows and the side panel ---- */
+  .split{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px}
+  .split.rv{grid-template-columns:minmax(0,1fr) 430px}
+  .split.rv .side{padding:12px 16px;gap:5px}
+  .wall{position:relative;min-width:0;min-height:0;background:var(--bg);border:1.5px solid var(--on-highlight);
+    border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+  .wh,.wr{display:grid;grid-template-columns:62px minmax(0,1fr) 68px 38px 30px 44px 44px;column-gap:5px;
+    padding:0 7px;align-items:center}
+  .wh{flex:0 0 auto;background:var(--on-highlight);color:var(--bg);font-size:7.5px;font-weight:600;
+    letter-spacing:.03em;height:14px}
+  .wrows{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+  .wr{flex:1 1 0;min-height:0;font-size:6.4px;line-height:1;color:var(--body);border-bottom:1px solid rgba(0,29,105,.09);
+    transition:opacity var(--t-reveal) var(--ease-io),background var(--t-reveal) var(--ease-io)}
+  .wr:nth-child(even){background:rgba(0,29,105,.035)}
+  .wh span,.wr span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wall.lit .wr{opacity:.4}
+  .wall.lit .wr.cl{opacity:1;background:var(--highlight);color:var(--title)}
+  .clbox{position:absolute;left:3px;right:3px;border:2.5px solid var(--on-highlight);border-radius:6px;pointer-events:none}
+  .cltag{position:absolute;right:8px;top:6px;background:var(--on-highlight);color:var(--bg);
+    font-size:13px;font-weight:600;line-height:1.2;padding:6px 11px;border-radius:14px;white-space:nowrap;
+    display:flex;align-items:center;gap:7px}
+  .cltag svg.ic{width:16px;height:16px}
+  .clbox.in{animation:pop var(--t-reveal) var(--ease-over) both}
+
+  .side{min-width:0;min-height:0;background:var(--highlight);border-radius:12px;padding:16px 18px;
+    display:flex;flex-direction:column;gap:12px}
+  .side:focus{outline:none}
+  .q{font-size:21px;font-weight:600;line-height:1.3;color:var(--title)}
+  .sub{font-size:14.5px;line-height:1.45;color:var(--body)}
+
+  /* the guess control: a slider from 1 to 45 and a number box, kept in step.
+     Until the student touches it the slider shows no thumb and the box is empty,
+     so nothing is pre-selected. */
+  .slwrap{display:flex;flex-direction:column;gap:4px}
+  .scale{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:var(--on-highlight)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;cursor:pointer;margin:0}
+  input[type=range]:focus{outline:none}
+  input[type=range]:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px;border-radius:6px}
+  input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--bg);border:1.5px solid var(--on-highlight)}
+  input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--bg);border:1.5px solid var(--on-highlight)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:24px;height:24px;margin-top:-9.5px;
+    border-radius:50%;background:var(--on-highlight);border:3px solid var(--bg);box-shadow:0 0 0 1.5px var(--on-highlight)}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--on-highlight);border:3px solid var(--bg)}
+  input[type=range].unset::-webkit-slider-thumb{opacity:0}
+  input[type=range].unset::-moz-range-thumb{opacity:0}
+  .numrow{display:flex;align-items:center;gap:10px}
+  .numrow label{font-size:15px;font-weight:600;color:var(--title)}
+  input[type=number]{font-family:inherit;font-size:20px;font-weight:600;color:var(--title);width:96px;
+    padding:6px 8px;border:1.5px solid var(--on-highlight);border-radius:8px;background:var(--bg);text-align:center}
+  input[type=number]::placeholder{color:var(--body);font-weight:400;font-size:15px}
+  input[type=number]:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  input[type=number]:disabled,input[type=range]:disabled{cursor:default;opacity:.7}
+  .gstat{font-size:14px;line-height:1.4;color:var(--body);min-height:20px}
+  .gstat b{color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:10px 18px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start;
+    display:inline-flex;align-items:center;gap:8px}
+  button.go svg.ic{width:18px;height:18px}
+  button.go.ghost{background:transparent;color:var(--on-highlight)}
+  button.go:disabled{opacity:.34;cursor:not-allowed}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .locked{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--title)}
+  .locked .gl{color:var(--on-highlight)}
+  .mt{margin-top:auto}
+
+  /* the reveal panel */
+  .ans{display:flex;align-items:baseline;gap:10px;color:var(--title)}
+  .ans .big{font-size:40px;font-weight:700;line-height:1}
+  .ans .unit{font-size:17px;font-weight:600}
+  .rvline{font-size:17px;font-weight:600;line-height:1.3;color:var(--title)}
+  .cmp{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .cmp div{display:flex;flex-direction:column;justify-content:space-between}
+  .cmp div{background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:4px 9px}
+  .cmp .k{display:block;font-size:12.5px;font-weight:600;line-height:1.25;color:var(--on-highlight)}
+  .cmp .v{display:block;font-size:17px;font-weight:700;line-height:1.3;color:var(--title)}
+  .fb{font-size:13.5px;line-height:1.34;color:var(--body)}
+  .fb b{color:var(--title)}
+  .why{background:var(--bg);border-left:4px solid var(--on-highlight);border-radius:0 8px 8px 0;padding:7px 11px;
+    font-size:13.5px;line-height:1.34;color:var(--title)}
+  .why b{font-weight:600;white-space:nowrap}
+  .why .more{display:block;margin-top:4px}
+  .side.in > *{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .panel.gate{background:var(--highlight);border-radius:12px;display:flex;flex-direction:column;gap:14px;padding:22px 24px;align-self:flex-start}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .scopes{grid-template-columns:1fr 1fr;gap:10px}
+    button.sc{min-height:0;padding:14px 12px}
+    button.sc .si{width:48px;height:48px}
+    button.sc .sn{font-size:17px}
+    .note2{font-size:16px}
+    .board{flex:0 0 auto}
+    .split,.split.rv{grid-template-columns:1fr}
+    .wall{height:340px}
+    .wh,.wr{grid-template-columns:52px minmax(0,1fr) 54px 30px}
+    .wh span:nth-child(n+5),.wr span:nth-child(n+5){display:none}
+    .side{padding:14px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="How Many Problems Are In Here?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 3</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="nav ghost" id="again" type="button" hidden>Guess again</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>How Many Problems Are In Here?</h2>
+    <p>Scroll through your scope's scan once. Before you read on, write down your guess: how many real problems are in there?</p>
+    <div class="box"><p><strong>About eight.</strong> In every scope, twelve rows are one problem, printed twelve times.</p></div>
+    <h3>Scope A, Claims Intake</h3>
+    <p>42 rows. The twelve rows on CCS-APP01 headed "Missing November 2022 security updates (KB5019964)" each carry a different flaw code. All twelve come from one missing update.</p>
+    <h3>Scope B, Payments and Remittance</h3>
+    <p>42 rows. The twelve rows on CCS-FS01 headed "Missing final security update KB5031419 (October 2023)" each carry a different flaw code. All twelve come from one missing update.</p>
+    <h3>Scope C, Patient Records and Archive</h3>
+    <p>40 rows. The twelve rows on CCS-ARCH01 headed "Missing final security update KB5031419 (October 2023)" each carry a different flaw code. All twelve come from one missing update.</p>
+    <h3>Scope D, Remote and Corporate</h3>
+    <p>40 rows. The twelve rows on WKS-01 to WKS-12 all read "Windows 10 unsupported version detection", one row per laptop. It is one problem, found on twelve laptops.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. */
+  var IC = {
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    stack:'<path d="M12 3.5 3 8l9 4.5L21 8z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16l9 4.5 9-4.5"/>',
+    lock:'<rect x="5" y="10.5" width="14" height="10" rx="1.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+    redo:'<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4.5h4.5"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- data ----------------
+     Every data row of each scope's scan export, in file order:
+     Host, Finding, CVE, Severity, CVSS, First seen, Last seen.
+     IP, Port, Protocol and Description are left out of the wall for width. */
+  var ROWS = {"A":[["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-37966","Critical","8.1","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-37967","High","7.2","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-37992","High","7.8","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-38015","Medium","6.5","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41039","High","8.1","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41045","High","7.8","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41047","Critical","8.8","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41048","Critical","8.8","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41050","High","7.8","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41088","High","8.1","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41118","High","7.5","2022-12-01","2026-01-15"],
+["CCS-APP01","Missing November 2022 security updates (KB5019964)","CVE-2022-41090","Medium","5.9","2022-12-01","2026-01-15"],
+["CCS-APP01","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["CCS-WEB01","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["CCS-WEB01","Windows Print Spooler elevation of privilege","CVE-2022-38028","High","7.8","2024-04-24","2026-01-15"],
+["CCS-APP01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-SFTP01","OpenSSH ssh-agent PKCS#11 remote code execution","CVE-2023-38408","Critical","9.8","2023-07-19","2026-01-15"],
+["CCS-SQL01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-APP01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-SQL01","SMBv3 compression remote code execution (SMBGhost)","CVE-2020-0796","Critical","10.0","2020-03-12","2026-01-15"],
+["CCS-SQL01","Microsoft SQL Server missing security updates","","Medium","6.5","2022-06-01","2026-01-15"],
+["CCS-SFTP01","FTP supports cleartext authentication","","Medium","6.5","2019-08-01","2026-01-15"],
+["CCS-SFTP01","Anonymous FTP enabled","","Medium","5.3","2019-08-01","2026-01-15"],
+["CCS-SFTP01","SSH weak MAC algorithms enabled","","Low","4.3","2021-11-03","2026-01-15"],
+["CCS-SFTP01","SSH weak key exchange algorithms enabled","","Low","3.7","2022-02-18","2026-01-15"],
+["MEDFLOW-TEST","Missing November 2022 security updates (KB5019964)","CVE-2022-37966","Critical","8.1","2022-12-01","2026-01-15"],
+["MEDFLOW-TEST","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["MEDFLOW-TEST","Microsoft SQL Server instance detected","","Medium","5.3","2023-01-10","2026-01-15"],
+["MEDFLOW-TEST","SMB signing not required","","Medium","5.3","2023-01-10","2026-01-15"],
+["CCS-DEV01","Missing November 2022 security updates (KB5019964)","CVE-2022-41048","Critical","8.8","2022-12-01","2026-01-15"],
+["CCS-DEV01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-DEV01","TLS 1.0 enabled on RDP","","Medium","6.5","2023-08-22","2026-01-15"],
+["CCS-WEB01","Deprecated TLS protocol enabled","","Medium","6.5","2021-09-14","2026-01-15"],
+["CCS-WEB01","Web server version disclosure","","Low","3.7","2020-07-01","2026-01-15"],
+["CCS-WEB01","Cleartext HTTP service","","Low","2.6","2022-01-11","2026-01-15"],
+["CCS-APP01","SMBv1 protocol enabled","","Medium","5.3","2020-03-19","2026-01-15"],
+["CCS-SQL01","Deprecated TLS protocol enabled","","Medium","6.5","2021-10-05","2026-01-15"],
+["CCS-SQL01","SMB signing not required","","Medium","5.3","2022-05-30","2026-01-15"],
+["CCS-SQL01","SQL Server Browser service exposed","","Low","3.7","2023-02-08","2026-01-15"],
+["CCS-APP01","SSL certificate is self-signed","","Low","3.7","2024-01-15","2026-01-15"],
+["CCS-WEB01","SMB signing not required","","Medium","5.3","2021-12-02","2026-01-15"],
+["CCS-SFTP01","OpenSSH service detected","","Info","0.0","2021-01-04","2026-01-15"]],"B":[["CCS-FS01","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36570","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36571","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36572","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36573","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36574","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36575","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36578","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36582","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36583","High","7.3","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36577","Critical","8.8","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36434","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-FS01","Windows SMBv1 remote code execution (EternalBlue)","CVE-2017-0144","Critical","8.8","2017-05-12","2026-01-15"],
+["CCS-FS01","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["CCS-FIN01","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["CCS-FS01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-FIN01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-FIN01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-FS01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-FIN01","SMBv3 compression remote code execution (SMBGhost)","CVE-2020-0796","Critical","10.0","2020-03-12","2026-01-15"],
+["CCS-FIN01","Missing November 2022 security updates (KB5019964)","CVE-2022-41047","Critical","8.8","2022-12-01","2026-01-15"],
+["CCS-FIN01","Missing November 2022 security updates (KB5019964)","CVE-2022-37992","High","7.8","2022-12-01","2026-01-15"],
+["CCS-FIN01","Missing November 2022 security updates (KB5019964)","CVE-2022-41118","High","7.5","2022-12-01","2026-01-15"],
+["CCS-PAY01","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-PAY01","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-PAY01","TLS 1.0 enabled on RDP","","Medium","6.5","2023-02-14","2026-01-15"],
+["CCS-PAY01","SMB signing not required","","Medium","5.3","2022-09-30","2026-01-15"],
+["CCS-FS01","SMBv1 protocol enabled","","Medium","5.3","2020-03-19","2026-01-15"],
+["CCS-FS01","SMB signing not required","","Medium","5.3","2021-06-14","2026-01-15"],
+["CCS-FS01","Readable network file share","","Medium","6.5","2021-06-14","2026-01-15"],
+["CCS-FS01","TLS 1.0 enabled on RDP","","Medium","6.5","2021-09-14","2026-01-15"],
+["CCS-FS01","NetBIOS service enabled","","Low","3.7","2020-03-19","2026-01-15"],
+["CCS-FS01","Remote registry accessible","","Medium","5.3","2021-11-02","2026-01-15"],
+["CCS-FIN01","Deprecated TLS protocol enabled","","Medium","6.5","2021-09-14","2026-01-15"],
+["CCS-FIN01","SMB signing not required","","Medium","5.3","2022-05-30","2026-01-15"],
+["CCS-FIN01","SSL certificate is self-signed","","Low","3.7","2024-01-15","2026-01-15"],
+["CCS-FIN01","Web server version disclosure","","Low","3.7","2020-07-01","2026-01-15"],
+["CCS-FIN01","RPC endpoint mapper accessible","","Low","3.7","2021-11-02","2026-01-15"],
+["CCS-FIN01","LLMNR enabled","","Low","3.7","2022-02-18","2026-01-15"],
+["CCS-PAY01","NetBIOS service enabled","","Low","3.7","2023-02-14","2026-01-15"],
+["CCS-FS01","SMB null session permitted","","Medium","5.3","2020-03-19","2026-01-15"]],"C":[["CCS-ARCH01","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36570","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36571","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36572","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36573","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36574","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36575","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36578","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36582","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36583","High","7.3","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36577","Critical","8.8","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Missing final security update KB5031419 (October 2023)","CVE-2023-36434","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-ARCH01","Windows SMBv1 remote code execution (EternalBlue)","CVE-2017-0144","Critical","8.8","2017-05-12","2026-01-15"],
+["CCS-FS01","Windows SMBv1 remote code execution (EternalBlue)","CVE-2017-0144","Critical","8.8","2017-05-12","2026-01-15"],
+["CCS-ARCH01","Windows Print Spooler remote code execution (PrintNightmare)","CVE-2021-34527","Critical","8.8","2021-07-05","2026-01-15"],
+["CCS-ARCH01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-SQL01","Windows BITS elevation of privilege","CVE-2020-0787","High","7.8","2020-03-12","2026-01-15"],
+["CCS-SQL01","SMBv3 compression remote code execution (SMBGhost)","CVE-2020-0796","Critical","10.0","2020-03-12","2026-01-15"],
+["CCS-FS01","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-36570","High","7.3","2023-10-11","2026-01-15"],
+["CCS-SQL01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-ARCH01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-SQL01","Microsoft SQL Server missing security updates","","Medium","6.5","2022-06-01","2026-01-15"],
+["CCS-SQL01","Deprecated TLS protocol enabled","","Medium","6.5","2021-10-05","2026-01-15"],
+["CCS-ARCH01","Deprecated TLS protocol enabled","","Medium","6.5","2021-09-14","2026-01-15"],
+["CCS-ARCH01","Cleartext HTTP service","","Low","2.6","2022-01-11","2026-01-15"],
+["CCS-ARCH01","Web server version disclosure","","Low","3.7","2020-07-01","2026-01-15"],
+["CCS-ARCH02","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-ARCH02","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-ARCH02","Readable network file share","","Medium","6.5","2021-06-14","2026-01-15"],
+["CCS-ARCH02","TLS 1.0 enabled on RDP","","Medium","6.5","2023-02-14","2026-01-15"],
+["CCS-ARCH01","SMBv1 protocol enabled","","Medium","5.3","2020-03-19","2026-01-15"],
+["CCS-ARCH01","Readable network file share","","Medium","6.5","2021-06-14","2026-01-15"],
+["CCS-ARCH01","SMB signing not required","","Medium","5.3","2021-06-14","2026-01-15"],
+["CCS-FS01","SMB null session permitted","","Medium","5.3","2020-03-19","2026-01-15"],
+["CCS-FS01","SMB signing not required","","Medium","5.3","2021-06-14","2026-01-15"],
+["CCS-SQL01","SMB signing not required","","Medium","5.3","2022-05-30","2026-01-15"],
+["CCS-ARCH02","SMB signing not required","","Medium","5.3","2023-02-14","2026-01-15"]],"D":[["WKS-01","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-02","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-03","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-04","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-05","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-06","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-07","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-08","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-09","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-10","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-11","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["WKS-12","Windows 10 unsupported version detection","","Critical","","2025-10-15","2026-01-15"],
+["CCS-FW01","FortiOS authentication bypass on administrative interface","CVE-2022-40684","Critical","9.8","2022-10-10","2026-01-15"],
+["CCS-FW01","FortiOS SSL VPN detected, firmware out of date","","High","7.5","2022-10-10","2026-01-15"],
+["CCS-FW01","Administrative interface reachable from untrusted networks","","Medium","6.5","2021-08-01","2026-01-15"],
+["CCS-DC01","Operating system identified","","Info","0.0","2021-01-04","2026-01-15"],
+["CCS-DC01","Netlogon elevation of privilege (Zerologon)","CVE-2020-1472","Critical","10.0","2020-08-11","2026-01-15"],
+["CCS-DC01","SMBv3 compression remote code execution (SMBGhost)","CVE-2020-0796","Critical","10.0","2020-03-12","2026-01-15"],
+["CCS-DC01","Microsoft Windows Server missing security updates","","Medium","6.5","2022-06-01","2026-01-15"],
+["CCS-DC01","SMB signing not required","","Medium","5.3","2021-09-14","2026-01-15"],
+["CCS-FS01","Windows Server 2012 R2 unsupported version detection","","Critical","","2023-10-11","2026-01-15"],
+["CCS-FS01","Windows SMBv1 remote code execution (EternalBlue)","CVE-2017-0144","Critical","8.8","2017-05-12","2026-01-15"],
+["CCS-FS01","Missing final security update KB5031419 (October 2023)","CVE-2023-35349","Critical","9.8","2023-10-11","2026-01-15"],
+["CCS-FS01","SMBv1 protocol enabled","","Medium","5.3","2020-03-19","2026-01-15"],
+["CCS-FS01","SMB signing not required","","Medium","5.3","2021-06-14","2026-01-15"],
+["DESKTOP-7F2KQ9L","Operating system identified","","Info","0.0","2025-12-02","2026-01-15"],
+["DESKTOP-7F2KQ9L","TLS 1.0 enabled on RDP","","Medium","6.5","2025-12-02","2026-01-15"],
+["DESKTOP-7F2KQ9L","SMB signing not required","","Medium","5.3","2025-12-02","2026-01-15"],
+["DESKTOP-7F2KQ9L","NetBIOS service enabled","","Low","3.7","2025-12-02","2026-01-15"],
+["CCS-DC01","LDAP over TLS supports deprecated protocol","","Medium","6.5","2021-09-14","2026-01-15"],
+["CCS-FW01","DNS recursion allowed from internal networks","","Low","3.7","2021-08-01","2026-01-15"],
+["CCS-DC01","LLMNR enabled","","Low","3.7","2022-02-18","2026-01-15"],
+["CCS-DC01","Kerberos pre-authentication disabled for one or more accounts","","Medium","5.3","2022-05-30","2026-01-15"],
+["WKS-03","SMB signing not required","","Medium","5.3","2025-10-15","2026-01-15"],
+["WKS-07","Endpoint protection software not detected","","Medium","5.3","2025-11-20","2026-01-15"],
+["WKS-11","Local administrator account enabled with common name","","Medium","5.3","2025-10-15","2026-01-15"],
+["DESKTOP-7F2KQ9L","Cleartext HTTP service","","Low","2.6","2025-12-02","2026-01-15"],
+["CCS-FW01","Outlook on the web endpoint reachable","","Low","3.7","2021-08-01","2026-01-15"],
+["CCS-DC01","Print Spooler service running on domain controller","","Medium","5.3","2022-05-30","2026-01-15"],
+["WKS-02","Remote Desktop enabled on workstation","","Low","3.7","2025-10-15","2026-01-15"]]};
+
+  /* The twelve-row cluster per scope (build spec table), as row indexes. */
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims", from:0, n:12,
+      host:"CCS-APP01", finding:"Missing November 2022 security updates (KB5019964)",
+      why:"All twelve rows are on one server, <b>CCS-APP01</b>. Each has a different flaw code (the CVE column, one code per known flaw), but every one needs the same fix: install the <b>November 2022 security update</b>, a repair sent out by Microsoft, the maker of Windows." },
+    B:{ name:"Payments and Remittance", ic:"coin", from:1, n:12,
+      host:"CCS-FS01", finding:"Missing final security update KB5031419 (October 2023)",
+      why:"All twelve rows are on one server, <b>CCS-FS01</b>. Each has a different flaw code (the CVE column, one code per known flaw), but every one comes from the same gap: the server never got <b>KB5031419</b>, the last security update its version of Windows will ever get, from October 2023. The same update also shows up on another server further down. Each server counts on its own." },
+    C:{ name:"Patient Records and Archive", ic:"archive", from:1, n:12,
+      host:"CCS-ARCH01", finding:"Missing final security update KB5031419 (October 2023)",
+      why:"All twelve rows are on one server, <b>CCS-ARCH01</b>. Each has a different flaw code (the CVE column, one code per known flaw), but every one comes from the same gap: the server never got <b>KB5031419</b>, the last security update its version of Windows will ever get, from October 2023. The same update also shows up on other servers further down. Each server counts on its own." },
+    D:{ name:"Remote and Corporate", ic:"laptop", from:0, n:12,
+      host:"WKS-01 to WKS-12", finding:"Windows 10 unsupported version detection",
+      why:"Each of these twelve rows is a different laptop, <b>WKS-01 to WKS-12</b>. Every one says the same thing: it runs <b>Windows 10</b>, which will receive no further security updates. One problem, found on twelve laptops." }
+  };
+  var ORDER = ["A","B","C","D"];
+  var MIN = 1, MAX = 45;
+
+  var S = [
+    { id:"scope", kind:"scope", label:"Your scope", h1:"Pick Your Scope",
+      lead:"Choose the scope you picked in Project 1. The next slide shows every row of that scope's scan." },
+    { id:"guess", kind:"guess", label:"Your guess", h1:"How Many Problems Are In Here?" },
+    { id:"reveal", kind:"reveal", label:"The answer", h1:"About Eight Real Problems" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m13-how-many-problems-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { scope:null, guess:{} }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var g = {};
+      if(isPlain(raw.guess)) ORDER.forEach(function(k){
+        var v = raw.guess[k];
+        if(Number.isInteger(v) && v >= MIN && v <= MAX) g[k] = v;
+      });
+      return { scope:(ORDER.indexOf(raw.scope) >= 0) ? raw.scope : null, guess:g };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+  var draft = {};   /* an unlocked value per scope, not saved */
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [];
+    var want = { A:42, B:42, C:40, D:40 };
+    ORDER.forEach(function(k){
+      var r = ROWS[k], c = SC[k];
+      if(!r || r.length !== want[k]) problems.push("scope " + k + " has " + (r ? r.length : 0) + " rows, spec says " + want[k]);
+      for(var j = c.from; j < c.from + c.n; j++){
+        var row = r[j];
+        if(!row){ problems.push("scope " + k + " cluster row " + j + " missing"); continue; }
+        if(row[1] !== c.finding) problems.push("scope " + k + " cluster row " + j + " is not the cluster finding");
+        if(k !== "D" && row[0] !== c.host) problems.push("scope " + k + " cluster row " + j + " is not on " + c.host);
+      }
+      r.forEach(function(row){ if(row[6] !== "2026-01-15") problems.push("scope " + k + " has a stale Last seen date"); });
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This interactive has authoring errors:</b></p>'
+        + '<ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"), again:document.getElementById("again"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function g(){ return st.scope ? st.guess[st.scope] : undefined; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(st.scope && i > 0){
+      el.chip.hidden = false;
+      el.chip.textContent = "Scope " + st.scope + " · " + SC[st.scope].name;
+    } else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.again.hidden = !(s.kind === "reveal" && st.scope && g() !== undefined);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    el.hint.textContent = "";
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end";
+      if(st.scope && g() !== undefined) el.hint.textContent = "Go back to the page for the next interactive."; }
+    else if(s.kind === "scope" && !st.scope){
+      el.next.disabled = true;
+      el.hint.textContent = "Pick a scope to carry on.";
+    }
+    else if(s.kind === "guess" && g() === undefined){
+      el.next.disabled = true;
+      if(st.scope) el.hint.textContent = "Lock in a guess to see the answer.";
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    var title = (s.kind === "reveal" && g() === undefined) ? "The Answer" : s.h1;
+    el.h1.textContent = title;
+    el.frame.setAttribute("aria-label", title);
+
+    if(s.kind === "scope") renderScope(s);
+    else if(!st.scope) needScope();
+    else if(s.kind === "guess") renderGuess();
+    else if(s.kind === "reveal"){
+      if(g() === undefined) needGuess(); else renderReveal();
+    }
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + title + ".");
+  }
+
+  function renderScope(s){
+    el.board.innerHTML = '<p class="lead">' + s.lead + "</p>"
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own guess</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        st.scope = b.dataset.k; save(st);
+        render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked.");
+      });
+    });
+  }
+
+  function needScope(){
+    el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Pick your scope first.</b> The rows depend on it.</p>'
+      + '<button class="go" type="button" id="goscope">Go to the scope picker</button></div>';
+    el.board.querySelector("#goscope").addEventListener("click", function(){ i = 0; render(); el.frame.focus(); });
+  }
+  function needGuess(){
+    el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Make your guess first.</b> The answer waits until you have locked one in.</p>'
+      + '<button class="go" type="button" id="gog">Go to the guess</button></div>';
+    el.board.querySelector("#gog").addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+  }
+
+  /* The wall: every data row, far too small to read. */
+  function wallHTML(lit){
+    var k = st.scope, c = SC[k], rows = ROWS[k];
+    var h = '<div class="wall' + (lit ? " lit" : "") + '" aria-hidden="true">'
+      + '<div class="wh"><span>Host</span><span>Finding</span><span>CVE</span><span>Severity</span><span>CVSS</span><span>First seen</span><span>Last seen</span></div>'
+      + '<div class="wrows">';
+    rows.forEach(function(r, j){
+      var cl = j >= c.from && j < c.from + c.n;
+      h += '<div class="wr' + (cl ? " cl" : "") + '">' + r.map(function(v){ return "<span>" + esc(v) + "</span>"; }).join("") + "</div>";
+    });
+    if(lit){
+      var top = (c.from / rows.length * 100), ht = (c.n / rows.length * 100);
+      h += '<div class="clbox' + (reduce ? "" : " in") + '" style="top:calc(' + top + '% - 2px);height:calc(' + ht + '% + 4px)">'
+        + '<span class="cltag">' + icon("stack") + "12 rows, 1 problem</span></div>";
+    }
+    return h + "</div></div>";
+  }
+
+  function renderGuess(){
+    var k = st.scope, locked = g();
+    var val = locked !== undefined ? locked : draft[k];
+    var has = val !== undefined;
+    el.board.innerHTML = '<p class="lead">This is every row of your scope\'s scan, all at once. Each row is one thing the scan flagged.</p>'
+      + '<div class="split">' + wallHTML(false)
+      + '<div class="side">'
+      + '<p class="q" id="gq">How many real problems are in here?</p>'
+      + '<p class="sub">Drag the slider, or type a number.</p>'
+      + '<div class="slwrap"><input type="range" id="rng" min="' + MIN + '" max="' + MAX + '" step="1" value="' + (has ? val : 23) + '"'
+      + (has ? "" : ' class="unset"') + (locked !== undefined ? " disabled" : "")
+      + ' aria-labelledby="gq" aria-valuetext="' + (has ? val : "No guess yet") + '">'
+      + '<div class="scale" aria-hidden="true"><span>1</span><span>45</span></div></div>'
+      + '<div class="numrow"><label for="num">Your guess</label>'
+      + '<input type="number" id="num" inputmode="numeric" min="' + MIN + '" max="' + MAX + '" step="1" placeholder="None" value="' + (has ? val : "") + '"'
+      + (locked !== undefined ? " disabled" : "") + "></div>"
+      + '<p class="gstat" id="gstat"></p>'
+      + (locked !== undefined
+          ? '<p class="locked mt"><span class="gl" aria-hidden="true">✓</span>Guess locked in: ' + locked + "</p>"
+          : '<button class="go mt" type="button" id="lock"' + (has ? "" : " disabled") + ">" + icon("lock") + "Lock in my guess</button>")
+      + "</div></div>";
+
+    var rng = el.board.querySelector("#rng"), num = el.board.querySelector("#num"),
+        lock = el.board.querySelector("#lock"), gs = el.board.querySelector("#gstat");
+    if(locked !== undefined){ gs.innerHTML = "Press <b>Continue</b> to see the answer."; return; }
+    function setVal(v, from){
+      draft[k] = v;
+      rng.classList.remove("unset");
+      if(from !== "rng") rng.value = v;
+      rng.setAttribute("aria-valuetext", String(v));
+      if(from !== "num") num.value = v;
+      lock.disabled = false;
+      gs.textContent = "";
+    }
+    rng.addEventListener("input", function(){ setVal(parseInt(rng.value, 10), "rng"); });
+    /* While unset, the first key press starts from an end, not from the hidden middle. */
+    rng.addEventListener("keydown", function(e){
+      if(!rng.classList.contains("unset")) return;
+      var up = { ArrowRight:1, ArrowUp:1, PageUp:1, Home:1 }, dn = { ArrowLeft:1, ArrowDown:1, PageDown:1, End:1 };
+      if(!(e.key in up) && !(e.key in dn)) return;
+      e.preventDefault();
+      setVal((e.key in up) ? MIN : MAX);
+    });
+    num.addEventListener("input", function(){
+      var t = num.value.trim();
+      if(t === ""){ delete draft[k]; rng.classList.add("unset"); lock.disabled = true; gs.textContent = ""; return; }
+      var v = Number(t);
+      if(!Number.isInteger(v) || v < MIN || v > MAX){
+        delete draft[k]; rng.classList.add("unset"); rng.setAttribute("aria-valuetext", "No guess yet");
+        lock.disabled = true;
+        gs.innerHTML = "<b>Use a whole number from 1 to 45.</b>";
+        return;
+      }
+      setVal(v, "num");
+    });
+    num.addEventListener("keydown", function(e){ if(e.key === "Enter" && !lock.disabled){ e.preventDefault(); lock.click(); } });
+    lock.addEventListener("click", function(){
+      var v = draft[k];
+      if(!Number.isInteger(v)) return;
+      st.guess[k] = v; save(st);
+      renderGuess(); header();
+      el.next.focus();
+      say("Guess locked in: " + v + ". Press Continue to see the answer.");
+    });
+  }
+
+  function feedback(v, rows){
+    if(v >= 30) return "That is close to the number of rows, not the number of problems. Many rows share one cause, so they count as one problem.";
+    if(v >= 6 && v <= 10) return "You looked past the rows to what causes them.";
+    if(v < 6) return "There are a few more than that. Some problems hide in only one or two rows.";
+    return "Fewer than that. Many rows share one cause, so they count as one problem.";
+  }
+
+  function renderReveal(){
+    var k = st.scope, c = SC[k], v = g(), rows = ROWS[k].length;
+    el.board.innerHTML = '<div class="split rv">' + wallHTML(true)
+      + '<div class="side' + (reduce ? "" : " in") + '" tabindex="-1" id="side">'
+      + '<p class="rvline">About eight. These twelve rows are one problem, printed twelve times.</p>'
+      + '<div class="cmp"><div><span class="k">Your guess</span><span class="v">' + v + '</span></div>'
+      + '<div><span class="k">Rows in the scan</span><span class="v">' + rows + "</span></div>"
+      + '<div><span class="k">Real problems</span><span class="v">About 8</span></div></div>'
+      + '<p class="fb">' + feedback(v, rows) + "</p>"
+      + '<p class="why">' + c.why + '<span class="more">The other rows group the same way, by cause. Grouped like that, your scan comes to about eight problems.</span></p>'
+      + "</div></div>";
+    say("About eight real problems. Your guess was " + v + ". Your scan has " + rows + " rows. These twelve rows are one problem, printed twelve times.");
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  el.again.addEventListener("click", function(){
+    if(!st.scope) return;
+    delete st.guess[st.scope]; delete draft[st.scope]; save(st);
+    i = 1; render(); el.frame.focus();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length,
+    reset:function(){ st = fresh(); draft = {}; save(st); i = 0; render(); },
+    scope:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; save(st); render(); return true; },
+    guess:function(v){ if(!st.scope) return false; st.guess[st.scope] = v; save(st); render(); return true; },
+    state:function(){ return { i:i, scope:st.scope, guess:st.guess }; }
+  };
+})();
+</script>
+</body>
+</html>

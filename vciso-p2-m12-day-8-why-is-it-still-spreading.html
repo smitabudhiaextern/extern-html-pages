@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 8: Why Is It Still Spreading?</title>
+<!--
+  vCISO P2 Step 3, Module 12: The Patch That Broke Antivirus for Six Days.
+  Build spec P2-10b in 06-content/project-02/step-03/module-12-internal.md.
+  Facts: P2 Sample Pack/Shared/Incident report - antivirus outage.md, LOCKED CANONICAL FACTS,
+  and P2 Sample Pack/Interactive content sets - P2.md, P2-10.
+  Scope neutral, per the outline. Answer: the third option (P2-10). Trap: the malware option.
+  Days are revealed one beat at a time. Nothing after day 8 is shown: days 11 and 12 stay on the page.
+  Nate is not named. The script "was run" (D2).
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and VCISO-STYLE-GUIDE.md section 6.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap;
+    display:inline-flex;align-items:center;gap:6px}
+  .chip svg.ic{width:14px;height:14px}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:17px;line-height:1.5;color:var(--body);max-width:80ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the count, one day at a time ---- */
+  .tl{flex:0 0 auto;display:flex;flex-direction:column;gap:8px}
+  .row{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:center;background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:12px;padding:9px 16px;min-height:52px}
+  .row .dn{display:flex;flex-direction:column;gap:1px}
+  .row .dn b{font-size:19px;font-weight:600;color:var(--title);line-height:1.1}
+  .row .dn span{font-size:13px;font-weight:600;color:var(--on-highlight)}
+  .row p{font-size:16.5px;line-height:1.4;color:var(--title)}
+  .row.now{background:var(--highlight);border-width:2px}
+  .row.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .cnt{display:grid;grid-template-columns:1fr 128px;gap:14px;align-items:center}
+  .track{height:22px;border-radius:6px;background:var(--tint);border:1px solid var(--line);position:relative;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;background:var(--on-highlight);border-radius:5px 0 0 5px;
+    transform-origin:left center}
+  .row.in .fill{animation:grow var(--t-reveal) var(--ease-out) both}
+  .num{font-size:17px;font-weight:600;color:var(--title);display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .num svg.ic{width:20px;height:20px;color:var(--on-highlight);flex:0 0 auto}
+  .row.wait{background:transparent;border:1.5px dashed var(--line)}
+  .row.wait .dn b{color:var(--body)}
+  .row.wait p{color:var(--body)}
+  .still{flex:0 0 auto;display:flex;align-items:center;gap:12px;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:11px 18px}
+  .still svg.ic{width:24px;height:24px;color:var(--on-highlight);flex:0 0 auto}
+  .still p{font-size:17.5px;line-height:1.4;font-weight:600;color:var(--title)}
+  .still.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:transparent;color:var(--on-highlight);align-self:flex-start;
+    display:inline-flex;align-items:center;gap:8px;flex:0 0 auto}
+  button.go.solid{background:var(--on-highlight);color:var(--bg)}
+  button.go svg.ic{width:18px;height:18px}
+  button.go:hover{background:var(--highlight)}
+  button.go.solid:hover{background:var(--on-highlight)}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* ---- slide 2: the choice ---- */
+  .pick{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
+  .opts{display:flex;flex-direction:column;gap:7px;min-height:0}
+  button.opt{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:6px 12px;flex:1 1 0;min-height:0;
+    display:grid;grid-template-columns:40px 1fr 64px;gap:10px;align-items:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt:hover{background:var(--highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt .oi{width:40px;height:40px;border-radius:10px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.opt .oi svg.ic{width:24px;height:24px}
+  button.opt .ot{display:flex;flex-direction:column;gap:2px;min-width:0}
+  button.opt .on{font-size:16px;font-weight:600;line-height:1.25;color:var(--title)}
+  button.opt .od{font-size:13.5px;line-height:1.3;color:var(--body)}
+  button.opt .mk{display:flex;flex-direction:column;align-items:center;gap:3px;justify-self:center}
+  button.opt .lb{font-size:12px;font-weight:600;line-height:1.15;color:var(--on-highlight);text-align:center}
+  /* The state marker. Empty ring when not chosen. Never filled until clicked. */
+  button.opt .g{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;align-self:center;background:transparent}
+  button.opt .g svg.ic{width:14px;height:14px}
+  button.opt.read{border-style:solid;border-color:var(--line)}
+  button.opt.mine{background:var(--highlight);border:2px solid var(--on-highlight);
+    box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--on-highlight)}
+  button.opt.mine .g{background:var(--on-highlight);color:var(--bg)}
+  button.opt.cur:not(.mine){background:var(--highlight);border-style:solid;border-color:var(--on-highlight)}
+
+  .panel{min-height:0;background:var(--highlight);border-radius:12px;padding:16px 20px;
+    display:flex;flex-direction:column;gap:10px}
+  .panel.empty{background:var(--tint);border:1.5px dashed var(--line);justify-content:center;align-items:flex-start}
+  .panel .pe{font-size:17px;line-height:1.45;color:var(--body)}
+  .panel .pe b{color:var(--title);font-weight:600}
+  .panel .ph{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .panel .ph svg.ic{width:26px;height:26px;color:var(--on-highlight);flex:0 0 auto}
+  .panel .pt{font-size:17.5px;font-weight:600;color:var(--title);line-height:1.25}
+  .panel .tags{display:flex;gap:8px;flex-wrap:wrap}
+  .panel .tag{align-self:flex-start;font-size:12.5px;font-weight:600;color:var(--on-highlight);background:var(--bg);
+    border:1px solid var(--on-highlight);border-radius:14px;padding:3px 10px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+  .panel .tag svg.ic{width:13px;height:13px}
+  .panel p.rp{font-size:16px;line-height:1.46;color:var(--title)}
+  .panel .more{margin-top:auto;font-size:14px;line-height:1.4;color:var(--body);border-top:1.5px solid var(--line);padding-top:8px}
+  .panel.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .panel:focus{outline:none}
+
+  /* ---- slide 3: why it kept spreading ---- */
+  .closewrap{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;min-height:0}
+  .yours{flex:0 0 auto;display:flex;align-items:flex-start;line-height:1.4;gap:10px;font-size:16px;color:var(--body)}
+  .yours b{color:var(--title);font-weight:600}
+  .yours svg.ic{width:20px;height:20px;color:var(--on-highlight);flex:0 0 auto}
+  .chain{flex:0 0 auto;display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr;align-items:stretch}
+  .link{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:12px;padding:12px 14px;
+    display:flex;flex-direction:column;gap:8px}
+  .link .lh{display:flex;align-items:center;gap:10px}
+  .link .bi{width:40px;height:40px;border-radius:10px;background:var(--highlight);border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .link .bi svg.ic{width:22px;height:22px}
+  .link .when{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight)}
+  .link p{font-size:16px;line-height:1.4;color:var(--title)}
+  .link p b{font-weight:600}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--on-highlight)}
+  .arrow svg.ic{width:22px;height:22px}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:12px 20px}
+  .statement p{font-size:17.5px;line-height:1.45;font-weight:600;color:var(--title)}
+  .statement p + p{margin-top:4px;font-weight:400}
+  .defs{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .def{background:var(--bg);border-left:4px solid var(--on-highlight);border-radius:0 8px 8px 0;padding:8px 12px;
+    font-size:14.5px;line-height:1.4;color:var(--body)}
+  .def b{color:var(--title);font-weight:600}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .board{flex:0 0 auto}
+    .row{grid-template-columns:1fr;gap:6px}
+    .cnt{grid-template-columns:1fr}
+    .pick{grid-template-columns:1fr}
+    button.opt{flex:0 0 auto;padding:12px}
+    button.opt .od{font-size:15px}
+    .panel{flex:0 0 auto}
+    .chain{grid-template-columns:1fr}
+    .arrow{transform:rotate(90deg);height:28px}
+    .defs{grid-template-columns:1fr}
+    .def{font-size:16px}
+    .statement p{font-size:17px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Day 8: Why Is It Still Spreading?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 3</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:14px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Day 8: Why Is It Still Spreading?</h2>
+    <p><strong>Day 1, 3 February 2025.</strong> A routine script was run to fix a Windows Update problem (Windows Update is the tool that installs Microsoft's fixes). It appears to work.</p>
+    <p><strong>Day 3, 5 February.</strong> 3 machines have no working antivirus.</p>
+    <p><strong>Day 5, 7 February.</strong> 10 machines.</p>
+    <p><strong>Day 8, 10 February.</strong> 40 machines.</p>
+    <p>Nobody has run anything on any of them since day 1. Before you read on, pick one reason it is still spreading:</p>
+    <ul>
+      <li>The script is still running somewhere</li>
+      <li>It is spreading between machines like malware</li>
+      <li>Something is triggering on each machine at a different time</li>
+      <li>A second, unrelated fault</li>
+    </ul>
+    <h3>Why it kept spreading</h3>
+    <div class="box">
+      <p>The answer is the third: something is triggering on each machine at a different time.</p>
+      <p>The day 1 script had switched off a component the antivirus depended on. Nothing broke until each machine restarted.</p>
+      <p>So the damage spread at the speed people restarted their computers. That explains the shape of the count, and it is what made the cause so hard to see.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG drawn to the Phosphor outline style: one weight, uniform size,
+     #001D69 through currentColor. No icon font, no network request. */
+  var IC = {
+    monitor:'<rect x="3" y="4" width="18" height="12.5" rx="1.8"/><path d="M9 20.5h6M12 16.5v4"/>',
+    shieldx:'<path d="M12 3.2 19.5 6v5.6c0 4.7-3.2 7.9-7.5 9.2-4.3-1.3-7.5-4.5-7.5-9.2V6z"/><path d="m9.5 9.8 5 5M14.5 9.8l-5 5"/>',
+    script:'<rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="m8 9 2.5 2.5L8 14"/><path d="M12.5 14.5H16"/>',
+    bug:'<rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M9.5 7.5a2.5 2.5 0 0 1 5 0"/><path d="M7 11.5H3.5M20.5 11.5H17M7 16H4M20 16h-3M12 11v8.5"/><path d="m8.5 5-1.5-2M15.5 5l1.5-2"/>',
+    timer:'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 1.6"/><path d="M10 2.5h4M18.5 6.5l1.5-1.5"/>',
+    split:'<path d="M4 7h5l6 10h5"/><path d="M4 17h5l6-10h5"/><path d="m17.5 4.5 2.5 2.5-2.5 2.5M17.5 14.5l2.5 2.5-2.5 2.5"/>',
+    question:'<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><path d="M12 16.8v.2"/>',
+    right:'<path d="M4 12h15M13 6l6 6-6 6"/>',
+    check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    x:'<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
+    eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    calendar:'<rect x="3.5" y="5" width="17" height="15.5" rx="1.8"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="m9.2 14.6 1.9 1.9 3.8-3.8"/>',
+    hand:'<circle cx="12" cy="12" r="8.5"/><path d="m7 7 10 10"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    restart:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/>',
+    power:'<path d="M12 3.5v8"/><path d="M7.2 6.4a7.5 7.5 0 1 0 9.6 0"/>',
+    warn:'<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.2M12 17v.2"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     Dates and counts: LOCKED CANONICAL FACTS. Options: P2-10, word for word.
+     Answer: the third (P2-10). Trap: the malware option (build spec).
+     Replies are reveal copy written at build. */
+  var DAYS = [
+    { d:"Day 3", date:"5 Feb", n:3 },
+    { d:"Day 5", date:"7 Feb", n:10 },
+    { d:"Day 8", date:"10 Feb", n:40 }
+  ];
+  var MAX = 40;
+
+  var ANSWER = "trigger";
+  var OPTS = [
+    { id:"running", ic:"script",
+      name:"The script is still running somewhere",
+      def:"The day 1 commands are still being carried out somewhere.",
+      verdict:"Not this one",
+      reply:[
+        "The script was run on day 1. Nobody has run anything on any machine since.",
+        "So there is nothing still running that could be reaching new machines."
+      ] },
+    { id:"malware", ic:"bug",
+      name:"It is spreading between machines like malware",
+      def:"Malware is harmful software that can copy itself to other machines.",
+      verdict:"Not this one",
+      trap:true,
+      reply:[
+        "This is the easy trap. A count that climbs like this looks like something jumping from machine to machine, and machines losing their protection feels like an attack.",
+        "Nothing attacked them. The day 1 script had already switched off a part the antivirus needs on every machine. Nothing was jumping between machines. Each one broke on its own, later."
+      ] },
+    { id:"trigger", ic:"timer",
+      name:"Something is triggering on each machine at a different time",
+      def:"To trigger is to set something off.",
+      verdict:"The answer",
+      reply:[
+        "The day 1 script had switched off a component the antivirus depended on: a part it needs in order to work.",
+        "Nothing broke until each machine restarted. People restart on different days, so machines broke on different days."
+      ] },
+    { id:"second", ic:"split",
+      name:"A second, unrelated fault",
+      def:"A fault is something broken. This would be a new, separate one.",
+      verdict:"Not this one",
+      reply:[
+        "That would mean a second problem started by chance at the same time.",
+        "It would still not explain why the count keeps climbing with nothing new run."
+      ] }
+  ];
+
+  var S = [
+    { id:"count", kind:"count", label:"Day 5 and day 8",
+      h1:"The Number Keeps Growing",
+      chip:"Days 1 to 8" },
+    { id:"pick", kind:"pick", label:"Your call",
+      h1:"Why Is It Still Spreading?",
+      chip:"Day 8, 10 February" },
+    { id:"why", kind:"close", label:"What was happening",
+      h1:"Why It Kept Spreading",
+      chip:"Day 8, 10 February" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m12-day-8-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function validId(v){ return OPTS.some(function(o){ return o.id === v; }); }
+  function fresh(){ return { shown:1, pick:null, read:{}, cur:null }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var shown = (Number.isInteger(raw.shown) && raw.shown >= 1 && raw.shown <= DAYS.length) ? raw.shown : 1;
+      var read = {};
+      if(isPlain(raw.read)) Object.keys(raw.read).forEach(function(k){ if(validId(k)) read[k] = 1; });
+      var pick = validId(raw.pick) ? raw.pick : null;
+      if(!pick) return { shown:shown, pick:null, read:{}, cur:null };
+      return { shown:DAYS.length, pick:pick, read:read, cur: validId(raw.cur) ? raw.cur : pick };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function opt(id){ var r = null; OPTS.forEach(function(o){ if(o.id === id) r = o; }); return r; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(s.chip){ el.chip.hidden = false; el.chip.innerHTML = icon("calendar") + esc(s.chip); }
+    else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    el.hint.textContent = "";
+    if(i === S.length-1){ el.next.textContent = "Start again"; el.hint.textContent = "That is the end. Start again clears your pick and hides the days again."; }
+    else if(s.kind === "count" && st.shown < DAYS.length){
+      el.next.disabled = true;
+      el.hint.textContent = "Show each day in turn to carry on.";
+    }
+    else if(s.kind === "pick" && !st.pick){
+      el.next.disabled = true;
+      el.hint.textContent = "Pick one reason to carry on.";
+    }
+    else if(s.kind === "pick"){
+      var n = Object.keys(st.read).length;
+      el.hint.textContent = n < OPTS.length
+        ? "You can open the other three to read their replies too. Your pick stays marked."
+        : "You have read all four replies.";
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+
+    if(s.kind === "count") renderCount(false);
+    else if(s.kind === "pick") renderPick();
+    else renderClose();
+
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  /* Slide 1: day 1, then the count one day at a time. Nothing past day 8. */
+  function dayRow(k, fresh){
+    var x = DAYS[k];
+    var last = (k === st.shown-1);
+    var pct = Math.round(x.n / MAX * 1000) / 10;
+    return '<div class="row' + (last ? " now" : "") + (fresh ? " in" : "") + '">'
+      + '<div class="dn"><b>' + x.d + "</b><span>" + x.date + " 2025</span></div>"
+      + '<div class="cnt"><span class="track" aria-hidden="true"><span class="fill" style="width:' + pct + '%"></span></span>'
+      + '<span class="num">' + icon("shieldx") + x.n + " machines</span></div>"
+      + '<span class="sr">' + x.n + " machines have no working antivirus.</span>"
+      + "</div>";
+  }
+  function renderCount(animateLast){
+    var rows = '<div class="row"><div class="dn"><b>Day 1</b><span>3 Feb 2025</span></div>'
+      + "<p>A routine script was run to fix a Windows Update problem (Windows Update is the tool that installs Microsoft's fixes). It appears to work.</p></div>";
+    for(var k=0;k<DAYS.length;k++){
+      if(k < st.shown) rows += dayRow(k, animateLast && k === st.shown-1 && !reduce);
+      else rows += '<div class="row wait"><div class="dn"><b>' + DAYS[k].d + "</b><span>" + DAYS[k].date + " 2025</span></div>"
+        + "<p>Not yet. Show the next day to see it.</p></div>";
+    }
+    var done = st.shown >= DAYS.length;
+    el.board.innerHTML =
+        '<p class="lead">Each bar shows how many machines (the company\'s computers) have <b>no working antivirus</b> that day.</p>'
+      + '<div class="tl">' + rows + "</div>"
+      + (done
+          ? '<div class="still' + (animateLast && !reduce ? " in" : "") + '">' + icon("hand")
+            + "<p>Nobody has run anything on any of them since day 1.</p></div>"
+          : '<button class="go solid" id="more" type="button">' + icon("plus") + "Show " + DAYS[st.shown].d.toLowerCase() + "</button>");
+    var b = el.board.querySelector("#more");
+    if(b) b.addEventListener("click", function(){
+      st.shown += 1; save(st);
+      renderCount(true); header();
+      var x = DAYS[st.shown-1];
+      say(x.d + ", " + x.date + ". " + x.n + " machines have no working antivirus."
+        + (st.shown >= DAYS.length ? " Nobody has run anything on any of them since day 1." : ""));
+      var nb = el.board.querySelector("#more");
+      (nb || el.next).focus();
+    });
+  }
+
+  /* Slide 2: four options, none chosen on arrival. */
+  function renderPick(){
+    el.board.innerHTML =
+        '<div class="pick">'
+      +   '<div class="opts" role="group" aria-label="Why it is still spreading">'
+      +     OPTS.map(function(o){ return optHTML(o); }).join("")
+      +   "</div>"
+      +   '<div class="panel" id="panel" tabindex="-1" aria-live="polite"></div>'
+      + "</div>";
+    paintPanel(false);
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.opt"), function(b){
+      b.addEventListener("click", function(){ choose(b.dataset.o); });
+    });
+  }
+  function optHTML(o){
+    var mine = st.pick === o.id, read = !!st.read[o.id], cur = st.cur === o.id;
+    var cls = "opt" + (mine ? " mine" : read ? " read" : "") + (cur ? " cur" : "");
+    var g = mine ? icon(o.id === ANSWER ? "check" : "x") : (read ? icon("eye") : "");
+    var lb = "";
+    if(st.pick && o.id === ANSWER) lb = '<span class="lb" aria-hidden="true">' + (mine ? "Right" : "The answer") + "</span>";
+    else if(mine) lb = '<span class="lb" aria-hidden="true">Your pick</span>';
+    var state = mine ? (o.id === ANSWER ? "Your pick. This is the answer." : "Your pick. Not the answer.")
+      : (st.pick && o.id === ANSWER) ? "The answer." : read ? "Reply read." : "Not chosen.";
+    return '<button class="' + cls + '" type="button" data-o="' + o.id + '" aria-pressed="' + mine + '">'
+      + '<span class="oi">' + icon(o.ic) + "</span>"
+      + '<span class="ot"><span class="on">' + esc(o.name) + '</span><span class="od">' + esc(o.def) + "</span></span>"
+      + '<span class="mk"><span class="g" aria-hidden="true">' + g + "</span>" + lb + "</span>"
+      + '<span class="sr">' + state + "</span>"
+      + "</button>";
+  }
+  function paintPanel(animate){
+    var p = el.board.querySelector("#panel");
+    if(!p) return;
+    if(!st.pick){
+      p.className = "panel empty";
+      p.innerHTML = '<p class="pe"><b>Nobody has run anything since day 1</b>, yet the count keeps climbing.</p><p class="pe">Nothing is chosen yet. Pick the one reason on the left you think explains it.</p>';
+      return;
+    }
+    var o = opt(st.cur || st.pick);
+    var mine = o.id === st.pick;
+    var right = o.id === ANSWER;
+    p.className = "panel";
+    p.innerHTML = '<div class="ph">' + icon(o.ic) + '<span class="pt">' + esc(o.name) + "</span></div>"
+      + '<div class="tags">'
+      +   '<span class="tag">' + (mine ? icon(right ? "check" : "x") + "Your pick" : icon("eye") + "Another option") + "</span>"
+      +   '<span class="tag">' + icon(right ? "check" : (o.trap ? "warn" : "x")) + esc(o.trap ? "Not this one: the trap" : o.verdict) + "</span>"
+      + "</div>"
+      + replyOf(o).map(function(t){ return '<p class="rp">' + esc(t) + "</p>"; }).join("")
+      + (mine ? "" : '<p class="more">Your pick is still: <b>' + esc(opt(st.pick).name) + "</b>.</p>");
+    if(animate && !reduce){ p.classList.remove("in"); void p.offsetWidth; p.classList.add("in"); }
+  }
+  /* "Yes." only opens the answer's reply when it is the student's own pick. */
+  function replyOf(o){
+    var r = o.reply.slice();
+    if(o.id === ANSWER && o.id === st.pick) r[0] = "Yes. " + r[0];
+    return r;
+  }
+  function choose(id){
+    var o = opt(id);
+    if(!o) return;
+    var first = !st.pick;
+    if(first) st.pick = id;
+    st.read[id] = 1;
+    st.cur = id;
+    save(st);
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.opt"), function(b){
+      var tmp = document.createElement("div");
+      tmp.innerHTML = optHTML(opt(b.dataset.o));
+      var nb = tmp.firstChild;
+      b.className = nb.className;
+      b.setAttribute("aria-pressed", nb.getAttribute("aria-pressed"));
+      b.innerHTML = nb.innerHTML;
+    });
+    paintPanel(true);
+    header();
+    say((first ? "Your pick: " : "Another option: ") + o.name + ". "
+      + (o.id === ANSWER ? "This is the answer. " : "Not this one. ") + replyOf(o).join(" "));
+    if(window.matchMedia("(max-width:599px)").matches){
+      var pn = el.board.querySelector("#panel");
+      if(pn){ pn.scrollIntoView({behavior: reduce ? "auto" : "smooth", block:"start"}); pn.focus({preventScroll:true}); }
+    }
+  }
+
+  /* Slide 3: the causal chain, told plainly. Days 11 and 12 stay on the page. */
+  function renderClose(){
+    var mine = st.pick ? opt(st.pick) : null;
+    var line;
+    if(!mine) line = icon("question") + "<span>You did not pick one. You can go back and choose before you read this.</span>";
+    else if(mine.id === ANSWER) line = icon("check") + "<span>Your pick: <b>" + esc(mine.name) + "</b>. That is the answer.</span>";
+    else line = icon("x") + "<span>Your pick: <b>" + esc(mine.name) + "</b>. The answer: <b>" + esc(opt(ANSWER).name) + "</b>.</span>";
+    el.board.innerHTML = '<div class="closewrap">'
+      + '<p class="yours">' + line + "</p>"
+      + '<div class="chain">'
+      +   '<div class="link"><div class="lh"><span class="bi">' + icon("script") + '</span><span class="when">Day 1</span></div>'
+      +     "<p>The script switches off <b>a component the antivirus depended on</b>, a part it needs in order to work. Nothing looks wrong.</p></div>"
+      +   '<div class="arrow">' + icon("right") + "</div>"
+      +   '<div class="link"><div class="lh"><span class="bi">' + icon("power") + '</span><span class="when">Days later</span></div>'
+      +     "<p>A machine <b>restarts</b>: it is turned off and on again. Each machine does this on its own day.</p></div>"
+      +   '<div class="arrow">' + icon("right") + "</div>"
+      +   '<div class="link"><div class="lh"><span class="bi">' + icon("shieldx") + '</span><span class="when">Straight after</span></div>'
+      +     "<p>That machine's antivirus <b>stops working</b>. The count goes up by one.</p></div>"
+      + "</div>"
+      + '<div class="statement"><p>The damage spread at the speed people restarted their computers.</p>'
+      +   "<p>That explains the shape of the count: 3, then 10, then 40, with nothing new run. It is also what made the cause so hard to see: the damage showed up days after the script ran, on machines nobody had touched.</p></div>"
+      + "</div>";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){
+    if(i === S.length-1){ st = fresh(); save(st); i = 0; render(); el.frame.focus(); say("Started again. Slide 1 of " + S.length + "."); return; }
+    go(1);
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled && i < S.length-1) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    return t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled && i < S.length-1) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    state:function(){ return { i:i, shown:st.shown, pick:st.pick, read:st.read, cur:st.cur }; }
+  };
+})();
+</script>
+</body>
+</html>

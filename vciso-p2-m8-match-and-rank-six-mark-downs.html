@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match and Rank Six Mark-Downs</title>
+<!--
+  vCISO P2 Step 2, Module 8: Grade Cumberland's Front Door. Step 4.
+  Interactive P2-7, part 2 (the match, then the rank).
+
+  Item list, pairs and ranks: P2 Sample Pack/Interactive content sets - P2.md, P2-7,
+  as trimmed in module-08-internal.md "Build Spec: P2-7". Same for all four scopes,
+  so there is no scope picker.
+  Rank rule from the spec: Login over HTTP first, TLS 1.0 second, X-Content-Type-Options
+  last. The three Moderate rows are equal, so any order among places 3 to 5 is right.
+  The short "why" lines on the tiers (a live credential leak, patient data in transit,
+  barely moves the needle) are the SME's own words.
+  The plain definitions and the small explainer line under each consequence are
+  explanation copy written at build, per the spec.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:16px 44px 12px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:22px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:6px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:78ch}
+  .lead b{color:var(--title);font-weight:600}
+  .leadrow{flex:0 0 auto;display:flex;align-items:center;gap:16px}
+  .leadrow .lead{flex:1 1 auto;min-width:0}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+
+  /* ---- slide 1: six cards to open ---- */
+  .grid6{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:10px 14px}
+  button.oc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:8px 12px;
+    display:flex;flex-direction:column;gap:5px;min-width:0;min-height:0;
+    transition:background var(--t-fast) var(--ease-out)}
+  button.oc:hover{background:var(--highlight)}
+  button.oc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.oc .oh{display:flex;align-items:center;gap:10px}
+  button.oc .oi{flex:0 0 auto;width:30px;height:30px;border-radius:8px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.oc .oi svg.ic{width:20px;height:20px}
+  button.oc .ot{font-size:16px;font-weight:600;line-height:1.25;color:var(--title)}
+  button.oc .ob{flex:1 1 auto;font-size:14px;line-height:1.35;color:var(--body);
+    border-top:1.5px dashed var(--line);padding-top:5px;display:flex;align-items:flex-start;gap:8px}
+  button.oc .ob .gl{margin-top:1px}
+  button.oc.open{background:var(--highlight);border-style:solid;border-width:2px}
+  button.oc.open .ob{border-top:1.5px solid var(--on-highlight);color:var(--title)}
+  button.oc.open .ob.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  /* ---- slide 2: the match ---- */
+  .cols{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:372px 1fr;gap:16px}
+  .cols.even{grid-template-columns:1fr 1fr}
+  .colh{font-size:12px;line-height:14px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .stack{display:flex;flex-direction:column;gap:5px}
+  button.card{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:9px;padding:4px 10px;min-height:46px;
+    display:flex;align-items:center;gap:10px;min-width:0;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+  button.card:hover:not(:disabled){background:var(--highlight)}
+  button.card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.card:disabled{cursor:default}
+  #lcol button.card{min-height:48px}
+  #lcol button.card .nm{line-height:1.2}
+  .colh .cn{font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--body);margin-left:6px}
+  button.card .tx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.card .nm{font-size:15px;font-weight:600;line-height:1.25;color:var(--title)}
+  button.card .sub{font-size:12.5px;line-height:1.3;color:var(--body)}
+  /* the pair badge: an empty ring until paired, then a filled number */
+  .badge{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--on-highlight);
+    background:transparent;color:var(--on-highlight);font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .tag{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--on-highlight);background:var(--bg);
+    border:1px solid var(--on-highlight);border-radius:12px;padding:2px 8px;white-space:nowrap;display:flex;align-items:center;gap:5px}
+  .tag.bad{border-style:dashed}
+  button.card.sel{background:var(--highlight);border-style:solid;border-width:2px;box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--on-highlight)}
+  button.card.paired{border-style:solid}
+  button.card.paired .badge,button.card.sel .badge{border-style:solid}
+  button.card.paired .badge{background:var(--on-highlight);color:var(--bg)}
+  button.card.ok{background:var(--highlight);border-style:solid;border-width:2px}
+  button.card.ok .badge{background:var(--on-highlight);color:var(--bg);border-style:solid}
+  button.card.miss{border-style:dashed;border-width:2px}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);white-space:nowrap;flex:0 0 auto;
+    display:inline-flex;align-items:center;gap:7px}
+  button.go.ghost{background:transparent;color:var(--on-highlight)}
+  button.go:disabled{opacity:.34;cursor:not-allowed}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* ---- slide 3: the rank ---- */
+  .slot{border:1.5px dashed var(--line);border-radius:9px;min-height:46px;padding:4px 10px;
+    display:flex;align-items:center;gap:10px;background:var(--tint)}
+  .slot .pn{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--on-highlight);
+    color:var(--on-highlight);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .slot .emp{font-size:13.5px;color:var(--body)}
+  .slot .emp b{color:var(--title);font-weight:600}
+  button.slot{font-family:inherit;text-align:left;cursor:pointer;width:100%;background:var(--bg);color:var(--title);
+    border:1.5px solid var(--on-highlight)}
+  button.slot:hover:not(:disabled){background:var(--highlight)}
+  button.slot:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.slot:disabled{cursor:default}
+  button.slot .pn{border-style:solid;background:var(--on-highlight);color:var(--bg)}
+  button.slot .tx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.slot .nm{font-size:15px;font-weight:600;line-height:1.25}
+  button.slot .sub{font-size:12.5px;line-height:1.3;color:var(--body)}
+  button.slot .r1{display:flex;align-items:center;gap:8px}
+  button.slot .r1 .nm{flex:1 1 auto;min-width:0}
+  button.slot .tag{padding:1px 8px}
+  button.slot.ok{background:var(--highlight);border-width:2px}
+  button.slot.miss{border-style:dashed;border-width:2px}
+  .poolempty{font-size:14px;line-height:1.45;color:var(--body);border:1.5px dashed var(--line);border-radius:9px;padding:12px 14px}
+  .poolempty b{color:var(--title)}
+
+  /* ---- slide 4: the close ---- */
+  .closewrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 470px;gap:22px;align-items:center}
+  .statement{background:var(--highlight);border-left:5px solid var(--on-highlight);border-radius:0 12px 12px 0;padding:24px 26px}
+  .statement p{font-size:22px;line-height:1.38;font-weight:600;color:var(--title)}
+  .statement p + p{margin-top:10px}
+  .statement p.why{font-size:17px;line-height:1.42;font-weight:400;color:var(--title);border-top:1.5px solid var(--line);padding-top:10px;margin-top:12px}
+  .order{list-style:none;display:flex;flex-direction:column;gap:6px}
+  .order li{display:flex;align-items:center;gap:10px;background:var(--bg);border:1.5px solid var(--on-highlight);
+    border-radius:9px;padding:6px 10px}
+  .order .pn{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--on-highlight);color:var(--bg);
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .order .tx{flex:1 1 auto;min-width:0}
+  .order .nm{font-size:14.5px;font-weight:600;line-height:1.25;color:var(--title)}
+  .order .sub{font-size:12.5px;line-height:1.3;color:var(--body)}
+  .order .tier{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--on-highlight);border:1px solid var(--on-highlight);
+    border-radius:12px;padding:2px 8px;white-space:nowrap}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:52px;padding-top:8px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .leadrow{flex-wrap:wrap}
+    .board{flex:0 0 auto}
+    .grid6{grid-template-columns:1fr;grid-template-rows:none}
+    .cols,.cols.even{grid-template-columns:1fr}
+    button.card .nm,button.slot .nm{font-size:16px}
+    button.card .sub,button.slot .sub{font-size:14px}
+    .closewrap{grid-template-columns:1fr}
+    .statement p{font-size:19px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Match and Rank Six Mark-Downs">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Match and Rank Six Mark-Downs</h2>
+    <p>Six real mark-downs a grading tool can give. Before you read the answers, match each one to what it costs, then rank them from most to least serious.</p>
+    <h3>From most serious to least serious</h3>
+    <ol>
+      <li><strong>Login form posts over HTTP.</strong> The page where you type your username and password sends them over http://, with no encryption. What it costs: credentials sent in the clear on every login. How much it matters: Most, a live credential leak.</li>
+      <li><strong>Legacy TLS 1.0 enabled.</strong> TLS is the encryption behind https://. Version 1.0 is an old one with known weak spots, and this site still accepts it. What it costs: traffic can be downgraded and read in transit. How much it matters: High, patient data in transit.</li>
+      <li><strong>No HSTS header.</strong> A header is a short note a website sends your browser along with each page. HSTS is one that tells your browser to only ever open this site on https://. This site does not send it. What it costs: a user can be pushed to an unencrypted version. How much it matters: Moderate.</li>
+      <li><strong>Missing Content-Security-Policy.</strong> A header that tells your browser which places a page may load code from. This site does not send it. What it costs: larger attack surface if the site is later compromised. How much it matters: Moderate.</li>
+      <li><strong>Cookies not marked Secure/HttpOnly.</strong> A cookie is a small note a site leaves in your browser so it remembers you are logged in. Secure and HttpOnly are two settings that protect it, and they are off. What it costs: a session cookie can be stolen or leaked. How much it matters: Moderate.</li>
+      <li><strong>No X-Content-Type-Options header.</strong> A header that tells your browser not to guess what kind of file it has been sent. This site does not send it. What it costs: minor browser hardening. How much it matters: Least, barely moves the needle.</li>
+    </ol>
+    <p>The three Moderate ones weigh about the same, so any order among places 3, 4 and 5 is right.</p>
+    <div class="box"><p>The tools listed these at about the same weight. They are not. One leaks passwords on every login. One barely moves the needle.</p><p>The top two put data at risk straight away. The middle three only hurt if something else goes wrong first.</p></div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. */
+  var IC = {
+    key:'<circle cx="8" cy="15" r="4"/><path d="M11 12 20 3M16.5 6.5l2.5 2.5M14 9l2 2"/>',
+    lock:'<rect x="4.5" y="10.5" width="15" height="10" rx="1.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/>',
+    shield:'<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    code:'<path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+    cookie:'<path d="M20.5 12.5A8.5 8.5 0 1 1 11.5 3.5a3 3 0 0 0 4 3.5 3 3 0 0 0 5 5.5z"/><path d="M8.5 10h.01M12 15.5h.01M8 15h.01M15.5 13h.01"/>',
+    file:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="M9 12.5h6M9 16h6"/>',
+    check:'<path d="M20 6 9 17l-5-5"/>',
+    undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     The six rows, their consequences and their rank are the SME's (P2-7) as trimmed
+     in the build spec. Do not change them. "def" and "gloss" are build explanation copy.
+     rank: 1 Most, 2 High, 3 Moderate, 4 Least. Place 1 must be rank 1, place 2 rank 2,
+     places 3 to 5 rank 3 in any order, place 6 rank 4. */
+  var M = {
+    login:{ ic:"key", nm:"Login form posts over HTTP",
+      def:"The page where you type your username and password sends them over http://, with no encryption.",
+      con:"Credentials sent in the clear on every login",
+      gloss:"Username and password travel as text anyone watching can read.",
+      rank:1, tier:"Most", why:"A live credential leak" },
+    tls:{ ic:"lock", nm:"Legacy TLS 1.0 enabled",
+      def:"TLS is the encryption behind https://. Version 1.0 is an old one with known weak spots, and this site still accepts it.",
+      con:"Traffic can be downgraded and read in transit",
+      gloss:"The connection is forced onto the weak old version and read on its way.",
+      rank:2, tier:"High", why:"Patient data in transit" },
+    hsts:{ ic:"shield", nm:"No HSTS header",
+      def:"A header is a short note a website sends your browser along with each page. HSTS is one that tells your browser to only ever open this site on https://. This site does not send it.",
+      con:"A user can be pushed to an unencrypted version",
+      gloss:"Someone can be steered to the http:// copy of the site.",
+      rank:3, tier:"Moderate", why:"" },
+    csp:{ ic:"code", nm:"Missing Content-Security-Policy",
+      def:"A header is a short note a website sends your browser along with each page. This one tells your browser which places a page may load code from. This site does not send it.",
+      con:"Larger attack surface if the site is later compromised",
+      gloss:"If an attacker ever breaks in, they have more ways to do harm.",
+      rank:3, tier:"Moderate", why:"" },
+    cookie:{ ic:"cookie", nm:"Cookies not marked Secure/HttpOnly",
+      def:"A cookie is a small note a site leaves in your browser to keep you logged in. Secure and HttpOnly are two settings that protect it. Both are off.",
+      con:"A session cookie can be stolen or leaked",
+      gloss:"The note that keeps someone logged in can be taken and used.",
+      rank:3, tier:"Moderate", why:"" },
+    xcto:{ ic:"file", nm:"No X-Content-Type-Options header",
+      def:"A header is a short note a website sends your browser along with each page. This one tells your browser not to guess what kind of file it has been sent. This site does not send it.",
+      con:"Minor browser hardening",
+      gloss:"Hardening means extra protection. This is a small amount of it.",
+      rank:4, tier:"Least", why:"Barely moves the needle" }
+  };
+  /* Fixed shuffles, chosen so no pair sits on the same row and no order hints at the rank. */
+  var LEFT  = ["xcto","hsts","login","cookie","tls","csp"];
+  var RIGHT = ["csp","tls","cookie","login","xcto","hsts"];
+  var POOL  = ["hsts","xcto","csp","login","cookie","tls"];
+  var ANSWER = ["login","tls","hsts","csp","cookie","xcto"];
+  var KEYS = Object.keys(M);
+
+  var S = [
+    { id:"meet",  kind:"explore", label:"The mark-downs", h1:"Six Mark-Downs, in Plain Words" },
+    { id:"match", kind:"match",   label:"Match",          h1:"Match Each Mark-Down to What It Costs" },
+    { id:"rank",  kind:"rank",    label:"Rank",           h1:"Rank Them by How Much They Matter" },
+    { id:"close", kind:"close",   label:"Sorted",         h1:"Six Mark-Downs, Sorted" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m8-match-and-rank-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { opened:{}, pairs:{}, matchOk:{}, matchChecks:0, matchShown:false,
+                             slots:[null,null,null,null,null,null], rankChecked:false, rankOkAll:false, rankChecks:0, rankShown:false }; }
+  function load(){
+    try{
+      var r = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(r)) return fresh();
+      var f = fresh();
+      if(isPlain(r.opened)) f.opened = r.opened;
+      if(isPlain(r.pairs)) KEYS.forEach(function(k){ if(M[r.pairs[k]]) f.pairs[k] = r.pairs[k]; });
+      if(isPlain(r.matchOk)) KEYS.forEach(function(k){ if(r.matchOk[k] && f.pairs[k] === k) f.matchOk[k] = 1; });
+      f.matchChecks = (typeof r.matchChecks === "number") ? r.matchChecks : 0;
+      f.matchShown = !!r.matchShown;
+      if(Array.isArray(r.slots) && r.slots.length === 6){
+        var seen = {};
+        f.slots = r.slots.map(function(x){ if(M[x] && !seen[x]){ seen[x] = 1; return x; } return null; });
+      }
+      f.rankChecked = !!r.rankChecked; f.rankOkAll = !!r.rankOkAll; f.rankShown = !!r.rankShown;
+      f.rankChecks = (typeof r.rankChecks === "number") ? r.rankChecks : 0;
+      return f;
+    }catch(e){ return fresh(); }
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(st)); }catch(e){} }
+  var st = load();
+  var selL = null, selR = null;      /* the card waiting for its partner */
+  var rankFeedback = null;           /* per-place verdicts from the last check */
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function setHint(h){ el.hint.innerHTML = h ? "<span>" + h + "</span>" : ""; }
+  function anim(n){ if(!reduce && n){ n.classList.remove("in"); void n.offsetWidth; n.classList.add("in"); } }
+
+  function openedCount(){ return KEYS.filter(function(k){ return st.opened[k]; }).length; }
+  function pairedCount(){ return KEYS.filter(function(k){ return st.pairs[k]; }).length; }
+  function matchedCount(){ return KEYS.filter(function(k){ return st.matchOk[k]; }).length; }
+  function matchDone(){ return matchedCount() === 6; }
+  function placedCount(){ return st.slots.filter(function(x){ return x; }).length; }
+  function rankDone(){ return st.rankOkAll; }
+  function placeOk(p, k){
+    if(!k) return false;
+    if(p === 0) return M[k].rank === 1;
+    if(p === 1) return M[k].rank === 2;
+    if(p === 5) return M[k].rank === 4;
+    return M[k].rank === 3;
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    el.chip.hidden = false;
+    if(s.kind === "explore") el.chip.textContent = "Opened " + openedCount() + " of 6";
+    else if(s.kind === "match") el.chip.textContent = matchDone() ? "All 6 matched" : "Paired " + pairedCount() + " of 6";
+    else if(s.kind === "rank"){ if(!matchDone()) el.chip.hidden = true; else el.chip.textContent = rankDone() ? (st.rankShown ? "Answer shown" : "Ranked") : "Placed " + placedCount() + " of 6"; }
+    else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.disabled = false;
+    el.next.textContent = "Continue";
+    if(s.kind === "match" && !matchDone()) el.next.disabled = true;
+    if(s.kind === "rank" && !rankDone()) el.next.disabled = true;
+    if(s.kind === "rank" && !matchDone()) el.next.disabled = true;
+    if(i === S.length-1){ el.next.textContent = "Start over"; }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    setHint("");
+    selL = null; selR = null;
+    if(s.kind === "explore") renderExplore();
+    else if(s.kind === "match") renderMatch();
+    else if(s.kind === "rank") renderRank();
+    else renderClose();
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  /* Slide 1: six cards, opened in any order. */
+  function renderExplore(){
+    var order = LEFT; /* same order as the match, so nothing on this slide hints at the rank */
+    el.board.innerHTML = '<p class="lead">Six real mark-downs, in the words a grading tool uses. <b>Tap each card</b> to see what it means.</p>'
+      + '<div class="grid6">' + order.map(function(k){
+          var m = M[k], open = !!st.opened[k];
+          return '<button class="oc' + (open ? " open" : "") + '" type="button" data-k="' + k + '" aria-expanded="' + open + '">'
+            + '<span class="oh"><span class="oi">' + icon(m.ic) + '</span><span class="ot">' + esc(m.nm) + "</span></span>"
+            + '<span class="ob">' + obHTML(m, open) + "</span></button>";
+        }).join("") + "</div>";
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.oc"), function(b){
+      b.addEventListener("click", function(){
+        var k = b.dataset.k;
+        if(st.opened[k]) return;
+        st.opened[k] = 1; save();
+        b.classList.add("open"); b.setAttribute("aria-expanded","true");
+        var ob = b.querySelector(".ob"); ob.innerHTML = obHTML(M[k], true); anim(ob);
+        header();
+        if(openedCount() === 6) setHint("<b>All six open.</b> Next, match each one to what it costs.");
+        say(M[k].nm + ". " + M[k].def + " Opened " + openedCount() + " of 6.");
+      });
+    });
+    if(openedCount() === 6) setHint("<b>All six open.</b> Next, match each one to what it costs.");
+    else setHint("Open all six first. You will need them for the match.");
+  }
+  function obHTML(m, open){
+    return open
+      ? '<span>' + esc(m.def) + "</span>"
+      : '<span class="gl" aria-hidden="true">+</span><span>Tap to see what it means</span>';
+  }
+
+  /* Slide 2: pair left with right. */
+  function renderMatch(){
+    el.board.innerHTML = '<div class="leadrow"><p class="lead">Click a mark-down, then what it costs. Pair all six, then check.</p>'
+      + '<button class="go ghost" id="clearm" type="button">' + icon("undo") + 'Clear</button>'
+      + '<button class="go" id="checkm" type="button">' + icon("check") + 'Check matches</button></div>'
+      + '<div class="cols">'
+      + '<div><div class="colh">Mark-down<span class="cn">The numbers only show which pairs go together.</span></div><div class="stack" id="lcol"></div></div>'
+      + '<div><div class="colh">What it costs</div><div class="stack" id="rcol"></div></div>'
+      + "</div>";
+    drawMatch();
+    el.board.querySelector("#checkm").addEventListener("click", checkMatch);
+    el.board.querySelector("#clearm").addEventListener("click", clearOrShowMatch);
+    if(matchDone()) setHint(matchDoneText());
+    else setHint("Forgot what one means? Click it and its meaning shows here.");
+  }
+  function leftNum(k){ return LEFT.indexOf(k) + 1; }
+  function partnerOf(r){ var f = null; KEYS.forEach(function(k){ if(st.pairs[k] === r) f = k; }); return f; }
+  function drawMatch(){
+    var L = el.board.querySelector("#lcol"), R = el.board.querySelector("#rcol");
+    L.innerHTML = LEFT.map(function(k){
+      var m = M[k], ok = !!st.matchOk[k], p = !!st.pairs[k], miss = !!(st.missL && st.missL[k]);
+      var cls = "card" + (ok ? " ok" : p ? " paired" : "") + (selL === k ? " sel" : "") + (miss && !p ? " miss" : "");
+      var tag = ok ? '<span class="tag">✓ Right</span>' : (miss && !p ? '<span class="tag bad">✗ Try again</span>' : (selL === k ? '<span class="tag">Selected</span>' : ""));
+      return '<button class="' + cls + '" type="button" data-k="' + k + '"' + (ok ? " disabled" : "")
+        + ' aria-pressed="' + (selL === k) + '" aria-label="' + esc(m.nm) + (ok ? ", matched correctly" : p ? ", paired" : ", not paired yet") + '">'
+        + '<span class="badge" aria-hidden="true">' + leftNum(k) + "</span>"
+        + '<span class="tx"><span class="nm">' + esc(m.nm) + "</span></span>" + tag + "</button>";
+    }).join("");
+    R.innerHTML = RIGHT.map(function(r){
+      var m = M[r], who = partnerOf(r), ok = who && st.matchOk[who], sel = (selR === r);
+      var miss = !!(st.missR && st.missR[r]) && !who;
+      var cls = "card" + (ok ? " ok" : who ? " paired" : "") + (sel ? " sel" : "") + (miss ? " miss" : "");
+      var badge = who ? leftNum(who) : (miss ? "✗" : "");
+      var tag = "";
+      return '<button class="' + cls + '" type="button" data-r="' + r + '"' + (ok ? " disabled" : "")
+        + ' aria-pressed="' + sel + '" aria-label="' + esc(m.con) + (ok ? ", matched correctly with " + esc(M[who].nm) : who ? ", paired with " + esc(M[who].nm) : miss ? ", wrong last time, not paired" : ", not paired yet") + '">'
+        + '<span class="badge" aria-hidden="true">' + badge + "</span>"
+        + '<span class="tx"><span class="nm">' + esc(m.con) + '</span><span class="sub">' + esc(m.gloss) + "</span></span>" + tag + "</button>";
+    }).join("");
+    Array.prototype.forEach.call(L.querySelectorAll("button.card"), function(b){
+      b.addEventListener("click", function(){ pickL(b.dataset.k); });
+    });
+    Array.prototype.forEach.call(R.querySelectorAll("button.card"), function(b){
+      b.addEventListener("click", function(){ pickR(b.dataset.r); });
+    });
+    var ck = el.board.querySelector("#checkm");
+    if(ck){
+      ck.disabled = matchDone() || pairedCount() < 6;
+      ck.innerHTML = icon("check") + (matchDone() ? "All matched" : "Check matches");
+    }
+    var cl = el.board.querySelector("#clearm");
+    if(cl){
+      cl.disabled = matchDone() || (pairedCount() === 0 && st.matchChecks === 0);
+      cl.innerHTML = (st.matchChecks >= 1 && !matchDone()) ? "Show the answer" : icon("undo") + "Clear";
+    }
+  }
+  function clearOrShowMatch(){
+    if(matchDone()) return;
+    if(st.matchChecks >= 1){
+      KEYS.forEach(function(k){ st.pairs[k] = k; st.matchOk[k] = 1; });
+      st.matchShown = true; st.missL = {}; st.missR = {};
+      selL = null; selR = null; save(); drawMatch(); header();
+      setHint(matchDoneText()); say("All six pairs shown."); el.next.focus();
+      return;
+    }
+    KEYS.forEach(function(k){ if(!st.matchOk[k]) delete st.pairs[k]; });
+    selL = null; selR = null; save(); drawMatch(); header();
+    setHint("Cleared. Start again with any mark-down.");
+  }
+  function focusCard(sel){ var n = el.board.querySelector(sel); if(n) n.focus(); }
+  function defHint(k){ setHint("<b>" + esc(M[k].nm) + ".</b> " + esc(M[k].def)); }
+  function pickL(k){
+    if(st.matchOk[k]) return;
+    if(selR){ pair(k, selR); return; }
+    selL = (selL === k) ? null : k;
+    drawMatch(); focusCard('button[data-k="' + k + '"]');
+    if(selL){ defHint(k); say(M[k].nm + " selected. " + M[k].def + " Now click the consequence it causes."); }
+    else setHint("");
+  }
+  function pickR(r){
+    var who = partnerOf(r);
+    if(who && st.matchOk[who]) return;
+    if(selL){ pair(selL, r); return; }
+    selR = (selR === r) ? null : r;
+    drawMatch(); focusCard('button[data-r="' + r + '"]');
+    if(selR){ setHint("<b>" + esc(M[r].con) + ".</b> Now click the mark-down that causes it."); say(M[r].con + " selected. Now click the mark-down that causes it."); }
+    else setHint("");
+  }
+  function pair(k, r){
+    var old = partnerOf(r);
+    if(old && old !== k) delete st.pairs[old];
+    st.pairs[k] = r;
+    if(st.missL) delete st.missL[k];
+    if(st.missR) delete st.missR[r];
+    selL = null; selR = null; save(); drawMatch(); header();
+    setHint("<b>Paired " + pairedCount() + " of 6.</b> " + (pairedCount() === 6 ? "Now click <b>Check matches</b>." : "Click a card again to change a pair."));
+    say(M[k].nm + " paired with " + M[r].con + ". Paired " + pairedCount() + " of 6.");
+    focusCard('button[data-r="' + r + '"]');
+  }
+  function checkMatch(){
+    if(pairedCount() < 6) return;
+    st.matchChecks += 1;
+    var right = 0; st.missL = {}; st.missR = {};
+    KEYS.forEach(function(k){
+      if(st.pairs[k] === k){ st.matchOk[k] = 1; right++; }
+      else { st.missL[k] = 1; st.missR[st.pairs[k]] = 1; delete st.pairs[k]; }
+    });
+    save(); drawMatch(); header();
+    if(matchDone()){ setHint(matchDoneText()); say("All six matched correctly."); el.next.focus(); }
+    else {
+      setHint("<b>" + right + " of 6 right.</b> Click a mark-down marked ✗ to reread what it means, then pair it again.");
+      say(right + " of 6 right. Pair the rest again.");
+    }
+  }
+  function matchDoneText(){
+    return st.matchShown ? "<b>These are the six pairs.</b> Now for the part that takes judgement: which ones matter most." :
+      "<b>All six matched.</b> Now for the part that takes judgement: which ones matter most.";
+  }
+
+  /* Slide 3: build the order by clicking, most serious first. */
+  function renderRank(){
+    if(!matchDone()){
+      el.board.innerHTML = '<p class="lead">Finish the match on the last slide first. Go <b>Back</b>, then come back here.</p>';
+      return;
+    }
+    el.board.innerHTML = '<div class="leadrow"><p class="lead">Click the <b>most serious</b> one first, then the next, down to the least.</p>'
+      + '<button class="go ghost" id="clearr" type="button">' + icon("undo") + 'Clear</button>'
+      + '<button class="go" id="checkr" type="button">' + icon("check") + 'Check my order</button></div>'
+      + '<div class="cols even">'
+      + '<div><div class="colh">To place</div><div class="stack" id="pool"></div></div>'
+      + '<div><div class="colh">Your order</div><div class="stack" id="slots"></div></div>'
+      + "</div>";
+    drawRank();
+    el.board.querySelector("#checkr").addEventListener("click", checkRank);
+    el.board.querySelector("#clearr").addEventListener("click", clearOrShow);
+    if(rankDone()) setHint(rankDoneText());
+    else setHint("Click one on the left to put it in place 1. Changed your mind? Click it on the right to send it back.");
+  }
+  function drawRank(){
+    var P = el.board.querySelector("#pool"), Q = el.board.querySelector("#slots");
+    var placed = {}; st.slots.forEach(function(x){ if(x) placed[x] = 1; });
+    var left = POOL.filter(function(k){ return !placed[k]; });
+    P.innerHTML = left.length ? left.map(function(k){
+      var m = M[k];
+      return '<button class="card" type="button" data-p="' + k + '" aria-label="Place ' + esc(m.nm) + ' next">'
+        + '<span class="badge" aria-hidden="true"></span>'
+        + '<span class="tx"><span class="nm">' + esc(m.nm) + '</span><span class="sub">' + esc(m.con) + "</span></span></button>";
+    }).join("") : '<div class="poolempty">' + (rankDone() ? "<b>All six placed and checked.</b>" : "<b>All six placed.</b> Click <b>Check my order</b>, or click a placed one to take it back.") + "</div>";
+    Q.innerHTML = st.slots.map(function(k, p){
+      var lab = p === 0 ? "Most serious" : p === 5 ? "Least serious" : "";
+      if(!k) return '<div class="slot"><span class="pn" aria-hidden="true">' + (p+1) + '</span><span class="emp">'
+        + (lab ? "<b>" + lab + ".</b> " : "") + "Empty</span></div>";
+      var m = M[k], fb = rankFeedback ? rankFeedback[p] : null;
+      var ok = rankDone() || fb === true, miss = fb === false;
+      var tag = ok ? '<span class="tag">✓ ' + esc(m.tier) + "</span>" : miss ? '<span class="tag bad">✗ Not here</span>' : "";
+      var sub = ok && m.why ? m.why : m.con;
+      return '<button class="slot' + (ok ? " ok" : "") + (miss ? " miss" : "") + '" type="button" data-s="' + p + '"'
+        + (rankDone() ? " disabled" : "") + ' aria-label="Place ' + (p+1) + ", " + esc(m.nm) + (ok ? ", right place" : miss ? ", not the right place" : "") + (rankDone() ? "" : ". Click to take it back") + '">'
+        + '<span class="pn" aria-hidden="true">' + (p+1) + "</span>"
+        + '<span class="tx"><span class="r1"><span class="nm">' + esc(m.nm) + "</span>" + tag + '</span><span class="sub">' + esc(sub) + "</span></span></button>";
+    }).join("");
+    Array.prototype.forEach.call(P.querySelectorAll("button.card"), function(b){
+      b.addEventListener("click", function(){ place(b.dataset.p); });
+    });
+    Array.prototype.forEach.call(Q.querySelectorAll("button.slot"), function(b){
+      b.addEventListener("click", function(){ unplace(+b.dataset.s); });
+    });
+    var ck = el.board.querySelector("#checkr");
+    ck.disabled = rankDone() || placedCount() < 6;
+    ck.innerHTML = icon("check") + (rankDone() ? (st.rankShown ? "Answer shown" : "Ranked") : "Check my order");
+    var cl = el.board.querySelector("#clearr");
+    cl.disabled = rankDone() || (placedCount() === 0 && st.rankChecks === 0);
+    cl.innerHTML = (st.rankChecks >= 2 && !rankDone()) ? "Show the answer" : icon("undo") + "Clear";
+  }
+  function place(k){
+    var p = st.slots.indexOf(null);
+    if(p < 0) return;
+    st.slots[p] = k; if(rankFeedback) rankFeedback[p] = null; save(); drawRank(); header();
+    setHint("<b>Place " + (p+1) + ":</b> " + esc(M[k].nm) + "." + (placedCount() === 6 ? " Now click <b>Check my order</b>." : ""));
+    say("Place " + (p+1) + ", " + M[k].nm + ". Placed " + placedCount() + " of 6.");
+    var nx = el.board.querySelector("#pool button.card");
+    if(nx) nx.focus(); else el.board.querySelector("#checkr").focus();
+  }
+  function unplace(p){
+    if(rankDone()) return;
+    var k = st.slots[p]; if(!k) return;
+    st.slots[p] = null; if(rankFeedback) rankFeedback[p] = null; save(); drawRank(); header();
+    setHint(esc(M[k].nm) + " is back in the list. Place " + (p+1) + " is empty, so the next one you click goes there.");
+    say(M[k].nm + " taken back. Place " + (p+1) + " is empty.");
+  }
+  function clearOrShow(){
+    if(rankDone()) return;
+    if(st.rankChecks >= 2){
+      st.slots = ANSWER.slice(); st.rankOkAll = true; st.rankShown = true; st.rankChecked = true;
+      rankFeedback = null; save(); drawRank(); header();
+      setHint(rankDoneText()); say("The answer is shown.");
+      return;
+    }
+    st.slots = [null,null,null,null,null,null]; rankFeedback = null; save(); drawRank(); header();
+    setHint("Cleared. Start again with the most serious one.");
+  }
+  function checkRank(){
+    if(placedCount() < 6) return;
+    st.rankChecks += 1; st.rankChecked = true;
+    rankFeedback = st.slots.map(function(k, p){ return placeOk(p, k); });
+    var right = rankFeedback.filter(function(x){ return x; }).length;
+    if(right === 6){ st.rankOkAll = true; rankFeedback = null; }
+    save(); drawRank(); header();
+    if(rankDone()){ setHint(rankDoneText()); say("All six in the right place."); el.next.focus(); }
+    else {
+      var fp = rankFeedback.indexOf(false);
+      setHint("<b>" + right + " of 6 in the right place.</b> " + CLUE[fp < 3 ? fp : fp === 5 ? 3 : 2]
+        + (st.rankChecks >= 2 ? " Or click <b>Show the answer</b>." : ""));
+      say(right + " of 6 in the right place.");
+    }
+  }
+  /* Clues for a wrong place: build explanation copy, drawn from the SME consequence lines. */
+  var CLUE = [
+    "Place 1 is for the one that gives away passwords on every single login, to anyone watching.",
+    "Place 2 is for the one where a connection can be forced onto a weak old version and read, patient data included.",
+    "Places 3 to 5 are for the ones that only cause harm if something else goes wrong first.",
+    "Place 6 is for the one whose cost is only a small amount of extra protection."
+  ];
+  function rankDoneText(){
+    return (st.rankShown ? "<b>This is the order.</b> " : "<b>Right.</b> ")
+      + "Places 3, 4 and 5 hold three that weigh about the same, so any order among them counts.";
+  }
+
+  /* Slide 4: the reveal. */
+  function renderClose(){
+    var order = rankDone() ? st.slots : ANSWER;
+    el.board.innerHTML = '<div class="closewrap">'
+      + '<div class="statement"><p>The tools listed these at about the same weight. They are not.</p>'
+      + "<p>One leaks passwords on every login. One barely moves the needle.</p>"
+      + '<p class="why">The top two put data at risk straight away. The middle three only hurt if something else goes wrong first.</p></div>'
+      + '<ol class="order" aria-label="The six, from most to least serious">' + order.map(function(k, p){
+          var m = M[k];
+          return '<li><span class="pn" aria-hidden="true">' + (p+1) + '</span><span class="tx"><span class="nm">' + esc(m.nm)
+            + '</span><br><span class="sub">' + esc(m.why || m.con) + '</span></span><span class="tier">' + esc(m.tier) + "</span></li>";
+        }).join("") + "</ol></div>";
+    setHint("Your own reports may not show all six of these, and may show others. That is normal. Write down only what your reports actually list.");
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  function startOver(){ st = fresh(); rankFeedback = null; save(); i = 0; render(); el.frame.focus(); }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ if(i === S.length-1) startOver(); else go(1); });
+
+  document.addEventListener("keydown", function(e){
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled && i < S.length-1) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled && i < S.length-1) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length,
+    reset:function(){ startOver(); },
+    state:function(){ return JSON.parse(JSON.stringify(st)); }
+  };
+})();
+</script>
+</body>
+</html>

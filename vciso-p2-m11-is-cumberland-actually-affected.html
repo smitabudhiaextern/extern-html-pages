@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is Cumberland Actually Affected?</title>
+<!--
+  vCISO P2 Step 3, Module 11: Read Two Real Flaw Records. Build spec P2-9a in
+  06-content/project-02/step-03/module-11-internal.md.
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and the
+  per-slide tint ramp in 09-assets/deck-palette.json. Look, scope picker,
+  navigation and scale-to-fit match vciso-p2-m5-follow-one-bill.html.
+
+  Sources for every fact:
+  - Codes, hosts and versions per scope: build spec table, module 6 lookup
+    blocks (cpes), SYSTEM LIST - CCS (Nate's copy), Environment Record
+    (SME drop 2026-09-25).
+  - What each code affects and what an attacker gets: the NVD text quoted in
+    the internal file's source trace (checked 25 and 26 September 2026).
+  - Verdicts: build spec. Every Services tab code applies, CVE-2020-0796
+    does not apply in any scope.
+  The wrong options on questions 1 and 2 are the other records in this module,
+  or a reading that goes beyond what the record says.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+  body.t5{background:#F0E4EF}
+  body.t6{background:#D0EEF1}
+  body.t7{background:#EEDAD6}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:26px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:7px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:80ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the scope picker ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:20px 18px 16px;
+    display:flex;flex-direction:column;gap:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  html.fresh button.sc:not(.on):hover{background:var(--bg)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:64px;height:64px;border-radius:14px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:36px;height:36px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:20px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto;min-height:50px}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:9px}
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  button.sc.on{background:var(--on-highlight);border:2px solid var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .ss{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- the record strip ---- */
+  .strip{flex:0 0 auto;display:flex;align-items:center;gap:12px;background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:8px 14px}
+  .strip > svg.ic{width:26px;height:26px;color:var(--on-highlight);flex:0 0 auto}
+  .strip .cv{font-size:18px;font-weight:700;color:var(--title);white-space:nowrap}
+  .strip .fr{font-size:14.5px;line-height:1.3;color:var(--body);flex:1 1 auto;min-width:0}
+  .strip .fr b{color:var(--title);font-weight:600}
+  .hc{font-weight:600;color:var(--title);background:var(--highlight);border-radius:4px;padding:1px 5px;
+    white-space:nowrap;text-transform:none;letter-spacing:0}
+  .card .cl .hc{font-size:13px}
+  .nw{white-space:nowrap}
+  .ph .qs,.qs{font-size:13.5px;color:var(--body);line-height:1.3;margin-top:-2px}
+  a.nvd{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;
+    color:var(--on-highlight);text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+  a.nvd svg.ic{width:18px;height:18px}
+  a.nvd:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px;border-radius:3px}
+
+  /* ---- question panels ---- */
+  .panel{flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:9px 16px 8px;
+    display:flex;flex-direction:column;gap:6px}
+  .panel:focus{outline:none}
+  .panel:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  html.ptr .panel:focus-visible{outline:none}
+  .panel.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .ph{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .ph svg.ic{width:22px;height:22px;color:var(--on-highlight);flex:0 0 auto}
+  .ph .qn{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);white-space:nowrap}
+  .ph .pt{font-size:17px;font-weight:600;color:var(--title);line-height:1.25}
+  .ph .tag{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--on-highlight);background:var(--bg);
+    border:1px solid var(--on-highlight);border-radius:14px;padding:3px 10px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .opts{flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
+  .opts.row{flex-direction:row}
+  .opts.row button.opt{flex:1 1 0}
+  button.opt{font-family:inherit;font-size:14.5px;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:9px;
+    padding:6px 12px;cursor:pointer;display:flex;gap:10px;align-items:center;min-height:34px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt .g{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:11px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;background:transparent}
+  button.opt:hover:not(:disabled){background:var(--highlight)}
+  html.fresh button.opt:hover:not(:disabled){background:var(--bg);border-color:var(--line)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  button.opt.out{background:transparent;border-style:dashed;border-color:var(--line);color:var(--body)}
+  button.opt.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.opt.out .g{border-style:dashed}
+  .note{flex:0 0 auto;min-height:19px;font-size:14px;line-height:1.38;color:var(--body)}
+  .note b{color:var(--title);font-weight:600}
+  .note:focus{outline:none}
+
+  /* an answered question, folded to one line */
+  .doneq{flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:6px 14px}
+  .doneq .gl{margin-top:1px;background:var(--on-highlight);color:var(--bg)}
+  .doneq .dq{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);
+    white-space:nowrap;padding-top:2px;width:132px;flex:0 0 auto}
+  .doneq .da{font-size:15px;line-height:1.38;color:var(--title);flex:1 1 auto;min-width:0}
+  .doneq .dh{font-size:12.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap;padding-top:2px}
+  .locked{flex:0 0 auto;display:flex;align-items:center;gap:10px;border:1.5px dashed var(--line);border-radius:10px;
+    padding:7px 14px;font-size:14.5px;color:var(--body);background:var(--tint)}
+  .locked svg.ic{width:20px;height:20px;color:var(--on-highlight)}
+
+  /* ---- the version check ---- */
+  .cmp{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:8px 14px 8px;
+    display:flex;flex-direction:column;gap:4px;min-width:0}
+  .card .cl{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--on-highlight)}
+  .card .cl svg.ic{width:18px;height:18px}
+  .card .cb{font-size:16px;font-weight:600;line-height:1.3;color:var(--title)}
+  .card .cs{font-size:13.5px;line-height:1.33;color:var(--body)}
+  .card .cs b{color:var(--title);font-weight:600}
+  .card.wait{border-style:dashed;border-color:var(--line);background:var(--tint)}
+  .card.wait .cb{color:var(--body);font-weight:500;font-size:15px}
+  .card.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .vbtns{flex:0 0 auto;display:flex;gap:12px}
+  button.vb{font-family:inherit;font-size:17px;font-weight:600;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:13px 16px;cursor:pointer;
+    display:flex;align-items:center;gap:10px;flex:1 1 0}
+  button.vb:hover{background:var(--highlight)}
+  html.fresh button.vb:hover{background:var(--bg)}
+  button.vb:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.vb .g{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);background:transparent}
+  .verdict{flex:0 0 auto;font-size:18px;font-weight:700;line-height:1.3;color:var(--title)}
+  .why{flex:0 0 auto;font-size:14.5px;line-height:1.4;color:var(--body)}
+  .why b{color:var(--title);font-weight:600}
+
+  /* ---- slide 6: the copy table ---- */
+  .ctab{flex:0 0 auto;width:100%;border-collapse:collapse;table-layout:fixed;background:var(--bg);
+    font-size:13px;line-height:1.35;color:var(--title)}
+  .ctab th{background:var(--on-highlight);color:var(--bg);text-align:left;font-size:11.5px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;padding:7px 8px;vertical-align:bottom}
+  .ctab th:nth-child(1){width:16%} .ctab th:nth-child(2){width:21%} .ctab th:nth-child(3){width:20%}
+  .ctab th:nth-child(4){width:15%} .ctab th:nth-child(5){width:17%} .ctab th:nth-child(6){width:11%}
+  .ctab td{padding:8px 8px;border-bottom:1.5px solid var(--line);vertical-align:top}
+  .ctab td:first-child{font-weight:600}
+  .ctab td.ap{font-weight:700}
+  .gate{flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:22px 24px;display:flex;flex-direction:column;gap:14px}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  .closewrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;padding-bottom:30px}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:40px 40px;max-width:840px}
+  .statement p{font-size:32px;line-height:1.35;font-weight:600;color:var(--title)}
+  .statement p.sub{font-size:17px;line-height:1.5;font-weight:400;color:var(--body);margin-top:16px}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .scopes{grid-template-columns:1fr 1fr;gap:10px}
+    button.sc{padding:14px 12px}
+    button.sc .si{width:48px;height:48px}
+    button.sc .sn{font-size:17px}
+    .board{flex:0 0 auto}
+    .strip{flex-wrap:wrap}
+    .strip .fr{flex:1 1 100%}
+    .panel{padding:14px 14px}
+    .ph{flex-wrap:wrap;row-gap:6px}
+    .ph .tag{margin-left:0;white-space:normal}
+    .opts.row{flex-direction:column}
+    button.opt{font-size:16px;padding:12px 13px}
+    .doneq{flex-wrap:wrap}
+    .doneq .dq{width:auto;flex:1 1 calc(100% - 30px)}
+    .doneq .da{flex:1 1 100%}
+    .cmp{grid-template-columns:1fr}
+    .vbtns{flex-direction:column}
+    .ctab,.ctab tbody,.ctab tr,.ctab td{display:block;width:100%}
+    .ctab thead{display:none}
+    .ctab{font-size:15px;background:transparent}
+    .ctab tr{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 0}
+    .ctab td{border:0;padding:4px 12px}
+    .ctab td::before{content:attr(data-l);display:block;font-size:12.5px;font-weight:600;letter-spacing:.04em;
+      text-transform:uppercase;color:var(--on-highlight)}
+    .statement{padding:22px 20px}
+    .statement p{font-size:22px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Is Cumberland Actually Affected?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 7</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:24px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Is Cumberland Actually Affected?</h2>
+    <p>For each of your two records, answer three questions: what it affects, what an attacker gets, and whether Cumberland runs the affected version. Then check your answers against your scope below.</p>
+    <h3>Scope A, Claims Intake</h3>
+    <ul>
+      <li><strong>CVE-2021-34527, on portal.</strong> Affects the Windows Print Spooler, on many Windows versions including Windows Server 2016. An attacker runs code with full system control. The portal machine runs Windows Server 2016 (Services tab). <strong>Applies.</strong></li>
+      <li><strong>CVE-2020-0796, on CCS-SQL01.</strong> Affects SMBv3 (version 3.1.1) on Windows 10 and Windows Server, versions 1903 and 1909 only. An attacker runs code from across the network. CCS-SQL01 runs Windows Server 2019 (Nate's system list, "SQL 2016 on Svr 2019"). <strong>Does not apply.</strong></li>
+    </ul>
+    <h3>Scope B, Payments and Remittance</h3>
+    <ul>
+      <li><strong>CVE-2021-34527, on payers.</strong> As in Scope A. The payers machine runs Windows Server 2016 (Services tab). <strong>Applies.</strong></li>
+      <li><strong>CVE-2020-0796, on CCS-FIN01.</strong> As in Scope A. CCS-FIN01 runs Windows Server 2016 (Nate's system list, "Win Svr 2016"). <strong>Does not apply.</strong></li>
+    </ul>
+    <h3>Scope C, Patient Records and Archive</h3>
+    <ul>
+      <li><strong>CVE-2017-0144, on records.</strong> Affects the SMBv1 server on older Windows, including Windows Server 2012 Gold and R2 (Gold means the first release, R2 its later second release). An attacker runs code from across the network. The records machine runs Windows Server 2012 R2 (Services tab). <strong>Applies.</strong></li>
+      <li><strong>CVE-2020-0796, on CCS-SQL01.</strong> As in Scope A. <strong>Does not apply.</strong></li>
+    </ul>
+    <h3>Scope D, Remote and Corporate</h3>
+    <ul>
+      <li><strong>CVE-2022-40684, on remote.</strong> Affects FortiOS 7.0.0 to 7.0.6 and 7.2.0 to 7.2.1, the administrative interface. An attacker takes over the administrative interface without logging in. The remote machine runs FortiOS 7.0.5 (Services tab). <strong>Applies.</strong></li>
+      <li><strong>CVE-2020-0796, on CCS-DC01.</strong> As in Scope A. CCS-DC01 runs Windows Server 2019 (Nate's system list, "Win Svr 2019"). <strong>Does not apply.</strong></li>
+    </ul>
+    <p>"Windows Server, version 1903" and "version 1909" are their own products, separate from Windows Server 2019 and Windows Server 2016. Only an exact product match counts.</p>
+    <div class="box"><p><strong>A flaw in the catalog is not a flaw you have.</strong></p></div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    file:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="M9 12.5h6M9 16h6"/>',
+    search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+    bug:'<rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M9 7.5a3 3 0 0 1 6 0"/><path d="M12 11v8.5M3.5 13H7M17 13h3.5M4.5 8.5l2.8 1.7M19.5 8.5l-2.8 1.7M4.5 18.5l2.8-1.8M19.5 18.5l-2.8-1.8"/>',
+    server:'<rect x="4" y="3.5" width="16" height="7" rx="1.2"/><rect x="4" y="13.5" width="16" height="7" rx="1.2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/>',
+    table:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.2"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/>',
+    lock:'<rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+    scale:'<path d="M12 3.5v17M7 20.5h10M4 7h16"/><path d="M6.5 7 3.5 13.5a3 3 0 0 0 6 0zM17.5 7l-3 6.5a3 3 0 0 0 6 0z"/>',
+    out:'<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ---------------- */
+
+  /* Question 1 options. Built from each record's NVD Description and
+     affected list, as quoted in module-11-internal.md. */
+  var AFFECTS = {
+    ps:{ txt:"The Windows Print Spooler, the part of Windows that sends work to printers. Many Windows versions, including Windows Server 2016.",
+         short:"Windows Print Spooler, on many Windows versions including Windows Server 2016" },
+    smb3:{ txt:"SMBv3 (version 3.1.1), the part of Windows that shares files over a network. Windows 10 and Windows Server, versions 1903 and 1909 only.",
+         short:"SMBv3 (version 3.1.1) file sharing, on Windows 10 and Windows Server, versions 1903 and 1909 only" },
+    smb1:{ txt:"SMBv1, an older version of the part of Windows that shares files over a network. Older Windows, including Windows Server 2012 Gold and R2. Gold means the first release of Windows Server 2012. R2 is its later second release.",
+         short:"SMBv1 file sharing, on older Windows including Windows Server 2012 Gold and R2" },
+    fortiall:{ txt:"Every version of FortiOS, the software that runs a Fortinet firewall. The flaw is in its administrative interface, its settings screen.",
+         short:"Every version of FortiOS" },
+    forti:{ txt:"FortiOS 7.0.0 to 7.0.6 and 7.2.0 to 7.2.1, the software that runs a Fortinet firewall. The flaw is in its administrative interface, its settings screen.",
+         short:"FortiOS 7.0.0 to 7.0.6 and 7.2.0 to 7.2.1, the administrative interface" }
+  };
+  /* Question 2 options. */
+  var GETS = {
+    rce:{ txt:"They can run their own code on the machine from across the network.",
+          short:"Runs their own code on the machine, from across the network" },
+    full:{ txt:"They can run code with full system control: install programs, change or delete data, create new accounts.",
+          short:"Runs code with full system control: can install programs, change or delete data, create accounts" },
+    admin:{ txt:"They can take over the firewall's administrative interface without logging in.",
+          short:"Takes over the administrative interface without logging in" }
+  };
+
+  var CODES = {
+    "CVE-2021-34527":{
+      q1:{ opts:["smb3","ps","forti"], ok:"ps",
+           why:{ smb3:"This Description does not mention sharing files. Read its first sentence again.",
+                 forti:"This Description is about Windows, not FortiOS." } },
+      q2:{ opts:["rce","full","admin"], ok:"full",
+           why:{ rce:"Close, but this Description goes further. It also lists what the attacker can do once the code runs. Pick the answer that includes that.",
+                 admin:"This record is about Windows, not a firewall." } },
+      nvd:"Many versions of Windows. The list includes Windows Server 2016, up to a certain build number.",
+      nvdS:"A build number is a numbered update to the same version." },
+    "CVE-2020-0796":{
+      q1:{ opts:["ps","smb1","smb3"], ok:"smb3",
+           why:{ ps:"This Description does not mention printing. Read its first sentence again.",
+                 smb1:"Look closely at which version of SMB this Description names." } },
+      q2:{ opts:["full","admin","rce"], ok:"rce",
+           why:{ full:"This Description says an attacker can run code. It does not list installing programs or creating accounts. Write only what the record says.",
+                 admin:"This record is about Windows, not a firewall." } },
+      nvd:"Windows 10, versions 1903 and 1909. Windows Server, versions 1903 and 1909. Nothing else.",
+      nvdS:"These four are the whole affected list." },
+    "CVE-2017-0144":{
+      q1:{ opts:["smb1","ps","smb3"], ok:"smb1",
+           why:{ ps:"This Description does not mention printing. Read its first sentence again.",
+                 smb3:"Look closely at which version of SMB this Description names." } },
+      q2:{ opts:["rce","admin","full"], ok:"rce",
+           why:{ full:"This Description says an attacker can run code. It does not list installing programs or creating accounts. Write only what the record says.",
+                 admin:"This record is about Windows, not a firewall." } },
+      nvd:"Older Windows. The Description names Windows Server 2012 Gold and R2.",
+      nvdS:"Gold means the first release of Windows Server 2012. R2 is its later second release. The affected list further down is long and also names many medical devices. Go by the Description." },
+    "CVE-2022-40684":{
+      q1:{ opts:["ps","fortiall","forti"], ok:"forti",
+           why:{ ps:"This Description is about FortiOS, not Windows.",
+                 fortiall:"Too broad. This record names exact FortiOS version ranges, not every version. Read which ones it lists." } },
+      q2:{ opts:["rce","admin","full"], ok:"admin",
+           why:{ rce:"This Description does not say an attacker runs code. Read what it says an attacker who has not logged in can do.",
+                 full:"This Description does not list installing programs or creating accounts. Read what it says an attacker who has not logged in can do." } },
+      nvd:"FortiOS 7.0.0 to 7.0.6, and 7.2.0 to 7.2.1.",
+      nvdS:"Any version inside either range is affected." }
+  };
+
+  var WHERE = {
+    svc:"Your Services tab, the Software and Version column",
+    nate:"SYSTEM LIST - CCS (Nate's copy)",
+    nvd:"The NVD record"
+  };
+  var WHERE_ORDER = ["svc","nate","nvd"];
+  var NVD_WHY = "NVD lists the versions a flaw affects. It cannot tell you what Cumberland runs.";
+
+  function url(c){ return "https://nvd.nist.gov/vuln/detail/" + c; }
+
+  /* One Services tab record per scope, then CVE-2020-0796 from Dana. */
+  var SVC_WHY_NATE = "This code came from your Services tab, and the lookup there already recorded the version it found. Check it there.";
+  var DANA_WHY_SVC = "Dana's code came from a scan of Cumberland's own machines, not from your lookup. Check that server's row in Nate's system list.";
+  var W2016_SVC = { run:"Windows Server 2016", note:"Your Services tab shows <b>windows_server_2016</b>, the lookup's way of writing it." };
+
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims", recs:[
+      { cve:"CVE-2021-34527", src:"svc", host:"portal", run:W2016_SVC.run, note:W2016_SVC.note,
+        row:"Services tab, portal row",
+        reveal:"The record lists Windows Server 2016, and the portal machine runs Windows Server 2016. NVD also names a build number: a machine updated past it is not affected. Your Services tab shows no build number, so nothing rules it out." },
+      { cve:"CVE-2020-0796", src:"nate", host:"CCS-SQL01", run:"Windows Server 2019",
+        note:"Nate's list says <b>“SQL 2016 on Svr 2019”</b>: SQL Server 2016, a database program, running on Windows Server 2019.",
+        row:"SYSTEM LIST - CCS (Nate's copy), CCS-SQL01 row",
+        reveal:"NVD lists Windows 10 and Windows Server, versions 1903 and 1909, and nothing else. CCS-SQL01 runs Windows Server 2019." } ] },
+    B:{ name:"Payments and Remittance", ic:"coin", recs:[
+      { cve:"CVE-2021-34527", src:"svc", host:"payers", run:W2016_SVC.run, note:W2016_SVC.note,
+        row:"Services tab, payers row",
+        reveal:"The record lists Windows Server 2016, and the payers machine runs Windows Server 2016. NVD also names a build number: a machine updated past it is not affected. Your Services tab shows no build number, so nothing rules it out." },
+      { cve:"CVE-2020-0796", src:"nate", host:"CCS-FIN01", run:"Windows Server 2016",
+        note:"Nate's list says <b>“Win Svr 2016”</b>: Windows Server 2016.",
+        row:"SYSTEM LIST - CCS (Nate's copy), CCS-FIN01 row",
+        reveal:"NVD lists Windows 10 and Windows Server, versions 1903 and 1909, and nothing else. CCS-FIN01 runs Windows Server 2016. It is the same server that payers runs on, so both your codes sit on one Windows Server 2016 machine. The Print Spooler record, CVE-2021-34527, lists Windows Server 2016, so that flaw applies. This record does not list it, so this one does not. One server can have one flaw and not another." } ] },
+    C:{ name:"Patient Records and Archive", ic:"archive", recs:[
+      { cve:"CVE-2017-0144", src:"svc", host:"records", run:"Windows Server 2012 R2",
+        note:"Your Services tab shows <b>windows_server_2012:r2</b>, the lookup's way of writing it.",
+        row:"Services tab, records row",
+        reveal:"The Description names Windows Server 2012 R2, and the records machine runs Windows Server 2012 R2." },
+      { cve:"CVE-2020-0796", src:"nate", host:"CCS-SQL01", run:"Windows Server 2019",
+        note:"Nate's list says <b>“SQL 2016 on Svr 2019”</b>: SQL Server 2016, a database program, running on Windows Server 2019.",
+        row:"SYSTEM LIST - CCS (Nate's copy), CCS-SQL01 row",
+        reveal:"NVD lists Windows 10 and Windows Server, versions 1903 and 1909, and nothing else. CCS-SQL01 runs Windows Server 2019." } ] },
+    D:{ name:"Remote and Corporate", ic:"laptop", recs:[
+      { cve:"CVE-2022-40684", src:"svc", host:"remote", run:"FortiOS 7.0.5",
+        note:"Your Services tab shows <b>fortios:7.0.5</b>, the lookup's way of writing it. FortiOS runs Cumberland's FortiGate firewall.",
+        row:"Services tab, remote row",
+        reveal:"The record covers FortiOS 7.0.0 to 7.0.6. The remote machine runs 7.0.5, which falls inside that range." },
+      { cve:"CVE-2020-0796", src:"nate", host:"CCS-DC01", run:"Windows Server 2019",
+        note:"Nate's list says <b>“Win Svr 2019”</b>: Windows Server 2019.",
+        row:"SYSTEM LIST - CCS (Nate's copy), CCS-DC01 row",
+        reveal:"NVD lists Windows 10 and Windows Server, versions 1903 and 1909, and nothing else. CCS-DC01 runs Windows Server 2019." } ] }
+  };
+  var ORDER = ["A","B","C","D"];
+  /* Build spec: every Services tab code applies; CVE-2020-0796 never does. */
+  function applies(r){ return r.src === "svc"; }
+  var SMB_TRAP = "“Windows Server, version 1903” and “version 1909” are their own products, separate from Windows Server 2019 and Windows Server 2016, even though 1903 and 2019 look alike. Only an exact product match counts. Even if a record’s page looks alarming, it only matters if Cumberland runs a version it lists.";
+
+  var S = [
+    { id:"scope", kind:"scope", label:"Your scope", h1:"Pick Your Scope" },
+    { id:"r1read", kind:"read", rec:0, label:"Record 1", h1:"Record 1 of 2: Read the Description" },
+    { id:"r1ver", kind:"ver", rec:0, label:"Record 1", h1:"Record 1 of 2: Does Cumberland Run It?" },
+    { id:"r2read", kind:"read", rec:1, label:"Record 2", h1:"Record 2 of 2: Read the Description" },
+    { id:"r2ver", kind:"ver", rec:1, label:"Record 2", h1:"Record 2 of 2: Does Cumberland Run It?" },
+    { id:"rows", kind:"rows", label:"Your Flaw Records tab", h1:"Your Two Flaw Records" },
+    { id:"close", kind:"close", label:"The point", h1:"What the Two Records Show" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m11-is-cumberland-actually-affected-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { scope:null, a:{} }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      return { scope:(ORDER.indexOf(raw.scope) >= 0) ? raw.scope : null, a:isPlain(raw.a) ? raw.a : {} };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [];
+    Object.keys(CODES).forEach(function(c){
+      ["q1","q2"].forEach(function(q){
+        var d = CODES[c][q], pool = q === "q1" ? AFFECTS : GETS;
+        if(d.opts.indexOf(d.ok) < 0) problems.push(c + " " + q + " right option missing");
+        d.opts.forEach(function(o){
+          if(!pool[o]) problems.push(c + " " + q + ' unknown option "' + o + '"');
+          if(o !== d.ok && !d.why[o]) problems.push(c + " " + q + ' option "' + o + '" has no why');
+        });
+      });
+    });
+    ORDER.forEach(function(k){
+      if(SC[k].recs.length !== 2) problems.push("scope " + k + " needs 2 records");
+      SC[k].recs.forEach(function(r){ if(!CODES[r.cve]) problems.push("scope " + k + " unknown code " + r.cve); });
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML = '<div class="lead"><b>This deck has authoring errors:</b><ul>'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function rowHTML(r){ return esc(r.row).split(esc(r.host)).join('<span class="nw">' + esc(r.host) + "</span>"); }
+  function strip(s){ return String(s).replace(/<[^>]+>/g,""); }
+  function say(m){ el.live.textContent = m; }
+  function cur(){ return st.scope ? SC[st.scope] : null; }
+  function ans(n){
+    if(!st.a[st.scope]) st.a[st.scope] = {};
+    if(!isPlain(st.a[st.scope][n])) st.a[st.scope][n] = {};
+    var a = st.a[st.scope][n];
+    ["q1","q2","wh"].forEach(function(q){ if(!isPlain(a[q])) a[q] = { out:{}, done:null }; if(!isPlain(a[q].out)) a[q].out = {}; });
+    return a;
+  }
+  function readDone(n){ var a = ans(n); return !!a.q1.done && !!a.q2.done; }
+  function verDone(n){ var a = ans(n); return !!a.wh.done && !!a.v; }
+  function recDone(n){ return readDone(n) && verDone(n); }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    if(st.scope && i > 0){ el.chip.hidden = false; el.chip.textContent = "Scope " + st.scope + ", " + SC[st.scope].name; }
+    else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    el.next.classList.remove("ghost");
+    if(i === S.length-1){ el.next.textContent = "Start over"; el.next.classList.add("ghost"); }
+    else if(s.kind === "scope" && !st.scope){ el.next.disabled = true; el.hint.innerHTML = "<span>" + "Pick a scope to carry on." + "</span>"; }
+    else if(s.kind === "read" && !(st.scope && readDone(s.rec))){ el.next.disabled = true; }
+    else if(s.kind === "ver" && !(st.scope && readDone(s.rec) && verDone(s.rec))){ el.next.disabled = true; }
+    else if(s.kind === "rows" && !(st.scope && recDone(0) && recDone(1))){ el.next.disabled = true; }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    document.documentElement.classList.add("fresh");
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    el.hint.textContent = "";
+    if(s.kind === "scope") renderScope();
+    else if(!st.scope) needScope();
+    else if(s.kind === "read") renderRead(s);
+    else if(s.kind === "ver") renderVer(s);
+    else if(s.kind === "rows") renderRows();
+    else renderClose();
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  function renderScope(){
+    el.board.innerHTML = '<p class="lead">Choose the scope you picked in Project 1. You will check your two flaw codes, one at a time, with the three questions for each.</p>'
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own answers</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        st.scope = b.dataset.k; save(st); render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked.");
+      });
+    });
+  }
+
+  function gate(msg, btn, to){
+    el.board.innerHTML = '<div class="gate"><p class="done">' + msg + '</p><button class="go" type="button" id="gobtn">' + btn + "</button></div>";
+    el.board.querySelector("#gobtn").addEventListener("click", function(){ i = to; render(); el.frame.focus(); });
+  }
+  function needScope(){ gate("<b>Pick your scope first.</b> Your two codes depend on it.", "Go to the scope picker", 0); }
+
+  function stripHTML(r, n){
+    var from = r.src === "svc" ? "From <b>your Services tab</b>, on " : "From <b>Dana</b>, on ";
+    return '<div class="strip">' + icon("bug")
+      + '<span class="cv">' + r.cve + "</span>"
+      + '<span class="fr">' + from + '<span class="hc">' + esc(r.host) + "</span></span>"
+      + '<a class="nvd" href="' + url(r.cve) + '" target="_blank" rel="noopener">Open its NVD record' + icon("out") + '<span class="sr"> (opens in a new tab)</span></a>'
+      + "</div>";
+  }
+
+  /* ---- slides 2 and 4: questions 1 and 2 ---- */
+  var QN = {
+    q1:{ n:"Question 1 of 3", t:"What does it affect?", pool:AFFECTS, dq:"It affects" },
+    q2:{ n:"Question 2 of 3", t:"What does an attacker get?", pool:GETS, dq:"An attacker gets",
+         sub:"Running code means making the machine carry out your own instructions, without sitting at it." }
+  };
+
+  function renderRead(s){
+    var sc = cur(), r = sc.recs[s.rec], c = CODES[r.cve], a = ans(s.rec);
+    if(s.rec === 1 && !recDone(0)){ gate("<b>Finish record 1 first.</b> The two records go in order.", "Back to record 1", 1); return; }
+    var h = stripHTML(r, s.rec);
+    h += qBlock("q1", c.q1, a.q1, true);
+    if(a.q1.done) h += qBlock("q2", c.q2, a.q2, true);
+    else h += '<div class="locked">' + icon("lock") + "Question 2 of 3, what an attacker gets, opens once you answer question 1.</div>";
+    el.board.innerHTML = h;
+    wireQ(s, "q1", c.q1, a.q1);
+    if(a.q1.done) wireQ(s, "q2", c.q2, a.q2);
+    if(readDone(s.rec)) el.hint.innerHTML = "<span>" + "<b>Two of three answered.</b> Continue to the third question." + "</span>";
+    else if(r.cve === "CVE-2017-0144") el.hint.innerHTML = "<span>" + "Open the record and read its <b>Description</b>, near the top. Pick the answer it supports." + "</span>";
+    else el.hint.innerHTML = "<span>" + "Open the record. Read its <b>Description</b>, near the top, and its <b>Known Affected Software Configurations</b> list, further down. Pick the answer they support." + "</span>";
+  }
+
+  function qBlock(q, d, a, isOpen){
+    var meta = QN[q];
+    if(a.done){
+      return '<div class="doneq" id="' + q + '"><span class="gl" aria-hidden="true">' + (a.done === "shown" ? "i" : "✓") + "</span>"
+        + '<span class="dq">' + meta.dq + "</span>"
+        + '<span class="da">' + esc(meta.pool[d.ok].txt)
+        + (a.done === "shown" ? '<span class="cs" style="display:block;font-size:13.5px;color:var(--body);margin-top:2px"><b>Not that one.</b> ' + esc(d.why[Object.keys(a.out).slice(-1)[0]] || "") + "</span>" : "")
+        + "</span>"
+        + '<span class="dh">' + (a.done === "shown" ? "Shown to you" : "You got it") + "</span></div>";
+    }
+    var outs = Object.keys(a.out), last = outs.length ? outs[outs.length-1] : null;
+    return '<div class="panel" id="' + q + '" tabindex="-1"><div class="ph">' + icon("search")
+      + '<span class="qn">' + meta.n + '</span><span class="pt">' + meta.t + "</span></div>"
+      + (meta.sub ? '<p class="qs">' + esc(meta.sub) + "</p>" : "")
+      + '<div class="opts" role="group" aria-label="' + meta.t + '">' + d.opts.map(function(o){
+          var x = !!a.out[o];
+          return '<button class="opt' + (x ? " out" : "") + '" type="button" data-o="' + o + '"' + (x ? ' disabled aria-disabled="true"' : "") + ">"
+            + '<span class="g" aria-hidden="true">' + (x ? "✕" : "") + '</span><span class="txt">' + esc(meta.pool[o].txt) + "</span></button>";
+        }).join("") + "</div>"
+      + '<div class="note" id="' + q + 'note" role="status" aria-live="polite">' + (last ? "<b>Not this one.</b> " + esc(d.why[last]) : "") + "</div></div>";
+  }
+
+  function wireQ(s, q, d, a){
+    var box = el.board.querySelector("#" + q);
+    if(!box || a.done) return;
+    Array.prototype.forEach.call(box.querySelectorAll("button.opt"), function(b){
+      b.addEventListener("click", function(){
+        var o = b.dataset.o;
+        if(o === d.ok){ finishQ(s, q, "right"); return; }
+        a.out[o] = 1; save(st);
+        if(Object.keys(a.out).length >= d.opts.length - 1){ finishQ(s, q, "shown"); return; }
+        b.classList.add("out"); b.disabled = true; b.setAttribute("aria-disabled","true");
+        b.querySelector(".g").textContent = "✕";
+        var note = box.querySelector(".note");
+        note.innerHTML = "<b>Not this one.</b> " + esc(d.why[o]);
+        say("Not this one. " + d.why[o]);
+        var first = box.querySelector("button.opt:not(:disabled)");
+        if(first) first.focus();
+      });
+    });
+  }
+
+  function finishQ(s, q, how){
+    var a = ans(s.rec);
+    a[q].done = how; save(st);
+    var r = cur().recs[s.rec], c = CODES[r.cve], d = c[q], meta = QN[q];
+    var lastWhy = "";
+    if(how === "shown"){ var ks = Object.keys(a[q].out); lastWhy = "Not that one. " + d.why[ks[ks.length-1]] + " "; }
+    render();
+    var nxt = null;
+    if(q === "q1" && !a.q2.done) nxt = el.board.querySelector("#q2");
+    else nxt = el.board.querySelector("#" + q);
+    if(nxt && !reduce){ nxt.classList.remove("in"); void nxt.offsetWidth; nxt.classList.add("in"); }
+    if(q === "q1" && !a.q2.done){ var p = el.board.querySelector("#q2"); if(p) p.focus(); }
+    else el.next.focus();
+    say((how === "right" ? "Correct. " : lastWhy + "Here is the answer. ") + meta.dq + ": " + meta.pool[d.ok].txt);
+  }
+
+  /* ---- slides 3 and 5: question 3, the version check and the verdict ---- */
+  function renderVer(s){
+    var sc = cur(), r = sc.recs[s.rec], c = CODES[r.cve], a = ans(s.rec);
+    if(!readDone(s.rec)){ gate("<b>Answer questions 1 and 2 for this record first.</b>", "Back to the questions", i-1); return; }
+    var ok = r.src;
+    var h = stripHTML(r, s.rec);
+    h += '<div class="cmp">'
+      + '<div class="card"><span class="cl">' + icon("file") + "What NVD says it affects</span>"
+      + '<span class="cb">' + esc(c.nvd) + '</span><span class="cs">' + esc(c.nvdS) + "</span></div>";
+    if(a.wh.done){
+      h += '<div class="card" id="runcard"><span class="cl">' + icon("server") + 'What the <span class="hc">' + esc(r.host) + "</span> machine runs</span>"
+        + '<span class="cb">' + esc(r.run) + '</span><span class="cs">' + r.note + "</span>"
+        + '<span class="cs"><b>Where you checked:</b> ' + rowHTML(r) + (a.wh.done === "shown" ? " (shown to you)" : "") + "</span>"
+        + (a.wh.done === "shown" ? '<span class="cs"><b>Not that one.</b> ' + esc(whyWhere(r, Object.keys(a.wh.out).slice(-1)[0])) + "</span>" : "")
+        + "</div>";
+    } else {
+      h += '<div class="card wait"><span class="cl">' + icon("server") + 'What the <span class="hc">' + esc(r.host) + "</span> machine runs</span>"
+        + '<span class="cb">Say where you check first.</span></div>';
+    }
+    h += "</div>";
+
+    if(!a.wh.done){
+      var outs = Object.keys(a.wh.out), last = outs.length ? outs[outs.length-1] : null;
+      h += '<div class="panel" id="wh" tabindex="-1"><div class="ph">' + icon("search")
+        + '<span class="qn">Question 3 of 3, part 1</span><span class="pt">Where do you check the version the ' + esc(r.host) + " machine runs?</span></div>"
+        + '<div class="opts row" role="group" aria-label="Where do you check the version">' + WHERE_ORDER.map(function(o){
+            var x = !!a.wh.out[o];
+            return '<button class="opt' + (x ? " out" : "") + '" type="button" data-o="' + o + '"' + (x ? ' disabled aria-disabled="true"' : "") + ">"
+              + '<span class="g" aria-hidden="true">' + (x ? "✕" : "") + '</span><span class="txt">' + esc(WHERE[o]) + "</span></button>";
+          }).join("") + "</div>"
+        + '<div class="note" id="whnote" role="status" aria-live="polite">' + (last ? "<b>Not this one.</b> " + esc(whyWhere(r, last)) : "") + "</div></div>";
+      el.board.innerHTML = h;
+      wireWhere(s, r, a);
+      el.hint.innerHTML = "<span>" + "Open the sheet you pick and find the " + esc(r.host) + " row." + "</span>";
+      return;
+    }
+
+    if(!a.v){
+      h += '<div class="panel" id="vq" tabindex="-1"><div class="ph">' + icon("scale")
+        + '<span class="qn">Question 3 of 3, part 2</span><span class="pt">Does Cumberland run a version this record affects?</span></div>'
+        + '<div class="vbtns">'
+        + '<button class="vb" type="button" data-v="yes"><span class="g" aria-hidden="true"></span>Yes, it applies</button>'
+        + '<button class="vb" type="button" data-v="no"><span class="g" aria-hidden="true"></span>No, it does not apply</button>'
+        + "</div></div>";
+      el.board.innerHTML = h;
+      Array.prototype.forEach.call(el.board.querySelectorAll("button.vb"), function(b){
+        b.addEventListener("click", function(){
+          a.v = b.dataset.v; save(st);
+          render();
+          var rv = el.board.querySelector("#rv");
+          if(rv){ if(!reduce){ rv.classList.remove("in"); void rv.offsetWidth; rv.classList.add("in"); } rv.focus(); }
+          say(strip(rv ? rv.textContent : ""));
+        });
+      });
+      el.hint.innerHTML = "<span>" + "Compare the two cards, then make the call." + "</span>";
+      return;
+    }
+
+    var yes = applies(r), right = (a.v === "yes") === yes;
+    h += '<div class="panel" id="rv" tabindex="-1"><div class="ph">' + icon("scale")
+      + '<span class="verdict">' + (yes ? "It applies." : "It does not apply.") + "</span>"
+      + '<span class="tag"><span aria-hidden="true">' + (right ? "✓" : "!") + "</span>You said: " + (a.v === "yes" ? "Yes, it applies" : "No, it does not apply")
+      + (right ? ". Right." : ". Not this time.") + "</span></div>"
+      + '<p class="why">' + esc(r.reveal) + (yes ? "" : " " + esc(SMB_TRAP)) + "</p></div>";
+    el.board.innerHTML = h;
+    el.hint.innerHTML = "<span>" + (s.rec === 0 ? "Continue to your second record." : "Continue to see both rows together.") + "</span>";
+  }
+
+  function whyWhere(r, o){
+    if(o === "nvd") return NVD_WHY;
+    return r.src === "svc" ? SVC_WHY_NATE : DANA_WHY_SVC;
+  }
+
+  function wireWhere(s, r, a){
+    var box = el.board.querySelector("#wh");
+    Array.prototype.forEach.call(box.querySelectorAll("button.opt"), function(b){
+      b.addEventListener("click", function(){
+        var o = b.dataset.o;
+        if(o === r.src){ doneWhere(s, r, a, "right"); return; }
+        a.wh.out[o] = 1; save(st);
+        if(Object.keys(a.wh.out).length >= WHERE_ORDER.length - 1){ doneWhere(s, r, a, "shown"); return; }
+        b.classList.add("out"); b.disabled = true; b.setAttribute("aria-disabled","true");
+        b.querySelector(".g").textContent = "✕";
+        box.querySelector(".note").innerHTML = "<b>Not this one.</b> " + esc(whyWhere(r, o));
+        say("Not this one. " + whyWhere(r, o));
+        var first = box.querySelector("button.opt:not(:disabled)");
+        if(first) first.focus();
+      });
+    });
+  }
+
+  function doneWhere(s, r, a, how){
+    a.wh.done = how; save(st);
+    render();
+    var rc = el.board.querySelector("#runcard");
+    if(rc && !reduce){ rc.classList.remove("in"); void rc.offsetWidth; rc.classList.add("in"); }
+    var vq = el.board.querySelector("#vq"); if(vq) vq.focus();
+    say((how === "right" ? "Correct. " : "Here is where to check. ") + r.row + ". The " + r.host + " machine runs " + r.run + ". " + strip(r.note) + " Does Cumberland run a version this record affects?");
+  }
+
+  /* ---- slide 6: the two rows ---- */
+  function renderRows(){
+    var sc = cur();
+    if(!(recDone(0) && recDone(1))){
+      var to = !recDone(0) ? (readDone(0) ? 2 : 1) : (readDone(1) ? 4 : 3);
+      gate("<b>Finish both records first.</b> This table shows your two rows, so it waits until then.", "Go to the next step", to);
+      return;
+    }
+    function cell(l, v, cls){ return '<td data-l="' + l + '"' + (cls ? ' class="' + cls + '"' : "") + ">" + v + "</td>"; }
+    var rows = sc.recs.map(function(r){
+      var c = CODES[r.cve];
+      return "<tr>" + cell("CVE", esc(r.cve))
+        + cell("What It Affects", esc(AFFECTS[c.q1.ok].short))
+        + cell("What an Attacker Gets", esc(GETS[c.q2.ok].short))
+        + cell("Does Cumberland Run It", (applies(r) ? "Yes. " : "No. ") + 'The <span class="nw">' + esc(r.host) + "</span> machine runs " + esc(r.run))
+        + cell("Where I Checked", rowHTML(r))
+        + cell("Applies", applies(r) ? "applies" : "does not apply", "ap") + "</tr>";
+    }).join("");
+    el.board.innerHTML = '<p class="lead">These are your two rows for the <b>Flaw Records</b> tab, one per code.</p>'
+      + '<table class="ctab"><thead><tr><th scope="col">CVE</th><th scope="col">What It Affects</th><th scope="col">What an Attacker Gets</th>'
+      + '<th scope="col">Does Cumberland Run It</th><th scope="col">Where I Checked</th><th scope="col">Applies</th></tr></thead><tbody>'
+      + rows + "</tbody></table>";
+  }
+
+  function renderClose(){
+    el.board.innerHTML = '<div class="closewrap"><div class="statement"><p>A flaw in the catalog is not a flaw you have.</p>'
+      + '<p class="sub">NVD is the catalog: a list of every known flaw. A flaw is yours only when Cumberland runs a version it lists. In your scope, one of your two codes applies and one does not.</p></div></div>';
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  function startOver(){
+    if(st.scope) delete st.a[st.scope];
+    st.scope = null; save(st); i = 0; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ if(i === S.length-1) startOver(); else go(1); });
+
+  document.addEventListener("pointerdown", function(){ document.documentElement.classList.add("ptr"); }, true);
+  var lastPt = null;
+  document.addEventListener("pointermove", function(e){
+    var p = e.clientX + "," + e.clientY;
+    if(lastPt !== null && p !== lastPt) document.documentElement.classList.remove("fresh");
+    lastPt = p;
+  }, true);
+  document.addEventListener("keydown", function(e){
+    document.documentElement.classList.remove("ptr");
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled && i < S.length-1) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled && i < S.length-1) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    scope:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; save(st); render(); return true; },
+    state:function(){ return { i:i, scope:st.scope, a:st.a }; }
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Rows to a Working List</title>
+<!--
+  vCISO P2 Step 4, Module 13: Triage the Scan Results. Step 3, "Group the Rows by Cause".
+  Build spec "Forty Rows Down to a Working List" in 06-content/project-02/step-04/module-13-internal.md.
+  Pass 1 only: group by cause. No shadow host is flagged, and CVE-2020-0796 gets no feedback.
+
+  Rows: P2 Sample Pack/Scope X/Scan export - Scope X.csv, Host, Finding and CVE columns, in file order.
+  Per Chaitanya's 25 Sep answers (item 8c), LAPTOP-KRAMSEY is renamed DESKTOP-7F2KQ9L.
+  No other card field changed in the 25 Sep drop (item 3a moved only dates, which cards do not show).
+  Info rows are the rows whose Severity cell reads Info.
+
+  The twelve-row cluster per scope, and the answer key groupings shown on slide 3, come from
+  the Scan answer keys, "The 8 findings", as summarised in the build spec. Where a key gives a
+  loose count ("~6", "the rest"), slide 3 shows it loose too.
+  Tolerance (build spec): the twelve rows in one group, and about six to ten groups, Info aside.
+  A group may also hold the same update on other hosts (internal flag "Twelve rows, one cause").
+
+  Governing authority: output/programs/vciso/CLAUDE.md section 6. Look, picker, chrome and
+  scale-to-fit follow vciso-p2-m5-follow-one-bill.html.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px;position:relative}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:78ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the scope picker ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:20px 18px 16px;
+    display:flex;flex-direction:column;gap:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:64px;height:64px;border-radius:14px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:36px;height:36px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:20px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto;min-height:50px}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:9px}
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  button.sc.on{background:var(--on-highlight);border:1.5px solid var(--on-highlight);box-shadow:0 0 0 .5px var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .ss{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- slide 2: the board ---- */
+  .sechd{flex:0 0 auto;display:flex;align-items:center;gap:10px;height:25px}
+  .sechd .st{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);
+    display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .sechd .st svg.ic{width:18px;height:18px}
+  .sechd .sx{font-size:13.5px;color:var(--body);white-space:nowrap}
+  .sechd .sx b{color:var(--title)}
+  .sechd .sp{flex:1 1 auto}
+  button.mini{font-family:inherit;font-size:13px;font-weight:600;color:var(--on-highlight);background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:7px;padding:2px 9px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;height:25px}
+  button.mini svg.ic{width:15px;height:15px}
+  button.mini:hover:not(:disabled){background:var(--highlight)}
+  button.mini:disabled{opacity:.34;cursor:not-allowed}
+  button.mini:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.mini.warn,button.mini.warn:hover:not(:disabled){background:var(--on-highlight);color:var(--bg)}
+
+  .pile{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,61px);gap:5px}
+  .pile .empty{grid-column:1 / -1;grid-row:1 / -1;display:flex;align-items:center;justify-content:center;gap:10px;
+    border:1.5px dashed var(--line);border-radius:10px;font-size:16px;font-weight:600;color:var(--title);background:var(--tint)}
+  .pile .empty svg.ic{width:24px;height:24px;color:var(--on-highlight)}
+  button.card{font-family:inherit;text-align:left;cursor:grab;background:var(--bg);color:var(--title);
+    border:1.5px solid var(--line);border-radius:9px;padding:4px 8px;min-width:0;
+    display:grid;grid-template-columns:16px minmax(0,1fr) auto;grid-template-rows:auto 1fr;column-gap:6px;row-gap:1px;
+    touch-action:none;user-select:none;-webkit-user-select:none;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.card:hover{border-color:var(--on-highlight)}
+  button.card:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .card .bx{grid-row:1;grid-column:1;width:15px;height:15px;margin-top:1px;border:1.5px solid var(--on-highlight);border-radius:3px;
+    display:flex;align-items:center;justify-content:center;color:var(--bg)}
+  .card .bx svg.ic{width:12px;height:12px;stroke-width:2.6}
+  .card .hs{grid-row:1;grid-column:2;font-size:12.5px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .cv{grid-row:1;grid-column:3;font-size:12.5px;font-weight:600;line-height:1.25;color:var(--on-highlight);white-space:nowrap}
+  .card .cv.none{font-weight:400;color:var(--body);font-style:italic}
+  .card .fd{grid-row:2;grid-column:1 / -1;font-size:12.5px;line-height:1.25;color:var(--body);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  button.card.sel{background:var(--highlight);border-color:var(--on-highlight);box-shadow:inset 0 0 0 1px var(--on-highlight)}
+  button.card.sel .bx{background:var(--on-highlight)}
+  button.card.lift{opacity:.35}
+  button.card.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .tiles{flex:0 0 auto;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(2,54px);gap:6px}
+  .tile{position:relative;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;min-width:0;
+    display:flex;flex-direction:column;overflow:hidden;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+  .tile.info{background:var(--highlight)}
+  .tile .put{font-family:inherit;flex:1 1 auto;display:flex;align-items:center;gap:5px;padding:3px 26px 0 7px;background:transparent;border:0;
+    cursor:pointer;text-align:left;color:var(--on-highlight);font-size:12px;font-weight:700;min-width:0;white-space:nowrap}
+  .tile .put svg.ic{width:16px;height:16px;flex:0 0 auto}
+  .tile .put .pn{overflow:hidden;text-overflow:ellipsis}
+  .tile .put:focus-visible{outline:3px solid var(--on-highlight);outline-offset:-3px;border-radius:8px}
+  .tile .eye{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:6px;border:0;background:transparent;
+    color:var(--on-highlight);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .tile .eye svg.ic{width:17px;height:17px}
+  .tile .eye:hover{background:var(--tint2)}
+  .tile .eye:focus-visible{outline:2.5px solid var(--on-highlight);outline-offset:0}
+  .tile input{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--title);background:var(--bg);
+    border:1px solid var(--line);border-radius:5px;margin:0 5px 5px;padding:2px 6px;height:23px;min-width:0}
+  .tile input::placeholder{color:var(--body);font-weight:400;font-style:italic;opacity:1}
+  .tile input:focus{outline:2.5px solid var(--on-highlight);outline-offset:0;border-color:var(--on-highlight)}
+  .tile input.need{border:1.5px dashed var(--on-highlight)}
+  .tile .it{font-size:12.5px;line-height:1.2;color:var(--title);padding:0 7px 5px;font-weight:600}
+  .tile.new{border-style:dashed;background:transparent}
+  .tile.new .put{flex-direction:column;justify-content:center;align-items:center;gap:2px;padding:3px 5px;font-size:12.5px;text-align:center;white-space:normal}
+  .tile.new .put .nl{display:flex;align-items:center;gap:5px}
+  .tile.new .put svg.ic{width:16px;height:16px}
+  .tile.new .put .sub{font-size:12.5px;font-weight:600;color:var(--body);line-height:1.2}
+  .tile.new.full .put{cursor:not-allowed}
+  .tile.slot{border:1.5px dashed var(--tint2);background:transparent}
+  .tile.hot{box-shadow:0 0 0 3px var(--bg),0 0 0 5.5px var(--on-highlight);background:var(--highlight)}
+  .tile.hot:not(.new) .put .pn{font-size:0}
+  .tile.hot:not(.new) .put .pn::after{content:"Drop here";font-size:12px}
+  .tile.can .put .pn{text-decoration:underline;text-underline-offset:3px}
+  .tile.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  /* the group view, over the board */
+  .gv{position:absolute;inset:0;background:var(--bg);border:2px solid var(--on-highlight);border-radius:12px;padding:12px 16px;
+    display:flex;flex-direction:column;gap:8px;z-index:5}
+  .gv.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .gv .gh{flex:0 0 auto;display:flex;align-items:center;gap:10px}
+  .gv .gh svg.ic{width:24px;height:24px;color:var(--on-highlight);flex:0 0 auto}
+  .gv .gh .gt{font-size:19px;font-weight:600;color:var(--title);white-space:nowrap}
+  .gv .gh input{font-family:inherit;font-size:16px;font-weight:600;color:var(--title);background:var(--bg);border:1.5px solid var(--on-highlight);
+    border-radius:7px;padding:4px 9px;width:330px}
+  .gv .gh input::placeholder{color:var(--body);font-weight:400;font-style:italic;opacity:1}
+  .gv .gh input:focus{outline:3px solid var(--on-highlight);outline-offset:1px}
+  .gv .gh .gc{font-size:14px;color:var(--body);white-space:nowrap}
+  .gv .gd{flex:0 0 auto;font-size:14px;line-height:1.4;color:var(--body)}
+  .gv .gd b{color:var(--title)}
+  .gv ul{flex:1 1 auto;min-height:0;overflow-y:auto;list-style:none;display:grid;grid-template-columns:1fr 1fr;
+    grid-auto-rows:min-content;column-gap:14px;row-gap:0;border-top:1.5px solid var(--line);align-content:start}
+  .gv li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--line);min-width:0}
+  .gv li .rt{font-size:12.5px;line-height:1.3;color:var(--title);min-width:0}
+  .gv li .rt b{font-weight:700}
+  .gv li .rt .c{color:var(--on-highlight);font-weight:600}
+  .gv li .rt .n{color:var(--body);font-style:italic}
+
+  /* ---- slide 3: the check ---- */
+  .cols{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1.08fr;gap:14px}
+  .checks{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
+  .ck{flex:0 0 auto;display:grid;grid-template-columns:26px 1fr;column-gap:9px;background:var(--bg);border:1.5px solid var(--on-highlight);
+    border-radius:11px;padding:6px 11px}
+  .ck.no{border-style:dashed}
+  .board.dense .checks{gap:4px}
+  .board.dense .ck{padding:4px 10px}
+  .board.dense .ck .cb{font-size:12.5px;line-height:1.25}
+  .ck svg.ic{width:26px;height:26px;color:var(--on-highlight)}
+  .ck .cl{font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:2px}
+  .ck .cb{font-size:13.5px;line-height:1.3;color:var(--title)}
+  .ck .cb .q{font-weight:600}
+  .ck.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .keybox{background:var(--highlight);border-radius:12px;padding:9px 16px 9px;display:flex;flex-direction:column;gap:5px;min-height:0}
+  .keybox .kt{font-size:16px;font-weight:600;color:var(--title);display:flex;align-items:center;gap:8px}
+  .keybox .kt svg.ic{width:22px;height:22px;color:var(--on-highlight)}
+  .ktab{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.25;color:var(--title)}
+  .ktab th{text-align:left;font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);
+    padding:3px 0 4px;border-bottom:1.5px solid var(--on-highlight)}
+  .ktab th:last-child,.ktab td:last-child{text-align:right;width:70px}
+  .ktab td{padding:3px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  .ktab tr.info td{color:var(--body);font-style:italic}
+  .kfoot{font-size:12.5px;line-height:1.35;color:var(--body)}
+  .kh{display:flex;align-items:center;gap:8px}
+  .kh .kt{flex:1 1 auto;white-space:nowrap}
+  .kgl{list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.35;color:var(--title);border-top:1.5px solid var(--on-highlight);padding-top:8px}
+  .kgl b{color:var(--title);font-weight:600}
+  button.go{font-family:inherit;font-size:14px;font-weight:600;padding:8px 15px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go.ghost{background:transparent;color:var(--on-highlight)}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .panel.gate{flex:0 0 auto;background:var(--highlight);border-radius:12px;display:flex;flex-direction:column;gap:14px;padding:22px 24px}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+
+  /* ---- slide 4: the working list ---- */
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);border-radius:0 12px 12px 0;padding:12px 22px;margin-bottom:4px}
+  .statement p{font-size:23px;line-height:1.3;font-weight:600;color:var(--title)}
+  .wl{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:4px;align-items:start}
+  .board.dense .statement{padding:8px 18px}
+  .board.dense .statement p{font-size:19px}
+  .board.dense .lead{font-size:14.5px}
+  .board.dense .wl{gap:5px}
+  .board.dense .wi{padding:4px 8px}
+  .board.dense .wi .wn{font-size:12.5px}
+  .wi{background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;min-width:0}
+  .wi .wn{font-size:13.5px;font-weight:600;line-height:1.25;color:var(--title);overflow-wrap:anywhere}
+  .wi .wh{font-size:12.5px;line-height:1.3;color:var(--body);display:block;overflow-wrap:anywhere}
+  .wi .wh b{color:var(--on-highlight);font-weight:700}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:6px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint > span{display:block}
+  #hint b{color:var(--title);font-weight:600}
+  #hint .hrow{display:flex;align-items:center;gap:12px}
+  #hint:has(.hrow){justify-content:flex-start}
+  #hint .hrow button.go{flex:0 0 auto;padding:9px 17px;align-self:flex-start}
+
+  /* the drag ghost, outside the scaled stage */
+  #ghost{position:fixed;left:0;top:0;z-index:50;pointer-events:none;background:var(--highlight);border:2px solid var(--on-highlight);
+    border-radius:9px;padding:6px 10px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:12.5px;font-weight:600;color:var(--title);box-shadow:0 6px 18px rgba(0,29,105,.25);max-width:240px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #ghost .gn{display:inline-block;margin-left:6px;background:var(--on-highlight);color:var(--bg);border-radius:10px;padding:0 7px;font-size:11.5px}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .scopes{grid-template-columns:1fr 1fr;gap:10px}
+    button.sc{min-height:0;padding:14px 12px}
+    button.sc .si{width:48px;height:48px}
+    button.sc .sn{font-size:17px}
+    .note2{font-size:16px}
+    .board{flex:0 0 auto}
+    .sechd{flex-wrap:wrap;height:auto;row-gap:6px}
+    .pile{grid-template-columns:1fr 1fr;grid-template-rows:none;grid-auto-rows:minmax(64px,auto)}
+    .card .fd{font-size:13px}
+    .tiles{grid-template-columns:1fr 1fr 1fr;grid-template-rows:none;grid-auto-rows:64px}
+    .tile.slot{display:none}
+    .gv{position:fixed;inset:10px;overflow:auto}
+    .gv .gh{flex-wrap:wrap}
+    .gv .gh input{width:100%}
+    .gv ul{grid-template-columns:1fr}
+    .cols{grid-template-columns:minmax(0,1fr)}
+    .kh{flex-wrap:wrap}
+    .kh .kt{white-space:normal}
+    .wl{grid-template-columns:1fr}
+    .statement p{font-size:19px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="From Rows to a Working List">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf p{margin-bottom:12px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>From Rows to a Working List</h2>
+    <p>This interactive needs JavaScript, which is switched off in this browser. You can do the same work in your scan copy.</p>
+    <p>Go down every row. Give rows the same group name when they share one cause: the same missing update on one machine, or the same problem on many machines. A group is one problem. Rows whose Severity is Info only report a fact, such as a machine's operating system, so they go in no group.</p>
+    <div class="box"><p><strong>The pattern is the finding. The rows are evidence for it.</strong></p></div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform stroke, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    folder:'<path d="M3.5 7V18a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-7.3L10.5 5.5h-6a1 1 0 0 0-1 1.5z"/>',
+    info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.8h.01"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    ok:'<circle cx="12" cy="12" r="8.5"/><path d="m8.2 12.3 2.6 2.6 5-5.2"/>',
+    warn:'<path d="M12 3.8 2.8 19.5h18.4z"/><path d="M12 10v4.2M12 16.8h.01"/>',
+    undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    rows:'<rect x="3.5" y="4.5" width="17" height="4" rx="1"/><rect x="3.5" y="10" width="17" height="4" rx="1"/><rect x="3.5" y="15.5" width="17" height="4" rx="1"/>',
+    close:'<path d="M6 6l12 12M18 6 6 18"/>',
+    left:'<path d="m14.5 6-6 6 6 6"/>',
+    right:'<path d="m9.5 6 6 6-6 6"/>',
+    tick:'<path d="m6 12.5 4 4 8-9"/>',
+    key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16.5 6.5l2.5 2.5M14 9l2 2"/>',
+    list:'<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     ROWS: every data row of each scope's scan, in file order: [Host, Finding, CVE, Info?].
+     Taken from the Scan export CSVs; the fourth value is 1 where the Severity cell reads Info.
+     LAPTOP-KRAMSEY is DESKTOP-7F2KQ9L, per the 25 Sep answers, item 8c. */
+  var ROWS = {
+    A:[
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-37966"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-37967"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-37992"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-38015"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41039"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41045"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41047"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41048"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41050"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41088"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41118"],
+      ["CCS-APP01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41090"],
+      ["CCS-APP01", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["CCS-WEB01", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["CCS-WEB01", "Windows Print Spooler elevation of privilege", "CVE-2022-38028"],
+      ["CCS-APP01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-SFTP01", "OpenSSH ssh-agent PKCS#11 remote code execution", "CVE-2023-38408"],
+      ["CCS-SQL01", "Operating system identified", "", 1],
+      ["CCS-APP01", "Operating system identified", "", 1],
+      ["CCS-SQL01", "SMBv3 compression remote code execution (SMBGhost)", "CVE-2020-0796"],
+      ["CCS-SQL01", "Microsoft SQL Server missing security updates", ""],
+      ["CCS-SFTP01", "FTP supports cleartext authentication", ""],
+      ["CCS-SFTP01", "Anonymous FTP enabled", ""],
+      ["CCS-SFTP01", "SSH weak MAC algorithms enabled", ""],
+      ["CCS-SFTP01", "SSH weak key exchange algorithms enabled", ""],
+      ["MEDFLOW-TEST", "Missing November 2022 security updates (KB5019964)", "CVE-2022-37966"],
+      ["MEDFLOW-TEST", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["MEDFLOW-TEST", "Microsoft SQL Server instance detected", ""],
+      ["MEDFLOW-TEST", "SMB signing not required", ""],
+      ["CCS-DEV01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41048"],
+      ["CCS-DEV01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-DEV01", "TLS 1.0 enabled on RDP", ""],
+      ["CCS-WEB01", "Deprecated TLS protocol enabled", ""],
+      ["CCS-WEB01", "Web server version disclosure", ""],
+      ["CCS-WEB01", "Cleartext HTTP service", ""],
+      ["CCS-APP01", "SMBv1 protocol enabled", ""],
+      ["CCS-SQL01", "Deprecated TLS protocol enabled", ""],
+      ["CCS-SQL01", "SMB signing not required", ""],
+      ["CCS-SQL01", "SQL Server Browser service exposed", ""],
+      ["CCS-APP01", "SSL certificate is self-signed", ""],
+      ["CCS-WEB01", "SMB signing not required", ""],
+      ["CCS-SFTP01", "OpenSSH service detected", "", 1]
+    ],
+    B:[
+      ["CCS-FS01", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36570"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36571"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36572"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36573"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36574"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36575"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36578"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36582"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36583"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36577"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36434"],
+      ["CCS-FS01", "Windows SMBv1 remote code execution (EternalBlue)", "CVE-2017-0144"],
+      ["CCS-FS01", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["CCS-FIN01", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["CCS-FS01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-FIN01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-FIN01", "Operating system identified", "", 1],
+      ["CCS-FS01", "Operating system identified", "", 1],
+      ["CCS-FIN01", "SMBv3 compression remote code execution (SMBGhost)", "CVE-2020-0796"],
+      ["CCS-FIN01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41047"],
+      ["CCS-FIN01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-37992"],
+      ["CCS-FIN01", "Missing November 2022 security updates (KB5019964)", "CVE-2022-41118"],
+      ["CCS-PAY01", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-PAY01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-PAY01", "TLS 1.0 enabled on RDP", ""],
+      ["CCS-PAY01", "SMB signing not required", ""],
+      ["CCS-FS01", "SMBv1 protocol enabled", ""],
+      ["CCS-FS01", "SMB signing not required", ""],
+      ["CCS-FS01", "Readable network file share", ""],
+      ["CCS-FS01", "TLS 1.0 enabled on RDP", ""],
+      ["CCS-FS01", "NetBIOS service enabled", ""],
+      ["CCS-FS01", "Remote registry accessible", ""],
+      ["CCS-FIN01", "Deprecated TLS protocol enabled", ""],
+      ["CCS-FIN01", "SMB signing not required", ""],
+      ["CCS-FIN01", "SSL certificate is self-signed", ""],
+      ["CCS-FIN01", "Web server version disclosure", ""],
+      ["CCS-FIN01", "RPC endpoint mapper accessible", ""],
+      ["CCS-FIN01", "LLMNR enabled", ""],
+      ["CCS-PAY01", "NetBIOS service enabled", ""],
+      ["CCS-FS01", "SMB null session permitted", ""]
+    ],
+    C:[
+      ["CCS-ARCH01", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36570"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36571"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36572"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36573"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36574"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36575"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36578"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36582"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36583"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36577"],
+      ["CCS-ARCH01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36434"],
+      ["CCS-ARCH01", "Windows SMBv1 remote code execution (EternalBlue)", "CVE-2017-0144"],
+      ["CCS-FS01", "Windows SMBv1 remote code execution (EternalBlue)", "CVE-2017-0144"],
+      ["CCS-ARCH01", "Windows Print Spooler remote code execution (PrintNightmare)", "CVE-2021-34527"],
+      ["CCS-ARCH01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-SQL01", "Windows BITS elevation of privilege", "CVE-2020-0787"],
+      ["CCS-SQL01", "SMBv3 compression remote code execution (SMBGhost)", "CVE-2020-0796"],
+      ["CCS-FS01", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-36570"],
+      ["CCS-SQL01", "Operating system identified", "", 1],
+      ["CCS-ARCH01", "Operating system identified", "", 1],
+      ["CCS-SQL01", "Microsoft SQL Server missing security updates", ""],
+      ["CCS-SQL01", "Deprecated TLS protocol enabled", ""],
+      ["CCS-ARCH01", "Deprecated TLS protocol enabled", ""],
+      ["CCS-ARCH01", "Cleartext HTTP service", ""],
+      ["CCS-ARCH01", "Web server version disclosure", ""],
+      ["CCS-ARCH02", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-ARCH02", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-ARCH02", "Readable network file share", ""],
+      ["CCS-ARCH02", "TLS 1.0 enabled on RDP", ""],
+      ["CCS-ARCH01", "SMBv1 protocol enabled", ""],
+      ["CCS-ARCH01", "Readable network file share", ""],
+      ["CCS-ARCH01", "SMB signing not required", ""],
+      ["CCS-FS01", "SMB null session permitted", ""],
+      ["CCS-FS01", "SMB signing not required", ""],
+      ["CCS-SQL01", "SMB signing not required", ""],
+      ["CCS-ARCH02", "SMB signing not required", ""]
+    ],
+    D:[
+      ["WKS-01", "Windows 10 unsupported version detection", ""],
+      ["WKS-02", "Windows 10 unsupported version detection", ""],
+      ["WKS-03", "Windows 10 unsupported version detection", ""],
+      ["WKS-04", "Windows 10 unsupported version detection", ""],
+      ["WKS-05", "Windows 10 unsupported version detection", ""],
+      ["WKS-06", "Windows 10 unsupported version detection", ""],
+      ["WKS-07", "Windows 10 unsupported version detection", ""],
+      ["WKS-08", "Windows 10 unsupported version detection", ""],
+      ["WKS-09", "Windows 10 unsupported version detection", ""],
+      ["WKS-10", "Windows 10 unsupported version detection", ""],
+      ["WKS-11", "Windows 10 unsupported version detection", ""],
+      ["WKS-12", "Windows 10 unsupported version detection", ""],
+      ["CCS-FW01", "FortiOS authentication bypass on administrative interface", "CVE-2022-40684"],
+      ["CCS-FW01", "FortiOS SSL VPN detected, firmware out of date", ""],
+      ["CCS-FW01", "Administrative interface reachable from untrusted networks", ""],
+      ["CCS-DC01", "Operating system identified", "", 1],
+      ["CCS-DC01", "Netlogon elevation of privilege (Zerologon)", "CVE-2020-1472"],
+      ["CCS-DC01", "SMBv3 compression remote code execution (SMBGhost)", "CVE-2020-0796"],
+      ["CCS-DC01", "Microsoft Windows Server missing security updates", ""],
+      ["CCS-DC01", "SMB signing not required", ""],
+      ["CCS-FS01", "Windows Server 2012 R2 unsupported version detection", ""],
+      ["CCS-FS01", "Windows SMBv1 remote code execution (EternalBlue)", "CVE-2017-0144"],
+      ["CCS-FS01", "Missing final security update KB5031419 (October 2023)", "CVE-2023-35349"],
+      ["CCS-FS01", "SMBv1 protocol enabled", ""],
+      ["CCS-FS01", "SMB signing not required", ""],
+      ["DESKTOP-7F2KQ9L", "Operating system identified", "", 1],
+      ["DESKTOP-7F2KQ9L", "TLS 1.0 enabled on RDP", ""],
+      ["DESKTOP-7F2KQ9L", "SMB signing not required", ""],
+      ["DESKTOP-7F2KQ9L", "NetBIOS service enabled", ""],
+      ["CCS-DC01", "LDAP over TLS supports deprecated protocol", ""],
+      ["CCS-FW01", "DNS recursion allowed from internal networks", ""],
+      ["CCS-DC01", "LLMNR enabled", ""],
+      ["CCS-DC01", "Kerberos pre-authentication disabled for one or more accounts", ""],
+      ["WKS-03", "SMB signing not required", ""],
+      ["WKS-07", "Endpoint protection software not detected", ""],
+      ["WKS-11", "Local administrator account enabled with common name", ""],
+      ["DESKTOP-7F2KQ9L", "Cleartext HTTP service", ""],
+      ["CCS-FW01", "Outlook on the web endpoint reachable", ""],
+      ["CCS-DC01", "Print Spooler service running on domain controller", ""],
+      ["WKS-02", "Remote Desktop enabled on workstation", ""]
+    ]
+  };
+
+  /* The scope data. "cluster" lists the file positions (1-based) of the twelve
+     rows the answer key counts as one problem. "key" is the answer key's own
+     grouping, from "The 8 findings" in each scope's Scan answer key, less the
+     pass-2 finding (the machine on no inventory), which this build does not show. */
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims",
+      cluster:[1,2,3,4,5,6,7,8,9,10,11,12],
+      cause:"the missing November 2022 updates on CCS-APP01",
+      key:[
+        ["CCS-APP01 is years behind on its updates", "12"],
+        ["Print Spooler remote code execution (PrintNightmare)", "3"],
+        ["Print Spooler elevation of privilege", "1"],
+        ["BITS elevation of privilege", "2"],
+        ["OpenSSH ssh-agent flaw on CCS-SFTP01", "1"],
+        ["Old FTP and weak SSH settings on CCS-SFTP01", "4"],
+        ["CCS-SQL01 behind on its updates, with weak connection settings", "4"],
+        ["Old connection settings and version disclosure", "11"],
+        ["SMBGhost on CCS-SQL01 (you look at it next)", "1"]
+      ], info:3,
+      why:"Each row has a different flaw code, but one missing update causes all twelve. Install it and all twelve go away, so they count as one problem.",
+      miss:"Different flaw codes do not mean different problems. Look at what the rows share.",
+      gl:["nick","rce","eop","bits","ssh","ftp","disc"] },
+    B:{ name:"Payments and Remittance", ic:"coin",
+      cluster:[2,3,4,5,6,7,8,9,10,11,12,13],
+      cause:"the missing final update KB5031419 on CCS-FS01",
+      key:[
+        ["Windows Server 2012 R2, an unsupported version", "2"],
+        ["CCS-FS01 missing its final update, KB5031419", "12"],
+        ["SMBv1 remote code execution (EternalBlue)", "1"],
+        ["Print Spooler remote code execution (PrintNightmare)", "2"],
+        ["BITS elevation of privilege", "2"],
+        ["CCS-FIN01 behind on its updates", "3"],
+        ["Connection and setting problems, on most machines", "The rest"],
+        ["SMBGhost on CCS-FIN01 (you look at it next)", "1"]
+      ], info:2,
+      why:"Each row has a different flaw code, but one missing update causes all twelve. Install it and all twelve go away, so they count as one problem.",
+      miss:"Different flaw codes do not mean different problems. Look at what the rows share.",
+      gl:["nick","rce","eop","bits","smb1","unsup"] },
+    C:{ name:"Patient Records and Archive", ic:"archive",
+      cluster:[2,3,4,5,6,7,8,9,10,11,12,13],
+      cause:"the missing final update KB5031419 on CCS-ARCH01",
+      key:[
+        ["Windows Server 2012 R2, an unsupported version, on three servers", "3"],
+        ["CCS-ARCH01 missing its final update, KB5031419", "12"],
+        ["SMBv1 remote code execution (EternalBlue)", "2"],
+        ["Print Spooler remote code execution (PrintNightmare)", "1"],
+        ["BITS elevation of privilege", "2"],
+        ["Shares named 'Archive' and 'Records' anyone signed in can read", "2"],
+        ["Records portal and connection settings, on most machines", "The rest"],
+        ["SMBGhost on CCS-SQL01 (you look at it next)", "1"]
+      ], info:2,
+      why:"Each row has a different flaw code, but one missing update causes all twelve. Install it and all twelve go away, so they count as one problem.",
+      miss:"Different flaw codes do not mean different problems. Look at what the rows share.",
+      gl:["nick","rce","eop","bits","smb1","unsup"] },
+    D:{ name:"Remote and Corporate", ic:"laptop",
+      cluster:[1,2,3,4,5,6,7,8,9,10,11,12],
+      cause:"the unsupported Windows 10 on the laptops WKS-01 to WKS-12",
+      key:[
+        ["The laptops WKS-01 to WKS-12 run an unsupported Windows 10", "12"],
+        ["FortiGate authentication bypass on CCS-FW01", "3"],
+        ["Netlogon elevation of privilege (Zerologon)", "1"],
+        ["SMBv1 remote code execution (EternalBlue)", "1"],
+        ["The shared file server CCS-FS01 runs an unsupported version", "3"],
+        ["Settings on the domain controller CCS-DC01", "About 6"],
+        ["Settings on laptops and the firewall CCS-FW01", "About 7"],
+        ["SMBGhost on CCS-DC01 (you look at it next)", "1"]
+      ], info:2,
+      why:"Each row is a different laptop, but all twelve have the same problem: a version of Windows 10 that gets no more updates. One fix covers all twelve, so they count as one problem.",
+      miss:"Twelve machines with the same problem are still one problem. Look at what the rows share.",
+      gl:["nick","rce","eop","auth","dc","smb1","unsup"] }
+  };
+  /* Plain meanings for the words in the answer key table. Our wording, not SME data. */
+  var GL = {
+    nick:"<b>PrintNightmare, EternalBlue, SMBGhost</b> and similar names are nicknames for well-known flaws.",
+    rce:"<b>Remote code execution:</b> an attacker can run their own commands on the machine.",
+    eop:"<b>Elevation of privilege:</b> a normal user can take admin powers.",
+    bits:"<b>BITS:</b> a Windows service that moves files in the background.",
+    ssh:"<b>OpenSSH:</b> the program people use to sign in to a machine over the network.",
+    ftp:"<b>FTP:</b> an old way to send files that does not protect them.",
+    disc:"<b>Version disclosure:</b> a machine tells anyone who asks which software version it runs.",
+    smb1:"<b>SMBv1:</b> an old version of Windows file sharing.",
+    unsup:"<b>Unsupported version:</b> one that no longer gets security updates.",
+    auth:"<b>Authentication bypass:</b> getting in without a valid password.",
+    dc:"<b>Domain controller:</b> the server that checks every staff sign-in."
+  };
+  var ORDER = ["A","B","C","D"];
+  var MAXG = 12;       /* groups the board holds, Info aside */
+  var PER = 9;         /* cards shown at once */
+  var LO = 6, HI = 10; /* the build spec's tolerance on group count */
+
+  var S = [
+    { id:"scope", kind:"scope", label:"Your scope", h1:"Pick Your Scope",
+      lead:"Choose the scope you picked in Project 1. The next slide lays out every row of your scope's scan as a card." },
+    { id:"board", kind:"board", label:"Group the rows", h1:"Group the Rows by Cause" },
+    { id:"check", kind:"check", label:"Check your groups", h1:"Check Your Groups" },
+    { id:"list", kind:"list", label:"Your working list", h1:"From Rows to a Working List" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m13-from-rows-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { scope:null, b:{} }; }
+  function cleanBoard(k, b){
+    var n = ROWS[k].length, seen = {}, out = { groups:[], info:[], seq:1, page:0 };
+    function ok(x){ return Number.isInteger(x) && x >= 0 && x < n && !seen[x]; }
+    if(!isPlain(b)) return out;
+    if(Array.isArray(b.groups)) b.groups.forEach(function(g){
+      if(!isPlain(g) || !Array.isArray(g.rows) || out.groups.length >= MAXG) return;
+      var rows = g.rows.filter(function(x){ if(!ok(x)) return false; seen[x] = 1; return true; });
+      if(!rows.length) return;
+      out.groups.push({ id:String(g.id || ("g" + out.seq)), name:typeof g.name === "string" ? g.name.slice(0,60) : "", rows:rows });
+    });
+    if(Array.isArray(b.info)) out.info = b.info.filter(function(x){ if(!ok(x)) return false; seen[x] = 1; return true; });
+    out.seq = Number.isInteger(b.seq) && b.seq > 0 ? b.seq : out.groups.length + 1;
+    out.page = Number.isInteger(b.page) && b.page >= 0 ? b.page : 0;
+    return out;
+  }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var o = { scope:(ORDER.indexOf(raw.scope) >= 0) ? raw.scope : null, b:{} };
+      if(isPlain(raw.b)) ORDER.forEach(function(k){ if(raw.b[k]) o.b[k] = cleanBoard(k, raw.b[k]); });
+      return o;
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [];
+    ORDER.forEach(function(k){
+      var r = ROWS[k], sc = SC[k];
+      if(!r || !r.length) { problems.push("scope " + k + " has no rows"); return; }
+      if(sc.cluster.length !== 12) problems.push("scope " + k + " cluster is not twelve rows");
+      sc.cluster.forEach(function(p){ if(!r[p-1]) problems.push("scope " + k + " cluster row " + p + " missing"); });
+      var inf = r.filter(function(x){ return x[3] === 1; }).length;
+      if(inf !== sc.info) problems.push("scope " + k + " has " + inf + " Info rows, key says " + sc.info);
+      r.forEach(function(x, n){ if(!x[0] || !x[1]) problems.push("scope " + k + " row " + (n+1) + " is missing a host or finding"); });
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This interactive has authoring errors and will not behave correctly:</b></p>'
+        + '<ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+  var sel = {};          /* selected pile rows, by index; never saved, never preset */
+  var view = null;       /* the group open in the group view: a group id, "info", or null */
+  var armReset = false, armTimer = null;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function setHint(h){ el.hint.innerHTML = "<span>" + h + "</span>"; }
+
+  function cur(){ return st.scope ? SC[st.scope] : null; }
+  function rows(){ return ROWS[st.scope]; }
+  function bd(){ if(!st.b[st.scope]) st.b[st.scope] = cleanBoard(st.scope, null); return st.b[st.scope]; }
+  function placed(){
+    var m = {}, b = bd();
+    b.groups.forEach(function(g){ g.rows.forEach(function(x){ m[x] = g.id; }); });
+    b.info.forEach(function(x){ m[x] = "info"; });
+    return m;
+  }
+  function pileList(){
+    var m = placed(), out = [];
+    for(var x=0; x<rows().length; x++) if(!(x in m)) out.push(x);
+    return out;
+  }
+  function groupById(id){ var g = null; bd().groups.forEach(function(x){ if(x.id === id) g = x; }); return g; }
+  function selList(){ return Object.keys(sel).map(Number).filter(function(x){ return sel[x]; }).sort(function(a,b){ return a-b; }); }
+  function unnamed(){ return bd().groups.filter(function(g){ return !g.name.trim(); }).length; }
+  function boardDone(){ return !!st.scope && pileList().length === 0 && unnamed() === 0 && bd().groups.length > 0; }
+  function rowText(x){ var r = rows()[x]; return r[0] + ", " + r[1] + ", " + (r[2] ? r[2] : "no CVE"); }
+  function hasKB(){ return rows().some(function(r){ return /\bKB\d/.test(r[1]); }); }
+  function plural(n, a, b){ return n + " " + (n === 1 ? a : b); }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(st.scope && i > 0){
+      el.chip.hidden = false;
+      var n = rows().length, left = pileList().length;
+      el.chip.textContent = "Scope " + st.scope + (s.kind === "board" ? " · " + (n - left) + " of " + n + " rows grouped" : "");
+    } else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "scope" && !st.scope){
+      el.next.disabled = true;
+      setHint("Pick a scope to carry on.");
+    }
+    else if(s.kind === "board" && !boardDone()){
+      el.next.disabled = true;
+    }
+    else if(s.kind === "check" && !boardDone()){
+      el.next.disabled = true;
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.board.classList.remove("dense");
+    var h = s.h1;
+    el.h1.textContent = h;
+    el.frame.setAttribute("aria-label", h);
+    el.hint.textContent = "";
+    if(s.kind !== "board") view = null;
+
+    if(s.kind === "scope") renderScope(s);
+    else if(s.kind === "board") renderBoard();
+    else if(s.kind === "check") renderCheck();
+    else if(s.kind === "list") renderList(s);
+    else el.board.innerHTML = '<div class="lead"><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></div>';
+
+    header();
+    if(s.kind === "board") boardHint();
+    say("Slide " + (i+1) + " of " + S.length + ". " + h + ".");
+  }
+
+  /* Slide 1: four scopes, one pick. Each scope keeps its own groups. */
+  function renderScope(s){
+    el.board.innerHTML = '<p class="lead">' + s.lead + "</p>"
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own groups</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        if(st.scope !== b.dataset.k) sel = {};
+        st.scope = b.dataset.k; save(st);
+        render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked.");
+      });
+    });
+  }
+
+  function needScope(){
+    el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Pick your scope first.</b> The rows depend on it.</p>'
+      + '<button class="go" type="button" id="goscope">Go to the scope picker</button></div>';
+    el.board.querySelector("#goscope").addEventListener("click", function(){ i = 0; render(); el.frame.focus(); });
+  }
+
+  /* Slide 2: the board. The pile of unplaced rows on top, the groups below. */
+  function renderBoard(){
+    if(!cur()){ needScope(); return; }
+    var b = bd(), pile = pileList();
+    var pages = Math.max(1, Math.ceil(pile.length / PER));
+    if(b.page >= pages) b.page = pages - 1;
+    var shown = pile.slice(b.page * PER, b.page * PER + PER);
+    var ns = selList().length;
+
+    var h = '<div class="sechd">'
+      + '<span class="st">' + icon("rows") + "Rows to group</span>"
+      + '<span class="sx"><b>' + pile.length + "</b> of " + rows().length + " left"
+      + (pile.length ? " · showing " + (b.page*PER + 1) + " to " + (b.page*PER + shown.length) : "") + "</span>"
+      + '<span class="sx" id="selcount">' + (ns ? "· <b>" + ns + " selected</b>" : "") + "</span>"
+      + '<span class="sp"></span>'
+      + '<button class="mini" type="button" id="clearsel"' + (ns ? "" : " disabled") + ">Clear selection</button>"
+      + '<button class="mini" type="button" id="prevp" aria-label="Show the previous rows"' + (b.page > 0 ? "" : " disabled") + ">" + icon("left") + "Previous</button>"
+      + '<button class="mini" type="button" id="nextp" aria-label="Show the next rows"' + (b.page < pages-1 ? "" : " disabled") + ">Next" + icon("right") + "</button>"
+      + '<button class="mini' + (armReset ? " warn" : "") + '" type="button" id="reset">' + icon("undo") + (armReset ? "Click again to clear" : "Start over") + "</button>"
+      + "</div>";
+
+    h += '<div class="pile" id="pile">';
+    if(!pile.length){
+      h += '<div class="empty">' + icon("ok") + (unnamed() ? "Every row is in a group. Now name every group." : "Every row is in a group.") + "</div>";
+    } else shown.forEach(function(x){ h += cardHTML(x); });
+    h += "</div>";
+
+    h += '<div class="sechd"><span class="st">' + icon("folder") + "Your groups</span>"
+      + '<span class="sx"><b>' + b.groups.length + "</b> made" + (unnamed() ? " · " + unnamed() + " still to name" : "") + "</span>"
+      + '<span class="sp"></span><span class="sx">A group is one problem. Name each one for its cause.</span></div>';
+
+    h += '<div class="tiles" id="tiles">' + tileInfo();
+    b.groups.forEach(function(g){ h += tileGroup(g); });
+    h += tileNew();
+    for(var k = b.groups.length; k < MAXG; k++) h += '<div class="tile slot" aria-hidden="true"></div>';
+    h += "</div>";
+
+    if(view) h += viewHTML();
+    el.board.innerHTML = h;
+    wireBoard();
+  }
+
+  function cardHTML(x){
+    var r = rows()[x], on = !!sel[x];
+    return '<button class="card' + (on ? " sel" : "") + '" type="button" data-x="' + x + '" aria-pressed="' + on + '"'
+      + ' title="' + esc(r[0] + " · " + r[1] + (r[2] ? " · " + r[2] : "")) + '"'
+      + ' aria-label="' + esc("Row " + (x+1) + ". " + rowText(x) + (on ? ". Selected" : "")) + '">'
+      + '<span class="bx" aria-hidden="true">' + (on ? icon("tick") : "") + "</span>"
+      + '<span class="hs">' + esc(r[0]) + "</span>"
+      + (r[2] ? '<span class="cv">' + esc(r[2]) + "</span>" : '<span class="cv none">No CVE</span>')
+      + '<span class="fd">' + esc(r[1]) + "</span>"
+      + "</button>";
+  }
+
+  function tileInfo(){
+    var n = bd().info.length, ns = selList().length;
+    return '<div class="tile info' + (ns ? " can" : "") + '" data-drop="info">'
+      + '<button class="put" type="button" data-put="info" aria-label="' + esc("Info. " + plural(n, "row", "rows") + ". Rows that only report a fact are not problems." + (ns ? " Put the " + plural(ns, "selected row", "selected rows") + " here." : "")) + '">'
+      + icon("info") + '<span class="pn">Info · ' + n + "</span></button>"
+      + '<button class="eye" type="button" data-view="info" aria-label="See the rows in Info" title="See the rows">' + icon("eye") + "</button>"
+      + '<span class="it">Facts, not problems</span></div>';
+  }
+  function tileGroup(g){
+    var ns = selList().length, n = g.rows.length;
+    var nm = g.name.trim();
+    return '<div class="tile' + (ns ? " can" : "") + '" data-drop="' + esc(g.id) + '"' + (nm ? ' title="' + esc(nm) + '"' : "") + '>'
+      + '<button class="put" type="button" data-put="' + esc(g.id) + '" aria-label="' + esc((nm ? "Group " + nm : "Unnamed group") + ". " + plural(n, "row", "rows") + "." + (ns ? " Put the " + plural(ns, "selected row", "selected rows") + " here." : "")) + '">'
+      + icon("folder") + '<span class="pn">' + plural(n, "row", "rows") + "</span></button>"
+      + '<button class="eye" type="button" data-view="' + esc(g.id) + '" aria-label="' + esc("See the rows in " + (nm || "this group")) + '" title="See the rows">' + icon("eye") + "</button>"
+      + '<input type="text" maxlength="60" data-name="' + esc(g.id) + '" value="' + esc(g.name) + '" placeholder="Name it" aria-label="Group name"' + (nm ? ' title="' + esc(nm) + '"' : ' class="need"') + "></div>";
+  }
+  function tileNew(){
+    var full = bd().groups.length >= MAXG, ns = selList().length;
+    return '<div class="tile new' + (full ? " full" : "") + (ns && !full ? " can" : "") + '" data-drop="' + (full ? "" : "new") + '">'
+      + '<button class="put" type="button" data-put="new"' + (full ? ' aria-disabled="true"' : "") + ">"
+      + '<span class="nl">' + icon("plus") + '<span class="pn">' + (full ? "Board full" : "New group") + "</span></span>"
+      + '<span class="sub">' + (full ? "Take rows out first" : (ns ? "Put " + ns + " here" : "Drop a row here")) + "</span></button></div>";
+  }
+
+  function viewHTML(){
+    var isInfo = view === "info", g = isInfo ? null : groupById(view);
+    var list = isInfo ? bd().info : (g ? g.rows : []);
+    var h = '<div class="gv" id="gv" role="dialog" aria-label="' + esc(isInfo ? "Rows in Info" : "Rows in this group") + '">'
+      + '<div class="gh">' + icon(isInfo ? "info" : "folder")
+      + (isInfo ? '<span class="gt">Info</span>'
+                : '<input type="text" maxlength="60" id="gvname" value="' + esc(g.name) + '" placeholder="Name this group" aria-label="Group name">')
+      + '<span class="gc">' + plural(list.length, "row", "rows") + "</span>"
+      + '<span style="flex:1 1 auto"></span>'
+      + (list.length ? '<button class="mini" type="button" id="gvall">' + icon("undo") + "Take all out</button>" : "")
+      + '<button class="mini" type="button" id="gvclose">' + icon("close") + "Close</button></div>"
+      + '<p class="gd">' + (isInfo
+          ? "<b>Info rows only report a fact the scanner saw</b>, such as a machine's operating system. Their Severity reads Info in your scan copy. They are not problems, so they go in no group."
+          : "Rows in one group should share one cause. Take out any row that does not, and it goes back to the rows to group.") + "</p>"
+      + "<ul>";
+    if(!list.length) h += '<li><span class="rt"><span class="n">Nothing here yet.</span></span></li>';
+    list.slice().sort(function(a,b){ return a-b; }).forEach(function(x){
+      var r = rows()[x];
+      h += '<li><span class="rt" title="' + esc(r[0] + " · " + r[1] + (r[2] ? " · " + r[2] : "")) + '"><b>' + esc(r[0]) + "</b> · " + esc(r[1]) + " · "
+        + (r[2] ? '<span class="c">' + esc(r[2]) + "</span>" : '<span class="n">No CVE</span>') + "</span>"
+        + '<button class="mini" type="button" data-out="' + x + '" aria-label="' + esc("Take out row " + (x+1) + ", " + rowText(x)) + '">' + icon("undo") + "Take out</button></li>";
+    });
+    return h + "</ul></div>";
+  }
+
+  /* ---------------- board actions ---------------- */
+  function moveTo(target, list){
+    var b = bd();
+    if(!list.length) return null;
+    var inSet = {}; list.forEach(function(x){ inSet[x] = 1; });
+    b.groups.forEach(function(g){ g.rows = g.rows.filter(function(x){ return !inSet[x]; }); });
+    b.info = b.info.filter(function(x){ return !inSet[x]; });
+    var made = null;
+    if(target === "new"){
+      if(b.groups.length >= MAXG) return null;
+      made = { id:"g" + b.seq, name:"", rows:list.slice() };
+      b.seq++;
+      b.groups.push(made);
+    } else if(target === "info"){
+      b.info = b.info.concat(list);
+    } else {
+      var g = groupById(target);
+      if(!g) return null;
+      g.rows = g.rows.concat(list);
+    }
+    b.groups = b.groups.filter(function(g){ return g.rows.length > 0; });
+    list.forEach(function(x){ delete sel[x]; });
+    save(st);
+    return made || (target === "info" ? "info" : groupById(target));
+  }
+
+  function drop(target, list){
+    if(target === "new" && bd().groups.length >= MAXG){
+      setHint("<b>The board holds " + MAXG + " groups.</b> A scan this size holds far fewer problems than that, so some of your groups share a cause. Open one with its eye button, take its rows out, and put them with the group they belong to.");
+      return;
+    }
+    if(!list.length){ setHint("<b>Select a row first.</b> Click a row card, or drag it onto a group."); return; }
+    var res = moveTo(target, list);
+    if(!res) return;
+    var nm = target === "info" ? "Info" : (res.name && res.name.trim() ? res.name : "a new group");
+    renderBoard(); header();
+    if(target === "new"){
+      var inp = el.board.querySelector('input[data-name="' + res.id + '"]');
+      var tl = inp ? inp.closest(".tile") : null;
+      if(tl && !reduce) tl.classList.add("in");
+      if(inp) inp.focus();
+      setHint("<b>New group made with " + plural(list.length, "row", "rows") + ".</b> Type a name for it: what do these rows have in common?");
+      say("New group made with " + plural(list.length, "row", "rows") + ". Type a name for it.");
+    } else {
+      boardHint(plural(list.length, "row", "rows") + " put in " + nm + ".");
+      say(plural(list.length, "row", "rows") + " put in " + nm + ". " + pileList().length + " left to group.");
+    }
+  }
+
+  function boardHint(lead){
+    if(S[i].kind !== "board" || !st.scope) return;
+    var left = pileList().length, un = unnamed(), ns = selList().length;
+    var m;
+    if(view) m = view === "info" ? "Take out any row that is a real problem, not a fact, then click Close."
+                                 : "Take out any row that does not share this group's cause, then click Close.";
+    else if(!left && !un) m = "<b>Every row is grouped and every group is named.</b> Open a group with its eye button to check it, then Continue.";
+    else if(!left) m = "<b>Every row is in a group.</b> Name the " + plural(un, "group", "groups") + " still showing Name it, then Continue.";
+    else if(ns) m = "<b>" + plural(ns, "row", "rows") + " selected.</b> Click a group to put " + (ns === 1 ? "it" : "them") + " there, or click New group. Your selection stays when you use Next and Previous, so you can pick rows from several pages.";
+    else m = "<b>Drag each row onto the group that shares its cause</b>, or onto New group. Or click rows to select them, then click a group."
+      + (hasKB() ? " A <b>KB</b> number is Microsoft's name for one update." : "")
+      + " <b>Info rows</b> are the rows whose Severity reads Info in your scan copy.";
+    setHint((lead ? "<b>" + esc(lead) + "</b> " : "") + m);
+  }
+
+  function refreshSelection(){
+    /* Update cards and tiles in place so focus stays on the card just clicked. */
+    var ns = selList().length;
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.card"), function(c){
+      var x = +c.dataset.x, on = !!sel[x];
+      c.classList.toggle("sel", on);
+      c.setAttribute("aria-pressed", on);
+      c.setAttribute("aria-label", "Row " + (x+1) + ". " + rowText(x) + (on ? ". Selected" : ""));
+      c.querySelector(".bx").innerHTML = on ? icon("tick") : "";
+    });
+    var sc = el.board.querySelector("#selcount");
+    if(sc) sc.innerHTML = ns ? "· <b>" + ns + " selected</b>" : "";
+    var cs = el.board.querySelector("#clearsel");
+    if(cs) cs.disabled = !ns;
+    var tiles = el.board.querySelector("#tiles");
+    if(tiles){
+      var tmp = document.createElement("div");
+      var h = tileInfo(); bd().groups.forEach(function(g){ h += tileGroup(g); }); h += tileNew();
+      tmp.innerHTML = h;
+      var fresh = tmp.querySelectorAll(".tile"), old = tiles.querySelectorAll(".tile:not(.slot)");
+      Array.prototype.forEach.call(old, function(t, k){
+        var f = fresh[k]; if(!f) return;
+        t.className = f.className;
+        var p = t.querySelector(".put"), fp = f.querySelector(".put");
+        if(p && fp){ p.setAttribute("aria-label", fp.getAttribute("aria-label") || ""); if(t.classList.contains("new")) p.innerHTML = fp.innerHTML; }
+      });
+    }
+    boardHint();
+  }
+
+  function wireBoard(){
+    var b = bd();
+    var q = function(s){ return el.board.querySelector(s); };
+    var qa = function(s){ return el.board.querySelectorAll(s); };
+
+    var cs = q("#clearsel"); if(cs) cs.addEventListener("click", function(){ sel = {}; refreshSelection(); });
+    var pp = q("#prevp"); if(pp) pp.addEventListener("click", function(){ if(b.page > 0){ b.page--; save(st); renderBoard(); header(); boardHint(); var n = q("#prevp"); if(n && !n.disabled) n.focus(); else if(q("#nextp")) q("#nextp").focus(); } });
+    var np = q("#nextp"); if(np) np.addEventListener("click", function(){ b.page++; save(st); renderBoard(); header(); boardHint(); var n = q("#nextp"); if(n && !n.disabled) n.focus(); else if(q("#prevp")) q("#prevp").focus(); });
+    var rs = q("#reset"); if(rs) rs.addEventListener("click", function(){
+      if(!armReset){
+        armReset = true; renderBoard(); header();
+        setHint("<b>Start over?</b> Click the button again to clear every group in Scope " + st.scope + ". Other scopes keep theirs.");
+        var r2 = q("#reset"); if(r2) r2.focus();
+        clearTimeout(armTimer);
+        armTimer = setTimeout(function(){ armReset = false; if(S[i].kind === "board"){ var r3 = el.board.querySelector("#reset"); if(r3){ r3.classList.remove("warn"); r3.innerHTML = icon("undo") + "Start over"; } boardHint(); } }, 4000);
+        return;
+      }
+      clearTimeout(armTimer); armReset = false;
+      st.b[st.scope] = cleanBoard(st.scope, null); sel = {}; view = null; save(st);
+      renderBoard(); header();
+      boardHint("Cleared. Every row is back in the pile.");
+      say("Cleared. Every row is back to group.");
+      var r4 = q("#reset"); if(r4) r4.focus();
+    });
+
+    Array.prototype.forEach.call(qa("button.card"), function(c){ wireCard(c); });
+
+    Array.prototype.forEach.call(qa("button.put"), function(p){
+      p.addEventListener("click", function(){ drop(p.dataset.put, selList()); });
+    });
+    Array.prototype.forEach.call(qa("button.eye"), function(e){
+      e.addEventListener("click", function(){ openView(e.dataset.view); });
+    });
+    Array.prototype.forEach.call(qa("input[data-name]"), function(inp){
+      inp.addEventListener("input", function(){
+        var g = groupById(inp.dataset.name); if(!g) return;
+        g.name = inp.value.slice(0,60); save(st);
+        inp.classList.toggle("need", !g.name.trim());
+        inp.title = g.name.trim(); inp.closest(".tile").title = g.name.trim();
+        header(); boardHint();
+        var sx = el.board.querySelectorAll(".sechd")[1];
+        if(sx){ var s2 = sx.querySelectorAll(".sx")[0]; if(s2) s2.innerHTML = "<b>" + b.groups.length + "</b> made" + (unnamed() ? " · " + unnamed() + " still to name" : ""); }
+        var pv = inp.closest(".tile").querySelector(".put");
+        if(pv) pv.setAttribute("aria-label", (g.name.trim() ? "Group " + g.name.trim() : "Unnamed group") + ". " + plural(g.rows.length, "row", "rows") + ".");
+        var em = el.board.querySelector(".pile .empty");
+        if(em) em.innerHTML = icon("ok") + (unnamed() ? "Every row is in a group. Now name every group." : "Every row is in a group.");
+      });
+      inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); inp.blur(); boardHint(); } });
+    });
+
+    var gv = q("#gv");
+    if(gv){
+      q("#gvclose").addEventListener("click", closeView);
+      var all = q("#gvall");
+      if(all) all.addEventListener("click", function(){
+        var list = view === "info" ? bd().info.slice() : (groupById(view) || {rows:[]}).rows.slice();
+        takeOut(list);
+      });
+      Array.prototype.forEach.call(gv.querySelectorAll("button[data-out]"), function(o){
+        o.addEventListener("click", function(){ takeOut([+o.dataset.out]); });
+      });
+      var gn = q("#gvname");
+      if(gn){
+        gn.addEventListener("input", function(){ var g = groupById(view); if(!g) return; g.name = gn.value.slice(0,60); save(st); header(); });
+        gn.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); closeView(); } });
+      }
+      gv.addEventListener("keydown", function(e){ if(e.key === "Escape"){ e.preventDefault(); closeView(); } });
+    }
+  }
+
+  function openView(id){
+    view = id; renderBoard(); header(); boardHint();
+    var gv = el.board.querySelector("#gv");
+    if(gv && !reduce) gv.classList.add("in");
+    var f = el.board.querySelector("#gvname") || el.board.querySelector("#gvclose");
+    if(f) f.focus();
+    var n = id === "info" ? bd().info.length : (groupById(id) || {rows:[]}).rows.length;
+    say((id === "info" ? "Info" : "Group") + " opened. " + plural(n, "row", "rows") + ".");
+  }
+  function closeView(){
+    var was = view;
+    view = null; renderBoard(); header(); boardHint();
+    var back = el.board.querySelector('button.eye[data-view="' + was + '"]');
+    if(back) back.focus();
+  }
+  function takeOut(list){
+    var b = bd(), inSet = {};
+    list.forEach(function(x){ inSet[x] = 1; });
+    b.groups.forEach(function(g){ g.rows = g.rows.filter(function(x){ return !inSet[x]; }); });
+    b.info = b.info.filter(function(x){ return !inSet[x]; });
+    var wasGroup = view !== "info";
+    b.groups = b.groups.filter(function(g){ return g.rows.length > 0; });
+    if(wasGroup && !groupById(view)) view = null;
+    save(st);
+    renderBoard(); header();
+    boardHint(plural(list.length, "row", "rows") + " back in the rows to group." + (view === null && wasGroup ? " The group was empty, so it is gone." : ""));
+    say(plural(list.length, "row", "rows") + " taken out.");
+    var f = el.board.querySelector("#gv button[data-out]") || el.board.querySelector("#gvclose") || el.board.querySelector("button.card");
+    if(f) f.focus();
+  }
+
+  /* ---------------- drag, by pointer ----------------
+     A press that moves more than 6px is a drag; anything less is a click,
+     which selects or clears the card. Dragging a selected card carries every
+     selected card; dragging an unselected one carries just it. */
+  var drag = null, ghost = null;
+  function wireCard(c){
+    c.addEventListener("click", function(e){
+      if(c._dragged){ c._dragged = false; e.preventDefault(); return; }
+      var x = +c.dataset.x;
+      if(sel[x]) delete sel[x]; else sel[x] = true;
+      refreshSelection();
+    });
+    c.addEventListener("pointerdown", function(e){
+      if(e.button !== 0) return;
+      drag = { c:c, x:+c.dataset.x, sx:e.clientX, sy:e.clientY, on:false, id:e.pointerId, hot:null };
+    });
+  }
+  document.addEventListener("pointermove", function(e){
+    if(!drag || e.pointerId !== drag.id) return;
+    if(!drag.on){
+      if(Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) < 7) return;
+      drag.on = true;
+      drag.list = sel[drag.x] ? selList() : [drag.x];
+      var r = rows()[drag.x];
+      ghost = document.createElement("div");
+      ghost.id = "ghost";
+      ghost.innerHTML = esc(r[0] + " · " + r[1]) + (drag.list.length > 1 ? '<span class="gn">' + drag.list.length + " rows</span>" : "");
+      document.body.appendChild(ghost);
+      drag.list.forEach(function(x){ var cc = el.board.querySelector('button.card[data-x="' + x + '"]'); if(cc) cc.classList.add("lift"); });
+    }
+    e.preventDefault();
+    ghost.style.transform = "translate(" + (e.clientX + 12) + "px," + (e.clientY + 10) + "px)";
+    var t = document.elementFromPoint(e.clientX, e.clientY);
+    var tile = t && t.closest ? t.closest(".tile[data-drop]") : null;
+    if(tile && !tile.dataset.drop) tile = null;
+    if(drag.hot !== tile){
+      if(drag.hot) drag.hot.classList.remove("hot");
+      if(tile) tile.classList.add("hot");
+      drag.hot = tile;
+    }
+  }, {passive:false});
+  function endDrag(e, cancel){
+    if(!drag || (e && e.pointerId !== drag.id)) return;
+    var d = drag; drag = null;
+    if(!d.on) return;
+    d.c._dragged = true;
+    setTimeout(function(){ d.c._dragged = false; }, 0);
+    if(ghost){ ghost.remove(); ghost = null; }
+    if(d.hot) d.hot.classList.remove("hot");
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.card.lift"), function(cc){ cc.classList.remove("lift"); });
+    if(!cancel && d.hot) drop(d.hot.dataset.drop, d.list);
+  }
+  document.addEventListener("pointerup", function(e){ endDrag(e, false); });
+  document.addEventListener("pointercancel", function(e){ endDrag(e, true); });
+
+  /* ---------------- slide 3: the check ---------------- */
+  function results(){
+    var sc = cur(), b = bd(), r = rows();
+    var m = placed();
+    var holders = {};
+    sc.cluster.forEach(function(p){ holders[m[p-1]] = 1; });
+    var hk = Object.keys(holders);
+    var clusterOk = hk.length === 1 && hk[0] !== "info" && hk[0] !== "undefined";
+    var cg = clusterOk ? groupById(hk[0]) : null;
+    var n = b.groups.length;
+    var infoRows = [], nonInfoInBin = 0, infoInBin = 0;
+    r.forEach(function(x, k){ if(x[3] === 1){ infoRows.push(k); if(m[k] === "info") infoInBin++; } else if(m[k] === "info") nonInfoInBin++; });
+    return { clusterOk:clusterOk, split:hk.length, cg:cg, n:n, countOk:n >= LO && n <= HI,
+             infoTotal:infoRows.length, infoIn:infoInBin, strays:nonInfoInBin };
+  }
+
+  function renderCheck(){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    if(!boardDone()){
+      var left = pileList().length, un = unnamed();
+      el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Finish your groups first.</b> '
+        + (left ? plural(left, "row is", "rows are") + " still to group." : "")
+        + (un ? " " + plural(un, "group needs", "groups need") + " a name." : "") + "</p>"
+        + '<button class="go" type="button" id="goboard">Back to the rows</button></div>';
+      el.board.querySelector("#goboard").addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+      return;
+    }
+    var R = results();
+    var extra = "";
+    if(R.clusterOk && R.cg.rows.length > 12){
+      var cf = {}; sc.cluster.forEach(function(p){ cf[rows()[p-1][1]] = 1; });
+      var cs = {}; sc.cluster.forEach(function(p){ cs[p-1] = 1; });
+      var others = R.cg.rows.filter(function(x){ return !cs[x]; });
+      var same = others.every(function(x){ return cf[rows()[x][1]]; });
+      extra = same ? " It also holds the same update on other machines, which is fine."
+                   : " It also holds " + plural(others.length, "other row", "other rows") + ". Open it and check they share this cause.";
+    }
+    var c1 = R.clusterOk
+      ? 'Your group <span class="q">“' + esc(R.cg.name.trim()) + "”</span> holds all twelve rows for " + esc(sc.cause) + ". " + esc(sc.why) + esc(extra)
+      : "The twelve rows for " + esc(sc.cause) + " are spread across " + R.split + " places. They share one cause, so they are one problem. Put them in one group. " + esc(sc.miss);
+    var c2 = "You made " + plural(R.n, "group", "groups") + ", Info aside. ";
+    if(R.countOk) c2 += "Anywhere from about six to ten is sound, as long as each group holds one cause. Open each group and check.";
+    else if(R.n > HI) c2 += "That is more problems than this scan holds. Look for groups that share one cause: the same missing update on one machine, or the same problem on many machines.";
+    else c2 += "Some of your groups probably hold rows with different causes. Split those apart.";
+    var c3 = "Your Info group holds " + R.infoIn + " of the " + R.infoTotal + " Info rows."
+      + (R.infoIn < R.infoTotal ? " Info rows only report a fact, such as a machine's operating system. Their Severity reads Info in your scan copy." : "")
+      + (R.strays ? " " + plural(R.strays, "row in it is", "rows in it are") + " a real problem, not a fact. Open Info with its eye button to find " + (R.strays === 1 ? "it" : "them") + "." : "");
+    var allOk = R.clusterOk && R.countOk;
+
+    var h = '<div class="cols"><div class="checks">'
+      + ckHTML(R.clusterOk, "The twelve rows, one cause", c1)
+      + ckHTML(R.countOk, "How many groups", c2)
+      + ckHTML(R.infoIn === R.infoTotal && !R.strays, "Info", c3)
+      + "</div>";
+
+    h += '<div class="keybox"><div class="kh"><p class="kt">' + icon("key") + "The answer key for Scope " + st.scope + "</p>"
+      + '<button class="mini" type="button" id="glbtn" aria-expanded="false" aria-controls="kgl">' + icon("info") + "What the words mean</button></div>"
+      + '<table class="ktab" id="ktab"><thead><tr><th scope="col">Group</th><th scope="col">Rows</th></tr></thead><tbody>'
+      + sc.key.map(function(k){ return "<tr><td>" + esc(k[0]) + "</td><td>" + esc(k[1]) + "</td></tr>"; }).join("")
+      + '<tr class="info"><td>Info, not a problem</td><td>' + sc.info + "</td></tr>"
+      + "</tbody></table>"
+      + '<ul class="kgl" id="kgl" hidden>' + sc.gl.map(function(k){ return "<li>" + (k === "nick" ? nickLine(sc) : GL[k]) + "</li>"; }).join("") + "</ul>"
+      + '<p class="kfoot">Your names do not have to match. What matters is that each group holds one cause.</p>'
+      + "</div></div>";
+    el.board.innerHTML = h;
+    /* The longest mix of check texts can run past the bottom bar: tighten the checks to fit. */
+    var chk = el.board.querySelector(".checks");
+    if(chk && chk.scrollHeight > chk.clientHeight + 1) el.board.classList.add("dense");
+    if(!reduce) Array.prototype.forEach.call(el.board.querySelectorAll(".ck"), function(c, k){ c.style.animationDelay = (k * 90) + "ms"; c.classList.add("in"); });
+    var glb = el.board.querySelector("#glbtn");
+    glb.addEventListener("click", function(){
+      var open = glb.getAttribute("aria-expanded") !== "true";
+      glb.setAttribute("aria-expanded", open);
+      el.board.querySelector("#kgl").hidden = !open;
+      el.board.querySelector("#ktab").hidden = open;
+      glb.innerHTML = icon(open ? "key" : "info") + (open ? "Show the answer key" : "What the words mean");
+      glb.focus();
+    });
+    setHint(allOk ? "<b>Your count is in the right range.</b> Compare your groups with the answer key, then Continue."
+      : '<span class="hrow"><button class="go ghost" type="button" id="goboard">Back to my groups</button><span>Change your groups, or Continue with them as they are.</span></span>');
+    var gb = el.hint.querySelector("#goboard");
+    if(gb) gb.addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+    say((R.clusterOk ? "Yes. " : "Not yet. ") + c1.replace(/<[^>]+>/g, "") + " " + (R.countOk ? "Yes. " : "Not yet. ") + c2 + " " + c3);
+  }
+  function nickLine(sc){
+    var n = [];
+    sc.key.forEach(function(k){ var m = k[0].match(/^(SMBGhost)|\(([A-Z][A-Za-z]+)\)/); var w = m && (m[1] || m[2]); if(w && n.indexOf(w) < 0) n.push(w); });
+    var last = n.pop();
+    return "<b>" + (n.length ? n.join(", ") + " and " + last : last) + "</b> are nicknames for well-known flaws.";
+  }
+  function ckHTML(ok, label, body){
+    return '<div class="ck' + (ok ? "" : " no") + '">' + icon(ok ? "ok" : "warn")
+      + '<div><p class="cl">' + (ok ? "Yes" : "Not yet") + " · " + esc(label) + '</p><p class="cb">' + body + "</p></div></div>";
+  }
+
+  /* ---------------- slide 4: the working list ---------------- */
+  function renderList(s){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    if(!boardDone()){
+      el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Finish your groups first.</b> This list is made from them.</p>'
+        + '<button class="go" type="button" id="goboard">Back to the rows</button></div>';
+      el.board.querySelector("#goboard").addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+      return;
+    }
+    var r = rows();
+    var h = '<div class="statement"><p>The pattern is the finding. The rows are evidence for it.</p></div>'
+      + '<p class="lead"><b>Your ' + plural(bd().groups.length, "group", "groups") + " in Scope " + st.scope + ".</b> Each one is one cause, with the rows and machines behind it.</p>"
+      + '<div class="wl">';
+    bd().groups.forEach(function(g){
+      var hosts = [];
+      g.rows.slice().sort(function(a,b){ return a-b; }).forEach(function(x){ if(hosts.indexOf(r[x][0]) < 0) hosts.push(r[x][0]); });
+      h += '<div class="wi" title="' + esc(g.name + ": " + hosts.join(", ")) + '"><p class="wn">' + esc(g.name.trim()) + '</p><p class="wh"><b>' + plural(g.rows.length, "row", "rows") + "</b> · " + esc(runs(hosts).join(", ")) + "</p></div>";
+    });
+    h += "</div>";
+    el.board.innerHTML = h;
+    el.board.classList.remove("dense");
+    var wl = el.board.querySelector(".wl"), bar = document.querySelector(".bar");
+    if(wl && bar && wl.getBoundingClientRect().bottom > bar.getBoundingClientRect().top) el.board.classList.add("dense");
+  }
+  /* Show a run of three or more numbered names, such as WKS-01, WKS-02, WKS-03, as "WKS-01 to WKS-03". */
+  function runs(hosts){
+    var list = hosts.slice().sort(), out = [], k = 0;
+    function part(h){ var m = h.match(/^(.*?)(\d+)$/); return m ? { p:m[1], n:parseInt(m[2], 10), w:m[2].length } : null; }
+    while(k < list.length){
+      var a = part(list[k]), j = k;
+      while(a && j + 1 < list.length){ var b = part(list[j+1]); if(b && b.p === a.p && b.w === a.w && b.n === a.n + (j + 1 - k)) j++; else break; }
+      if(j - k >= 2) out.push(list[k] + " to " + list[j]); else for(var t = k; t <= j; t++) out.push(list[t]);
+      k = j + 1;
+    }
+    return out;
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(view) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); sel = {}; view = null; save(st); i = 0; render(); },
+    /* QA only: pick a scope, or group every row by its answer-key style cause
+       (same finding text), so later slides can be measured. */
+    scope:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; sel = {}; save(st); render(); return true; },
+    groupByFinding:function(max){
+      if(!st.scope) return false;
+      var b = cleanBoard(st.scope, null), by = {};
+      rows().forEach(function(r, x){
+        if(r[3] === 1){ b.info.push(x); return; }
+        var k = r[1];
+        if(!by[k]){
+          if(b.groups.length >= (max || MAXG)){ b.groups[b.groups.length-1].rows.push(x); return; }
+          by[k] = { id:"g" + b.seq++, name:k, rows:[] }; b.groups.push(by[k]);
+        }
+        by[k].rows.push(x);
+      });
+      st.b[st.scope] = b; save(st); render(); return true;
+    },
+    view:function(id){ openView(id); return true; },
+    state:function(){ return { i:i, scope:st.scope, board:st.scope ? bd() : null, sel:selList() }; }
+  };
+})();
+</script>
+</body>
+</html>

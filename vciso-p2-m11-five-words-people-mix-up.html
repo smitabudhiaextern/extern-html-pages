@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Five Words People Mix Up</title>
+<!--
+  vCISO P2 Step 3, Module 11: Read Two Real Flaw Records. Section "Five Words That Mean Different Things".
+  Build spec: 06-content/project-02/step-03/module-11-internal.md, "Build Spec: P2-9b Five Words People Mix Up".
+  Items verbatim from P2 Sample Pack/Interactive content sets - P2.md, P2-9 (the five-word table).
+  Same for every scope, so there is no scope picker.
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and
+  VCISO-STYLE-GUIDE.md section 6b (per-slide tint ramp, 09-assets/deck-palette.json).
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:78ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slides 1 and 2: the match board ----
+     Three columns: the five words, the five options, and a side panel with
+     the instruction, the feedback and the words to know. Every slot exists at
+     full size from first paint, so matching changes what a box says and never
+     moves anything. */
+  .match{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:250px 300px 1fr;grid-template-rows:minmax(0,1fr);gap:12px}
+  .match.mx{grid-template-columns:244px 256px 1fr}
+  .match.mx button.wd{padding:4px 10px}
+  .match.mx .fb{font-size:13.5px;line-height:1.36;padding:7px 12px}
+  .match.mx .fb .fbh{margin-bottom:3px}
+  .match.mx .gloss{padding:6px 11px}
+  .match.mx .gloss p{line-height:1.32}
+  .match.mx button.op{font-size:14.5px;line-height:1.26;padding:3px 10px}
+  .mcol{min-width:0;min-height:0;display:grid;grid-template-rows:repeat(5,minmax(0,1fr));gap:7px}
+  .mhead{display:none}
+
+  button.wd{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:10px;padding:6px 11px;min-width:0;
+    display:flex;align-items:center;gap:10px;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+  button.wd:hover:not(:disabled){background:var(--highlight)}
+  button.wd:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.wd .wn svg.ic{width:20px;height:20px;color:var(--on-highlight);flex:0 0 auto}
+  button.wd .wt{min-width:0;display:flex;flex-direction:column;gap:2px}
+  button.wd .wn{font-size:17px;font-weight:700;line-height:1.2;color:var(--title);display:flex;align-items:center;gap:7px}
+  button.wd .ws{font-size:12.5px;line-height:1.3;color:var(--body)}
+  button.wd .ws b{color:var(--on-highlight);font-weight:600}
+  button.wd.sel{background:var(--bg);border:2px solid var(--on-highlight);
+    box-shadow:0 0 0 3px var(--bg),0 0 0 5.5px var(--on-highlight)}
+  button.wd.sel .ws{color:var(--on-highlight);font-weight:600}
+  button.wd.done{background:var(--highlight);border:2px solid var(--on-highlight);cursor:default}
+  button.wd.done .ws{color:var(--title)}
+  button.wd:disabled{opacity:1}
+  button.wd.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  button.op{font-family:inherit;font-size:15px;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;
+    padding:6px 12px;cursor:pointer;display:flex;gap:10px;align-items:center;min-width:0;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.op .g{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:12px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center}
+  button.op .ot{min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.op .om{font-size:12.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--bg)}
+  button.op:hover:not(:disabled){background:var(--highlight);border-color:var(--on-highlight)}
+  button.op:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.op:disabled{cursor:default}
+  button.op.out{background:transparent;border-style:dashed;border-color:var(--line)}
+  button.op.out .tx{text-decoration:line-through;text-decoration-thickness:1px}
+  button.op.out .g{border-style:dashed}
+  button.op.used{background:var(--on-highlight);border:1.5px solid var(--on-highlight);color:var(--bg)}
+  button.op.used .g{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.op.used.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .side{min-width:0;min-height:0;display:flex;flex-direction:column;gap:9px}
+  .fb{flex:1 1 auto;min-height:0;background:var(--highlight);border-radius:10px;padding:10px 13px;
+    font-size:14px;line-height:1.42;color:var(--title);overflow:hidden}
+  .fb b{font-weight:700}
+  .fb .fbh{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--on-highlight);margin-bottom:5px}
+  .fb .fbh svg.ic{width:18px;height:18px}
+  .fb .fbt.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .fb:focus{outline:none}
+  .gloss{flex:0 0 auto;border:1.5px solid var(--on-highlight);border-radius:10px;background:var(--bg);padding:8px 12px}
+  .gloss .gh{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .gloss .gh svg.ic{width:18px;height:18px}
+  .gloss p{font-size:12.5px;line-height:1.38;color:var(--body)}
+  .gloss p + p{margin-top:3px}
+  .gloss p b{color:var(--title);font-weight:700}
+  button.nav.clr{display:inline-flex;align-items:center;gap:6px}
+  button.nav.clr svg.ic{width:16px;height:16px}
+
+  /* ---- gates ---- */
+  .panel.gate{flex:0 0 auto;background:var(--highlight);border-radius:12px;display:flex;flex-direction:column;gap:14px;padding:22px 24px}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* ---- slide 3: all five together ---- */
+  .ctab{flex:0 0 auto;width:100%;border-collapse:collapse;table-layout:fixed;background:var(--bg);
+    font-size:16px;line-height:1.35;color:var(--title)}
+  .ctab th{background:var(--on-highlight);color:var(--bg);text-align:left;font-size:12.5px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;padding:8px 12px}
+  .ctab th:nth-child(1){width:22%} .ctab th:nth-child(2){width:39%} .ctab th:nth-child(3){width:39%}
+  .ctab td{padding:10px 12px;border-bottom:1.5px solid var(--line);vertical-align:top}
+  .ctab td:first-child{font-weight:700}
+  .ctab td .cw{display:flex;align-items:center;gap:9px}
+  .ctab td .cw svg.ic{width:20px;height:20px;color:var(--on-highlight);flex:0 0 auto}
+
+  /* ---- slide 4: the closing line ---- */
+  .closewrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;padding-bottom:30px}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:40px 40px;max-width:840px}
+  .statement p{font-size:32px;line-height:1.35;font-weight:600;color:var(--title)}
+  .csub{flex:0 0 auto;margin-top:16px;font-size:18px;line-height:1.45;color:var(--body);max-width:62ch}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .board{flex:0 0 auto}
+    .match,.match.mx{grid-template-columns:1fr;gap:10px}
+    .mcol{grid-template-rows:none;gap:8px}
+    .mhead{display:block;font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+    .side{order:-1}
+    .fb,.match.mx .fb{flex:0 0 auto;min-height:80px;font-size:15px;line-height:1.42}
+    button.wd,.match.mx button.wd{padding:10px 12px}
+    button.wd .ws{font-size:14px}
+    button.op,.match.mx button.op{font-size:16px;line-height:1.3;padding:12px 13px}
+    .gloss p{font-size:14px}
+    .ctab,.ctab tbody,.ctab tr,.ctab td{display:block;width:100%}
+    .ctab thead{display:none}
+    .ctab{font-size:15px;background:transparent}
+    .ctab tr{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 0}
+    .ctab td{border:0;padding:4px 12px}
+    .ctab td::before{content:attr(data-l);display:block;font-size:12.5px;font-weight:600;letter-spacing:.04em;
+      text-transform:uppercase;color:var(--on-highlight)}
+    .statement{padding:22px 20px}
+    .statement p{font-size:22px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Five Words People Mix Up">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+      <button class="nav ghost clr" id="clr" type="button" hidden></button>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Five Words People Mix Up</h2>
+    <h3>Words to know</h3>
+    <ul>
+      <li><strong>Exploit:</strong> to use a weakness to get in or do harm. An exploited flaw is one attackers already know how to use.</li>
+      <li><strong>Unpatched:</strong> the maker has released a fix, called a patch, and nobody has installed it.</li>
+      <li><strong>Internet-facing:</strong> anyone on the internet can reach it.</li>
+      <li><strong>Firewall:</strong> a barrier that blocks unwanted traffic from outside the network.</li>
+      <li><strong>Server:</strong> a computer that does a job for other computers, like running a website or storing records.</li>
+    </ul>
+    <h3>The five words</h3>
+    <ul>
+      <li><strong>Vulnerability</strong> means a weakness. Cumberland example: the unpatched server.</li>
+      <li><strong>Threat</strong> means something that could exploit the weakness. Cumberland example: an attacker running the exploited flaw.</li>
+      <li><strong>Exposure</strong> means how reachable that weakness is from where a threat sits. Cumberland example: the server is internet-facing, not behind the firewall.</li>
+      <li><strong>Risk</strong> means how likely it is, combined with what it would cost. Cumberland example: likely, combined with patient-data loss, equals high.</li>
+      <li><strong>Control</strong> means what you put in the way to reduce it. Cumberland example: patch it, or firewall it off.</li>
+    </ul>
+    <p>Exposure and risk are the two people mix up all the time. Exposure is about reach. Risk is how likely, combined with what it would cost.</p>
+    <div class="box"><p><strong>You can reduce risk. You can never remove it.</strong></p></div>
+    <p>A patch or a firewall makes harm less likely or less costly. Neither one brings the chance of harm down to zero.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    crack:'<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6z"/><path d="m12.5 6.5-2 4 3 2-2 4.5"/>',
+    target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+    globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z"/>',
+    scale:'<path d="M12 4v16M7 20h10"/><path d="M5 7h14"/><path d="M5 7 2.5 13a2.6 2.6 0 0 0 5 0z"/><path d="M19 7l-2.5 6a2.6 2.6 0 0 0 5 0z"/>',
+    wall:'<rect x="3.5" y="4.5" width="17" height="15" rx="1"/><path d="M3.5 9.5h17M3.5 14.5h17M9 4.5v5M15 9.5v5M9 14.5v5"/>',
+    chat:'<path d="M4 5.5h16v10H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15.5H5.5A1.5 1.5 0 0 0 4 21z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15.5h5.5A1.5 1.5 0 0 1 20 21z"/>',
+    reset:'<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4.5h4.5"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     The five words, their meanings and their examples are verbatim from
+     P2-9 (Interactive content sets - P2.md). The "sr" field is the
+     screen-reader text: the risk example says "combined with" aloud, per the
+     build spec. Everything in "ok", "hint" and "trap" is reveal copy written
+     at build, in plain words. */
+  var W = [
+    { id:"vul",  name:"Vulnerability", ic:"crack" },
+    { id:"thr",  name:"Threat",        ic:"target" },
+    { id:"exp",  name:"Exposure",      ic:"globe" },
+    { id:"risk", name:"Risk",          ic:"scale" },
+    { id:"ctl",  name:"Control",       ic:"wall" }
+  ];
+
+  var R = {
+    mean:{
+      opts:[
+        { id:"risk", txt:"how likely it is, combined with what it would cost" },
+        { id:"ctl",  txt:"what you put in the way to reduce it" },
+        { id:"vul",  txt:"a weakness" },
+        { id:"exp",  txt:"how reachable that weakness is from where a threat sits" },
+        { id:"thr",  txt:"something that could exploit the weakness" }
+      ],
+      ok:{
+        vul:"A weak spot in a system. It is there whether or not anyone ever uses it.",
+        thr:"Someone or something that could use the weak spot to do harm.",
+        exp:"Picture a door. Exposure is whether an attacker can walk up to it at all. A weak lock inside a locked building is less exposed than the same lock on the street.",
+        risk:"How likely the harm is, weighed together with what it would cost if it happened.",
+        ctl:"Anything you put in place to lower the risk."
+      },
+      hint:{
+        vul:"A vulnerability is the weak spot on its own, before anyone attacks it or reaches it.",
+        thr:"A threat is a who or a what: someone or something that could use a weak spot to do harm.",
+        exp:"Exposure is about reach. Ask how easily a threat can get to the weak spot.",
+        risk:"Risk puts two things together: how likely the harm is, and what it would cost.",
+        ctl:"A control is something you do, or put in place, to make things safer."
+      },
+      trap:{
+        "exp:risk":"This meaning weighs two things together. Exposure is about only one thing. Try another.",
+        "risk:exp":"This meaning is about only one thing. Risk puts two things together. Try another."
+      },
+      gloss:[
+        ["Exploit", "to use a weakness to get in or do harm."]
+      ]
+    },
+    ex:{
+      opts:[
+        { id:"exp",  txt:"the server is internet-facing, not behind the firewall" },
+        { id:"ctl",  txt:"patch it, or firewall it off" },
+        { id:"risk", txt:"likely × patient-data loss = high", sr:"likely, combined with patient-data loss, equals high" },
+        { id:"thr",  txt:"an attacker running the exploited flaw" },
+        { id:"vul",  txt:"the unpatched server" }
+      ],
+      ok:{
+        vul:"The software has a known flaw. The maker has released a fix, and nobody has installed it, so the weak spot is still there.",
+        thr:"The attacker is the one who could use that flaw to do harm.",
+        exp:"Anyone on the internet can reach the server. No firewall stands in the way.",
+        risk:"The server is easy to reach and attackers already know how to use the flaw, so an attack is likely. Losing patient data would cost a lot. Together, the risk is high. Being easy to reach is only one part of it.",
+        ctl:"Install the fix, or block the way in. Either one lowers the risk."
+      },
+      hint:{
+        vul:"Look for the weak spot itself: the thing that is broken or missing.",
+        thr:"Look for who would do the attacking.",
+        exp:"Look for how easily the weak spot can be reached.",
+        risk:"Look for how likely it is, combined with what it would cost.",
+        ctl:"Look for what Cumberland could do about it."
+      },
+      trap:{
+        "exp:risk":"This example weighs two things together. Exposure is only about reach. Try another.",
+        "risk:exp":"This example is only about reach. Risk also weighs how likely an attack is and what it would cost. Try another."
+      },
+      gloss:[
+        ["Unpatched", "the maker has released a fix, called a patch, and nobody has installed it."],
+        ["Exploited flaw", "a flaw attackers already know how to use."],
+        ["Internet-facing", "anyone on the internet can reach it."],
+        ["Firewall", "a barrier that blocks unwanted traffic from outside the network."],
+        ["Server", "a computer that does a job for other computers, like running a website or storing records."],
+        ["× and =", "in the risk example, × means \u201ccombined with\u201d and = means \u201ccomes out as\u201d."]
+      ]
+    }
+  };
+
+  var S = [
+    { id:"mean", kind:"match", round:"mean", label:"Meanings", h1:"Match Each Word to Its Meaning",
+      lead:"Your findings will use these five words. Mix two of them up and a finding says the wrong thing.",
+      ask:"<b>Click a word, then click the meaning that fits it.</b> Match all five to carry on." },
+    { id:"ex", kind:"match", round:"ex", label:"Examples", h1:"Match Each Word to a Cumberland Example",
+      ask:"<b>Click a word, then click the example that fits it.</b> Each word shows its meaning. Match all five to carry on." },
+    { id:"all", kind:"all", label:"All five", h1:"All Five Words Together",
+      lead:"Read each row left to right: the word, what it means, and how it shows up at Cumberland. Look hardest at Exposure and Risk, the two people swap." },
+    { id:"close", kind:"close", label:"The point", h1:"The Point to Keep",
+      body:["You can reduce risk. You can never remove it."],
+      sub:"A patch or a firewall makes harm less likely or less costly. Neither one brings the chance of harm down to zero." }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m11-five-words-people-mix-up-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { m:{ mean:{}, ex:{} }, out:{ mean:{}, ex:{} } }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw) || !isPlain(raw.m) || !isPlain(raw.out)) return fresh();
+      var o = fresh();
+      ["mean","ex"].forEach(function(r){
+        if(isPlain(raw.m[r])) W.forEach(function(w){ if(raw.m[r][w.id] === 1) o.m[r][w.id] = 1; });
+        if(isPlain(raw.out[r])) W.forEach(function(w){ if(isPlain(raw.out[r][w.id])) o.out[r][w.id] = raw.out[r][w.id]; });
+      });
+      return o;
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  /* Not saved: which word is picked right now, and the last feedback shown. */
+  var pick = null, fbNow = null;
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. Every round needs one option per word,
+     a confirmation and a hint for every word. */
+  (function validate(){
+    var problems = [], ids = {};
+    S.forEach(function(s, n){
+      if(!s.id) problems.push("slide " + (n+1) + " has no id");
+      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+      ids[s.id] = 1;
+    });
+    ["mean","ex"].forEach(function(r){
+      var seen = {};
+      R[r].opts.forEach(function(o){ if(seen[o.id]) problems.push(r + ' duplicate option "' + o.id + '"'); seen[o.id] = 1; });
+      W.forEach(function(w, k){
+        if(!seen[w.id]) problems.push(r + ' has no option for "' + w.id + '"');
+        if(!R[r].ok[w.id]) problems.push(r + ' has no confirmation for "' + w.id + '"');
+        if(!R[r].hint[w.id]) problems.push(r + ' has no hint for "' + w.id + '"');
+        if(R[r].opts[k] && R[r].opts[k].id === w.id) problems.push(r + ' option ' + (k+1) + ' sits beside its own word');
+      });
+      if(R[r].opts.length !== W.length) problems.push(r + " has " + R[r].opts.length + " options, needs " + W.length);
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This deck has authoring errors and will not behave correctly:</b></p>'
+        + '<ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live"),
+    clr:document.getElementById("clr")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function word(id){ var x = null; W.forEach(function(w){ if(w.id === id) x = w; }); return x; }
+  function opt(r, id){ var x = null; R[r].opts.forEach(function(o){ if(o.id === id) x = o; }); return x; }
+  function spoken(o){ return o.sr || o.txt; }
+  function count(r){ return W.filter(function(w){ return st.m[r][w.id]; }).length; }
+  function roundDone(r){ return count(r) === W.length; }
+  function outs(r, wid){ if(!st.out[r][wid]) st.out[r][wid] = {}; return st.out[r][wid]; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(s.kind === "match" && s.round === "ex" && !roundDone("mean")){
+      el.chip.hidden = true;
+    } else if(s.kind === "match"){
+      el.chip.hidden = false;
+      el.chip.textContent = "Matched " + count(s.round) + " of " + W.length;
+    } else el.chip.hidden = true;
+
+    /* The reset button: clears the round on a match slide, starts over at the end. */
+    if(s.kind === "match"){
+      el.clr.hidden = !(count(s.round) || Object.keys(st.out[s.round]).length);
+      el.clr.innerHTML = icon("reset") + "Clear this round";
+    } else if(s.kind === "close"){
+      el.clr.hidden = false;
+      el.clr.innerHTML = icon("reset") + "Start over";
+    } else el.clr.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "match" && s.round === "ex" && !roundDone("mean")){
+      el.next.disabled = true;
+      el.clr.hidden = true;
+    }
+    else if(s.kind === "match" && !roundDone(s.round)){
+      el.next.disabled = true;
+      el.hint.innerHTML = s.ask;
+    }
+    else if(s.kind === "match"){
+      el.hint.innerHTML = "<b>All five matched.</b> Continue when you are ready.";
+    }
+    else if(s.kind === "all" && !(roundDone("mean") && roundDone("ex"))){
+      el.next.disabled = true;
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    el.hint.textContent = "";
+    pick = null; fbNow = null;
+    if(typeof armed !== "undefined"){ armed = false; clearTimeout(armT); }
+
+    if(s.kind === "match") renderMatch(s);
+    else if(s.kind === "all") renderAll(s);
+    else if(s.kind === "close") renderClose(s);
+    else el.board.innerHTML = '<div class="lead"><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></div>';
+
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  function gate(msg, btn, to){
+    el.board.innerHTML = '<div class="panel gate"><p class="done">' + msg + "</p>"
+      + '<button class="go" type="button" id="gogate">' + btn + "</button></div>";
+    el.board.querySelector("#gogate").addEventListener("click", function(){ i = to; render(); el.frame.focus(); });
+  }
+
+  /* Slides 1 and 2: the two match rounds. Nothing is picked on load. */
+  function renderMatch(s){
+    var r = s.round;
+    if(r === "ex" && !roundDone("mean")){
+      gate("<b>Match the five meanings first.</b> This round builds on them. " + (W.length - count("mean")) + " still to go.",
+           "Back to the meanings", 0);
+      return;
+    }
+    el.board.innerHTML = (s.lead ? '<p class="lead">' + esc(s.lead) + "</p>" : "") + '<div class="match' + (r === "ex" ? " mx" : "") + '">'
+      + '<div class="mcol" id="words" role="group" aria-label="The five words"><p class="mhead">Words</p>' + W.map(function(w){ return wordBtn(r, w); }).join("") + "</div>"
+      + '<div class="mcol" id="opts" role="group" aria-label="' + (r === "mean" ? "The five meanings" : "The five examples") + '"><p class="mhead">' + (r === "mean" ? "Meanings" : "Examples") + "</p>"
+      + R[r].opts.map(function(o){ return optBtn(r, o); }).join("") + "</div>"
+      + '<div class="side">'
+      +   '<div class="fb" id="fb" tabindex="-1"><p class="fbh">' + icon("chat") + 'Feedback</p><div class="fbt" id="fbt"></div></div>'
+      +   '<div class="gloss"><p class="gh">' + icon("book") + "Words to know</p>"
+      +     R[r].gloss.map(function(g){ return "<p><b>" + esc(g[0]) + ":</b> " + esc(g[1]) + "</p>"; }).join("")
+      +   "</div>"
+      + "</div></div>";
+    setFb(r, null);
+    wireMatch(s);
+  }
+
+  function wordBtn(r, w){
+    var done = !!st.m[r][w.id], sel = pick === w.id;
+    var sub;
+    if(done){
+      var o = opt(r, w.id);
+      sub = '<b aria-hidden="true">✓ </b>' + esc(o.txt);
+    } else if(sel){
+      sub = "Picked. Now choose " + (r === "mean" ? "its meaning" : "its example");
+    } else if(r === "ex"){
+      sub = "Means " + esc(opt("mean", w.id).txt);
+    } else {
+      sub = "Not matched yet";
+    }
+    var label = w.name + ". " + (done ? "Matched to " + spoken(opt(r, w.id)) : (sel ? "Picked." : "Not matched yet.")
+      + (r === "ex" && !done ? " Means " + opt("mean", w.id).txt + "." : ""));
+    return '<button class="wd' + (done ? " done" : "") + (sel ? " sel" : "") + '" type="button" data-w="' + w.id + '"'
+      + (done ? " disabled" : "") + ' aria-pressed="' + sel + '" aria-label="' + esc(label) + '">'
+      + '<span class="wt"><span class="wn">' + icon(w.ic) + esc(w.name) + '</span><span class="ws">' + sub + "</span></span>"
+      + "</button>";
+  }
+
+  function optBtn(r, o){
+    var used = !!st.m[r][o.id];
+    var x = !used && pick && !!outs(r, pick)[o.id];
+    var g = used ? "✓" : (x ? "✕" : "");
+    var label = spoken(o) + (used ? ". Matched to " + word(o.id).name + "." : (x ? ". Ruled out for " + word(pick).name + "." : ""));
+    return '<button class="op' + (used ? " used" : "") + (x ? " out" : "") + '" type="button" data-o="' + o.id + '"'
+      + (used || x ? " disabled" : "") + ' aria-label="' + esc(label) + '">'
+      + '<span class="g" aria-hidden="true">' + g + "</span>"
+      + '<span class="ot">' + (used ? '<span class="om" aria-hidden="true">' + esc(word(o.id).name) + "</span>" : "")
+      + '<span class="tx">' + esc(o.txt) + "</span></span></button>";
+  }
+
+  function setFb(r, html, animate){
+    var t = el.board.querySelector("#fbt");
+    if(!t) return;
+    if(html === null){
+      if(roundDone(r)) html = "<b>All five matched.</b> " + (r === "mean"
+        ? "Next, match each word to a Cumberland example."
+        : "Continue to see all five words side by side.");
+      else if(pick) html = "<b>" + esc(word(pick).name) + "</b> is picked. Now click the " + (r === "mean" ? "meaning" : "example") + " that fits it.";
+      else html = "Nothing picked yet. Start with any word.";
+    }
+    t.innerHTML = html;
+    if(animate && !reduce){ t.classList.remove("in"); void t.offsetWidth; t.classList.add("in"); }
+  }
+
+  function redraw(r){
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.wd"), function(b){
+      var tmp = document.createElement("div"); tmp.innerHTML = wordBtn(r, word(b.dataset.w));
+      var nb = tmp.firstChild;
+      b.className = nb.className; b.disabled = nb.disabled;
+      b.setAttribute("aria-pressed", nb.getAttribute("aria-pressed"));
+      b.setAttribute("aria-label", nb.getAttribute("aria-label"));
+      b.innerHTML = nb.innerHTML;
+    });
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.op"), function(b){
+      var tmp = document.createElement("div"); tmp.innerHTML = optBtn(r, opt(r, b.dataset.o));
+      var nb = tmp.firstChild;
+      b.className = nb.className; b.disabled = nb.disabled;
+      b.setAttribute("aria-label", nb.getAttribute("aria-label"));
+      b.innerHTML = nb.innerHTML;
+    });
+    header();
+  }
+
+  function wireMatch(s){
+    var r = s.round;
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.wd"), function(b){
+      b.addEventListener("click", function(){
+        var w = b.dataset.w;
+        if(st.m[r][w]) return;
+        pick = (pick === w) ? null : w;
+        redraw(r);
+        setFb(r, null);
+        say(pick ? word(pick).name + " picked. Now choose " + (r === "mean" ? "its meaning." : "its example.") : "Nothing picked.");
+      });
+    });
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.op"), function(b){
+      b.addEventListener("click", function(){
+        var o = opt(r, b.dataset.o);
+        if(!o || st.m[r][o.id]) return;
+        if(!pick){
+          setFb(r, "<b>Pick a word first.</b> Click one of the five words first, then click this again.", true);
+          say("Pick a word first.");
+          return;
+        }
+        var w = word(pick);
+        if(o.id === pick){
+          st.m[r][pick] = 1; save(st);
+          var done = pick; pick = null;
+          redraw(r);
+          var ob = el.board.querySelector('button.op[data-o="' + done + '"]');
+          var wb = el.board.querySelector('button.wd[data-w="' + done + '"]');
+          if(!reduce){ [ob, wb].forEach(function(n){ if(n){ n.classList.remove("in"); void n.offsetWidth; n.classList.add("in"); } }); }
+          var msg = "<b>Matched: " + esc(w.name) + ".</b> " + esc(R[r].ok[done]);
+          if(roundDone(r)) msg += " <b>That is all five.</b>";
+          setFb(r, msg, true);
+          if(roundDone(r)) el.next.focus();
+          else { var nx = el.board.querySelector("button.wd:not(:disabled)"); if(nx) nx.focus(); }
+          say("Matched. " + w.name + ": " + spoken(o) + ". " + R[r].ok[done] + (roundDone(r) ? " That is all five. Continue is ready." : ""));
+          return;
+        }
+        outs(r, pick)[o.id] = 1; save(st);
+        var trap = R[r].trap[pick + ":" + o.id];
+        var fb = trap
+          ? "<b>Not this one, and people mix these two up all the time.</b> " + esc(trap)
+          : "<b>Not this one for " + esc(w.name) + ".</b> " + esc(R[r].hint[pick]);
+        redraw(r);
+        setFb(r, fb, true);
+        var nf = el.board.querySelector("button.op:not(:disabled)");
+        if(nf) nf.focus(); else el.board.querySelector("#fb").focus();
+        say((trap ? "Not this one, and people mix these two up all the time. " + trap : "Not this one for " + w.name + ". " + R[r].hint[pick]));
+      });
+    });
+  }
+
+  /* Slide 3: all five, side by side. Waits until both rounds are done. */
+  function renderAll(s){
+    if(!roundDone("mean") || !roundDone("ex")){
+      var to = roundDone("mean") ? 1 : 0;
+      gate("<b>Finish both matching rounds first.</b> This table shows every answer, so it waits until then.",
+           to ? "Back to the examples" : "Back to the meanings", to);
+      return;
+    }
+    function cell(l, v){ return '<td data-l="' + l + '">' + v + "</td>"; }
+    el.board.innerHTML = (s.lead ? '<p class="lead">' + esc(s.lead) + "</p>" : "") + '<table class="ctab"><thead><tr><th scope="col">Word</th><th scope="col">What It Means</th><th scope="col">Cumberland Example</th></tr></thead><tbody>'
+      + W.map(function(w){
+          var ex = opt("ex", w.id);
+          return "<tr>"
+            + cell("Word", '<span class="cw">' + icon(w.ic) + esc(w.name) + "</span>")
+            + cell("What It Means", esc(opt("mean", w.id).txt))
+            + cell("Cumberland Example", ex.sr ? '<span aria-hidden="true">' + esc(ex.txt) + '</span><span class="sr">' + esc(ex.sr) + "</span>" : esc(ex.txt))
+            + "</tr>";
+        }).join("")
+      + "</tbody></table>";
+  }
+
+  /* Slide 4: the closing line, no input. */
+  function renderClose(s){
+    el.board.innerHTML = '<div class="closewrap"><div class="statement">'
+      + (s.body || []).map(function(p){ return "<p>" + esc(p) + "</p>"; }).join("") + "</div>"
+      + (s.sub ? '<p class="csub">' + esc(s.sub) + "</p>" : "") + "</div>";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  var armed = false, armT = null;
+  el.clr.addEventListener("click", function(){
+    var s = S[i];
+    if(s.kind === "match"){
+      var r = s.round;
+      st.m[r] = {}; st.out[r] = {};
+      save(st); render();
+      var f = el.board.querySelector("button.wd"); if(f) f.focus();
+      say("Round cleared. Nothing is picked.");
+    } else if(s.kind === "close"){
+      if(!armed){
+        armed = true;
+        el.clr.innerHTML = icon("reset") + "Click again to clear both rounds";
+        say("Click Start over again within five seconds to clear both rounds.");
+        clearTimeout(armT);
+        armT = setTimeout(function(){ armed = false; if(S[i].kind === "close") el.clr.innerHTML = icon("reset") + "Start over"; }, 5000);
+        return;
+      }
+      armed = false; clearTimeout(armT);
+      st = fresh(); save(st); i = 0; render(); el.frame.focus();
+      say("Started over. Every match is cleared.");
+    }
+  });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    /* QA only: complete a round so the deeper states can be measured. */
+    fillAll:function(){
+      W.forEach(function(w){ st.m.mean[w.id] = 1; st.m.ex[w.id] = 1; });
+      save(st); render(); return true;
+    },
+    state:function(){ return { i:i, pick:pick, m:st.m, out:st.out }; }
+  };
+})();
+</script>
+</body>
+</html>

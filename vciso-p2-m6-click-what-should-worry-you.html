@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Click What Should Worry You</title>
+<!--
+  vCISO P2 Step 2, Module 6: Look Up Your Scope's Address. Build spec P2-5a
+  (06-content/project-02/step-02/module-06-internal.md).
+  Built to match vciso-p2-m5-follow-one-bill.html: same shell, scope picker,
+  navigation, per-slide tint ramp (VCISO-STYLE-GUIDE.md 6b) and scale-to-fit.
+
+  Data: the four JSON blocks are verbatim from the module page, which carries
+  Chaitanya's 25 Sep 2026 fixture blocks. Keyed clicks: ports, cpes, vulns
+  (P2-5). Bonus: tags. Gentle "not this one": ip, hostnames (pending Chaitanya).
+  Version facts: Environment Record (SME drop 2026-09-25), "What is actually
+  wrong" and D3. A, B and D never say end of support (build spec).
+  Port and CVE reveal wording is identical to the page's two definition boxes.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:80ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+
+  /* ---- slide 1: the scope picker ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:20px 18px 16px;
+    display:flex;flex-direction:column;gap:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:64px;height:64px;border-radius:14px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:36px;height:36px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:20px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto;min-height:50px}
+  button.sc .sh{font-family:var(--mono);font-size:12.5px;color:var(--body);word-break:break-all}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:9px}
+  button.sc.on{background:var(--on-highlight);border:2px solid var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .ss,button.sc.on .sh{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- slide 2: the lookup and the reveal ---- */
+  .split{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:470px minmax(0,1fr);gap:14px}
+  .code{min-height:0;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:12px;
+    padding:9px 10px 9px;display:flex;flex-direction:column;gap:3px;font-family:var(--mono);font-size:13px;color:var(--title)}
+  .code .cap{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--on-highlight);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:0 6px 4px;border-bottom:1.5px solid var(--line);margin-bottom:3px}
+  .code .br{padding:3px 8px;line-height:20px;white-space:pre}
+  button.ln{position:relative;font-family:var(--mono);font-size:13px;line-height:20px;text-align:left;color:var(--title);cursor:pointer;
+    background:transparent;border:1.5px dashed var(--line);border-radius:7px;padding:3px 8px 3px 32px;
+    display:flex;align-items:flex-start;gap:8px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.ln .tx{flex:1 1 auto;min-width:0;white-space:pre-wrap;word-break:break-word;padding-left:16px;text-indent:-16px}
+  button.ln .st{position:absolute;left:7px;top:4.5px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--on-highlight);display:flex}
+  button.ln .st .gl{width:18px;height:18px;font-size:12px}
+  button.ln:hover{background:var(--highlight);border-color:var(--on-highlight)}
+  button.ln:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.ln.cur{box-shadow:inset 4px 0 0 var(--on-highlight)}
+  button.ln.hit{background:var(--highlight);border:2px solid var(--on-highlight);padding:2.5px 7.5px 2.5px 31.5px}
+  button.ln.hit .st,button.ln.bonus .st{left:6.5px;top:4px}
+  button.ln.hit .st .gl{background:var(--on-highlight);color:var(--bg)}
+  button.ln.bonus{background:var(--bg);border:2px dashed var(--on-highlight);padding:2.5px 7.5px 2.5px 31.5px}
+  button.ln.miss{background:transparent;border-style:dotted}
+  button.ln.miss .tx{color:var(--body)}
+  button.ln.miss .st{color:var(--body)}
+  button.ln.miss .st .gl{border-color:var(--body);border-style:dashed}
+
+  .panel{min-height:0;background:var(--highlight);border-radius:12px;padding:14px 18px;
+    display:flex;flex-direction:column;gap:9px;overflow:hidden}
+  .panel:focus{outline:none}
+  .panel.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .panel.idle{justify-content:center;align-items:flex-start;gap:14px}
+  .panel.idle .bigic{width:60px;height:60px;border-radius:14px;border:1.5px solid var(--on-highlight);background:var(--bg);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  .panel.idle .bigic svg.ic{width:34px;height:34px}
+  .panel.idle p{font-size:17px;line-height:1.45;color:var(--title)}
+  .panel.idle p.big{font-size:21px;font-weight:600;line-height:1.35}
+  .panel.idle p.sub{font-size:15px;color:var(--body)}
+  .ph{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .ph svg.ic{width:24px;height:24px;color:var(--on-highlight);flex:0 0 auto}
+  .ph .pt{font-size:18px;font-weight:600;color:var(--title);line-height:1.2}
+  .ph .tag{margin-left:auto;font-size:12px;font-weight:700;color:var(--on-highlight);background:var(--bg);
+    border:1px solid var(--on-highlight);border-radius:14px;padding:3px 9px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .ph .tag.dash{border-style:dashed}
+  .pp{flex:0 0 auto;font-size:14.5px;line-height:1.42;color:var(--title)}
+  .panel.sw{gap:7px}
+  .panel.sw .pp{font-size:14px;line-height:1.4}
+  .pp.soft{color:var(--body)}
+  .pp b{font-weight:700}
+  .pp .mono,.nw{white-space:nowrap}
+  .def{flex:0 0 auto;background:var(--bg);border-left:4px solid var(--on-highlight);border-radius:0 8px 8px 0;
+    padding:8px 12px;font-size:14.5px;line-height:1.42;color:var(--title)}
+  .mono{font-family:var(--mono);font-size:.94em}
+  .doors{flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap}
+  .door{display:flex;align-items:center;gap:7px;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:8px;
+    padding:6px 11px;font-family:var(--mono);font-size:16px;font-weight:700;color:var(--title)}
+  .door svg.ic{width:20px;height:20px;color:var(--on-highlight)}
+  .dec{flex:0 0 auto;display:flex;flex-direction:column;gap:4px}
+  .segrow{display:flex;gap:5px}
+  .seg{flex:0 1 auto;min-width:0;background:var(--bg);border:1.5px solid var(--line);border-radius:7px;padding:4px 7px}
+  .seg .raw{display:block;font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--title);word-break:break-all}
+  .seg .mean{display:block;font-size:12px;line-height:1.25;color:var(--body);margin-top:1px}
+  .seg.w2{flex-grow:2.2}
+
+  .reads{font-size:13.5px;line-height:1.35;color:var(--title)}
+  .reads b{font-weight:700}
+  .cves{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+  .tagl{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+  .tagl div{font-size:14.5px;line-height:1.4;color:var(--title)}
+  .tagl .mono{font-weight:700}
+
+  /* ---- slide 3: the recap ---- */
+  .host{flex:0 0 auto;display:flex;align-items:center;gap:10px;font-size:15px;color:var(--body)}
+  .host svg.ic{width:22px;height:22px;color:var(--on-highlight)}
+  .host .mono{font-size:15px;font-weight:700;color:var(--title)}
+  .cards3{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .rc{background:var(--bg);border:2px solid var(--on-highlight);border-radius:12px;padding:16px 16px 16px;
+    display:flex;flex-direction:column;gap:9px;min-height:220px}
+  .rc .ri{width:52px;height:52px;border-radius:12px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  .rc .ri svg.ic{width:30px;height:30px}
+  .rc .rl{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .rc .rv{font-size:18px;font-weight:700;line-height:1.3;color:var(--title)}
+  .rc .rv.mono{font-size:17px}
+  .rc .rw{font-size:14.5px;line-height:1.42;color:var(--body);border-top:1.5px solid var(--line);padding-top:9px;margin-top:auto}
+  .panel.gate{flex:0 0 auto;gap:14px;padding:22px 24px}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled,button.nav.ghost:disabled{background:transparent;color:var(--on-highlight);border-style:dashed;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+  #reset{margin-left:auto}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .board{flex:0 0 auto}
+    .scopes{grid-template-columns:1fr 1fr;gap:10px}
+    button.sc{min-height:0;padding:14px 12px}
+    button.sc .si{width:48px;height:48px}
+    button.sc .sn{font-size:17px}
+    .note2{font-size:16px}
+    .split{grid-template-columns:1fr}
+    .code{font-size:13px}
+    .panel{padding:14px}
+    .pp,.def,.tagl div{font-size:16px}
+    .segrow{flex-wrap:wrap}
+    .seg{flex:1 1 40%}
+    .cards3{grid-template-columns:1fr}
+    .rc{min-height:0}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #reset{margin-left:0}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Click What Should Worry You">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 3</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+      <button class="nav ghost" id="reset" type="button" hidden>Start over</button>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:24px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf code{font-family:Menlo,Consolas,monospace;font-size:15px}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Click What Should Worry You</h2>
+    <p>Three lines in your scope's lookup result should worry you: the ports line, the cpes line and the vulns line.</p>
+    <div class="box"><p><strong>A port.</strong> A numbered door on a machine. An open port means some service is waiting behind it for anyone who knocks.</p></div>
+    <p><strong>The cpes line</strong> names the software on the server. Read each entry in parts: the kind of software (o is an operating system, the main software that runs the machine; a is an application, a program running on it), who makes it, the product, and its version.</p>
+    <div class="box"><p><strong>A CVE.</strong> A public ID for one specific known flaw in one piece of software, written as CVE, a year, and a number.</p></div>
+    <h3>Scope A, Claims Intake</h3>
+    <ul><li>Open ports: 80, 443, 445</li><li>Software and version: Microsoft Windows Server 2016, and Microsoft IIS 10.0, the program that serves web pages</li><li>Flaw code: CVE-2021-34527</li></ul>
+    <h3>Scope B, Payments and Remittance</h3>
+    <ul><li>Open ports: 80, 443, 445</li><li>Software and version: Microsoft Windows Server 2016</li><li>Flaw code: CVE-2021-34527</li></ul>
+    <h3>Scope C, Patient Records and Archive</h3>
+    <ul><li>Open ports: 80, 443, 445</li><li>Software and version: Microsoft Windows Server 2012 R2, out of support since October 2023, and Microsoft IIS 8.5, the program that serves web pages</li><li>Flaw codes: CVE-2017-0144, CVE-2021-34527</li></ul>
+    <h3>Scope D, Remote and Corporate</h3>
+    <ul><li>Open ports: 443, 10443</li><li>Software and version: Fortinet FortiOS 7.0.5, the software that runs Cumberland's firewall</li><li>Flaw code: CVE-2022-40684</li></ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    door:'<path d="M5 21V4.5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1V21"/><path d="M3 21h18"/><circle cx="15" cy="12.5" r=".9"/>',
+    chip:'<rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',
+    bug:'<rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M12 11v8.5M7 13H3.5M20.5 13H17M7.6 17.5 4.5 19.5M16.4 17.5l3.1 2M7.6 9.5 4.5 7.5M16.4 9.5l3.1-2M9 7.5a3 3 0 0 1 6 0"/>',
+    tag:'<path d="M3.5 12.3V4.5a1 1 0 0 1 1-1h7.8l8.2 8.2a1 1 0 0 1 0 1.4l-7.4 7.4a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.4"/>',
+    pin:'<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
+    globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z"/>',
+    cursor:'<path d="M5 3.5l5.4 16 2.3-6.8 6.8-2.3z"/><path d="M13 13l6 6"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     JSON blocks verbatim from the module page (25 Sep 2026 fixtures). */
+  var PORT_DEF = "<b>A port.</b> A numbered door on a machine. An open port means some service is waiting behind it for anyone who knocks.";
+  var CVE_DEF  = "<b>A CVE.</b> A public ID for one specific known flaw in one piece of software, written as CVE, a year, and a number.";
+  var OLD = "This version hasn't been updated in years.";
+  var WHY_EXACT = "Known flaws are listed against exact versions. Once you know the version, you can look up what is wrong with it.";
+
+  var SEG = {
+    o:{ raw:"o", mean:"kind" },
+    a:{ raw:"a", mean:"kind" },
+    ms:{ raw:"microsoft", mean:"maker" },
+    ft:{ raw:"fortinet", mean:"maker" }
+  };
+
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims",
+      ip:"203.0.113.47", hostnames:["portal.cumberlandclaims.com"],
+      ports:[80,443,445],
+      cpes:["cpe:/o:microsoft:windows_server_2016","cpe:/a:microsoft:iis:10.0"],
+      vulns:["CVE-2021-34527"], tags:[],
+      dec:[
+        { segs:[SEG.o, SEG.ms, { raw:"windows_server_2016", mean:"product and version" }],
+          reads:"Microsoft Windows Server 2016" },
+        { segs:[SEG.a, SEG.ms, { raw:"iis", mean:"product" }, { raw:"10.0", mean:"version" }],
+          reads:"Microsoft IIS 10.0, which serves web pages" }
+      ],
+      verWhy:OLD + " " + WHY_EXACT,
+      sw:"Microsoft Windows Server 2016, with Microsoft IIS 10.0",
+      tagTxt:[] },
+    B:{ name:"Payments and Remittance", ic:"coin",
+      ip:"203.0.113.51", hostnames:["payers.cumberlandclaims.com"],
+      ports:[80,443,445],
+      cpes:["cpe:/o:microsoft:windows_server_2016"],
+      vulns:["CVE-2021-34527"], tags:["self-signed"],
+      dec:[
+        { segs:[SEG.o, SEG.ms, { raw:"windows_server_2016", mean:"product and version" }],
+          reads:"Microsoft Windows Server 2016" }
+      ],
+      verWhy:OLD + " " + WHY_EXACT,
+      sw:"Microsoft Windows Server 2016",
+      tagTxt:[{ t:"self-signed", m:"the server's certificate, its ID card for secure connections, vouches for itself instead of being vouched for by a trusted outside company." }] },
+    C:{ name:"Patient Records and Archive", ic:"archive",
+      ip:"203.0.113.58", hostnames:["records.cumberlandclaims.com"],
+      ports:[80,443,445],
+      cpes:["cpe:/o:microsoft:windows_server_2012:r2","cpe:/a:microsoft:iis:8.5"],
+      vulns:["CVE-2017-0144","CVE-2021-34527"], tags:["http","smb","eol-product"],
+      dec:[
+        { segs:[SEG.o, SEG.ms, { raw:"windows_server_2012:r2", mean:"product and version" }],
+          reads:"Microsoft Windows Server 2012 R2" },
+        { segs:[SEG.a, SEG.ms, { raw:"iis", mean:"product" }, { raw:"8.5", mean:"version" }],
+          reads:"Microsoft IIS 8.5, which serves web pages" }
+      ],
+      verWhy:"Windows Server 2012 R2 has been <b>out of support since October 2023</b>: Microsoft no longer fixes its flaws. " + OLD,
+      sw:"Microsoft Windows Server 2012 R2, with Microsoft IIS 8.5",
+      tagTxt:[
+        { t:"http", m:"it serves web pages." },
+        { t:"smb", m:"Windows file sharing answers here." },
+        { t:"eol-product", m:"end of life, meaning the maker no longer supports this software." }
+      ] },
+    D:{ name:"Remote and Corporate", ic:"laptop",
+      ip:"203.0.113.62", hostnames:["remote.cumberlandclaims.com"],
+      ports:[443,10443],
+      cpes:["cpe:/o:fortinet:fortios:7.0.5"],
+      vulns:["CVE-2022-40684"], tags:["vpn"],
+      dec:[
+        { segs:[SEG.o, SEG.ft, { raw:"fortios", mean:"product" }, { raw:"7.0.5", mean:"version" }],
+          reads:"Fortinet FortiOS 7.0.5" }
+      ],
+      verWhy:"This is the firewall, the machine that guards the edge of Cumberland's network (the office computers linked together) and decides what gets in from the internet. Staff working from home also connect through it. " + OLD + " " + WHY_EXACT,
+      sw:"Fortinet FortiOS 7.0.5",
+      tagTxt:[{ t:"vpn", m:"this is where staff connect to the office network from home." }] }
+  };
+  var ORDER = ["A","B","C","D"];
+  var FIELDS = ["ip","hostnames","ports","cpes","vulns","tags"];
+  var KEYED = { ports:1, cpes:1, vulns:1 };
+
+  var S = [
+    { id:"scope", kind:"scope", label:"Your scope", h1:"Pick Your Scope",
+      lead:"Choose the scope you picked in Project 1. The next slide shows the lookup on your scope's address." },
+    { id:"click", kind:"click", label:"The lookup", h1:"Click What Should Worry You" },
+    { id:"recap", kind:"recap", label:"What you found", h1:"What Should Worry You" }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m6-click-what-should-worry-you-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { scope:null, clicked:{}, last:{} }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      return { scope: (ORDER.indexOf(raw.scope) >= 0) ? raw.scope : null,
+               clicked: isPlain(raw.clicked) ? raw.clicked : {},
+               last:    isPlain(raw.last)    ? raw.last    : {} };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  (function validate(){
+    var problems = [];
+    ORDER.forEach(function(k){
+      var sc = SC[k];
+      FIELDS.forEach(function(f){ if(sc[f] === undefined) problems.push("scope " + k + " is missing " + f); });
+      if(!sc.dec || sc.dec.length !== sc.cpes.length) problems.push("scope " + k + " needs one decode per cpe");
+      if(sc.tagTxt.length !== sc.tags.length) problems.push("scope " + k + " needs one meaning per tag");
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This deck has authoring errors and will not behave correctly:</b></p>'
+        + '<ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live"),
+    reset:document.getElementById("reset")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function cur(){ return st.scope ? SC[st.scope] : null; }
+  function clicks(){ if(!st.clicked[st.scope]) st.clicked[st.scope] = {}; return st.clicked[st.scope]; }
+  function foundCount(){
+    if(!st.scope) return 0;
+    var c = st.clicked[st.scope] || {};
+    return Object.keys(KEYED).filter(function(f){ return c[f]; }).length;
+  }
+  function allFound(){ return foundCount() === 3; }
+  function listText(a){
+    if(a.length === 1) return String(a[0]);
+    if(a.length === 2) return a[0] + " and " + a[1];
+    return a.slice(0, -1).join(", ") + " and " + a[a.length-1];
+  }
+  var WORDS = ["no","one","two","three","four"];
+
+  /* One JSON line, exactly as the page prints it. */
+  function jsonVal(v){
+    if(Array.isArray(v)) return "[" + v.map(function(x){ return typeof x === "number" ? String(x) : '"' + x + '"'; }).join(", ") + "]";
+    return '"' + v + '"';
+  }
+  function lineText(sc, f){
+    return '"' + f + '": ' + jsonVal(sc[f]) + (f === "tags" ? "" : ",");
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(st.scope && i > 0){
+      el.chip.hidden = false;
+      el.chip.textContent = "Scope " + st.scope + (s.kind === "click" ? " · Found " + foundCount() + " of 3" : "");
+    } else el.chip.hidden = true;
+
+    el.reset.hidden = (i === 0);
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "scope" && !st.scope){
+      el.next.disabled = true;
+      el.hint.innerHTML = "Pick a scope to carry on.";
+    }
+    else if(s.kind === "click" && !allFound()){
+      el.next.disabled = true;
+      if(st.scope) el.hint.innerHTML = "Find all three to carry on.";
+    }
+    else if(s.kind === "click"){
+      el.hint.innerHTML = "<b>All three found.</b> Continue to see them side by side.";
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    var h = s.h1;
+    if(s.kind === "recap" && st.scope) h = "What Should Worry You in Scope " + st.scope;
+    el.h1.textContent = h;
+    el.frame.setAttribute("aria-label", h);
+    el.hint.textContent = "";
+
+    if(s.kind === "scope") renderScope(s);
+    else if(s.kind === "click") renderClick(s);
+    else if(s.kind === "recap") renderRecap(s);
+    else el.board.innerHTML = '<div class="lead"><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></div>';
+
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + h + ".");
+  }
+
+  /* Slide 1: four scopes, one pick. */
+  function renderScope(s){
+    el.board.innerHTML = '<p class="lead">' + s.lead + "</p>"
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own clicks</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        st.scope = b.dataset.k; save(st);
+        render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked.");
+      });
+    });
+  }
+
+  function needScope(){
+    el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Pick your scope first.</b> The lookup depends on it.</p>'
+      + '<button class="go" type="button" id="goscope">Go to the scope picker</button></div>';
+    el.board.querySelector("#goscope").addEventListener("click", function(){ i = 0; render(); el.frame.focus(); });
+  }
+
+  function kindOf(f){ return KEYED[f] ? "hit" : (f === "tags" ? "bonus" : "miss"); }
+  function stateHTML(f, n){
+    var k = kindOf(f);
+    if(k === "hit") return '<span class="gl" aria-hidden="true">' + n + "</span>";
+    if(k === "bonus") return '<span class="gl" aria-hidden="true">★</span>';
+    return '<span class="gl" aria-hidden="true">−</span>';
+  }
+
+  /* Slide 2: the raw lookup. Every field line is a button. */
+  function renderClick(s){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    var c = clicks();
+    el.board.innerHTML = '<div class="split">'
+      + '<div class="code" role="group" aria-label="Lookup result for ' + esc(sc.hostnames[0]) + '">'
+      + '<div class="cap">Lookup result · Scope ' + st.scope + "</div>"
+      + '<div class="br" aria-hidden="true">{</div>'
+      + FIELDS.map(function(f){
+          return '<button class="ln" type="button" data-f="' + f + '">'
+            + '<span class="tx">' + esc(lineText(sc, f)) + "</span>"
+            + '<span class="st"></span></button>';
+        }).join("")
+      + '<div class="br" aria-hidden="true">}</div>'
+      + "</div>"
+      + '<div class="panel" id="panel" tabindex="-1"></div>'
+      + "</div>";
+    paintLines();
+    var last = st.last[st.scope];
+    showPanel(last && c[last] ? last : null, false);
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.ln"), function(b){
+      b.addEventListener("click", function(){
+        var f = b.dataset.f;
+        if(!c[f]) c[f] = Date.now();
+        st.last[st.scope] = f; save(st);
+        paintLines();
+        showPanel(f, true);
+        header();
+        var p = el.board.querySelector("#panel");
+        say(labelOf(f) + ". " + (p ? p.textContent : ""));
+      });
+    });
+  }
+  function labelOf(f){
+    var k = kindOf(f);
+    return k === "hit" ? "Found, " + foundCount() + " of 3" : (k === "bonus" ? "Bonus" : "Not this one");
+  }
+  /* Keyed lines are numbered in the order the student found them. */
+  function paintLines(){
+    var c = clicks(), order = Object.keys(KEYED).filter(function(f){ return c[f]; })
+      .sort(function(a, b){ return c[a] - c[b]; });
+    var last = st.last[st.scope];
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.ln"), function(b){
+      var f = b.dataset.f, on = !!c[f], k = kindOf(f);
+      b.classList.remove("hit", "bonus", "miss", "cur");
+      if(on) b.classList.add(k);
+      if(on && f === last) b.classList.add("cur");
+      b.querySelector(".st").innerHTML = on ? stateHTML(f, order.indexOf(f) + 1) : "";
+      b.setAttribute("aria-label", lineText(cur(), f) + (on ? ". " + (k === "hit" ? "Found" : k === "bonus" ? "Bonus" : "Not this one") : ""));
+    });
+  }
+
+  /* The kind letters that appear in this scope's cpes line, explained once. */
+  function legend(sc){
+    var hasA = sc.cpes.some(function(x){ return x.indexOf("cpe:/a:") === 0; });
+    return "<b>o</b> means operating system, the main software that runs the machine."
+      + (hasA ? " <b>a</b> means application, a program running on it." : "");
+  }
+  function panelHead(ic, title, tag, dash){
+    return '<div class="ph">' + icon(ic) + '<span class="pt">' + title + "</span>"
+      + '<span class="tag' + (dash ? " dash" : "") + '">' + tag + "</span></div>";
+  }
+  function showPanel(f, animate){
+    var p = el.board.querySelector("#panel");
+    var sc = cur();
+    var h = "";
+    if(!f){
+      p.className = "panel idle";
+      p.innerHTML = '<span class="bigic">' + icon("cursor") + "</span>"
+        + '<p class="big">Three things on this screen should worry you. Click them.</p>'
+        + '<p class="sub">On the left is what a free lookup service recorded about the server behind <span class="mono nw">' + esc(sc.hostnames[0]) + "</span>, the computer that answers at that address. Every line can be clicked.</p>";
+      return;
+    }
+    var n = foundCount();
+    var tagHit = '<span class="gl" aria-hidden="true">✓</span>' + (n === 3 ? "All 3 found" : n + " of 3 found");
+    if(f === "ports"){
+      h = panelHead("door", "Open ports", tagHit)
+        + '<div class="def">' + PORT_DEF + "</div>"
+        + '<p class="pp">This server has <b>' + WORDS[sc.ports.length] + " doors open</b>: " + listText(sc.ports)
+        + ". The lookup saw them from the internet, so anyone out there can knock.</p>"
+        + '<div class="doors">' + sc.ports.map(function(x){ return '<span class="door">' + icon("door") + x + "</span>"; }).join("") + "</div>";
+    }
+    else if(f === "cpes"){
+      h = panelHead("chip", "Software and version", tagHit)
+        + '<p class="pp">This line names the software on the server. Skip the <span class="mono">cpe:/</span> and read the rest in parts. ' + legend(sc) + "</p>"
+        + sc.dec.map(function(d){
+            return '<div class="dec"><div class="segrow">' + d.segs.map(function(g){
+                return '<span class="seg' + (g.w2 ? " w2" : "") + ((g.raw === "o" || g.raw === "a") ? " o" : "") + '"><span class="raw">' + esc(g.raw) + '</span><span class="mean">' + esc(g.mean) + "</span></span>";
+              }).join("") + "</div>"
+              + '<div class="reads">Reads as: <b>' + esc(d.reads) + "</b></div></div>";
+          }).join("")
+        + '<p class="pp">' + sc.verWhy + "</p>";
+    }
+    else if(f === "vulns"){
+      var v = sc.vulns;
+      h = panelHead("bug", "A flaw code", tagHit)
+        + '<div class="def">' + CVE_DEF + "</div>"
+        + '<div class="segrow">'
+        + '<span class="seg"><span class="raw">CVE</span><span class="mean">says it is a flaw ID</span></span>'
+        + '<span class="seg"><span class="raw">' + v[0].split("-")[1] + '</span><span class="mean">a year</span></span>'
+        + '<span class="seg"><span class="raw">' + v[0].split("-")[2] + '</span><span class="mean">a number</span></span>'
+        + "</div>"
+        + '<p class="pp">This server has <b>' + WORDS[v.length] + (v.length > 1 ? " flaw codes" : " flaw code") + "</b>: " + v.map(function(x){ return '<span class="mono"><b>' + x + "</b></span>"; }).join(" and ") + ".</p>";
+    }
+    else if(f === "tags"){
+      h = panelHead("tag", "Labels", '<span class="gl" aria-hidden="true">★</span>Bonus', true)
+        + '<p class="pp">Not one of the three, but worth a look. This line holds short labels the lookup adds to what it found.</p>';
+      if(!sc.tags.length){
+        h += '<p class="pp">Here the list is empty: the lookup added <b>no labels</b> to this server. Nothing more to read on this line.</p>';
+      } else {
+        h += '<div class="tagl">' + sc.tagTxt.map(function(t){
+            return '<div><span class="mono">' + esc(t.t) + "</span>: " + esc(t.m) + "</div>";
+          }).join("") + "</div>";
+      }
+    }
+    else if(f === "ip"){
+      h = panelHead("pin", "The IP address", '<span class="gl" aria-hidden="true">−</span>Not this one', true)
+        + '<p class="pp">This is the server\'s IP address, its number on the internet. It says where the server is, not what is wrong with it.</p>'
+        + '<p class="pp soft">Try another line.</p>';
+    }
+    else if(f === "hostnames"){
+      h = panelHead("globe", "The name", '<span class="gl" aria-hidden="true">−</span>Not this one', true)
+        + '<p class="pp">This is the server\'s name. You already have it on your Exposure List. A name tells you where to look, not what is wrong.</p>'
+        + '<p class="pp soft">Try another line.</p>';
+    }
+    p.className = "panel" + (f === "cpes" ? " sw" : "");
+    p.innerHTML = h;
+    if(animate && !reduce){ p.classList.remove("in"); void p.offsetWidth; p.classList.add("in"); }
+  }
+
+  /* Slide 3: the three, side by side. */
+  function renderRecap(s){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    if(!allFound()){
+      el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Find all three first.</b> This slide shows them side by side, so it waits until then.</p>'
+        + '<button class="go" type="button" id="goclick">Back to the lookup</button></div>';
+      el.board.querySelector("#goclick").addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+      return;
+    }
+    function card(ic, lab, val, mono, why){
+      return '<div class="rc"><span class="ri">' + icon(ic) + "</span>"
+        + '<span class="rl">' + lab + "</span>"
+        + '<span class="rv' + (mono ? " mono" : "") + '">' + val + "</span>"
+        + '<span class="rw">' + why + "</span></div>";
+    }
+    el.board.innerHTML = '<p class="lead">Three lines turned a name into something to check. Here they are in plain words.</p>'
+      + '<div class="host">' + icon("globe") + "Server behind <span class=\"mono\">" + esc(sc.hostnames[0]) + "</span></div>"
+      + '<div class="cards3">'
+      + card("door", "Open ports", esc(sc.ports.join(", ")), true,
+          WORDS[sc.ports.length].charAt(0).toUpperCase() + WORDS[sc.ports.length].slice(1) + " doors anyone on the internet can knock on.")
+      + card("chip", "Software and version", esc(sc.sw), false,
+          st.scope === "C" ? "Out of support since October 2023. Microsoft no longer fixes its flaws. " + OLD : OLD + " The exact version is how you look up what is wrong with it.")
+      + card("bug", "Flaw " + (sc.vulns.length > 1 ? "codes" : "code"), sc.vulns.map(esc).join("<br>"), true,
+          (sc.vulns.length > 1 ? "Public IDs for known flaws" : "A public ID for one known flaw") + " in this software.")
+      + "</div>";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  /* Start over clears this scope's clicks and returns to the lookup. */
+  el.reset.addEventListener("click", function(){
+    if(st.scope){ st.clicked[st.scope] = {}; delete st.last[st.scope]; save(st); }
+    i = st.scope ? 1 : 0; render(); el.frame.focus();
+    say("Clicks cleared. Start again.");
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    scope:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; save(st); render(); return true; },
+    state:function(){ return { i:i, scope:st.scope, clicked:st.clicked, found:foundCount() }; }
+  };
+})();
+</script>
+</body>
+</html>

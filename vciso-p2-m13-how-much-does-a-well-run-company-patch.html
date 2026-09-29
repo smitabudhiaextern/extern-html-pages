@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Much Does a Well-Run Company Patch?</title>
+<!--
+  vCISO P2 Step 4, Module 13: Triage the Scan Results. Step 1, second interactive.
+  Built to match the approved P2 module 5 decks (same shell, bar, tint ramp).
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and
+  VCISO-STYLE-GUIDE.md section 6b (per-slide tint ramp, 09-assets/deck-palette.json).
+
+  Source: P2 Sample Pack, "Interactive content sets - P2.md", P2-11.
+    Answer: 100% is theoretical, 90% is doing well, 60 to 70% is common.
+    Reveal: outage windows, old software depending on other old software,
+    suppliers who won't support the newer version, systems nobody dares touch.
+    Then: a scanner reporting things that turn out to be wrong, or unpatchable,
+    is expected, not a defect.
+  Build spec: 06-content/project-02/step-04/module-13-internal.md.
+  Same for all four scopes, so there is no scope picker.
+  The figures carry no published source (internal flag); they appear only here.
+
+  Verify before shipping:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:80ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- definition strip ---- */
+  .defs{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .def{background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:0 10px 10px 0;
+    padding:10px 14px;font-size:15px;line-height:1.42;color:var(--title)}
+  .def b{font-weight:700}
+
+  /* ---- slide 1: the guess ---- */
+  .ask{flex:1 1 auto;min-height:0;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:12px;
+    padding:16px 26px 16px;display:flex;flex-direction:column;gap:10px}
+  .ask .q{font-size:20px;line-height:1.35;font-weight:600;color:var(--title)}
+  .readout{display:flex;align-items:center;gap:12px;min-height:40px}
+  .readout .rv{font-size:30px;font-weight:700;color:var(--on-highlight);min-width:92px}
+  .readout .rv.none{font-size:16px;font-weight:600;color:var(--body);min-width:0}
+  .readout .rl{font-size:15px;color:var(--body)}
+  .readout .rl b{color:var(--title)}
+
+  .slider{position:relative;height:58px;margin:0 12px;cursor:pointer;touch-action:none;outline:none}
+  .slider .trk{position:absolute;left:0;right:0;top:18px;height:10px;border-radius:5px;
+    border:1.5px dashed var(--on-highlight);background:var(--tint)}
+  .slider.set .trk{border-style:solid}
+  .slider .fill{position:absolute;left:0;top:18px;height:10px;border-radius:5px 0 0 5px;background:var(--on-highlight);width:0}
+  .slider:not(.set) .fill{display:none}
+  .slider .thumb{position:absolute;top:9px;width:28px;height:28px;margin-left:-14px;border-radius:50%;
+    background:var(--bg);border:3px solid var(--on-highlight);box-shadow:0 1px 3px rgba(0,29,105,.22)}
+  .slider .thumb::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--on-highlight)}
+  .slider:not(.set) .thumb{display:none}
+  .slider:focus-visible .trk{outline:3px solid var(--on-highlight);outline-offset:6px}
+  .slider.locked{cursor:default}
+  .slider .tk{position:absolute;top:34px;width:40px;margin-left:-20px;text-align:center;font-size:13px;font-weight:600;color:var(--body)}
+  .slider .tk::before{content:"";display:block;width:1.5px;height:6px;background:var(--line);margin:0 auto 3px}
+
+  .ctl{flex:0 0 auto;display:flex;align-items:center;gap:14px;margin-top:auto}
+  button.step{font-family:inherit;font-size:15px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    display:inline-flex;align-items:center;gap:8px}
+  button.step.ghost{background:transparent;color:var(--on-highlight)}
+  button.step svg.ic{width:18px;height:18px}
+  button.step:disabled{opacity:.34;cursor:not-allowed}
+  button.step:disabled.done{opacity:1;cursor:default;background:var(--highlight);color:var(--on-highlight)}
+  button.step:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .ctl .cs{font-size:15px;line-height:1.4;color:var(--body)}
+  .ctl .cs b{color:var(--title);font-weight:600}
+  .ctl .cs .gl{margin-right:6px;vertical-align:-3px}
+
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+
+  /* ---- slide 2: the scale ---- */
+  .scalebox{flex:0 0 auto;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:12px;padding:12px 26px 10px}
+  .scale{position:relative;height:132px;margin:0 104px 0 30px}
+  .scale .trk{position:absolute;left:0;right:0;top:56px;height:12px;border-radius:6px;background:var(--tint2)}
+  .scale .band{position:absolute;top:50px;height:24px;border:2px solid var(--on-highlight);border-radius:4px;
+    background:repeating-linear-gradient(135deg,var(--highlight) 0 5px,rgba(0,29,105,.28) 5px 7px)}
+  .scale .mk{position:absolute;top:44px;width:3px;height:36px;margin-left:-1.5px;background:var(--on-highlight)}
+  .scale .al{position:absolute;top:84px;width:120px;margin-left:-60px;text-align:center;line-height:1.2}
+  .scale .al.side{top:45px;width:auto;margin-left:14px;text-align:left}
+  .scale .al .n{display:block;font-size:17px;font-weight:700;color:var(--on-highlight)}
+  .scale .al .w{display:block;font-size:13px;font-weight:600;color:var(--title)}
+  .scale .ans{opacity:0;transition:opacity var(--t-reveal) var(--ease-over)}
+  .scale.shown .ans{opacity:1}
+  .scale.shown .sx.pre{display:none}
+  .scale .sx{position:absolute;top:74px;font-size:12px;font-weight:600;color:var(--body);width:40px;margin-left:-20px;text-align:center}
+  .scale .you{position:absolute;top:0;width:0;height:52px}
+  .scale .you .yt{position:absolute;top:0;left:-65px}
+  .scale .you .yp{position:absolute;top:24px;left:-7px}
+  .scale .you .ys{position:absolute;top:33px;left:-1px}
+  .scale .you .yt{background:var(--on-highlight);color:var(--bg);font-size:13px;font-weight:600;border-radius:14px;padding:3px 10px;white-space:nowrap}
+  .scale .you .yp{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid var(--on-highlight)}
+  .scale .you .ys{width:2px;height:16px;border-left:2px dotted var(--on-highlight)}
+
+  .legend{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .lg{background:var(--highlight);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    opacity:0;transform:translateY(-4px);transition:opacity var(--t-reveal) var(--ease-over),transform var(--t-reveal) var(--ease-over)}
+  .shown-all .lg{opacity:1;transform:none}
+  .lg .n{font-size:20px;font-weight:700;color:var(--on-highlight)}
+  .lg .w{font-size:15px;font-weight:600;color:var(--title)}
+  .lg .d{font-size:14px;line-height:1.38;color:var(--body)}
+  .verdict{flex:1 1 auto;min-width:0;font-size:16px;line-height:1.45;color:var(--title);display:flex;gap:10px;align-items:flex-start;min-height:24px}
+  .verdict .gl{margin-top:1px}
+
+  /* ---- slide 3: four reasons ---- */
+  .cards4{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:stretch}
+  button.oc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:14px 14px 14px;min-height:280px;
+    display:flex;flex-direction:column;gap:10px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.oc:hover{background:var(--highlight)}
+  button.oc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.oc .oi{width:44px;height:44px;border-radius:12px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  button.oc .oi svg.ic{width:26px;height:26px}
+  button.oc .ot{font-size:17px;font-weight:600;line-height:1.28;color:var(--title);min-height:66px}
+  button.oc .oh{display:flex;flex-direction:column;gap:9px}
+  button.oc .ob{font-size:15px;line-height:1.42;color:var(--body);
+    border-top:1.5px dashed var(--line);padding-top:10px;display:flex;align-items:flex-start;gap:8px}
+  button.oc .ob .gl{margin-top:1px}
+  button.oc.open{background:var(--highlight);border-style:solid;border-width:2px}
+  button.oc.open .ob{border-top:1.5px solid var(--on-highlight);color:var(--title)}
+  button.oc.open .ob.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  /* ---- slide 4: the closing line ---- */
+  .closewrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:14px;min-height:0}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:18px 28px}
+  .bridge{flex:0 0 auto;font-size:17px;line-height:1.45;color:var(--title);font-weight:600}
+  .defs.d3{grid-template-columns:1fr 1fr 1fr}
+  .defs.d3 .def{font-size:14px;padding:9px 13px}
+  .endrow{flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .endrow .recap{flex:1 1 auto}
+  .statement p{font-size:24px;line-height:1.4;font-weight:600;color:var(--title)}
+  .recap{flex:0 0 auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .recap li{list-style:none;display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--on-highlight);
+    border-radius:22px;padding:8px 15px;font-size:15px;font-weight:600;color:var(--title)}
+  .recap li svg.ic{width:20px;height:20px;color:var(--on-highlight)}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .defs{grid-template-columns:1fr}
+    .ask{padding:14px 14px;flex:0 0 auto}
+    .ask .q{font-size:18px}
+    .ctl{flex-wrap:wrap;margin-top:12px}
+    .scalebox{padding:10px 10px}
+    .scale{margin:0 76px 0 22px}
+    .scale .al{width:70px;margin-left:-35px}
+    .scale .al .n{font-size:13px}
+    .scale{height:162px}
+    .scale .al .w{font-size:12px}
+    .scale .al:not(.side){top:120px}
+    .scale .al.well{top:84px}
+    .scale .al.side{margin-left:8px}
+    .scale .sx{font-size:12px}
+    .defs.d3{grid-template-columns:1fr}
+    .bridge{font-size:16px}
+    .legend{grid-template-columns:1fr}
+    .cards4{grid-template-columns:1fr}
+    button.oc{min-height:0}
+    button.oc .ot{min-height:0}
+    .statement{padding:18px 18px}
+    .statement p{font-size:20px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="How Much Does a Well-Run Company Patch?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>How Much Does a Well-Run Company Patch?</h2>
+    <p>A patch is an update from a program's maker that fixes a known flaw. A system is fully patched when every patch for it is installed.</p>
+    <p><strong>What share of its systems does a large, well-run company have fully patched?</strong> Write down your guess before you read on.</p>
+    <h3>The answer</h3>
+    <ul>
+      <li><strong>60 to 70%:</strong> common.</li>
+      <li><strong>90%:</strong> doing well.</li>
+      <li><strong>100%:</strong> theoretical. It is possible on paper, but real companies do not reach it.</li>
+    </ul>
+    <h3>Why not 100%?</h3>
+    <ul>
+      <li><strong>Outage windows.</strong> Most patches need a restart. Many systems can only be switched off at an agreed time, called an outage window, so the patch waits.</li>
+      <li><strong>Old software depending on other old software.</strong> Updating one program can break an older program that relies on it, so both stay as they are.</li>
+      <li><strong>Suppliers who won't support the newer version.</strong> The company that sells a program may only help with problems on an older version. Updating means losing their help.</li>
+      <li><strong>Systems nobody dares touch.</strong> Some systems matter so much that nobody wants to risk restarting them. So they go without patches.</li>
+    </ul>
+    <p>When you open Cumberland's scan, expect a lot of rows. Some will be for systems that cannot be patched, and some will turn out to be wrong. A defect here means a sign that the scanner is broken.</p>
+    <div class="box"><p>So a scanner reporting things that turn out to be wrong, or unpatchable, is expected, not a defect.</p></div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    stack:'<rect x="4" y="4" width="16" height="5" rx="1.2"/><rect x="4" y="10" width="16" height="5" rx="1.2"/><rect x="4" y="16" width="16" height="4" rx="1.2"/><path d="M7 6.5h2M7 12.5h2"/>',
+    vendor:'<path d="M4 20V9l4-3 4 3v11"/><path d="M12 20V11h8v9"/><path d="M3 20h18"/><path d="M7 12h2M7 15.5h2M15 14h2M15 17h2"/>',
+    warn:'<path d="M12 4 3 19.5h18z"/><path d="M12 10v4.5"/><path d="M12 17.2v.1"/>',
+    target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+    scan:'<rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/><path d="M7 10.5h10"/>',
+    chart:'<path d="M4 20h16"/><rect x="6" y="12" width="3" height="6" rx=".6"/><rect x="10.5" y="8" width="3" height="10" rx=".6"/><rect x="15" y="4.5" width="3" height="13.5" rx=".6"/>',
+    arrow:'<path d="M4 12h15M13 6l6 6-6 6"/>',
+    lock:'<rect x="5" y="10.5" width="14" height="10" rx="1.8"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+    reset:'<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v4h4"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     Figures and reasons: P2-11, verbatim in substance. Explanations of each
+     reason are ours (the SME gives the headline only). */
+  var ANS = [
+    { id:"common", lo:60, hi:70, n:"60 to 70%", w:"Common", d:"This is where many large companies sit." },
+    { id:"well",   at:90,        n:"90%",       w:"Doing well", d:"If a company reaches 90%, it is patching well." },
+    { id:"theory", at:100,       n:"100%",      w:"Theoretical", d:"Possible on paper. Real companies do not reach it." }
+  ];
+
+  var S = [
+    { id:"guess", kind:"guess", label:"Your guess",
+      h1:"How Much Does a Well-Run Company Patch?",
+      q:"What share of its systems does a large, well-run company have fully patched?" },
+
+    { id:"answer", kind:"answer", label:"The answer",
+      h1:"Here Is Where Real Companies Sit" },
+
+    { id:"why", kind:"explore", label:"Why",
+      h1:"Why Not 100%?",
+      lead:"Even a well-run company leaves some systems unpatched, for four reasons. Click or tap each card to open it.",
+      cards:[
+        { id:"outage", ic:"clock", name:"Outage windows",
+          txt:"Most patches need a restart. Many systems can only be switched off at an agreed time, called an outage window, so the patch waits." },
+        { id:"old", ic:"stack", name:"Old software depending on other old software",
+          txt:"Updating one program can break an older program that relies on it. So both stay as they are." },
+        { id:"supplier", ic:"vendor", name:"Suppliers who won't support the newer version",
+          txt:"The company that sells a program may only help with problems on an older version. Updating means losing their help." },
+        { id:"touch", ic:"warn", name:"Systems nobody dares touch",
+          txt:"Some systems matter so much that nobody wants to risk restarting them. So they go without patches." }
+      ] },
+
+    { id:"close", kind:"close", label:"Your scan",
+      h1:"What This Means for Your Scan",
+      body:"So a scanner reporting things that turn out to be wrong, or unpatchable, is expected, not a defect." }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m13-well-run-patch-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { g:null, locked:false, shown:false, opened:{} }; }
+  function okG(v){ return typeof v === "number" && v >= 0 && v <= 100 && Math.floor(v) === v; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var g = okG(raw.g) ? raw.g : null;
+      var locked = !!raw.locked && g !== null;
+      return { g:g, locked:locked, shown:!!raw.shown && locked,
+               opened: isPlain(raw.opened) ? raw.opened : {} };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function openedCount(s){ return (s.cards || []).filter(function(c){ return st.opened[c.id]; }).length; }
+
+  /* The verdict compares the guess with the SME's three figures only. */
+  var NEXT = " The next slide shows why even well-run companies stop short of 100%.";
+  function verdict(g){
+    if(g >= 90) return "You guessed " + g + "%. That is at or above what a company doing well reaches. Most people guess high." + NEXT;
+    if(g > 70)  return "You guessed " + g + "%. That is above what is common. Most people guess high." + NEXT;
+    if(g >= 60) return "You guessed " + g + "%. That is what is common." + NEXT;
+    return "You guessed " + g + "%. That is below what is common." + NEXT;
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(s.kind === "explore"){
+      el.chip.hidden = false;
+      el.chip.textContent = "Opened " + openedCount(s) + " of " + s.cards.length;
+    } else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    el.hint.textContent = "";
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "guess" && !st.locked){
+      el.next.disabled = true;
+      el.hint.innerHTML = "Set your guess on the line and lock it in to carry on.";
+    }
+    else if(s.kind === "answer" && !st.shown){
+      el.next.disabled = true;
+      el.hint.innerHTML = "Show the answer to carry on.";
+    }
+    else if(s.kind === "explore" && openedCount(s) < s.cards.length){
+      el.next.disabled = true;
+      el.hint.innerHTML = "Open all four cards to carry on.";
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    if(s.kind === "guess") renderGuess(s);
+    else if(s.kind === "answer") renderAnswer(s);
+    else if(s.kind === "explore") renderExplore(s);
+    else renderClose(s);
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + s.h1 + ".");
+  }
+
+  /* Slide 1: the guess. The line starts empty: no thumb, no value, dashed
+     track, until the student clicks, drags or presses a key. */
+  function renderGuess(s){
+    var ticks = "";
+    [0,25,50,75,100].forEach(function(t){ ticks += '<span class="tk" style="left:' + t + '%">' + t + "%</span>"; });
+    el.board.innerHTML =
+        '<div class="defs">'
+      +   '<div class="def"><b>A patch</b> is an update from a program\'s maker that fixes a known flaw.</div>'
+      +   '<div class="def"><b>Fully patched</b> means every patch for that system is installed. A system is any computer or program the company runs.</div>'
+      + "</div>"
+      + '<div class="ask">'
+      +   '<p class="q">' + esc(s.q) + "</p>"
+      +   '<div class="readout" id="ro"></div>'
+      +   '<div class="slider" id="sl" role="slider" tabindex="0" aria-label="Your guess, in percent" aria-valuemin="0" aria-valuemax="100">'
+      +     '<span class="trk"></span><span class="fill" id="fill"></span><span class="thumb" id="th"></span>' + ticks
+      +   "</div>"
+      +   '<div class="ctl"><button class="step" id="lockb" type="button">' + icon("lock") + "Lock in my guess</button>"
+      +   '<span class="cs" id="cs"></span></div>'
+      + "</div>";
+
+    var sl = el.board.querySelector("#sl"), ro = el.board.querySelector("#ro"),
+        fill = el.board.querySelector("#fill"), th = el.board.querySelector("#th"),
+        lockb = el.board.querySelector("#lockb"), cs = el.board.querySelector("#cs");
+
+    function paint(){
+      var g = st.g;
+      if(g === null){
+        sl.classList.remove("set");
+        sl.setAttribute("aria-valuetext", "No guess yet");
+        sl.removeAttribute("aria-valuenow");
+        ro.innerHTML = '<span class="rv none">No guess yet.</span><span class="rl">Click or drag on the line below. Arrow keys work too.</span>';
+      } else {
+        sl.classList.add("set");
+        sl.setAttribute("aria-valuenow", g);
+        sl.setAttribute("aria-valuetext", g + " percent");
+        fill.style.width = g + "%";
+        th.style.left = g + "%";
+        ro.innerHTML = '<span class="rv">' + g + "%</span>"
+          + '<span class="rl">' + (st.locked ? "<b>Locked in.</b> This is your guess." : "Your guess so far. Adjust it until it feels right.") + "</span>";
+      }
+      sl.classList.toggle("locked", st.locked);
+      sl.setAttribute("aria-disabled", st.locked ? "true" : "false");
+      lockb.disabled = st.locked || g === null;
+      lockb.classList.toggle("done", st.locked);
+      if(st.locked){
+        lockb.innerHTML = icon("lock") + "Guess locked";
+        cs.innerHTML = '<span class="gl" aria-hidden="true">✓</span><b>Locked at ' + g + "%.</b> Continue to see the answer.";
+      } else if(g === null){
+        cs.textContent = "";
+      } else {
+        cs.textContent = "Lock it in when you are ready.";
+      }
+    }
+    function setFromX(x){
+      if(st.locked) return;
+      var r = sl.getBoundingClientRect();
+      var p = Math.round((x - r.left) / r.width * 100);
+      st.g = Math.max(0, Math.min(100, p));
+      save(st); paint();
+    }
+    var dragging = false;
+    sl.addEventListener("pointerdown", function(e){
+      if(st.locked) return;
+      dragging = true;
+      try{ sl.focus({focusVisible:false}); }catch(err){ sl.focus(); }
+      try{ sl.setPointerCapture(e.pointerId); }catch(err){}
+      setFromX(e.clientX);
+    });
+    sl.addEventListener("pointermove", function(e){ if(dragging) setFromX(e.clientX); });
+    sl.addEventListener("pointerup", function(){ dragging = false; });
+    sl.addEventListener("pointercancel", function(){ dragging = false; });
+    sl.addEventListener("keydown", function(e){
+      if(st.locked) return;
+      var d = 0;
+      if(e.key === "ArrowRight" || e.key === "ArrowUp") d = 1;
+      else if(e.key === "ArrowLeft" || e.key === "ArrowDown") d = -1;
+      else if(e.key === "PageUp") d = 10;
+      else if(e.key === "PageDown") d = -10;
+      else if(e.key === "Home"){ e.preventDefault(); st.g = 0; save(st); paint(); return; }
+      else if(e.key === "End"){ e.preventDefault(); st.g = 100; save(st); paint(); return; }
+      else return;
+      e.preventDefault();
+      /* From empty, the first key press starts the guess at 50. */
+      st.g = st.g === null ? 50 : Math.max(0, Math.min(100, st.g + d));
+      save(st); paint();
+    });
+    lockb.addEventListener("click", function(){
+      if(st.g === null || st.locked) return;
+      st.locked = true; save(st); paint(); header();
+      el.next.focus();
+      say("Guess locked at " + st.g + " percent.");
+    });
+    paint();
+  }
+
+  /* Slide 2: the answer on the same 0 to 100 line, with the guess pinned. */
+  function renderAnswer(){
+    var g = st.g;
+    var you = (g === null) ? "" :
+      '<div class="you" style="left:' + g + '%"><span class="yt">Your guess: ' + g + '%</span><span class="yp"></span><span class="ys"></span></div>';
+    var marks = ""
+      + '<span class="band ans" style="left:60%;width:10%"></span>'
+      + '<span class="al ans" style="left:65%"><span class="n">60 to 70%</span><span class="w">Common</span></span>'
+      + '<span class="mk ans" style="left:90%"></span>'
+      + '<span class="al ans well" style="left:90%"><span class="n">90%</span><span class="w">Doing well</span></span>'
+      + '<span class="mk ans" style="left:100%"></span>'
+      + '<span class="al ans side" style="left:100%"><span class="n">100%</span><span class="w">Theoretical</span></span>';
+    var sx = "";
+    /* 75% and 100% are plain axis labels shown only before the reveal,
+       where the answer labels would otherwise collide with them. */
+    [0,25,50,75,100].forEach(function(t){ sx += '<span class="sx' + (t > 50 ? " pre" : "") + '" style="left:' + t + '%">' + t + "%</span>"; });
+    el.board.innerHTML =
+        '<p class="lead">You guessed what share of its systems a large, well-run company has fully patched. Here is the answer.</p>'
+      + '<div class="scalebox"><div class="scale' + (st.shown ? " shown" : "") + '" id="sc">'
+      +   '<span class="trk"></span>' + sx + marks + you
+      + "</div></div>"
+      + '<div class="legend' + (st.shown ? " shown-all" : "") + '" id="lg">'
+      +   ANS.map(function(a){
+            return '<div class="lg"' + (st.shown ? "" : ' aria-hidden="true"') + '><span class="n">' + a.n + '</span><span class="w">' + a.w + '</span><span class="d">' + a.d + "</span></div>";
+          }).join("")
+      + "</div>"
+      + '<div class="ctl" style="margin-top:0">'
+      +   (st.shown ? "" : '<button class="step" id="showb" type="button">Show the answer ' + icon("arrow") + "</button>")
+      +   '<p class="verdict" id="vd">' + (st.shown && g !== null ? '<span class="gl" aria-hidden="true">' + icon("target").replace('class="ic"','class="ic" style="width:13px;height:13px"') + "</span><span>" + esc(verdict(g)) + "</span>" : "") + "</p>"
+      + "</div>";
+    /* Keep the guess bubble inside the box at the far left. */
+    var yt = el.board.querySelector(".you .yt"), sc0 = el.board.querySelector("#sc");
+    if(yt && sc0){
+      var W = sc0.getBoundingClientRect().width / (stageScale() || 1);
+      var half = yt.offsetWidth / 2;
+      var room = g * W / 100 + 44;   /* 30px scale margin + most of the box padding */
+      yt.style.left = (-Math.min(half, room)) + "px";
+    }
+    var b = el.board.querySelector("#showb");
+    if(b) b.addEventListener("click", function(){
+      st.shown = true; save(st);
+      var sc = el.board.querySelector("#sc"), lg = el.board.querySelector("#lg");
+      sc.classList.add("shown");
+      if(reduce) lg.classList.add("shown-all");
+      else setTimeout(function(){ lg.classList.add("shown-all"); }, 260);
+      Array.prototype.forEach.call(lg.querySelectorAll(".lg"), function(x){ x.removeAttribute("aria-hidden"); });
+      var vd = el.board.querySelector("#vd");
+      if(g !== null) vd.innerHTML = '<span class="gl" aria-hidden="true">' + icon("target").replace('class="ic"','class="ic" style="width:13px;height:13px"') + "</span><span>" + esc(verdict(g)) + "</span>";
+      b.remove();
+      header();
+      el.next.focus();
+      say("60 to 70 percent is common. 90 percent is doing well. 100 percent is theoretical. " + (g !== null ? verdict(g) : ""));
+    });
+  }
+
+  /* Slide 3: four cards, opened in any order. Continue waits for all four. */
+  function renderExplore(s){
+    el.board.innerHTML = '<p class="lead">' + s.lead + "</p>"
+      + '<div class="cards4">' + s.cards.map(function(c){
+          var open = !!st.opened[c.id];
+          return '<button class="oc' + (open ? " open" : "") + '" type="button" data-c="' + esc(c.id) + '" aria-expanded="' + open + '">'
+            + '<span class="oi">' + icon(c.ic) + "</span>"
+            + '<span class="ot">' + esc(c.name) + "</span>"
+            + '<span class="ob">' + obHTML(c, open) + "</span>"
+            + "</button>";
+        }).join("") + "</div>";
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.oc"), function(b){
+      b.addEventListener("click", function(){
+        var c = null;
+        s.cards.forEach(function(x){ if(x.id === b.dataset.c) c = x; });
+        if(!c || st.opened[c.id]) return;
+        st.opened[c.id] = 1; save(st);
+        b.classList.add("open");
+        b.setAttribute("aria-expanded", "true");
+        var ob = b.querySelector(".ob");
+        ob.innerHTML = obHTML(c, true);
+        if(!reduce){ ob.classList.remove("in"); void ob.offsetWidth; ob.classList.add("in"); }
+        header();
+        say(c.name + ". " + c.txt + " Opened " + openedCount(s) + " of " + s.cards.length + ".");
+      });
+    });
+  }
+  function obHTML(c, open){
+    return open
+      ? '<span class="gl" aria-hidden="true">✓</span><span>' + esc(c.txt) + "</span>"
+      : '<span class="gl" aria-hidden="true">+</span><span>Click or tap to open</span>';
+  }
+
+  /* Slide 4: the closing line, the two words it needs, and start over. */
+  function renderClose(s){
+    el.board.innerHTML = '<div class="closewrap">'
+      + '<div class="defs d3">'
+      +   '<div class="def"><b>A scanner</b> is a program that checks each machine for known flaws. Ridgeline IT ran one on Cumberland\'s machines.</div>'
+      +   '<div class="def"><b>Unpatchable</b> means no patch can be installed to fix it.</div>'
+      +   '<div class="def"><b>A defect</b> here means a sign that the scanner is broken.</div>'
+      + "</div>"
+      + '<p class="bridge">When you open Cumberland\'s scan, expect a lot of rows. Some will be for systems that cannot be patched, and some will turn out to be wrong.</p>'
+      + '<div class="statement"><p>' + esc(s.body) + "</p></div>"
+      + '<div class="endrow"><ul class="recap" aria-label="Your guess and the answer">'
+      +   (st.g !== null ? "<li>" + icon("target") + "Your guess: " + st.g + "%</li>" : "")
+      +   "<li>" + icon("chart") + "Common: 60 to 70%</li>"
+      +   "<li>" + icon("chart") + "Doing well: 90%</li>"
+      + "</ul>"
+      + '<button class="step ghost" id="again" type="button">' + icon("reset") + "Start over</button></div>"
+      + "</div>";
+    el.board.querySelector("#again").addEventListener("click", function(){
+      st = fresh(); save(st); i = 0; render(); el.frame.focus();
+      say("Started over. No guess yet.");
+    });
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && el.next.disabled) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target) || (e.target.closest && e.target.closest(".slider"))){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0) go(1); else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function stageScale(){ var m = /scale\(([\d.]+)\)/.exec(stage.style.transform || ""); return m ? parseFloat(m[1]) : 1; }
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    state:function(){ return { i:i, g:st.g, locked:st.locked, shown:st.shown, opened:st.opened }; }
+  };
+})();
+</script>
+</body>
+</html>
