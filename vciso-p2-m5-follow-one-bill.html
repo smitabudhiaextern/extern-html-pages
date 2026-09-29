@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Follow One Bill</title>
+<!--
+  vCISO P2 Step 2, Module 5: Follow the Data. Section "Trace One Bill Through Your Scope".
+  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html).
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and
+  VCISO-STYLE-GUIDE.md section 6, which set the larger type scale and the
+  per-slide tint ramp used here (09-assets/deck-palette.json).
+
+  Every stop fact comes from the Environment Record (SME drop 2026-09-25) or the
+  P1 asset inventory templates. The stop order per scope is our proposal and
+  awaits Chaitanya's approval (see module-05-internal.md).
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:78ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the scope picker ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:22px 18px 18px;min-height:292px;
+    display:flex;flex-direction:column;gap:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:64px;height:64px;border-radius:14px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:36px;height:36px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:20px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:9px}
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  button.sc.on{background:var(--on-highlight);border:2px solid var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .ss{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- slide 2 and 3: the chain of stops ---- */
+  .chain{flex:0 0 auto;display:grid;align-items:stretch}
+  .arr{display:flex;align-items:center;justify-content:center;color:var(--on-highlight)}
+  .arr svg.ic{width:20px;height:20px}
+  button.stop,div.stop{font-family:inherit;text-align:left;background:var(--bg);color:var(--title);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:9px 10px 9px;min-width:0;
+    display:flex;flex-direction:column;gap:5px;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+  button.stop{cursor:pointer;min-height:90px}
+  button.stop:hover{background:var(--highlight)}
+  button.stop:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .stop .sh{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--on-highlight)}
+  .stop .sh svg.ic{width:20px;height:20px;flex:0 0 auto}
+  .stop .sh .io{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600}
+  .stop .nm{font-size:15px;font-weight:600;line-height:1.25;color:var(--title);flex:1 1 auto}
+  .stop .ft{font-size:12.5px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:6px}
+  .stop .ft .gl{width:17px;height:17px;font-size:10.5px}
+  button.stop.blank{border-style:dashed;background:var(--tint)}
+  button.stop.blank .nm{color:var(--body);font-weight:600}
+  button.stop.sel{box-shadow:0 0 0 3px var(--bg),0 0 0 5.5px var(--on-highlight)}
+  button.stop.sel .ft{text-decoration:underline;text-underline-offset:3px}
+  .stop.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  div.stop{min-height:74px}
+  .chain.big div.stop{min-height:96px}
+  div.stop.extra{border:2px dashed var(--on-highlight);background:var(--highlight)}
+
+  /* ---- the panel under the chain ---- */
+  .panel{flex:1 1 auto;min-height:0;background:var(--highlight);border-radius:12px;padding:12px 18px;
+    display:flex;flex-direction:column;gap:8px}
+  .panel.gate{flex:0 0 auto;gap:14px;padding:22px 24px}
+  .panel.ask{justify-content:center;gap:16px;padding:20px 24px}
+  .panel.ask .pq{font-size:20px}
+  .panel:focus{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .panel.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .ph{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .ph svg.ic{width:26px;height:26px;color:var(--on-highlight);flex:0 0 auto}
+  .ph .pt{font-size:20px;font-weight:600;color:var(--title);line-height:1.2}
+  .ph .tag{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--on-highlight);background:var(--bg);
+    border:1px solid var(--on-highlight);border-radius:14px;padding:3px 10px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .facts{flex:0 0 auto;display:grid;grid-template-columns:168px 1fr;row-gap:0;border-top:1.5px solid var(--line)}
+  .facts dt,.facts dd{padding:10px 0;border-bottom:1.5px solid var(--line)}
+  .facts dt{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);padding-top:12px}
+  .facts dd{font-size:16.5px;line-height:1.42;color:var(--title)}
+  .facts dd .pv{font-weight:700}
+  .facts dd .pr{color:var(--body)}
+  .pq{flex:0 0 auto;font-size:16px;font-weight:600;line-height:1.35;color:var(--title)}
+  .pctx{flex:0 0 auto;font-size:14.5px;line-height:1.4;color:var(--body)}
+  .opts{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  button.opt{font-family:inherit;font-size:15px;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--line);border-radius:9px;
+    padding:8px 12px;cursor:pointer;display:flex;gap:9px;align-items:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt .g{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:11px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center}
+  button.opt:hover:not(:disabled){background:var(--highlight);border-color:var(--on-highlight)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  button.opt.out{background:transparent;border-style:dashed;border-color:var(--line)}
+  button.opt.out .txt{text-decoration:line-through;text-decoration-thickness:1px}
+  button.opt.out .g{border-style:dashed}
+  .note{flex:0 0 auto;height:44px;overflow-y:auto;font-size:14px;line-height:1.4;color:var(--body)}
+  .note b{color:var(--title);font-weight:600}
+  .done{font-size:15px;line-height:1.45;color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* ---- slide 3: the guess and the reveal ---- */
+  .gbtns{flex:0 0 auto;display:flex;gap:12px}
+  button.gb{font-family:inherit;font-size:17px;font-weight:600;line-height:1.3;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:20px 18px;cursor:pointer;
+    display:flex;align-items:center;gap:10px;flex:1 1 0}
+  button.gb:hover{background:var(--highlight)}
+  button.gb:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.gb .g{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .verdict{flex:0 0 auto;font-size:17px;font-weight:600;line-height:1.35;color:var(--title)}
+  .why{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .why b{color:var(--title)}
+  .panel.rv .facts dt,.panel.rv .facts dd{padding-top:6px;padding-bottom:6px}
+  .panel.rv .facts dt{padding-top:8px}
+  .panel.rv .facts dd{font-size:14.5px}
+
+  /* ---- slide 4: the closing line ---- */
+  .closewrap{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;padding-bottom:30px}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 12px 12px 0;padding:40px 40px;max-width:840px}
+  .statement p{font-size:32px;line-height:1.35;font-weight:600;color:var(--title)}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .scopes{grid-template-columns:1fr 1fr;gap:10px}
+    button.sc{min-height:0;padding:14px 12px}
+    button.sc .si{width:48px;height:48px}
+    button.sc .sn{font-size:17px}
+    .note2{font-size:16px}
+    .chain{grid-template-columns:1fr!important;row-gap:4px}
+    .arr{height:22px;justify-content:flex-start;padding-left:20px}
+    .arr svg.ic{transform:rotate(90deg)}
+    button.stop{min-height:0}
+    .stop .nm{font-size:16px}
+    .stop .ft{font-size:14px}
+    .panel{padding:14px 14px}
+    .facts{grid-template-columns:1fr}
+    .facts dt{border-bottom:0;padding-bottom:0}
+    .facts dd{font-size:16px}
+    .opts{grid-template-columns:1fr}
+    button.opt{font-size:16px;padding:12px 13px}
+    .note{height:auto;overflow:visible;font-size:15px}
+    .gbtns{flex-direction:column}
+    .statement{padding:22px 20px}
+    .statement p{font-size:22px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Follow One Bill">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:24px 0 6px}
+    .nsf h4{font-size:17px;color:#1C1B1B;margin:14px 0 4px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h2>Follow One Bill</h2>
+    <p>Find your scope below. Each one shows where one patient's bill goes in that scope, stop by stop, and what is known about each stop: what sits there, who can reach it, and whether it is protected. Before you read the last part of your scope, ask yourself: is that every place the bill sits?</p>
+
+    <h3>Scope A, Claims Intake</h3>
+    <ol>
+      <li><strong>Clinic Portal.</strong> What sits there: visit details the clinics send in. Who can reach it: the 41 clinics, over the internet. Protected: not sure, you grade its front door later in this step.</li>
+      <li><strong>MedFlow production.</strong> What sits there: the billing and claims platform, v4.2, on CCS-APP01. Who can reach it: the MedFlow vendor, through support access on no record, and Ridgeline IT, through its standing admin access. Protected: not sure, the vendor can change it without telling Cumberland.</li>
+      <li><strong>Claims database.</strong> What sits there: the live claims data, on CCS-SQL01. Who can reach it: not recorded. Protected: not sure, not recorded.</li>
+      <li><strong>Waypoint Clearing connection.</strong> What sits there: claims files, sent out every night over SFTP from CCS-SFTP01. Who can reach it: Waypoint Clearing, the clearinghouse. Tara Whitlock owns it. Protected: no, a legacy transfer protocol also runs, so credentials can be read in transit.</li>
+    </ol>
+    <div class="box"><p><strong>The copy nobody wrote down: the patient data on MedFlow-TEST.</strong> You met this box in Project 1: Nate's list calls it decommissioned and Finance still pays for it. The point here is what is on it: a full copy of live patient data. Who can reach it: not recorded, and no owner is recorded. Protected: no. It has no backup and no monitoring, and IT believes it is switched off.</p></div>
+
+    <h3>Scope B, Payments and Remittance</h3>
+    <ol>
+      <li><strong>Meridian remittance connection.</strong> What sits there: remittance advice, Meridian's note of what it paid, arriving at payers.cumberlandclaims.com. Who can reach it: Meridian, over the internet. Gil Ramsey owns it. Protected: not sure, you grade its front door later in this step.</li>
+      <li><strong>Remittance file drop.</strong> What sits there: payer files, in a folder on CCS-FS01. Who can reach it: not recorded. Protected: no, CCS-FS01 runs Windows Server 2012 R2, out of support since October 2023.</li>
+      <li><strong>Remittance Manager.</strong> What sits there: patient and payment data, in the reconciliation application licensed from Ardex. Who can reach it: Gil Ramsey owns it; anyone else is not recorded. Protected: not sure, not recorded.</li>
+      <li><strong>Payment posting export.</strong> What sits there: a monthly file sent back to the clinics. Who can reach it: the clinics that receive it. Protected: not sure, not recorded.</li>
+    </ol>
+    <div class="box"><p><strong>The copy nobody wrote down: the reconciliation spreadsheets on the file server.</strong> Working files on CCS-FS01, kept by individual Finance staff, holding account and payment detail and patient identifiers. They are on your Project 1 inventory as an asset. What nobody wrote down is that they hold this bill's payment detail a second time, outside Remittance Manager. Who can reach them: the Finance staff who keep them; anyone else is not recorded. Protected: no, they sit on a server out of support since October 2023.</p></div>
+
+    <h3>Scope C, Patient Records and Archive</h3>
+    <ol>
+      <li><strong>Records Request Portal.</strong> What sits there: patient record requests, on a website served from CCS-ARCH01. Who can reach it: patients, over the internet. Protected: not sure, you grade its front door later in this step.</li>
+      <li><strong>Archive store.</strong> What sits there: seven years of closed claims. Who can reach it: Doreen Alcott owns it; anyone else is not recorded. Protected: not sure, not recorded.</li>
+      <li><strong>Backup repository.</strong> What sits there: Veeam backups, kept on the premises. Who can reach it: Nate Brody owns it; anyone else is not recorded. Protected: not sure, backups run but restores have never been tested.</li>
+      <li><strong>ArcVault offsite replication.</strong> What sits there: a nightly copy sent to ArcVault, outside Cumberland. Who can reach it: ArcVault. Nate Brody owns it. Protected: not sure, not recorded.</li>
+    </ol>
+    <div class="box"><p><strong>The copy nobody wrote down: the monthly export file with no deletion date.</strong> MedFlow writes it to CCS-FS01 every month, and about 14 months of files are kept. It is on your Project 1 inventory with no stated purpose. What nobody wrote down is that it is another copy of patient data, outside the archive, kept with no date to delete it. Who can reach it: not recorded, and no owner is recorded. Protected: no, it has no encryption and no deletion date.</p></div>
+
+    <h3>Scope D, Remote and Corporate</h3>
+    <ol>
+      <li><strong>CCS-FS01.</strong> What sits there: shared files for corporate, payments and records work. Who can reach it: Nate Brody owns it, and Ridgeline IT has standing admin access. Protected: no, Windows Server 2012 R2, out of support since October 2023.</li>
+      <li><strong>FortiGate firewall and VPN.</strong> What sits there: the perimeter firewall, a FortiGate 60F, where the VPN terminates. Who can reach it: staff working remotely, through remote.cumberlandclaims.com. Protected: not sure, you grade its front door later in this step.</li>
+      <li><strong>Staff laptop fleet.</strong> What sits there: about 180 staff laptops, Windows 10 and Windows 11. Who can reach it: the staff who carry them. Nate Brody owns the fleet. Protected: not sure, about 40 still run Windows 10, out of support since October 2025.</li>
+      <li><strong>Microsoft 365 tenant.</strong> What sits there: Exchange Online email, SharePoint and Teams. Who can reach it: staff, from anywhere, through Outlook on the web. No owner is recorded on the IT list. Protected: no, staff webmail has no conditional access.</li>
+    </ol>
+    <div class="box"><p><strong>The copy nobody wrote down: patient data in staff email attachments and local laptop files.</strong> You counted the laptops and the mail system. You did not count what they keep: patient data in email attachments and in files saved on the laptops. No asset list gives these copies a row. Who can reach them: not recorded. Protected: not sure, not recorded.</p></div>
+
+    <p>If you thought the path was complete, it was not: there is a copy nobody wrote down. If you thought there was more, you were right, and that is the specific one nobody tracks.</p>
+    <p><strong>Copy every stop into your Data Flow tab, one row each.</strong></p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z"/>',
+    app:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.8"/><path d="M3.5 8.5h17"/><path d="M8 13h8M8 16h5"/>',
+    db:'<ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
+    send:'<path d="M21 3 3 10.4l7.2 3.4L13.6 21z"/><path d="M10.2 13.8 21 3"/>',
+    inbox:'<path d="M3.5 13.5 6 5h12l2.5 8.5V19a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/><path d="M3.5 13.5H9l1 2h4l1-2h5.5"/>',
+    folder:'<path d="M3.5 7V18a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-7.3L10.5 5.5h-6a1 1 0 0 0-1 1.5z"/>',
+    table:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.2"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/>',
+    file:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="M9 12.5h6M9 16h6"/>',
+    backup:'<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/><path d="M12 8v4.3l2.8 1.7"/>',
+    cloud:'<path d="M7 18.5h10.5a4 4 0 0 0 .6-8 5.5 5.5 0 0 0-10.6-1.2A4.6 4.6 0 0 0 7 18.5z"/><path d="M12 16v-5M9.8 13l2.2-2.2 2.2 2.2"/>',
+    server:'<rect x="4" y="3.5" width="16" height="7" rx="1.2"/><rect x="4" y="13.5" width="16" height="7" rx="1.2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/>',
+    shield:'<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.1 7.5 9.5 4.4-1.4 7.5-4.9 7.5-9.5V6z"/><path d="M9 12h6M12 9v6"/>',
+    mail:'<rect x="3" y="5.5" width="18" height="13" rx="1.2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
+    hidden:'<path d="M3 3l18 18"/><path d="M10.6 5.6A9.6 9.6 0 0 1 12 5.5c5 0 8.5 4.6 9.5 6.5a15 15 0 0 1-3 3.8"/><path d="M6.6 6.9A15.3 15.3 0 0 0 2.5 12c1 1.9 4.5 6.5 9.5 6.5a9.2 9.2 0 0 0 4.3-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+    arrow:'<path d="M4 12h15M13 6l6 6-6 6"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     Every fact below is from the Environment Record (SME drop 2026-09-25) or
+     the P1 asset inventory template for that scope. Where the record says
+     nothing about who can reach a stop or whether it is protected, the text
+     says "not recorded". The wrong options on each blank are real systems
+     from the other three scopes. */
+  var FRONT = "You grade its front door later in this step.";
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims",
+      stops:[
+        { id:"a1", name:"Clinic Portal", ic:"globe",
+          what:"Visit details the clinics send in",
+          who:"The 41 clinics, over the internet",
+          pv:"Not sure", pr:FRONT },
+        { id:"a2", name:"MedFlow production", ic:"app", blank:true,
+          what:"The billing and claims platform, v4.2, on CCS-APP01",
+          who:"The MedFlow vendor, through support access on no record. Ridgeline IT, through its standing admin access",
+          pv:"Not sure", pr:"The vendor can change it without telling Cumberland.",
+          q:"The visit details have come in through the portal. Which system turns them into a bill?",
+          opts:[
+            { id:"o1", txt:"Remittance Manager", why:"Remittance Manager reconciles payments once they come back. It belongs to Scope B, Payments and Remittance." },
+            { id:"o2", txt:"MedFlow production", ok:true },
+            { id:"o3", txt:"Records Request Portal", why:"That is where patients ask for their old records. It belongs to Scope C, Patient Records and Archive." },
+            { id:"o4", txt:"Entra ID", why:"Entra ID is the identity service for staff accounts, not a place claims are billed. It belongs to Scope D, Remote and Corporate." }
+          ] },
+        { id:"a3", name:"Claims database", ic:"db", blank:true,
+          what:"The live claims data, on CCS-SQL01",
+          who:"Not recorded. No owner is recorded either",
+          pv:"Not sure", pr:"Not recorded.",
+          q:"The bill is live and still being worked. Where is its claim data stored?",
+          opts:[
+            { id:"o1", txt:"Archive store", why:"The archive holds closed claims, kept for seven years. This bill is still live. It belongs to Scope C." },
+            { id:"o2", txt:"Remittance file drop", why:"That folder is where payer files land after an insurer pays. It belongs to Scope B." },
+            { id:"o3", txt:"Claims database", ok:true },
+            { id:"o4", txt:"CCS-DC01", why:"CCS-DC01 is the domain controller, which runs sign-in to the company network. It belongs to Scope D." }
+          ] },
+        { id:"a4", name:"Waypoint Clearing connection", ic:"send",
+          what:"Claims files, sent out every night over SFTP from CCS-SFTP01",
+          who:"Waypoint Clearing, the clearinghouse. Tara Whitlock owns it",
+          pv:"No", pr:"A legacy transfer protocol also runs, so credentials can be read in transit." }
+      ],
+      extra:{ name:"The patient data on MedFlow-TEST", short:"MedFlow-TEST",
+        what:"A full copy of live patient data, on a test copy of MedFlow",
+        who:"Not recorded. No owner is recorded",
+        pv:"No", pr:"No backup, no monitoring, and IT believes it is switched off.",
+        why:"You met this box in Project 1: Nate's list calls it decommissioned, and Finance still pays for it. The point here is not the box. It is <b>what is on it</b>: a full copy of live patient data, so bills like this one sit there too, and nobody counted it as a stop." } },
+
+    B:{ name:"Payments and Remittance", ic:"coin",
+      stops:[
+        { id:"b1", name:"Meridian remittance connection", ic:"inbox",
+          what:"Remittance advice, Meridian's note of what it paid, arriving at payers.cumberlandclaims.com",
+          who:"Meridian, over the internet. Gil Ramsey owns it",
+          pv:"Not sure", pr:FRONT },
+        { id:"b2", name:"Remittance file drop", ic:"folder", blank:true,
+          what:"Payer files, in a folder on CCS-FS01",
+          who:"Not recorded. No owner is recorded either",
+          pv:"No", pr:"CCS-FS01 runs Windows Server 2012 R2, out of support since October 2023.",
+          q:"Meridian's payment file has arrived. Where does it land?",
+          opts:[
+            { id:"o1", txt:"CCS-SFTP01", why:"CCS-SFTP01 sends claims files out to the clearinghouses. It belongs to Scope A, Claims Intake." },
+            { id:"o2", txt:"Archive store", why:"The archive holds closed claims, kept for seven years. It belongs to Scope C." },
+            { id:"o3", txt:"Remittance file drop", ok:true },
+            { id:"o4", txt:"Guest wifi", why:"Guest wifi is a shared network for visitors, not a place files are kept. It belongs to Scope D." }
+          ] },
+        { id:"b3", name:"Remittance Manager", ic:"app", blank:true,
+          what:"Patient and payment data, in the reconciliation application licensed from Ardex",
+          who:"Gil Ramsey owns it. Anyone else: not recorded",
+          pv:"Not sure", pr:"Not recorded.",
+          q:"Finance now has to match that payment to the bill. Which application does it?",
+          opts:[
+            { id:"o1", txt:"MedFlow production", why:"MedFlow is the billing and claims platform. It makes the bill; Finance reconciles the payment elsewhere. It belongs to Scope A." },
+            { id:"o2", txt:"Remittance Manager", ok:true },
+            { id:"o3", txt:"Backup repository", why:"The backup repository keeps copies for recovery. It reconciles nothing. It belongs to Scope C." },
+            { id:"o4", txt:"Paylene payroll", why:"Paylene pays Cumberland's own staff, not patients' bills. It belongs to Scope D." }
+          ] },
+        { id:"b4", name:"Payment posting export", ic:"send",
+          what:"A monthly file sent back to the clinics",
+          who:"The clinics that receive it. No owner is recorded",
+          pv:"Not sure", pr:"Not recorded." }
+      ],
+      extra:{ name:"The reconciliation spreadsheets on the file server", short:"Reconciliation spreadsheets",
+        what:"Account and payment detail and patient identifiers, in working files on CCS-FS01",
+        who:"The Finance staff who keep them. Anyone else: not recorded",
+        pv:"No", pr:"They sit on CCS-FS01, out of support since October 2023.",
+        why:"They are on your Project 1 inventory as an asset. What nobody wrote down is that they hold <b>this bill's payment detail a second time</b>, outside Remittance Manager, in files no one owns." } },
+
+    C:{ name:"Patient Records and Archive", ic:"archive",
+      stops:[
+        { id:"c1", name:"Records Request Portal", ic:"globe",
+          what:"Patient record requests, on a website served from CCS-ARCH01",
+          who:"Patients, over the internet",
+          pv:"Not sure", pr:FRONT },
+        { id:"c2", name:"Archive store", ic:"archive", blank:true,
+          what:"Seven years of closed claims",
+          who:"Doreen Alcott owns it. Anyone else: not recorded",
+          pv:"Not sure", pr:"Not recorded.",
+          q:"A patient asks for an old, closed bill. Where is it kept?",
+          opts:[
+            { id:"o1", txt:"Claims database", why:"That holds live claims still being worked. This bill is closed. It belongs to Scope A." },
+            { id:"o2", txt:"Remittance Manager", why:"Remittance Manager reconciles payments. It belongs to Scope B." },
+            { id:"o3", txt:"CCS-DC01", why:"CCS-DC01 is the domain controller, which runs sign-in to the company network. It belongs to Scope D." },
+            { id:"o4", txt:"Archive store", ok:true }
+          ] },
+        { id:"c3", name:"Backup repository", ic:"backup", blank:true,
+          what:"Veeam backups, kept on the premises",
+          who:"Nate Brody owns it. Anyone else: not recorded",
+          pv:"Not sure", pr:"Backups run, but restores have never been tested.",
+          q:"Before anything goes offsite, where is the on-site copy kept?",
+          opts:[
+            { id:"o1", txt:"Backup repository", ok:true },
+            { id:"o2", txt:"CCS-SFTP01", why:"CCS-SFTP01 sends claims files out to the clearinghouses. It belongs to Scope A." },
+            { id:"o3", txt:"Bank positive-pay upload", why:"That sends cheque files out to Bluegrass Federal, the bank. It belongs to Scope B." },
+            { id:"o4", txt:"Site-to-site VPN to Ridgeline IT", why:"That is a network tunnel to the IT provider. Nothing is kept in it. It belongs to Scope D." }
+          ] },
+        { id:"c4", name:"ArcVault offsite replication", ic:"cloud",
+          what:"A nightly copy sent to ArcVault, outside Cumberland",
+          who:"ArcVault. Nate Brody owns it",
+          pv:"Not sure", pr:"Not recorded." }
+      ],
+      extra:{ name:"The monthly export file with no deletion date", short:"Monthly export file",
+        what:"Patient data that MedFlow writes to CCS-FS01 every month. About 14 months of files are kept",
+        who:"Not recorded. No owner is recorded",
+        pv:"No", pr:"No encryption and no deletion date.",
+        why:"It is on your Project 1 inventory, with no stated purpose. What nobody wrote down is that it is <b>another copy of patient data</b>, outside the archive, kept with no date to delete it." } },
+
+    D:{ name:"Remote and Corporate", ic:"laptop",
+      stops:[
+        { id:"d1", name:"CCS-FS01", ic:"server",
+          what:"Shared files for corporate, payments and records work",
+          who:"Nate Brody owns it. Ridgeline IT has standing admin access",
+          pv:"No", pr:"Windows Server 2012 R2, out of support since October 2023." },
+        { id:"d2", name:"FortiGate firewall and VPN", ic:"shield", blank:true,
+          what:"The perimeter firewall, a FortiGate 60F. The VPN terminates here",
+          who:"Staff working remotely, through remote.cumberlandclaims.com",
+          pv:"Not sure", pr:FRONT,
+          q:"A member of staff is working from home. What do they come in through to reach that file?",
+          opts:[
+            { id:"o1", txt:"CCS-SFTP01", why:"CCS-SFTP01 sends claims files out to the clearinghouses, not to staff. It belongs to Scope A." },
+            { id:"o2", txt:"Meridian remittance connection", why:"That is where Meridian sends payment files in. It belongs to Scope B." },
+            { id:"o3", txt:"FortiGate firewall and VPN", ok:true },
+            { id:"o4", txt:"Records Request Portal", why:"That is for patients asking for their records, not for staff. It belongs to Scope C." }
+          ] },
+        { id:"d3", name:"Staff laptop fleet", ic:"laptop", blank:true,
+          what:"About 180 staff laptops, Windows 10 and Windows 11",
+          who:"The staff who carry them. Nate Brody owns the fleet",
+          pv:"Not sure", pr:"About 40 still run Windows 10, out of support since October 2025.",
+          q:"Where does the member of staff open the file?",
+          opts:[
+            { id:"o1", txt:"CCS-APP01", why:"CCS-APP01 is the server that runs MedFlow, the billing platform. It belongs to Scope A." },
+            { id:"o2", txt:"CCS-FIN01", why:"CCS-FIN01 is the finance server, which also hosts the payer endpoint. It belongs to Scope B." },
+            { id:"o3", txt:"CCS-ARCH01", why:"CCS-ARCH01 is the archive server behind the records portal. It belongs to Scope C." },
+            { id:"o4", txt:"Staff laptop fleet", ok:true }
+          ] },
+        { id:"d4", name:"Microsoft 365 tenant", ic:"mail",
+          what:"Exchange Online email, SharePoint and Teams",
+          who:"Staff, from anywhere, through Outlook on the web. No owner on the IT list",
+          pv:"No", pr:"Staff webmail has no conditional access." }
+      ],
+      extra:{ name:"Patient data in staff email attachments and local laptop files", short:"Attachments and local files",
+        what:"Patient data in email attachments and in files saved on the laptops",
+        who:"Not recorded",
+        pv:"Not sure", pr:"Not recorded.",
+        why:"You counted the laptops and the mail system. You did not count <b>what they keep</b>: patient data in email attachments and in files saved on the laptops. No asset list gives these copies a row." } }
+  };
+  var ORDER = ["A","B","C","D"];
+
+  var S = [
+    { id:"scope", kind:"scope", label:"Your scope", h1:"Pick Your Scope",
+      lead:"Choose the scope you picked in Project 1. The next slide shows one patient's bill travelling through it." },
+    { id:"path", kind:"path", label:"The path", h1:"Where One Bill Goes" },
+    { id:"count", kind:"count", label:"Check the path", h1:"Is That Every Place the Bill Sits?" },
+    { id:"close", kind:"close", label:"Your Data Flow tab", h1:"Your Data Flow Tab",
+      body:["Copy every stop into your Data Flow tab, one row each."] }
+  ];
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m5-follow-one-bill-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { scope:null, fill:{}, out:{}, sel:{}, guess:{} }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      return { scope: (ORDER.indexOf(raw.scope) >= 0) ? raw.scope : null,
+               fill:  isPlain(raw.fill)  ? raw.fill  : {},
+               out:   isPlain(raw.out)   ? raw.out   : {},
+               sel:   isPlain(raw.sel)   ? raw.sel   : {},
+               guess: isPlain(raw.guess) ? raw.guess : {} };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. Every blank needs exactly one right
+     option and a reason on every wrong one. */
+  (function validate(){
+    var problems = [], ids = {};
+    S.forEach(function(s, n){
+      if(!s.id) problems.push("slide " + (n+1) + " has no id");
+      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+      ids[s.id] = 1;
+    });
+    ORDER.forEach(function(k){
+      var blanks = 0, sids = {};
+      SC[k].stops.forEach(function(p){
+        if(sids[p.id]) problems.push("scope " + k + ' duplicate stop id "' + p.id + '"');
+        sids[p.id] = 1;
+        if(!p.what || !p.who || !p.pv) problems.push("scope " + k + ' stop "' + p.id + '" is missing a fact');
+        if(!p.blank) return;
+        blanks++;
+        var ok = 0, oids = {};
+        (p.opts || []).forEach(function(o){
+          if(oids[o.id]) problems.push("scope " + k + ' stop "' + p.id + '" duplicate option "' + o.id + '"');
+          oids[o.id] = 1;
+          if(o.ok){ ok++; if(o.txt !== p.name) problems.push("scope " + k + ' stop "' + p.id + '" right option does not match the stop name'); }
+          else if(!o.why) problems.push("scope " + k + ' stop "' + p.id + '" option "' + o.id + '" has no why');
+        });
+        if(ok !== 1) problems.push("scope " + k + ' stop "' + p.id + '" has ' + ok + " right options, needs exactly 1");
+      });
+      if(blanks !== 2) problems.push("scope " + k + " has " + blanks + " blanks, needs 2");
+      if(!SC[k].extra) problems.push("scope " + k + " has no uncounted copy");
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This deck has authoring errors and will not behave correctly:</b></p>'
+        + '<ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+
+  function cur(){ return st.scope ? SC[st.scope] : null; }
+  function fills(){ if(!st.fill[st.scope]) st.fill[st.scope] = {}; return st.fill[st.scope]; }
+  function outs(pid){
+    if(!st.out[st.scope]) st.out[st.scope] = {};
+    if(!st.out[st.scope][pid]) st.out[st.scope][pid] = {};
+    return st.out[st.scope][pid];
+  }
+  function blanksOf(sc){ return sc.stops.filter(function(p){ return p.blank; }); }
+  function filledCount(){
+    var sc = cur(); if(!sc) return 0;
+    var f = st.fill[st.scope] || {};
+    return blanksOf(sc).filter(function(p){ return f[p.id]; }).length;
+  }
+  function pathDone(){ return !!st.scope && filledCount() === 2; }
+  function isOpen(p){ return !p.blank || !!(st.fill[st.scope] || {})[p.id]; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    if(st.scope && i > 0 && i < S.length-1){
+      el.chip.hidden = false;
+      el.chip.textContent = "Scope " + st.scope + (s.kind === "path" ? " · Blanks filled " + filledCount() + " of 2" : "");
+    } else el.chip.hidden = true;
+
+    el.back.disabled = (i === 0);
+    el.next.textContent = "Continue";
+    el.next.disabled = false;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "scope" && !st.scope){
+      el.next.disabled = true;
+      el.hint.innerHTML = "Pick a scope to carry on.";
+    }
+    else if(s.kind === "path" && !pathDone()){
+      el.next.disabled = true;
+      if(st.scope) el.hint.innerHTML = "Fill both blank stops to carry on. Click a stop to see its facts.";
+    }
+    else if(s.kind === "count" && !(pathDone() && st.guess[st.scope])){
+      el.next.disabled = true;
+      if(pathDone()) el.hint.innerHTML = "Make a call to carry on.";
+    }
+    else if(s.kind === "count") el.hint.textContent = "";
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    var h = s.h1;
+    if(s.kind === "path" && st.scope) h = "Where One Bill Goes in Scope " + st.scope;
+    el.h1.textContent = h;
+    el.frame.setAttribute("aria-label", h);
+    el.hint.textContent = "";
+
+    if(s.kind === "scope") renderScope(s);
+    else if(s.kind === "path") renderPath(s);
+    else if(s.kind === "count") renderCount(s);
+    else if(s.kind === "close") renderClose(s);
+    else el.board.innerHTML = '<div class="lead"><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></div>';
+
+    header();
+    say("Slide " + (i+1) + " of " + S.length + ". " + h + ".");
+  }
+
+  /* Slide 1: four scopes, one pick. The pick can change; each scope keeps its own answers. */
+  function renderScope(s){
+    el.board.innerHTML = '<p class="lead">' + s.lead + "</p>"
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own answers</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        st.scope = b.dataset.k; save(st);
+        render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked.");
+      });
+    });
+  }
+
+  function needScope(){
+    el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Pick your scope first.</b> The path depends on it.</p>'
+      + '<button class="go" type="button" id="goscope">Go to the scope picker</button></div>';
+    el.board.querySelector("#goscope").addEventListener("click", function(){ i = 0; render(); el.frame.focus(); });
+  }
+
+  function chainCols(n){
+    var c = [];
+    for(var k=0;k<n;k++){ if(k) c.push("26px"); c.push("minmax(0,1fr)"); }
+    return c.join(" ");
+  }
+
+  /* Slide 2: the path. Given stops show their facts; the two blanks open a
+     picker. Every slot exists from first paint, so filling a blank changes
+     what a box says and never moves the chain. */
+  function renderPath(s){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    var n = sc.stops.length;
+    var sel = st.sel[st.scope];
+    if(typeof sel !== "number" || sel < 0 || sel >= n){
+      sel = 0;
+      for(var k=0;k<n;k++){ if(sc.stops[k].blank && !isOpen(sc.stops[k])){ sel = k; break; } }
+    }
+    var parts = [];
+    sc.stops.forEach(function(p, k){
+      if(k) parts.push('<div class="arr" aria-hidden="true">' + icon("arrow") + "</div>");
+      parts.push(stopBtn(p, k, k === sel, n));
+    });
+    el.board.innerHTML = '<p class="lead"><b>Two stops are blank.</b> Click one and pick the system that belongs there. Click any stop to read its facts.</p>'
+      + '<div class="chain" style="grid-template-columns:' + chainCols(n) + '">' + parts.join("") + "</div>"
+      + '<div class="panel" id="panel" tabindex="-1"></div>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.stop"), function(b){
+      b.addEventListener("click", function(){ select(+b.dataset.k, true); });
+    });
+    showPanel(sel, false);
+  }
+
+  function stopBtn(p, k, isSel, n){
+    var open = isOpen(p);
+    var io = k === 0 ? "Bill enters" : (k === n-1 ? "Bill leaves" : "");
+    var status = !open ? '<span class="gl" aria-hidden="true">?</span>Blank: pick it'
+               : (p.blank ? '<span class="gl" aria-hidden="true">✓</span>You placed it' : '<span class="gl" aria-hidden="true">✓</span>Given');
+    if(isSel) status += " · showing";
+    var label = "Stop " + (k+1) + (io ? ", " + io.toLowerCase() : "") + ". " + (open ? p.name : "Blank, pick the system");
+    return '<button class="stop' + (open ? "" : " blank") + (isSel ? " sel" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + isSel + '" aria-label="' + esc(label) + '">'
+      + '<span class="sh">' + icon(open ? p.ic : "hidden") + "Stop " + (k+1) + (io ? '<span class="io">' + io + "</span>" : "") + "</span>"
+      + '<span class="nm">' + (open ? esc(p.name) : "Blank") + "</span>"
+      + '<span class="ft">' + status + "</span>"
+      + "</button>";
+  }
+
+  function select(k, focusPanel){
+    st.sel[st.scope] = k; save(st);
+    var sc = cur(), n = sc.stops.length;
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.stop"), function(b){
+      var kk = +b.dataset.k;
+      var tmp = document.createElement("div");
+      tmp.innerHTML = stopBtn(sc.stops[kk], kk, kk === k, n);
+      var nb = tmp.firstChild;
+      b.className = nb.className;
+      b.setAttribute("aria-pressed", nb.getAttribute("aria-pressed"));
+      b.setAttribute("aria-label", nb.getAttribute("aria-label"));
+      b.innerHTML = nb.innerHTML;
+    });
+    showPanel(k, true);
+    if(focusPanel){
+      var p = sc.stops[k];
+      if(isOpen(p)) say("Stop " + (k+1) + ", " + p.name + ". What sits there: " + p.what + ". Who can reach it: " + p.who + ". Protected: " + p.pv + ". " + p.pr);
+      else say("Stop " + (k+1) + " is blank. " + p.q);
+    }
+  }
+
+  function factsHTML(p){
+    return '<dl class="facts">'
+      + "<dt>What sits there</dt><dd>" + esc(p.what) + "</dd>"
+      + "<dt>Who can reach it</dt><dd>" + esc(p.who) + "</dd>"
+      + '<dt>Protected</dt><dd><span class="pv">' + esc(p.pv) + '.</span> <span class="pr">' + esc(p.pr) + "</span></dd>"
+      + "</dl>";
+  }
+
+  function showPanel(k, animate){
+    var sc = cur(), p = sc.stops[k];
+    var panel = el.board.querySelector("#panel");
+    if(isOpen(p)){
+      panel.innerHTML = '<div class="ph">' + icon(p.ic) + '<span class="pt">Stop ' + (k+1) + ": " + esc(p.name) + "</span>"
+        + '<span class="tag"><span aria-hidden="true">✓</span>' + (p.blank ? "You placed it" : "Given") + "</span></div>"
+        + factsHTML(p);
+    } else {
+      var out = outs(p.id), last = null;
+      p.opts.forEach(function(o){ if(out[o.id]) last = o; });
+      panel.innerHTML = '<div class="ph">' + icon("hidden") + '<span class="pt">Stop ' + (k+1) + " is blank</span></div>"
+        + '<p class="pq">' + esc(p.q) + "</p>"
+        + '<div class="opts">' + p.opts.map(function(o){
+            var x = !!out[o.id];
+            return '<button class="opt' + (x ? " out" : "") + '" type="button" data-o="' + o.id + '"' + (x ? ' disabled aria-disabled="true"' : "") + ">"
+              + '<span class="g" aria-hidden="true">' + (x ? "✕" : "●") + '</span><span class="txt">' + esc(o.txt) + "</span></button>";
+          }).join("") + "</div>"
+        + '<div class="note" id="note" role="status" aria-live="polite">' + (last ? "<b>Not this one.</b> " + esc(last.why) : "") + "</div>";
+      wireOpts(p, k);
+    }
+    if(animate && !reduce){ panel.classList.remove("in"); void panel.offsetWidth; panel.classList.add("in"); }
+  }
+
+  function wireOpts(p, k){
+    var note = el.board.querySelector("#note");
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.opt"), function(b){
+      b.addEventListener("click", function(){
+        var o = null;
+        p.opts.forEach(function(x){ if(x.id === b.dataset.o) o = x; });
+        if(!o) return;
+        if(o.ok){ place(p, k, "right"); return; }
+        b.classList.add("out");
+        b.disabled = true;
+        b.setAttribute("aria-disabled", "true");
+        b.querySelector(".g").textContent = "✕";
+        note.innerHTML = "<b>Not this one.</b> " + esc(o.why);
+        outs(p.id)[o.id] = 1; save(st);
+        var wrong = p.opts.filter(function(x){ return !x.ok; }).length;
+        if(Object.keys(outs(p.id)).length >= wrong){ place(p, k, "shown"); return; }
+        var live = el.board.querySelector("button.opt:not(:disabled)");
+        if(live) live.focus();
+        say("Ruled out. " + o.why);
+      });
+    });
+  }
+
+  function place(p, k, how){
+    fills()[p.id] = how; save(st);
+    select(k, false);
+    var b = el.board.querySelector('button.stop[data-k="' + k + '"]');
+    if(b && !reduce){ b.classList.remove("in"); void b.offsetWidth; b.classList.add("in"); }
+    header();
+    if(pathDone()) el.hint.innerHTML = "<b>Both blanks filled.</b> Click any stop to reread its facts, then Continue.";
+    else el.hint.innerHTML = "One blank left. Click it to fill it.";
+    var panel = el.board.querySelector("#panel");
+    if(panel) panel.focus();
+    say((how === "right" ? "Correct. " : "") + "Stop " + (k+1) + " is " + p.name + ". What sits there: " + p.what + ". Who can reach it: " + p.who + ". Protected: " + p.pv + ". " + p.pr);
+  }
+
+  /* Slide 3: the guess, then the stop nobody counted. Nothing about the
+     extra stop is rendered until both blanks are filled and a guess is made. */
+  function renderCount(s){
+    var sc = cur();
+    if(!sc){ needScope(); return; }
+    if(!pathDone()){
+      el.board.innerHTML = '<div class="panel gate"><p class="done"><b>Fill both blank stops on the path first.</b> ' + (2 - filledCount()) + " still to go.</p>"
+        + '<button class="go" type="button" id="gopath">Back to the path</button></div>';
+      el.board.querySelector("#gopath").addEventListener("click", function(){ i = 1; render(); el.frame.focus(); });
+      return;
+    }
+    var g = st.guess[st.scope];
+    var n = sc.stops.length + (g ? 1 : 0);
+    var parts = [];
+    sc.stops.forEach(function(p, k){
+      if(k) parts.push('<div class="arr" aria-hidden="true">' + icon("arrow") + "</div>");
+      parts.push('<div class="stop"><span class="sh">' + icon(p.ic) + "Stop " + (k+1) + '</span><span class="nm">' + esc(p.name) + "</span>"
+        + (g ? "" : '<span class="ft"><span class="gl" aria-hidden="true">✓</span>' + (p.blank ? "You placed it" : "Given") + "</span>") + "</div>");
+    });
+    if(g){
+      parts.push('<div class="arr" aria-hidden="true">' + icon("arrow") + "</div>");
+      parts.push('<div class="stop extra" id="xstop"><span class="sh">' + icon("hidden") + "Stop " + (sc.stops.length+1) + '</span><span class="nm">' + esc(sc.extra.short) + "</span></div>");
+    }
+    var chain = '<div class="chain' + (g ? "" : " big") + '" style="grid-template-columns:' + chainCols(n) + '">' + parts.join("") + "</div>";
+    if(!g){
+      el.board.innerHTML = '<p class="lead">You have followed the bill through ' + sc.stops.length + " stops in Scope " + st.scope + ", " + esc(sc.name) + ". Make a call before you go on.</p>"
+        + chain
+        + '<div class="panel ask"><p class="pq">Is that every place this bill sits in your scope?</p>'
+        + '<div class="gbtns">'
+        + '<button class="gb" type="button" data-g="yes"><span class="g" aria-hidden="true">●</span>Yes, that is the whole path</button>'
+        + '<button class="gb" type="button" data-g="no"><span class="g" aria-hidden="true">●</span>No, there is at least one more</button>'
+        + "</div>"
+        + '<p class="pctx">There is no penalty either way. Go with your instinct.</p></div>';
+      Array.prototype.forEach.call(el.board.querySelectorAll("button.gb"), function(b){
+        b.addEventListener("click", function(){
+          st.guess[st.scope] = b.dataset.g; save(st);
+          renderCount(s); header();
+          var x = el.board.querySelector("#xstop");
+          var rv = el.board.querySelector("#rv");
+          if(!reduce){ [x, rv].forEach(function(nd){ if(nd){ nd.classList.remove("in"); void nd.offsetWidth; nd.classList.add("in"); } }); }
+          if(rv) rv.focus();
+          var e = sc.extra;
+          say(verdict(st.guess[st.scope]) + " " + e.name + ". What sits there: " + e.what + ". Who can reach it: " + e.who + ". Protected: " + e.pv + ". " + e.pr);
+        });
+      });
+      return;
+    }
+    var e = sc.extra;
+    el.board.innerHTML = chain
+      + '<div class="panel rv" id="rv" tabindex="-1">'
+      + '<div class="ph">' + icon("hidden") + '<span class="pt">Stop ' + (sc.stops.length+1) + ": " + esc(e.name) + "</span>"
+      + '<span class="tag"><span aria-hidden="true">!</span>You said: ' + (g === "yes" ? "that was the whole path" : "there was more") + "</span></div>"
+      + '<p class="verdict">' + esc(verdict(g)) + "</p>"
+      + '<p class="why">' + e.why + "</p>"
+      + factsHTML(e)
+      + "</div>";
+  }
+  function verdict(g){
+    return g === "yes"
+      ? "It was not the whole path. There is a copy nobody wrote down."
+      : "Good instinct: data really is everywhere. Here is the specific copy nobody tracks.";
+  }
+
+  function renderClose(s){
+    el.board.innerHTML = '<div class="closewrap"><div class="statement">'
+      + (s.body || []).map(function(p){ return "<p>" + p + "</p>"; }).join("") + "</div></div>";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render(); el.frame.focus();
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    /* QA only: set a scope, and fill both blanks, so the two-click-deep
+       states can be measured and screenshotted. */
+    scope:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; save(st); render(); return true; },
+    fillAll:function(){
+      if(!st.scope) return false;
+      blanksOf(cur()).forEach(function(p){ fills()[p.id] = "right"; });
+      save(st); render(); return true;
+    },
+    state:function(){ return { i:i, scope:st.scope, fill:st.fill, guess:st.guess }; }
+  };
+})();
+</script>
+</body>
+</html>
