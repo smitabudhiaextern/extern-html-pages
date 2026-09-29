@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Before You Open It</title>
+<!--
+  vCISO P3 Step 1, Module 1: the live class poll.
+  The student locks in one guess, then sees how the class guessed. The answer
+  is never shown here. The student finds out in Module 3.
+
+  Built from the same shell as vciso-p2-m3-check-understanding.html: fixed
+  960x540 canvas, scale to fit, the Extern five, the vCISO tint ramp in slide
+  order (VCISO-STYLE-GUIDE.md 6b), system fonts, inline SVG icons.
+
+  The one network request this page makes is to ENDPOINT, the Google Apps
+  Script web app that keeps the class totals. With ENDPOINT empty, or with the
+  request failing, the page still works: it shows the student's own guess and
+  a calm line saying the class results could not load.
+
+  To reuse for another poll: copy this file, then change ENDPOINT, POLL_ID and
+  the POLL block at the top of the script. Nothing else needs to change.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-file.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-file.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in layout
+     and let the transform do all of the fitting. */
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+  h1:focus{outline:none}
+  h1 .rng{font-size:20px;font-weight:400;color:var(--body);margin-left:4px;white-space:nowrap}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+
+  svg.ic{display:block;flex:0 0 auto;width:20px;height:20px;fill:none;stroke:currentColor;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--on-highlight)}
+
+  /* ================= screen 1: the ask ================= */
+  .lead{font-size:17px;line-height:1.5;max-width:66ch;color:var(--body);margin-bottom:22px}
+
+  /* A radio group of four cards. One tab stop, arrows move and choose. */
+  .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .opt{
+    font-family:inherit;text-align:left;color:var(--title);cursor:pointer;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:12px;
+    padding:16px 16px 18px;min-height:168px;display:flex;flex-direction:column;gap:10px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out);
+  }
+  .opt:hover{background:var(--highlight);border-color:var(--on-highlight)}
+  .opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .opt .row1{display:flex;align-items:center;justify-content:space-between}
+  .opt .mark{display:flex;align-items:center;gap:8px}
+  .opt .txt{margin-top:auto;display:flex;flex-direction:column;gap:4px}
+  .let{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--on-highlight);color:var(--on-highlight);
+    font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  /* The radio mark changes shape when chosen: an empty ring becomes a ring
+     with a dot. That is the non-colour signal. */
+  .dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--on-highlight);position:relative}
+  .dot::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--on-highlight);transform:scale(0);
+    transition:transform var(--t-fast) var(--ease-over)}
+  .opt .lab{font-size:20px;line-height:1.25;font-weight:600;color:var(--title)}
+  .opt .sub{font-size:16px;line-height:1.35;color:var(--body)}
+  .opt[aria-checked="true"]{background:var(--highlight);border:2px solid var(--on-highlight);
+    box-shadow:inset 0 0 0 1.5px var(--on-highlight);padding:15.5px 15.5px 17.5px}
+  .opt[aria-checked="true"] .dot::after{transform:scale(1)}
+  .opt[aria-checked="true"] .let{background:var(--on-highlight);color:var(--bg)}
+  .picked{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight);
+    visibility:hidden}
+  .opt[aria-checked="true"] .picked{visibility:visible}
+
+  /* ================= screen 2: the class ================= */
+  .sec{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:600;color:var(--title);margin:2px 0 12px}
+
+  .rows{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .rows li{display:grid;grid-template-columns:34px 218px 1fr 150px;align-items:center;gap:14px;
+    min-height:52px;padding:6px 12px;border:1.5px solid transparent;border-radius:10px}
+  /* The student's own row carries three signals besides colour: a border,
+     the person icon, and the word "You". */
+  .rows li.mine{background:var(--highlight);border:2px solid var(--on-highlight);padding:5.5px 11.5px}
+  .rows .let{width:30px;height:30px;font-size:15px}
+  .rows li.mine .let{background:var(--on-highlight);color:var(--bg)}
+  .rl{min-width:0;display:flex;flex-direction:column;gap:1px}
+  .rl .l1{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:600;color:var(--title);line-height:1.25}
+  .rl .l2{font-size:14px;color:var(--body);line-height:1.3}
+  .you{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;letter-spacing:.03em;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:999px;padding:1px 8px 1px 5px;background:var(--bg)}
+  .you svg.ic{width:15px;height:15px}
+  .track{height:18px;border-radius:9px;background:var(--tint2);overflow:hidden;position:relative}
+  .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:9px;background:var(--on-highlight);
+    transition:width var(--t-reveal) var(--ease-out)}
+  .cnt{font-size:15px;line-height:1.3;color:var(--title);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .cnt b{font-weight:600}
+
+  /* Loading: the tracks breathe, the counts wait. */
+  .rows[aria-busy="true"] .track{animation:breathe 1.4s var(--ease-io) infinite alternate}
+  @keyframes breathe{from{opacity:.55}to{opacity:1}}
+
+  .status{display:flex;align-items:center;gap:8px;min-height:24px;margin-top:10px;font-size:15px;line-height:1.4;color:var(--body)}
+  .status b{color:var(--title);font-weight:600}
+  .status.calm{margin-top:0;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;
+    font-size:17px;line-height:1.5;color:var(--title);max-width:64ch}
+
+  .keep{margin-top:18px;display:flex;align-items:center;gap:10px;background:var(--highlight);
+    border-left:4px solid var(--on-highlight);border-radius:0 10px 10px 0;padding:12px 16px;
+    font-size:17px;line-height:1.45;color:var(--title)}
+
+  /* ================= the action bar ================= */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:14px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:10px 20px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);display:inline-flex;align-items:center;gap:8px;
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav svg.ic{color:var(--bg);width:18px;height:18px}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav.ghost svg.ic{color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.4;color:var(--body)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    h1{font-size:22px}
+    h1 .rng{display:block;margin:4px 0 0;font-size:17px}
+    .lead{font-size:16px;margin-bottom:16px}
+    .opts{grid-template-columns:1fr;gap:10px}
+    .opt{min-height:0;flex-direction:row;align-items:center;gap:12px;padding:12px 14px}
+    .opt[aria-checked="true"]{padding:11.5px 13.5px}
+    .opt .row1{order:3;margin-left:auto}
+    .opt .row1 .let{display:none}
+    .opt .txt{order:2;margin-top:0;gap:2px}
+    .opt .lab{font-size:17px;margin-top:0}
+    .opt .sub{font-size:16px}
+    .opt .let2{display:flex!important;order:1}
+    .picked{font-size:12px}
+    .rows li{grid-template-columns:30px 1fr;grid-template-areas:"let lab" "let bar" "let cnt";row-gap:6px;padding:10px 12px}
+    .rows li.mine{padding:9.5px 11.5px}
+    .rows li .let{grid-area:let;align-self:start}
+    .rows li .rl{grid-area:lab}
+    .rows li .track{grid-area:bar}
+    .rows li .cnt{grid-area:cnt;text-align:left}
+    .keep{margin-top:18px;font-size:16px}
+    .status.calm{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{flex:1 1 100%}
+  }
+  .opt .let2{display:none}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body class="t1">
+
+<div id="stage">
+  <div class="frame" id="frame" role="group" aria-label="Class poll">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 2 · Class poll</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="h1" tabindex="-1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar" id="bar">
+      <button class="nav" id="lock" type="button" disabled></button>
+      <button class="nav ghost" id="retry" type="button" hidden></button>
+      <div id="hint" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Before You Open It</h2>
+    <p>Ray says Cumberland's policy has it all. Of the rules in that document, what share describe something that actually happens at Cumberland today?</p>
+    <ol type="A">
+      <li><strong>Almost all of it</strong> (75 to 100%)</li>
+      <li><strong>Most of it</strong> (50 to 75%)</li>
+      <li><strong>Some of it</strong> (25 to 50%)</li>
+      <li><strong>Very little</strong> (0 to 25%)</li>
+    </ol>
+    <div class="box"><p>Keep your guess. You find out how close you were in Module 3.</p></div>
+  </div>
+</noscript>
+
+<script>
+const ENDPOINT = "";  // paste the Apps Script web app URL (ends in /exec)
+const POLL_ID = "p3-m1-policy-share";
+
+/* ---------------- the poll ----------------
+   To reuse this file for another poll, change ENDPOINT, POLL_ID and this
+   block. Option ids must match the keys the Apps Script counts. */
+const POLL = {
+  title: "Before You Open It",
+  question: "Ray says Cumberland's policy has it all. Of the rules in that document, what share describe something that actually happens at Cumberland today?",
+  OPTIONS: [
+    { id: "a", letter: "A", label: "Almost all of it", sub: "75 to 100%" },
+    { id: "b", letter: "B", label: "Most of it",       sub: "50 to 75%"  },
+    { id: "c", letter: "C", label: "Some of it",       sub: "25 to 50%"  },
+    { id: "d", letter: "D", label: "Very little",      sub: "0 to 25%"   }
+  ],
+  lockLabel:   "Lock in my guess",
+  hintPick:    "Pick one of the four.",
+  hintPicked:  "Once you lock it in, it stays.",
+  guessPrefix: "Your guess: ",
+  classHead:   "How your class guessed",
+  loading:     "Loading the class results",
+  totalLine:   function(n){ return "Based on " + n + (n === 1 ? " guess" : " guesses") + " so far"; },
+  countLine:   function(n, pct){ return n + (n === 1 ? " guess" : " guesses") + ", " + pct + "%"; },
+  fallback:    "The class results could not load right now. Your guess is saved in this browser.",
+  retryLabel:  "Try again",
+  keep:        "Keep your guess. You find out how close you were in Module 3.",
+  timeoutMs:   8000
+};
+
+(function(){
+  "use strict";
+
+  var OPTS = POLL.OPTIONS;
+  var VOTE_KEY = "poll-vote:" + POLL_ID;   /* one per poll */
+  var CLIENT_KEY = "poll-client-id";       /* one per browser, shared by every poll */
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    lock:'<rect x="4.5" y="10.5" width="15" height="10.5" rx="1.8"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/>',
+    person:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.3-3.6 4.2-5.6 7.5-5.6s6.2 2 7.5 5.6"/>',
+    chart:'<path d="M4 20h16"/><path d="M4 4v16"/><path d="M8 8h6v3H8z"/><path d="M8 14h10v3H8z"/>',
+    hourglass:'<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M7.5 3.5c0 4.2 4.5 5.8 4.5 8.5s-4.5 4.3-4.5 8.5M16.5 3.5c0 4.2-4.5 5.8-4.5 8.5s4.5 4.3 4.5 8.5"/>',
+    info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6v.1"/>',
+    bookmark:'<path d="M6.5 3.5h11v17l-5.5-3.6-5.5 3.6z"/>',
+    retry:'<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>'
+  };
+  function ic(name){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[name] + "</svg>"; }
+
+  /* ---------------- data validation, at load, loud ---------------- */
+  (function validate(){
+    var p = [], ids = {};
+    if(!POLL_ID) p.push("POLL_ID is empty");
+    if(!OPTS || OPTS.length < 2) p.push("OPTIONS needs at least two options");
+    (OPTS || []).forEach(function(o, n){
+      if(!o.id) p.push("option " + (n + 1) + " has no id");
+      if(ids[o.id]) p.push('duplicate option id "' + o.id + '"');
+      ids[o.id] = 1;
+      if(!o.label) p.push('option "' + o.id + '" has no label');
+    });
+    if(p.length){
+      document.getElementById("board").innerHTML = '<p class="lead"><b>This poll has setup errors:</b> ' + p.join("; ") + "</p>";
+      throw new Error("poll config invalid: " + p.join("; "));
+    }
+  })();
+
+  /* ---------------- storage ----------------
+     Every access is wrapped. Storage can be blocked in some embeds, and a
+     blocked API must degrade quietly, never take the page down. */
+  function sget(k){ try{ return window.localStorage.getItem(k); }catch(e){ return null; } }
+  function sset(k, v){ try{ window.localStorage.setItem(k, v); return true; }catch(e){ return false; } }
+  function sdel(k){ try{ window.localStorage.removeItem(k); }catch(e){} }
+
+  function optById(id){ for(var n = 0; n < OPTS.length; n++) if(OPTS[n].id === id) return OPTS[n]; return null; }
+
+  /* The vote record: { choice, sent }. "sent" turns true only once the server
+     has answered ok. A vote that never reached the server is sent again on
+     the next visit, so a dropped connection does not lose it. */
+  function loadVote(){
+    try{
+      var r = JSON.parse(sget(VOTE_KEY));
+      if(r && typeof r === "object" && optById(r.choice)) return { choice: r.choice, sent: r.sent === true };
+    }catch(e){}
+    return null;
+  }
+  function saveVote(v){ sset(VOTE_KEY, JSON.stringify(v)); }
+
+  var memClient = null;
+  function clientId(){
+    var id = sget(CLIENT_KEY);
+    if(id && /^[A-Za-z0-9_-]{1,64}$/.test(id)) return id;
+    if(memClient) return memClient;
+    id = "";
+    try{ if(window.crypto && typeof window.crypto.randomUUID === "function") id = window.crypto.randomUUID(); }catch(e){ id = ""; }
+    if(!/^[A-Za-z0-9_-]{1,64}$/.test(id)) try{
+      id = "";
+      var b = new Uint8Array(16);
+      window.crypto.getRandomValues(b);
+      for(var n = 0; n < b.length; n++) id += ("0" + b[n].toString(16)).slice(-2);
+    }catch(e){
+      while(id.length < 32) id += Math.random().toString(36).slice(2);
+      id = id.slice(0, 32);
+    }
+    memClient = id;
+    sset(CLIENT_KEY, id);
+    return id;
+  }
+
+  /* ---------------- network ----------------
+     GET reads totals. POST casts a vote with a text/plain body and no other
+     header, so the browser sends it as a CORS simple request and never asks
+     the server for a preflight. Redirects are followed (Apps Script answers
+     /exec with a redirect). Never mode "no-cors": that hides the answer.
+     Anything slower than timeoutMs, not JSON, or without ok === true counts
+     as a failure. The server says "busy, try again" when it could not get
+     its lock; that one is retried twice, 1.5 s apart, before giving up. */
+  var BUSY = "busy, try again", BUSY_RETRIES = 2, BUSY_WAIT_MS = 1500;
+  function requestWithRetry(method){
+    var left = BUSY_RETRIES;
+    function attempt(){
+      return request(method).catch(function(e){
+        if(e && e.message === BUSY && left > 0){
+          left--;
+          return new Promise(function(res){ setTimeout(res, BUSY_WAIT_MS); }).then(attempt);
+        }
+        throw e;
+      });
+    }
+    return attempt();
+  }
+
+  function request(method){
+    return new Promise(function(resolve, reject){
+      if(!ENDPOINT){ reject(new Error("no endpoint")); return; }
+      var done = false, ctrl = null;
+      try{ ctrl = new AbortController(); }catch(e){}
+      var timer = setTimeout(function(){
+        if(done) return; done = true;
+        try{ if(ctrl) ctrl.abort(); }catch(e){}
+        reject(new Error("timeout"));
+      }, POLL.timeoutMs);
+      var opts = { method: method, cache: "no-store", credentials: "omit", redirect: "follow" };
+      if(ctrl) opts.signal = ctrl.signal;
+      var url = ENDPOINT;
+      if(method === "GET") url += (ENDPOINT.indexOf("?") === -1 ? "?" : "&") + "poll=" + encodeURIComponent(POLL_ID);
+      else {
+        opts.headers = { "Content-Type": "text/plain;charset=utf-8" };
+        opts.body = JSON.stringify({ poll: POLL_ID, choice: state.choice, client: clientId() });
+      }
+      var p;
+      try{ p = fetch(url, opts); }catch(e){ p = Promise.reject(e); }
+      p.then(function(res){
+        if(!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      }).then(function(j){
+        var r = parseResult(j);   /* throws on ok !== true, before "done" is set */
+        if(done) return; done = true; clearTimeout(timer);
+        resolve(r);
+      }).catch(function(e){
+        if(done) return; done = true; clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
+
+  function parseResult(j){
+    if(!j || typeof j !== "object") throw new Error("not json");
+    if(j.ok !== true) throw new Error(typeof j.error === "string" ? j.error : "not ok");
+    if(j.poll !== undefined && j.poll !== POLL_ID) throw new Error("wrong poll");
+    var src = (j.counts && typeof j.counts === "object") ? j.counts : {};
+    var counts = {}, sum = 0;
+    OPTS.forEach(function(o){
+      var n = Number(src[o.id]);
+      n = (isFinite(n) && n > 0) ? Math.floor(n) : 0;
+      counts[o.id] = n; sum += n;
+    });
+    var total = Number(j.total);
+    total = (isFinite(total) && total >= 0) ? Math.floor(total) : sum;
+    return { counts: counts, total: Math.max(total, sum) };
+  }
+
+  /* ---------------- state and elements ---------------- */
+  var el = {
+    prog: document.getElementById("prog"), segs: document.getElementById("segs"),
+    h1: document.getElementById("h1"), board: document.getElementById("board"),
+    lock: document.getElementById("lock"), retry: document.getElementById("retry"),
+    hint: document.getElementById("hint"), live: document.getElementById("live")
+  };
+  var reduce = false;
+  try{ reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){}
+
+  var state = { screen: 0, pick: null, choice: null, sent: false, busy: false, preview: false };
+  var runId = 0;   /* a newer render cancels any older request's result */
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+
+  function header(){
+    el.prog.textContent = (state.screen + 1) + " of 2 · Class poll";
+    el.segs.innerHTML = "<i class='" + (state.screen === 0 ? "here" : "on") + "'></i><i class='" + (state.screen === 1 ? "here" : "") + "'></i>";
+    document.body.className = "t" + (state.screen + 1);
+  }
+
+  /* ================= screen 1 ================= */
+  function renderAsk(){
+    state.screen = 0;
+    header();
+    el.h1.textContent = POLL.title;
+    var h = '<p class="lead" id="q">' + esc(POLL.question) + "</p>" +
+      '<div class="opts" role="radiogroup" aria-labelledby="q">';
+    OPTS.forEach(function(o, n){
+      var on = state.pick === o.id;
+      var tab = on || (!state.pick && n === 0) ? "0" : "-1";
+      h += '<button type="button" class="opt" role="radio" data-o="' + esc(o.id) + '" aria-checked="' + on + '" tabindex="' + tab + '">' +
+        '<span class="let let2" aria-hidden="true">' + esc(o.letter || o.id.toUpperCase()) + "</span>" +
+        '<span class="row1"><span class="let" aria-hidden="true">' + esc(o.letter || o.id.toUpperCase()) + '</span><span class="mark" aria-hidden="true"><span class="picked">Picked</span><span class="dot"></span></span></span>' +
+        '<span class="txt"><span class="lab">' + esc(o.label) + "</span>" +
+        (o.sub ? '<span class="sub">' + esc(o.sub) + "</span>" : "") + "</span>" +
+        "</button>";
+    });
+    h += "</div>";
+    el.board.innerHTML = h;
+
+    el.lock.hidden = false;
+    el.lock.innerHTML = ic("lock") + esc(POLL.lockLabel);
+    el.retry.hidden = true;
+    syncLock();
+    wireRadios();
+  }
+
+  function syncLock(){
+    el.lock.disabled = !state.pick;
+    el.hint.textContent = state.pick ? POLL.hintPicked : POLL.hintPick;
+  }
+
+  function radios(){ return Array.prototype.slice.call(el.board.querySelectorAll('[role="radio"]')); }
+
+  function choose(id, focus){
+    state.pick = id;
+    radios().forEach(function(r){
+      var on = r.getAttribute("data-o") === id;
+      r.setAttribute("aria-checked", on ? "true" : "false");
+      r.tabIndex = on ? 0 : -1;
+      if(on && focus) r.focus();
+    });
+    syncLock();
+  }
+
+  function wireRadios(){
+    var rs = radios();
+    rs.forEach(function(r, n){
+      r.addEventListener("click", function(){ choose(r.getAttribute("data-o"), true); });
+      r.addEventListener("keydown", function(e){
+        var k = e.key, to = null;
+        if(k === "ArrowRight" || k === "ArrowDown") to = (n + 1) % rs.length;
+        else if(k === "ArrowLeft" || k === "ArrowUp") to = (n - 1 + rs.length) % rs.length;
+        else if(k === "Home") to = 0;
+        else if(k === "End") to = rs.length - 1;
+        else if(k === " " || k === "Enter"){ e.preventDefault(); choose(r.getAttribute("data-o"), true); return; }
+        if(to === null) return;
+        e.preventDefault();
+        choose(rs[to].getAttribute("data-o"), true);
+      });
+    });
+  }
+
+  el.lock.addEventListener("click", function(){
+    if(state.screen !== 0 || !state.pick) return;
+    state.choice = state.pick;
+    state.sent = false;
+    state.preview = false;
+    saveVote({ choice: state.choice, sent: false });
+    renderResults(true);
+    el.h1.focus();
+    sync();
+  });
+
+  el.retry.addEventListener("click", function(){ if(!state.busy) sync(); });
+
+  /* ================= screen 2 ================= */
+  function renderResults(announce){
+    state.screen = 1;
+    header();
+    var mine = optById(state.choice);
+    el.h1.innerHTML = esc(POLL.guessPrefix + mine.label) + (mine.sub ? ' <span class="rng">' + esc(mine.sub) + "</span>" : "");
+
+    var h = '<div class="sec" id="classhead">' + ic("chart") + esc(POLL.classHead) + "</div>" +
+      '<ul class="rows" id="rows" aria-labelledby="classhead" aria-busy="true">';
+    OPTS.forEach(function(o){
+      var me = o.id === state.choice;
+      h += '<li class="' + (me ? "mine" : "") + '" data-o="' + esc(o.id) + '">' +
+        '<span class="let" aria-hidden="true">' + esc(o.letter || o.id.toUpperCase()) + "</span>" +
+        '<span class="rl"><span class="l1">' + esc(o.label) +
+          (me ? '<span class="you">' + ic("person") + "You" + '<span class="sr">, your guess</span></span>' : "") + "</span>" +
+          (o.sub ? '<span class="l2">' + esc(o.sub) + "</span>" : "") + "</span>" +
+        '<span class="track" aria-hidden="true"><span class="fill"></span></span>' +
+        '<span class="cnt"></span>' +
+        "</li>";
+    });
+    h += "</ul>" +
+      '<div class="status" id="status"></div>' +
+      '<div class="keep">' + ic("bookmark") + "<span>" + esc(POLL.keep) + "</span></div>";
+    el.board.innerHTML = h;
+
+    el.lock.hidden = true;
+    el.retry.hidden = true;
+    el.retry.innerHTML = ic("retry") + esc(POLL.retryLabel);
+    el.hint.textContent = "";
+    if(announce) say(POLL.guessPrefix + mine.label + ".");
+  }
+
+  function setStatus(kind, html){
+    var s = el.board.querySelector("#status");
+    if(!s) return;
+    s.className = "status" + (kind === "fail" ? " calm" : "");
+    s.innerHTML = html;
+  }
+
+  function showLoading(){
+    var rows = el.board.querySelector("#rows");
+    if(rows){ rows.hidden = false; rows.setAttribute("aria-busy", "true"); }
+    setStatus("load", ic("hourglass") + "<span>" + esc(POLL.loading) + "</span>");
+    say(POLL.loading);
+  }
+
+  function showCounts(r){
+    var rows = el.board.querySelector("#rows");
+    if(!rows) return;
+    rows.hidden = false;
+    OPTS.forEach(function(o){
+      var li = rows.querySelector('li[data-o="' + o.id + '"]');
+      if(!li) return;
+      var n = r.counts[o.id];
+      var pct = r.total > 0 ? Math.round(n / r.total * 100) : 0;
+      li.querySelector(".cnt").innerHTML = "<b>" + esc(POLL.countLine(n, pct)) + "</b>";
+      var fill = li.querySelector(".fill");
+      var w = r.total > 0 ? (n / r.total * 100) : 0;
+      if(n > 0 && w < 1.5) w = 1.5;   /* a single vote still paints */
+      if(reduce) fill.style.width = w + "%";
+      else requestAnimationFrame(function(){ requestAnimationFrame(function(){ fill.style.width = w + "%"; }); });
+    });
+    rows.setAttribute("aria-busy", "false");
+    setStatus("ok", "<span>" + esc(POLL.totalLine(r.total)) + "</span>");
+    el.retry.hidden = true;
+
+    var mine = optById(state.choice), mn = r.counts[state.choice];
+    var mp = r.total > 0 ? Math.round(mn / r.total * 100) : 0;
+    say(POLL.totalLine(r.total) + ". " + mine.label + ", your guess: " + POLL.countLine(mn, mp) + ".");
+  }
+
+  function showFallback(){
+    var rows = el.board.querySelector("#rows");
+    if(rows){ rows.hidden = true; rows.setAttribute("aria-busy", "false"); }
+    setStatus("fail", ic("info") + "<span>" + esc(POLL.fallback) + "</span>");
+    /* A retry only makes sense when there is somewhere to retry. */
+    el.retry.hidden = !ENDPOINT;
+    say(POLL.fallback);
+  }
+
+  /* Send the vote if the server has not confirmed it yet, otherwise read the
+     totals. Either way the answer is the same shape. */
+  function sync(){
+    var my = ++runId;
+    state.busy = true;
+    el.retry.hidden = true;
+    showLoading();
+    var method = state.sent ? "GET" : "POST";
+    requestWithRetry(method).then(function(r){
+      if(my !== runId) return;
+      state.busy = false;
+      if(method === "POST"){ state.sent = true; saveVote({ choice: state.choice, sent: true }); }
+      showCounts(r);
+    }, function(){
+      if(my !== runId) return;
+      state.busy = false;
+      showFallback();
+    });
+  }
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  /* ---------------- start ----------------
+     A browser that has already voted opens straight on the results. No
+     re-voting and no change button: one vote per browser. */
+  function start(){
+    var v = loadVote();
+    if(v){
+      state.choice = v.choice; state.sent = v.sent;
+      renderResults(false);
+      sync();
+    } else {
+      renderAsk();
+    }
+  }
+  try{ start(); }
+  catch(e){
+    /* Last line of defence: the page must never be blank. */
+    try{ renderAsk(); }catch(e2){}
+  }
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps through the page with this. goto(1) with no saved
+     vote shows a preview of the results screen with sample counts; it saves
+     nothing and sends nothing. Students never reach it. */
+  window.__ex = {
+    slides: 2,
+    goto: function(n){
+      if(n === 0){
+        if(loadVote()) return false;
+        runId++; state.busy = false; renderAsk(); return true;
+      }
+      if(n === 1){
+        runId++; state.busy = false;
+        var v = loadVote();
+        if(v){ state.choice = v.choice; state.sent = v.sent; renderResults(false); sync(); return true; }
+        state.choice = state.pick || OPTS[0].id; state.preview = true;
+        renderResults(false);
+        var c = {}, t = 0;
+        OPTS.forEach(function(o, k){ c[o.id] = [14, 9, 5, 2][k % 4]; t += c[o.id]; });
+        showCounts({ counts: c, total: t });
+        return true;
+      }
+      return false;
+    },
+    reset: function(){ sdel(VOTE_KEY); runId++; state = { screen: 0, pick: null, choice: null, sent: false, busy: false, preview: false }; renderAsk(); },
+    pick: function(id){ if(state.screen !== 0 || !optById(id)) return false; choose(id, false); return true; },
+    state: function(){ return { screen: state.screen, pick: state.pick, choice: state.choice, sent: state.sent, stored: loadVote(), endpoint: ENDPOINT }; }
+  };
+})();
+</script>
+</body>
+</html>
