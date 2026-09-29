@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three Buckets</title>
+<!--
+  vCISO P3 Step 1, Module 2, Interactive 2 (the three-bucket sort).
+  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html),
+  matched to the house look of vciso-p2-m3-sort-six-actions.html.
+  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6, which
+  sets the larger type scale and the per-slide tint ramp used here.
+  Spec: 06-content/project-03/step-01/module-02-internal.md, "Interactive 2".
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. The Extern five, plus the vCISO per-slide tint ramp
+     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
+     Tint carries no meaning. Every tint of navy is an rgba() of
+     #001D69. No state is ever signalled by colour alone: every
+     coloured state also carries a glyph or a label.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback: hover, press, focus, select */
+    --t-frame:300ms;   /* movement between slides                  */
+    --t-reveal:560ms;  /* a value or an answer resolving           */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);  /* the slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Shared with every
+     vCISO deck, so slide 2 here is the same colour as slide 2 elsewhere. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in
+     layout and let the transform do all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header. Progress is visible from first paint. ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  /* vCISO 6a: heading 28px at 600. */
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:8px}
+
+  .board{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr;gap:20px}
+  .col{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px;max-width:74ch}
+  .intro p{font-size:17px;line-height:1.5}
+  .intro p b{color:var(--title);font-weight:600}
+  button.jump{font-family:inherit;font-size:13px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:6px;padding:5px 10px;cursor:pointer}
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- slide 1: the three-bucket sort ----
+     Buckets and the card tray are fixed in size, so nothing on the slide
+     reflows when a card moves. */
+  .board.srt{display:flex;flex-direction:column;gap:8px}
+  .how{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:40px;background:var(--highlight);color:var(--title);
+    border-left:4px solid var(--on-highlight);border-radius:6px;padding:4px 6px 4px 12px;font-size:15px;line-height:1.3}
+  .how .ht{flex:1 1 auto;min-width:0}
+  .how b{font-weight:600}
+  .how .ld{display:block}
+  .how .sc{flex:0 0 auto;font-weight:600;color:var(--on-highlight);font-size:15px;padding-right:6px}
+
+  .tray{flex:0 0 auto;height:62px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+    background:var(--tint);border:1.5px dashed var(--line);border-radius:10px;padding:5px;
+    transition:background var(--t-fast) var(--ease-out)}
+  .tray.over,.tray.armed:hover{background:var(--highlight);border-color:var(--on-highlight)}
+  .tray.armed{cursor:pointer}
+  .tempty{grid-column:1/-1;display:flex;align-items:center;padding:0 8px;font-size:14px;line-height:1.4;color:var(--body)}
+
+  .bins{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .bin{min-width:0;min-height:0;display:flex;flex-direction:column;gap:5px;background:var(--tint);
+    border:1.5px dashed var(--on-highlight);border-radius:10px;padding:5px 7px 6px;
+    transition:background var(--t-fast) var(--ease-out)}
+  .bin.armed{cursor:pointer}
+  .bin.over,.bin.armed:hover{background:var(--highlight);border-style:solid}
+  button.bh{flex:0 0 auto;font-family:inherit;font-size:16px;font-weight:600;line-height:1.25;color:var(--title);
+    text-align:left;background:transparent;border:0;border-radius:6px;padding:2px 4px;cursor:pointer;
+    display:flex;align-items:center;gap:8px}
+  button.bh:focus-visible{outline:3px solid var(--on-highlight);outline-offset:1px}
+  button.bh:disabled{cursor:default}
+  .bk{flex:0 0 auto;width:24px;height:22px;border-radius:5px;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);font-size:13px;font-weight:600;color:var(--on-highlight);
+    display:flex;align-items:center;justify-content:center}
+  .bcards{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px}
+
+  .scard{min-width:0;display:flex;align-items:center;gap:8px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:3px 9px;
+    cursor:grab;user-select:none;-webkit-user-select:none;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  .scard:hover:not(.locked){border-color:var(--on-highlight)}
+  .scard:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .scard.sel{background:var(--highlight);border-color:var(--on-highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
+  .scard.drag{opacity:.5}
+  .scard.locked{cursor:default}
+  .scard.bad{border-style:dashed;border-color:var(--on-highlight)}
+  .scard.good{border-color:var(--on-highlight)}
+  .scard .ct{flex:1 1 auto;min-width:0;font-size:15px;line-height:1.28;color:var(--title)}
+  /* The card mark: its bucket's number while sorting, then a tick or a
+     cross once checked. Shape and glyph, never colour alone. */
+  .scard .tg{flex:0 0 auto;width:26px;height:24px;border-radius:6px;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;color:var(--on-highlight)}
+  .scard .tg.x{border-style:dashed;background:transparent}
+  .scard.sel .tg{background:var(--on-highlight);color:var(--bg)}
+  /* The gloss inside a picked-up card. Phones only: on the canvas the hint
+     bar carries it, and the tray has no room for it. */
+  .scard .cd{display:none}
+
+  /* ---- slide 2: where each one goes ---- */
+  .board.ans{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:18px}
+  .ab{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+  .ab + .ab{margin-top:12px}
+  .abh{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;line-height:1.25;color:var(--title)}
+  .acard{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;padding:7px 11px;
+    display:flex;flex-direction:column;gap:3px}
+  .acard.miss,.tbox.miss{border-style:dashed}
+  .acard.in,.tbox.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .an{display:flex;align-items:flex-start;gap:8px;font-size:16px;line-height:1.3;font-weight:600;color:var(--title)}
+  .gl{flex:0 0 auto;width:19px;height:19px;margin-top:0;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .miss .gl{border-style:dashed}
+  .ar{font-size:15px;line-height:1.42;color:var(--body);padding-left:27px}
+  .ar b{color:var(--on-highlight);font-weight:600}
+  .tbox{background:var(--highlight);border:1.5px solid var(--on-highlight);border-left-width:4px;border-radius:0 9px 9px 0;
+    padding:9px 12px;display:flex;flex-direction:column;gap:5px}
+  .tbox .tl{font-size:16px;line-height:1.4;font-weight:600;color:var(--title)}
+  .tbox .ts{display:flex;align-items:flex-start;gap:8px;font-size:15px;line-height:1.4;color:var(--body)}
+  .tbox .ts b{color:var(--on-highlight);font-weight:600}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         can never displace this row. ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .how button.nav{padding:7px 15px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .board,.board.ans{display:block}
+    .board.srt{display:flex}
+    .intro p{font-size:16px}
+    .how{flex-wrap:wrap;font-size:16px;padding:10px 12px}
+    .how .sc{font-size:16px}
+    .tray{height:auto;min-height:60px;grid-template-columns:1fr}
+    .bins{grid-template-columns:1fr;align-content:start}
+    .bin{min-height:96px}
+    button.bh{font-size:17px}
+    .scard{padding:10px 12px}
+    .scard .ct{font-size:16px}
+    .scard .cd{display:block;margin-top:6px;font-size:16px;line-height:1.45;color:var(--body)}
+    .tempty{font-size:15px;padding:10px 8px}
+    .ab + .ab{margin-top:16px}
+    .col + .col{margin-top:16px}
+    .an{font-size:16px}
+    .ar,.tbox .ts{font-size:16px;line-height:1.5}
+    .tbox .tl{font-size:17px}
+    button.jump{font-size:14px;padding:7px 12px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Three buckets">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 2</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="nav ghost" id="again" type="button">Start again</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h2>Three buckets</h2>
+    <p>Here are four things Cumberland has. Put each one into one of three buckets: <strong>Stops it happening</strong>, <strong>Tells you it happened</strong>, or <strong>Puts it right afterwards</strong>. Each bucket is about something going wrong.</p>
+    <ol>
+      <li><strong>The locked server room, access limited to Nate.</strong> A server room is the locked room where a company keeps its main computers.</li>
+      <li><strong>Admin accounts require a second factor.</strong> Admin accounts are the powerful logins that can change how the company's computers are set up. A second factor is a second check on top of the password, like a code sent to a phone.</li>
+      <li><strong>Nightly backups that run and replicate offsite.</strong> A backup is a spare copy of the files, made every night. Replicate offsite means a copy is also sent to another place, away from the office.</li>
+      <li><strong>The firewall blocking inbound traffic.</strong> A firewall is a guard between the company's computers and the internet. Inbound traffic is anything trying to come in from the internet.</li>
+    </ol>
+    <p>It's fine to leave a bucket empty. If you do, ask why.</p>
+    <p>Decide all four before you read on.</p>
+
+    <h3>Stops it happening</h3>
+    <ul>
+      <li><strong>The locked server room, access limited to Nate.</strong> It keeps people out before anything can happen. A locked door doesn't warn anyone if someone gets in.</li>
+      <li><strong>Admin accounts require a second factor.</strong> It stops someone logging in with only a stolen password. It doesn't tell anyone that someone tried.</li>
+      <li><strong>The firewall blocking inbound traffic.</strong> It blocks traffic from the internet before it can get in. It doesn't tell anyone if something gets past it.</li>
+    </ul>
+
+    <h3>Tells you it happened</h3>
+    <div class="box"><p><strong>Nothing here would tell Cumberland something had gone wrong.</strong></p></div>
+
+    <h3>Puts it right afterwards</h3>
+    <ul>
+      <li><strong>Nightly backups that run and replicate offsite.</strong> They let Cumberland get its files back after something goes wrong. They don't stop anything happening, and they don't warn anyone.</li>
+    </ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- content ----------------
+     Bucket labels and card wording are verbatim from the module spec
+     (module-02-internal.md, Interactive 2). Answers from P3-2. */
+  var BINS = [
+    { id:"stop", key:"1", label:"Stops it happening" },
+    { id:"tell", key:"2", label:"Tells you it happened" },
+    { id:"fix",  key:"3", label:"Puts it right afterwards" }
+  ];
+  /* `why` says why the card belongs in its bucket. `ok` is what a student
+     who placed it right reads: the same reason, plus the plain point that
+     it warns nobody, which is what leaves the middle bucket empty.
+     `not[bucket]` answers a wrong pick of that bucket. */
+  var CARDS = [
+    { id:"room", bin:"stop", txt:"The locked server room, access limited to Nate",
+      def:"A server room is the locked room where a company keeps its main computers.",
+      why:"It keeps people out before anything can happen.",
+      ok:"It keeps people out before anything can happen. A locked door doesn't warn anyone if someone gets in.",
+      not:{ tell:"A locked door doesn't warn anyone if someone gets in.",
+            fix:"A lock can't undo anything once something has gone wrong." } },
+    { id:"mfa", bin:"stop", txt:"Admin accounts require a second factor",
+      def:"Admin accounts are the powerful logins that can change how the company's computers are set up. A second factor is a second check on top of the password, like a code sent to a phone.",
+      why:"It stops someone logging in with only a stolen password.",
+      ok:"It stops someone logging in with only a stolen password. It doesn't tell anyone that someone tried.",
+      not:{ tell:"It doesn't tell anyone that someone tried to log in.",
+            fix:"It can't undo what someone did once they got in." } },
+    { id:"bak", bin:"fix", txt:"Nightly backups that run and replicate offsite",
+      def:"A backup is a spare copy of the files, made every night. Replicate offsite means a copy is also sent to another place, away from the office.",
+      why:"They let Cumberland get its files back after something goes wrong.",
+      ok:"They let Cumberland get its files back after something goes wrong. They don't stop anything happening, and they don't warn anyone.",
+      not:{ stop:"A backup doesn't stop anything going wrong. Files can still be lost or damaged.",
+            tell:"A backup doesn't warn anyone. It just keeps a copy until someone needs the files back." } },
+    { id:"fw", bin:"stop", txt:"The firewall blocking inbound traffic",
+      def:"A firewall is a guard between the company's computers and the internet. Inbound traffic is anything trying to come in from the internet.",
+      why:"It blocks traffic from the internet before it can get in.",
+      ok:"It blocks traffic from the internet before it can get in. It doesn't tell anyone if something gets past it.",
+      not:{ tell:"It doesn't tell anyone if something gets past it.",
+            fix:"It can't undo anything that already got past it." } }
+  ];
+  var NUM = ["no", "one", "two", "three", "four"];
+  var EMPTY_LINE = "Nothing here would tell Cumberland something had gone wrong.";
+  var HOW = "It's fine to leave a bucket empty. If you do, ask why.";
+  /* Gives the "it" in all three bucket labels something to point at. */
+  var LEAD = "Each bucket is about something going wrong.";
+
+  var S = [
+    { id:"sort", kind:"sort", label:"Sort four things", h1:"Which bucket does each one go in?" },
+    { id:"answers", kind:"answers", label:"Where each one goes", h1:"Where each one goes" }
+  ];
+
+  /* ---------------- state ----------------
+     localStorage is wrapped: a blocked storage API must degrade silently. */
+  var KEY = "vciso-p3-m2-three-buckets-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { answers:{}, place:{} }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var place = {};
+      if(isPlain(raw.place)){
+        CARDS.forEach(function(c){ if(binOf(raw.place[c.id])) place[c.id] = raw.place[c.id]; });
+      }
+      var answers = isPlain(raw.answers) ? raw.answers : {};
+      /* A check only counts if every card is still placed. */
+      if(answers.sort && Object.keys(place).length !== CARDS.length) answers = {};
+      return { answers:answers, place:place };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  function binOf(id){ for(var k=0;k<BINS.length;k++) if(BINS[k].id === id) return BINS[k]; return null; }
+  function cardOf(id){ for(var k=0;k<CARDS.length;k++) if(CARDS[k].id === id) return CARDS[k]; return null; }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var GLYPH = { out:"✕", ok:"✓" };
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+     var problems = [], ids = {}, cids = {};
+     S.forEach(function(s, n){
+       if(!s.id) problems.push("slide " + (n+1) + " has no id");
+       if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+       ids[s.id] = 1;
+     });
+     CARDS.forEach(function(c){
+       if(cids[c.id]) problems.push('duplicate card id "' + c.id + '"');
+       cids[c.id] = 1;
+       if(!binOf(c.bin)) problems.push('card "' + c.id + '" has no valid bucket');
+       if(!c.why || !c.ok || !c.def) problems.push('card "' + c.id + '" is missing why, ok or def');
+       BINS.forEach(function(b){
+         if(b.id !== c.bin && !(c.not && c.not[b.id])) problems.push('card "' + c.id + '" has no reason for a wrong pick of "' + b.id + '"');
+       });
+     });
+     if(problems.length){
+       document.getElementById("board").innerHTML =
+         '<div class="intro"><p><b>This deck has authoring errors and will not '
+         + 'behave correctly:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+         + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+       throw new Error("deck data invalid: " + problems.join("; "));
+     }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+  var sel = null;   /* the card currently picked up, if any */
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function attr(s){ return esc(s).replace(/"/g, "&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function checked(){ return !!st.answers.sort; }
+  function placedCount(){ return CARDS.filter(function(c){ return st.place[c.id]; }).length; }
+  function rightCount(){ return CARDS.filter(function(c){ return st.place[c.id] === c.bin; }).length; }
+
+  var GATE_HINT = "Drag each card into a bucket, or tap a card and then tap a bucket. " +
+    "On a keyboard, Enter picks up a card and 1, 2 or 3 puts it down.";
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    el.back.disabled = (i === 0);
+    el.again.disabled = !checked() && placedCount() === 0;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else if(s.kind === "sort" && !checked()){ el.next.disabled = true; el.next.textContent = "Continue"; }
+    else { el.next.disabled = false; el.next.textContent = "Continue"; }
+
+    if(checked() && s.kind === "answers"){
+      el.chip.hidden = false;
+      el.chip.textContent = rightCount() + " of " + CARDS.length + " in the right bucket";
+    } else { el.chip.hidden = true; el.chip.textContent = ""; }
+  }
+
+  function render(focusSel){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    if(s.kind === "sort") renderSort(focusSel);
+    else if(s.kind === "answers") renderAnswers();
+    else {
+      el.board.className = "board";
+      el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
+    }
+    header();
+  }
+
+  /* ---------------- slide 1: sort ---------------- */
+  function cardLabel(c){
+    var p = st.place[c.id];
+    var base = c.txt + ". ";
+    if(checked()){
+      if(p === c.bin) return base + "In " + binOf(p).label + ". Right.";
+      return base + "In " + binOf(p).label + ". Not right.";
+    }
+    if(sel === c.id) return base + "Picked up. Press 1, 2 or 3 to put it in a bucket.";
+    if(p) return base + "In " + binOf(p).label + ". Press Enter to pick it up and move it.";
+    return base + "Not sorted yet. Press Enter to pick it up.";
+  }
+
+  function cardHTML(c){
+    var p = st.place[c.id], done = checked();
+    var right = done && p === c.bin;
+    var cls = "scard" + (sel === c.id ? " sel" : "") + (done ? " locked" + (right ? " good" : " bad") : "");
+    var tag = "";
+    if(done) tag = '<span class="tg' + (right ? "" : " x") + '" aria-hidden="true">' + (right ? GLYPH.ok : GLYPH.out) + "</span>";
+    else if(p) tag = '<span class="tg" aria-hidden="true">' + binOf(p).key + "</span>";
+    return '<div class="' + cls + '" role="button" data-c="' + c.id + '"' +
+      (done ? ' tabindex="-1" aria-disabled="true"' : ' tabindex="0" draggable="true" aria-pressed="' + (sel === c.id ? "true" : "false") + '"') +
+      ' aria-label="' + attr(cardLabel(c)) + '">' +
+      '<span class="ct" aria-hidden="true">' + esc(c.txt) +
+        (sel === c.id && !done ? '<span class="cd">' + esc(c.def) + "</span>" : "") + "</span>" + tag + "</div>";
+  }
+
+  function renderSort(focusSel){
+    var done = checked();
+    el.board.className = "board srt";
+    var armed = sel && !done ? " armed" : "";
+    var right = done
+      ? '<span class="sc">' + rightCount() + " of " + CARDS.length + " right. Continue to see why.</span>"
+      : '<button class="nav" id="chk" type="button"' + (placedCount() === CARDS.length ? "" : " disabled") + ">Check my answers</button>";
+    var how = '<div class="how"><span class="ht"><span class="ld">' + esc(LEAD) + "</span><b>" + esc(HOW) + "</b></span>" + right + "</div>";
+
+    var inTray = CARDS.filter(function(c){ return !st.place[c.id]; });
+    var tray = '<div class="tray' + (sel && st.place[sel] && !done ? " armed" : "") + '" data-drop="tray" aria-label="Cards to sort">' +
+      (inTray.length ? inTray.map(cardHTML).join("")
+        : '<div class="tempty">' + (done ? "Your sort is checked. Each card now shows a tick or a cross."
+            : "All four are in buckets. Move any you want, then press Check my answers.") + "</div>") + "</div>";
+
+    var bins = '<div class="bins">' + BINS.map(function(b){
+      var cs = CARDS.filter(function(c){ return st.place[c.id] === b.id; });
+      return '<div class="bin' + armed + '" data-drop="' + b.id + '">' +
+        '<button class="bh" type="button" data-bin="' + b.id + '"' + (done ? " disabled" : "") +
+          ' aria-label="' + attr(b.label + ". Holds " + cs.length + (cs.length === 1 ? " card." : " cards.") + (done ? "" : " Press to put the picked-up card here.")) + '">' +
+          '<span class="bk" aria-hidden="true">' + b.key + "</span>" + esc(b.label) + "</button>" +
+        '<div class="bcards">' + cs.map(cardHTML).join("") + "</div></div>";
+    }).join("") + "</div>";
+
+    el.board.innerHTML = how + tray + bins;
+    if(!done) wireSort();
+    setSortHint();
+    if(focusSel){ var f = el.board.querySelector(focusSel); if(f) f.focus(); }
+  }
+
+  function setSortHint(){
+    if(checked()){ el.hint.textContent = ""; return; }
+    if(sel){
+      var c = cardOf(sel);
+      el.hint.innerHTML = "<span><b>Picked up.</b> Tap a bucket, or press 1, 2 or 3. " + esc(c.def) + "</span>";
+    } else el.hint.textContent = GATE_HINT;
+  }
+  function showDef(id){
+    var c = cardOf(id);
+    if(!c || checked()) return;
+    el.hint.innerHTML = "<span>" + esc(c.def) + "</span>";
+  }
+
+  function pick(id){
+    if(checked()) return;
+    sel = (sel === id) ? null : id;
+    renderSort('.scard[data-c="' + id + '"]');
+    say(sel ? "Picked up: " + cardOf(id).txt + ". " + cardOf(id).def + " Press 1, 2 or 3 to put it in a bucket."
+            : "Put down.");
+  }
+
+  function place(id, zone){
+    if(checked() || !cardOf(id)) return;
+    if(zone === "tray") delete st.place[id];
+    else if(binOf(zone)) st.place[id] = zone;
+    else return;
+    save(st);
+    sel = null;
+    var focus;
+    if(zone === "tray") focus = '.scard[data-c="' + id + '"]';
+    else {
+      var nextCard = CARDS.filter(function(c){ return !st.place[c.id]; })[0];
+      focus = nextCard ? '.scard[data-c="' + nextCard.id + '"]' : "#chk";
+    }
+    renderSort(focus);
+    header();
+    say(cardOf(id).txt + (zone === "tray" ? ": back with the cards to sort." : ": in " + binOf(zone).label + ".") +
+      (placedCount() === CARDS.length ? " All four placed. You can check your answers." : ""));
+  }
+
+  function wireSort(){
+    Array.prototype.forEach.call(el.board.querySelectorAll(".scard"), function(card){
+      var id = card.dataset.c;
+      card.addEventListener("click", function(e){ e.stopPropagation(); pick(id); });
+      card.addEventListener("keydown", function(e){
+        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(id); }
+      });
+      /* The plain-words gloss shows on hover, on keyboard focus and while
+         dragging, not only on tap, so a student who drags still reads it. */
+      card.addEventListener("mouseenter", function(){ if(!sel) showDef(id); });
+      card.addEventListener("mouseleave", function(){ if(!sel) setSortHint(); });
+      card.addEventListener("focus", function(){ if(!sel && card.matches(":focus-visible")) showDef(id); });
+      card.addEventListener("blur", function(){ if(!sel) setSortHint(); });
+      card.addEventListener("dragstart", function(e){
+        sel = id;
+        try{ e.dataTransfer.setData("text/plain", id); e.dataTransfer.effectAllowed = "move"; }catch(x){}
+        card.classList.add("drag");
+        showDef(id);
+      });
+      /* A drag dropped outside every bucket must not leave the card
+         secretly picked up, or the next tap on a bucket would move it. */
+      card.addEventListener("dragend", function(){
+        card.classList.remove("drag");
+        if(sel === id){ sel = null; setSortHint(); }
+        Array.prototype.forEach.call(el.board.querySelectorAll(".over"), function(z){ z.classList.remove("over"); });
+      });
+    });
+    Array.prototype.forEach.call(el.board.querySelectorAll("[data-drop]"), function(z){
+      var zone = z.dataset.drop;
+      z.addEventListener("dragover", function(e){ e.preventDefault(); z.classList.add("over"); });
+      z.addEventListener("dragleave", function(e){ if(!z.contains(e.relatedTarget)) z.classList.remove("over"); });
+      z.addEventListener("drop", function(e){
+        e.preventDefault();
+        var id = "";
+        try{ id = e.dataTransfer.getData("text/plain"); }catch(x){}
+        place(id || sel, zone);
+      });
+      z.addEventListener("click", function(){
+        if(sel) place(sel, zone);
+        else if(zone !== "tray"){
+          el.hint.innerHTML = "<span><b>Pick up a card first.</b> Tap a card, then tap this bucket.</span>";
+        }
+      });
+    });
+    var chk = el.board.querySelector("#chk");
+    if(chk) chk.addEventListener("click", checkSort);
+  }
+
+  function checkSort(){
+    if(placedCount() !== CARDS.length) return;
+    st.answers.sort = rightCount() === CARDS.length ? "right" : "shown";
+    sel = null;
+    save(st);
+    renderSort();
+    header();
+    el.next.focus();
+    say("Checked. " + rightCount() + " of " + CARDS.length + " are in the right bucket. Continue to see why.");
+  }
+
+  /* ---------------- slide 2: where each one goes ----------------
+     Every card sits in its right bucket. Each carries a tick or a cross,
+     a label saying so, and a reason. A cross never sits beside a tick. */
+  function acardHTML(c, anim){
+    var p = st.place[c.id], right = p === c.bin;
+    var reason = right
+      ? "<b>Right.</b> " + esc(c.ok)
+      : "<b>Not right. You put it in " + esc(binOf(p).label) + ".</b> " + esc(c.not[p]) + " " + esc(c.why);
+    return '<div class="acard' + (right ? "" : " miss") + anim + '">' +
+      '<div class="an"><span class="gl" aria-hidden="true">' + (right ? GLYPH.ok : GLYPH.out) + "</span>" +
+      "<span>" + esc(c.txt) + "</span></div>" +
+      '<div class="ar">' + reason + "</div></div>";
+  }
+
+  function headHTML(b){
+    return '<div class="abh"><span class="bk" aria-hidden="true">' + b.key + "</span>" + esc(b.label) + "</div>";
+  }
+
+  function renderAnswers(){
+    if(!checked()){
+      el.board.className = "board";
+      el.board.innerHTML = '<div class="intro"><p>Sort the four cards first. Where each one goes appears here once you press <b>Check my answers</b>.</p>' +
+        '<button class="jump" type="button" id="tosort">Go to the sort</button></div>';
+      el.board.querySelector("#tosort").addEventListener("click", function(){ i = 0; render(); toTop(); });
+      el.hint.textContent = "";
+      return;
+    }
+    var anim = reduce ? "" : " in";
+    el.board.className = "board ans";
+    var inTell = CARDS.filter(function(c){ return st.place[c.id] === "tell"; }).length;
+    var tellOk = inTell === 0;
+    var tell = '<div class="tbox' + (tellOk ? "" : " miss") + anim + '">' +
+      '<div class="tl">' + esc(EMPTY_LINE) + "</div>" +
+      '<div class="ts"><span class="gl" aria-hidden="true">' + (tellOk ? GLYPH.ok : GLYPH.out) + "</span><span>" +
+      (tellOk ? "<b>Right.</b> You left this bucket empty."
+              : "<b>Not right.</b> You put " + NUM[inTell] + (inTell === 1 ? " card" : " cards") + " here. Each card's reason says why it doesn't belong.") +
+      "</span></div></div>";
+
+    var byBin = function(id){ return CARDS.filter(function(c){ return c.bin === id; }).map(function(c){ return acardHTML(c, anim); }).join(""); };
+    el.board.innerHTML =
+      '<div class="col"><div class="ab">' + headHTML(BINS[0]) + byBin("stop") + "</div></div>" +
+      '<div class="col"><div class="ab">' + headHTML(BINS[1]) + tell + "</div>" +
+      '<div class="ab">' + headHTML(BINS[2]) + byBin("fix") + "</div></div>";
+    el.hint.textContent = "";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function toTop(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && el.next.disabled) return;
+    sel = null; i = n; render(); toTop();
+    say("Slide " + (i+1) + " of " + S.length + ". " + S[i].h1 + ".");
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  el.again.addEventListener("click", function(){
+    st = fresh(); save(st); sel = null; i = 0; render(); toTop();
+    say("Started again. All four cards are back with the cards to sort.");
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(S[i].kind !== "sort" || checked() || !sel) return;
+    var b = null; BINS.forEach(function(x){ if(x.key === e.key) b = x; });
+    if(b){ e.preventDefault(); place(sel, b.id); return; }
+    if(e.key === "0"){ e.preventDefault(); place(sel, "tray"); return; }
+    if(e.key === "Escape"){ var was = sel; sel = null; renderSort('.scard[data-c="' + was + '"]'); say("Put down."); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps through the deck with this. Keep it on every deck. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      sel = null; i = n; render(); return true;
+    },
+    slides:S.length,
+    place:function(id, zone){ place(id, zone); return st.place[id] === zone || (zone === "tray" && !st.place[id]); },
+    check:function(){ checkSort(); return checked(); },
+    reset:function(){ st = fresh(); save(st); sel = null; i = 0; render(); },
+    state:function(){ return { i:i, sel:sel, answers:st.answers, place:st.place }; }
+  };
+})();
+</script>
+</body>
+</html>
