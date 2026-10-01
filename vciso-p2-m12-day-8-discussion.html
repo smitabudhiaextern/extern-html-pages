@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 8 Class Discussion</title>
+<!--
+  vCISO P2 Step 3, Module 12: the checkpoint as a class discussion.
+  The student writes the one question they would have asked on day 8, posts
+  it, and reads what classmates posted. Newest first. No sample posts, ever.
+
+  Built from the same shell as vciso-p3-m1-policy-guess-poll.html: fixed
+  960x540 canvas, scale to fit, the Extern five, the vCISO tint ramp in slide
+  order (VCISO-STYLE-GUIDE.md 6b), system fonts, inline SVG icons.
+
+  The one network request this page makes is to ENDPOINT, the same Google
+  Apps Script web app the class poll uses (class-poll-backend/Code.gs). With
+  ENDPOINT empty, or with the request failing, the page still works: the
+  student writes and posts, sees their own question saved on this device, and
+  reads a calm line saying classmates' questions appear once the board is on.
+
+  To reuse for another board: copy this file, then change ENDPOINT, BOARD_ID
+  and the BOARD block at the top of the script, and add the board name to
+  BOARDS in Code.gs.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-file.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-file.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* The vCISO tint ramp, in slide order. One slide, so slide 1. */
+  body.t1{background:#F2DAE0}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ---- */
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 16px;display:flex;flex-direction:column}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:6px;border-radius:2px;background:var(--on-highlight)}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:6px}
+  .lead{flex:0 0 auto;font-size:17px;line-height:1.5;color:var(--body);margin-bottom:14px}
+
+  svg.ic{display:block;flex:0 0 auto;width:20px;height:20px;fill:none;stroke:currentColor;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--on-highlight)}
+
+  .cols{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:352px 1fr;gap:20px}
+
+  /* ================= left: write and post ================= */
+  .panel{background:var(--bg);border:1.5px solid var(--line);border-radius:12px;min-height:0}
+  .compose{padding:14px 16px 14px;display:flex;flex-direction:column}
+  .lab{display:block;font-size:15px;font-weight:600;color:var(--title);margin-bottom:6px}
+  .lab .opt{font-weight:400;color:var(--body)}
+  textarea,input[type="text"]{
+    font-family:inherit;font-size:16px;line-height:1.45;color:var(--title);
+    background:#FDF8F8;border:1.5px solid var(--line);border-radius:8px;width:100%;
+    transition:border-color var(--t-fast) var(--ease-out)
+  }
+  textarea{resize:none;height:118px;padding:9px 11px;display:block}
+  input[type="text"]{height:40px;padding:0 11px}
+  textarea::placeholder,input::placeholder{color:var(--body);opacity:.8}
+  textarea:hover,input[type="text"]:hover{border-color:var(--on-highlight)}
+  textarea:focus-visible,input[type="text"]:focus-visible{outline:3px solid var(--on-highlight);outline-offset:1px;border-color:var(--on-highlight)}
+  textarea[aria-invalid="true"]{border:2px solid var(--on-highlight);padding:8.5px 10.5px}
+
+  .count{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:22px;margin:5px 0 10px;
+    font-size:13px;line-height:1.35;color:var(--body);font-variant-numeric:tabular-nums;text-align:right}
+  .count svg.ic{width:16px;height:16px}
+  .count.over{color:var(--title);font-weight:600}
+
+  .postrow{display:flex;align-items:center;gap:12px;margin-top:14px;min-height:44px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:10px 20px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);display:inline-flex;align-items:center;gap:8px;
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav svg.ic{color:var(--bg);width:18px;height:18px}
+  button.nav.ghost{background:transparent;color:var(--on-highlight);padding:6px 12px;font-size:14px}
+  button.nav.ghost svg.ic{color:var(--on-highlight);width:16px;height:16px}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.4;color:var(--body)}
+  #hint b{color:var(--title);font-weight:600}
+
+  /* ================= right: the class's answers ================= */
+  .feed{display:flex;flex-direction:column;padding:12px 6px 10px 14px}
+  .fhead{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-right:8px;margin-bottom:8px;min-height:30px}
+  .fhead h2{font-size:17px;font-weight:600;color:var(--title)}
+  .fside{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+  .fcount{font-size:14px;color:var(--body);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .more{display:flex;align-items:center;gap:4px;font-size:13px;line-height:1.3;color:var(--on-highlight);white-space:nowrap}
+  .more svg.ic{width:14px;height:14px}
+
+  .note{flex:0 0 auto;display:flex;align-items:flex-start;gap:8px;margin:0 8px 8px 0;background:var(--highlight);
+    border-left:4px solid var(--on-highlight);border-radius:0 10px 10px 0;padding:9px 12px;
+    font-size:15px;line-height:1.45;color:var(--title)}
+  .note svg.ic{margin-top:1px}
+  .note .grow{flex:1 1 auto;min-width:0}
+  .note button.nav{margin-top:6px}
+
+  .list{flex:1 1 auto;min-height:0;overflow-y:auto;list-style:none;display:flex;flex-direction:column;gap:8px;
+    padding:2px 8px 4px 2px;border-radius:8px;overscroll-behavior:contain;position:relative}
+  .list:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .post{flex:0 0 auto;background:#FDF8F8;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px 10px}
+  /* The student's own post carries signals besides colour: a heavier border,
+     the person icon and the word "You". */
+  .post.mine{background:var(--highlight);border:2px solid var(--on-highlight);padding:8.5px 11.5px 9.5px}
+  .who{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin-bottom:3px}
+  .who .nm{font-size:15px;font-weight:600;color:var(--title);overflow-wrap:anywhere}
+  .who .ago{font-size:13px;color:var(--body);white-space:nowrap}
+  .you{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;letter-spacing:.03em;
+    color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:999px;padding:0 8px 0 5px;background:var(--bg)}
+  .you svg.ic{width:15px;height:15px}
+  .post .tx{font-size:16px;line-height:1.45;color:var(--title);overflow-wrap:anywhere}
+  .post .st{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:13px;line-height:1.35;color:var(--body)}
+  .post .st svg.ic{width:15px;height:15px}
+
+  .empty{display:flex;align-items:flex-start;gap:8px;padding:6px 2px;font-size:16px;line-height:1.5;color:var(--body)}
+  .feed[aria-busy="true"] .empty{animation:breathe 1.4s var(--ease-io) infinite alternate}
+  @keyframes breathe{from{opacity:.55}to{opacity:1}}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    h1{font-size:22px;max-width:none}
+    .lead{font-size:16px;margin-bottom:16px}
+    .cols{display:flex;flex-direction:column;gap:16px}
+    .compose{padding:14px}
+    textarea{height:140px}
+    button.nav{font-size:16px;padding:13px 20px}
+    button.nav.ghost{padding:9px 14px;font-size:15px}
+    .postrow{flex-wrap:wrap}
+    #hint{flex:1 1 100%}
+    .feed{padding:12px}
+    .fhead,.note{margin-right:0}
+    .fhead{padding-right:0}
+    .list{overflow:visible;padding:2px 0 4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body class="t1">
+
+<div id="stage">
+  <div class="frame" id="frame" role="group" aria-label="Class discussion">
+
+    <div class="top">
+      <span class="prog" id="prog">Checkpoint · Class discussion</span>
+      <span class="segs" id="segs" aria-hidden="true"><i></i></span>
+    </div>
+
+    <h1 id="h1"></h1>
+    <p class="lead" id="lead"></p>
+
+    <div class="cols">
+      <form class="panel compose" id="form" novalidate autocomplete="off">
+        <label class="lab" for="text" id="textLab"></label>
+        <textarea id="text" aria-describedby="count" spellcheck="true"></textarea>
+        <div class="count" id="count" aria-live="polite"></div>
+
+        <label class="lab" for="name" id="nameLab"></label>
+        <input type="text" id="name" maxlength="40" autocomplete="given-name">
+
+        <div class="postrow">
+          <button class="nav" id="post" type="submit" disabled></button>
+          <div id="hint" aria-live="polite"></div>
+        </div>
+      </form>
+
+      <section class="panel feed" id="feed" aria-labelledby="fh" aria-busy="false">
+        <div class="fhead">
+          <span id="fhIcon"></span>
+          <h2 id="fh"></h2>
+          <span class="fside">
+            <span class="fcount" id="fcount"></span>
+            <span class="more" id="more" hidden></span>
+          </span>
+        </div>
+        <div class="note" id="note" hidden></div>
+        <ul class="list" id="list" tabindex="0" aria-labelledby="fh"></ul>
+      </section>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf p{margin-bottom:12px}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>On day 8, what one question would have found the cause fastest?</h2>
+    <p>By day 8, forty of Cumberland's computers had lost their antivirus. Write the one question you would have asked the team that day to find out why, in one sentence.</p>
+    <div class="box"><p>This class board needs JavaScript to post. Write your question in your notes instead, so you have it ready.</p></div>
+  </div>
+</noscript>
+
+<script>
+const ENDPOINT = "";  // paste the Apps Script web app URL (ends in /exec), the same one the class poll uses
+const BOARD_ID = "vciso-p2-m12-day8";
+
+/* ---------------- the board ----------------
+   To reuse this file for another board, change ENDPOINT, BOARD_ID and this
+   block. BOARD_ID must also be listed in BOARDS in Code.gs. */
+const BOARD = {
+  question:    "On day 8, what one question would have found the cause fastest?",
+  how:         "By day 8, forty of Cumberland's computers had lost their antivirus. Write the one question you would have asked the team that day to find out why, in one sentence.",
+  textLabel:   "Your question",
+  placeholder: "For example, start with What, Who or When",
+  nameLabel:   "Your first name",
+  nameOpt:     " (optional)",
+  namePh:      "Anonymous",
+  postLabel:   "Post",
+  maxText:     500,
+  maxName:     40,
+  feedHead:    "What your class asked",
+  hintEmpty:   "Write your question to post it.",
+  hintReady:   "Leave the name blank to post as Anonymous.",
+  hintTags:    "Write your question in words to post it.",
+  posted:      "Posted. Your question is at the top of the list.",
+  savedHere:   "Saved. You can move on whenever you are ready.",
+  visitOnly:   "Kept for this visit only. Copy it into your notes so you have it.",
+  loading:     "Loading your class's questions",
+  emptyClass:  "No one has posted yet. Yours can be the first.",
+  emptyMine:   "Your question will show here after you post it.",
+  offline:     "Your classmates' questions will show up here once the class board is switched on. You do not need to do anything. What you post is saved on this device, and your class will see it then.",
+  offlineMem:  "Your classmates' questions will show up here once the class board is switched on. You do not need to do anything.",
+  failed:      "Your classmates' questions could not load right now. Anything you post is saved on this device and sent the next time this page connects.",
+  slowDown:    "You just posted. Wait a few seconds and it will be sent.",
+  /* "5 times" must match MAX_POSTS_PER_CLIENT in Code.gs. Change both together. */
+  tooMany:     "You have posted 5 times here, which is the most one person can post on this board. This one is saved on this device.",
+  full:        "This board is full, so new questions cannot be added. Yours is saved on this device.",
+  pendingLine: "Saved on this device. Not sent to the class yet.",
+  pendingMem:  "Not sent to the class yet.",
+  localLine:   "Saved on this device only.",
+  localMem:    "Kept for this visit only.",
+  more:        "Scroll to see more",
+  one:         "1 question",
+  many:        " questions",
+  retryLabel:  "Try again",
+  you:         "You",
+  anon:        "Anonymous",
+  timeoutMs:   8000,
+  refreshMs:   45000
+};
+
+(function(){
+  "use strict";
+
+  var POSTS_KEY = "disc-posts:" + BOARD_ID;   /* this student's own posts on this board */
+  var DRAFT_KEY = "disc-draft:" + BOARD_ID;   /* an unsent draft */
+  var NAME_KEY  = "disc-name";                /* the first name, shared by every board */
+  var CLIENT_KEY = "poll-client-id";          /* one per browser, shared with the class polls */
+  var CODE = /^[A-Za-z0-9_-]{1,64}$/;
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    chats:'<path d="M8.5 15.5H6l-3 2.5V6.5A2 2 0 0 1 5 4.5h10a2 2 0 0 1 2 2v1"/><path d="M21 20.5l-3-2.5h-6.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2H19a2 2 0 0 1 2 2z"/>',
+    person:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.3-3.6 4.2-5.6 7.5-5.6s6.2 2 7.5 5.6"/>',
+    send:'<path d="M4 12h9"/><path d="M4.2 4.6l16 7.4-16 7.4 2.6-7.4z"/>',
+    hourglass:'<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M7.5 3.5c0 4.2 4.5 5.8 4.5 8.5s-4.5 4.3-4.5 8.5M16.5 3.5c0 4.2-4.5 5.8-4.5 8.5s4.5 4.3 4.5 8.5"/>',
+    info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6v.1"/>',
+    retry:'<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
+    warn:'<path d="M12 4l9 15.5H3z"/><path d="M12 10v4.5"/><path d="M12 17.2v.1"/>',
+    device:'<rect x="6.5" y="3" width="11" height="18" rx="2"/><path d="M10.5 6h3"/>',
+    pen:'<path d="M15.5 4.5l4 4L9 19H5v-4z"/><path d="M13 7l4 4"/>',
+    down:'<path d="M6 9.5l6 6 6-6"/>'
+  };
+  function ic(name){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[name] + "</svg>"; }
+
+  /* ---------------- storage ----------------
+     Every access is wrapped. Storage can be blocked in some embeds, and a
+     blocked API must degrade quietly, never take the page down. When it is
+     blocked, posts live in memory for this visit. */
+  var mem = {};
+  function sget(k){ try{ var v = window.localStorage.getItem(k); return v === null ? (k in mem ? mem[k] : null) : v; }catch(e){ return k in mem ? mem[k] : null; } }
+  function sset(k, v){ mem[k] = v; try{ window.localStorage.setItem(k, v); return true; }catch(e){ return false; } }
+  function sdel(k){ delete mem[k]; try{ window.localStorage.removeItem(k); }catch(e){} }
+  /* Can this browser keep things after the page closes? If not, the page
+     never says "saved on this device". */
+  var stored = (function(){ try{ var k = "disc-probe"; window.localStorage.setItem(k, "1"); window.localStorage.removeItem(k); return true; }catch(e){ return false; } })();
+  function savedMsg(){ return stored ? BOARD.savedHere : BOARD.visitOnly; }
+
+  var memClient = null;
+  function clientId(){
+    var id = sget(CLIENT_KEY);
+    if(id && CODE.test(id)) return id;
+    if(memClient) return memClient;
+    id = randomCode(32);
+    memClient = id;
+    sset(CLIENT_KEY, id);
+    return id;
+  }
+  function randomCode(len){
+    var id = "";
+    try{
+      var b = new Uint8Array(Math.ceil(len / 2));
+      window.crypto.getRandomValues(b);
+      for(var n = 0; n < b.length; n++) id += ("0" + b[n].toString(16)).slice(-2);
+    }catch(e){
+      while(id.length < len) id += Math.random().toString(36).slice(2);
+    }
+    return id.slice(0, len);
+  }
+
+  /* My posts: [{ id, name, text, time, status }]. status is "pending" until
+     the server has answered ok, then "sent". "local" means the server will
+     never take it (the per-person limit), so it is not sent again. */
+  function loadMine(){
+    try{
+      var a = JSON.parse(sget(POSTS_KEY));
+      if(!Array.isArray(a)) return [];
+      return a.filter(function(p){
+        return p && typeof p === "object" && typeof p.id === "string" && CODE.test(p.id) &&
+          typeof p.text === "string" && p.text && typeof p.time === "number";
+      }).map(function(p){
+        return { id: p.id, name: typeof p.name === "string" ? cut(p.name, BOARD.maxName) : "",
+          text: p.text.slice(0, BOARD.maxText), time: p.time,
+          status: (p.status === "sent" || p.status === "local") ? p.status : "pending" };
+      });
+    }catch(e){ return []; }
+  }
+  function saveMine(){ sset(POSTS_KEY, JSON.stringify(state.mine)); }
+
+  /* The same tidy the server does: tags out, line breaks to spaces, runs of
+     spaces squeezed. Display always escapes as well; this is not the guard. */
+  function clean(s){
+    return String(s == null ? "" : s)
+      .replace(/<[^>]*>/g, " ")
+      .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, " ")
+      /* invisible and direction-flipping characters: they could make a blank
+         post or show text backwards. The same list is in cleanText_ in Code.gs. */
+      .replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  /* Cut to n characters without splitting an emoji in half. */
+  function cut(s, n){ return s.slice(0, n).replace(/[\uD800-\uDBFF]$/, ""); }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+
+  /* ---------------- network ----------------
+     GET reads the board. POST sends one post with a text/plain body and no
+     other header, so the browser sends it as a CORS simple request and never
+     asks for a preflight. Redirects are followed (Apps Script answers /exec
+     with a redirect). Never mode "no-cors": that hides the answer. Anything
+     slower than timeoutMs, not JSON, or without ok === true is a failure.
+     "busy, try again" is retried twice, 1.5 s apart, like the poll. */
+  var BUSY = "busy, try again", BUSY_RETRIES = 2, BUSY_WAIT_MS = 1500;
+
+  function call(method, payload){
+    var left = BUSY_RETRIES;
+    function attempt(){
+      return request(method, payload).catch(function(e){
+        if(e && e.message === BUSY && left > 0){
+          left--;
+          return new Promise(function(res){ setTimeout(res, BUSY_WAIT_MS); }).then(attempt);
+        }
+        throw e;
+      });
+    }
+    return attempt();
+  }
+
+  function request(method, payload){
+    return new Promise(function(resolve, reject){
+      if(!ENDPOINT){ reject(new Error("no endpoint")); return; }
+      var done = false, ctrl = null;
+      try{ ctrl = new AbortController(); }catch(e){}
+      var timer = setTimeout(function(){
+        if(done) return; done = true;
+        try{ if(ctrl) ctrl.abort(); }catch(e){}
+        reject(new Error("timeout"));
+      }, BOARD.timeoutMs);
+      var opts = { method: method, cache: "no-store", credentials: "omit", redirect: "follow" };
+      if(ctrl) opts.signal = ctrl.signal;
+      var url = ENDPOINT;
+      if(method === "GET"){
+        url += (ENDPOINT.indexOf("?") === -1 ? "?" : "&") + "action=list&board=" + encodeURIComponent(BOARD_ID) +
+          "&client=" + encodeURIComponent(clientId());
+      } else {
+        opts.headers = { "Content-Type": "text/plain;charset=utf-8" };
+        opts.body = JSON.stringify(payload);
+      }
+      var p;
+      try{ p = fetch(url, opts); }catch(e){ p = Promise.reject(e); }
+      p.then(function(res){
+        if(!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      }).then(function(j){
+        var r = parseBoard(j);   /* throws on ok !== true */
+        if(done) return; done = true; clearTimeout(timer);
+        resolve(r);
+      }).catch(function(e){
+        if(done) return; done = true; clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
+
+  function parseBoard(j){
+    if(!j || typeof j !== "object") throw new Error("not json");
+    if(j.ok !== true) throw new Error(typeof j.error === "string" ? j.error : "not ok");
+    if(j.board !== undefined && j.board !== BOARD_ID) throw new Error("wrong board");
+    var src = Array.isArray(j.posts) ? j.posts : [];
+    var posts = [];
+    src.forEach(function(p){
+      if(!p || typeof p !== "object") return;
+      var text = typeof p.text === "string" ? p.text.slice(0, 2000) : "";
+      if(!text.trim()) return;
+      var t = Number(p.time);
+      posts.push({
+        id: typeof p.id === "string" ? p.id : "",
+        name: typeof p.name === "string" ? p.name.slice(0, 80) : "",
+        text: text,
+        time: isFinite(t) && t > 0 ? t : 0,
+        mine: p.mine === true
+      });
+    });
+    var total = Number(j.total);
+    total = (isFinite(total) && total >= 0) ? Math.floor(total) : posts.length;
+    var now = Number(j.now);
+    return { posts: posts, total: Math.max(total, posts.length), skew: isFinite(now) && now > 0 ? now - Date.now() : 0 };
+  }
+
+  /* ---------------- state and elements ---------------- */
+  var el = {};
+  ["h1","lead","form","textLab","text","count","nameLab","name","post","hint","feed","fhIcon","fh","fcount","more","note","list","live"]
+    .forEach(function(id){ el[id] = document.getElementById(id); });
+
+  var state = {
+    mine: loadMine(),
+    server: null,        /* the last good board from the server, or null */
+    conn: ENDPOINT ? "loading" : "off",   /* off | loading | ok | fail */
+    busy: false,
+    msg: "",             /* a calm line about the last post, if any */
+    msgKey: "",          /* which line that is: posted | slowDown | saved | other */
+    fails: 0             /* failed reads in a row */
+  };
+  var runId = 0, gapTimer = null;
+
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+
+  /* ---------------- the left side ---------------- */
+  function renderStatic(){
+    el.h1.textContent = BOARD.question;
+    el.lead.textContent = BOARD.how;
+    el.textLab.textContent = BOARD.textLabel;
+    el.text.placeholder = BOARD.placeholder;
+    el.nameLab.innerHTML = esc(BOARD.nameLabel) + '<span class="opt">' + esc(BOARD.nameOpt) + "</span>";
+    el.name.placeholder = BOARD.namePh;
+    el.name.maxLength = BOARD.maxName;
+    el.post.innerHTML = ic("send") + esc(BOARD.postLabel);
+    el.fhIcon.innerHTML = ic("chats");
+    el.fh.textContent = BOARD.feedHead;
+    el.text.value = sget(DRAFT_KEY) || "";
+    el.name.value = cut(sget(NAME_KEY) || "", BOARD.maxName);
+  }
+
+  function syncCompose(){
+    var raw = el.text.value, n = raw.length, over = n - BOARD.maxText;
+    var c = el.count;
+    if(over > 0){
+      c.className = "count over";
+      c.innerHTML = ic("warn") + "<span>" + n + " of " + BOARD.maxText + " characters, " + over + " too many</span>";
+      el.text.setAttribute("aria-invalid", "true");
+    } else {
+      c.className = "count";
+      c.innerHTML = "<span>" + n + " of " + BOARD.maxText + " characters</span>";
+      el.text.removeAttribute("aria-invalid");
+    }
+    var ok = over <= 0 && clean(raw).length > 0;
+    el.post.disabled = !ok || state.busyPost === true;
+    if(state.msg && !raw) { el.hint.innerHTML = state.msg; return; }
+    state.msg = ""; state.msgKey = "";
+    if(!raw.trim()) el.hint.textContent = BOARD.hintEmpty;
+    else if(!clean(raw)) el.hint.textContent = BOARD.hintTags;
+    else if(over > 0) el.hint.textContent = "Please shorten it a little to post.";
+    else el.hint.textContent = BOARD.hintReady;
+  }
+
+  /* ---------------- the right side ---------------- */
+  function ago(t, skew){
+    var s = Math.max(0, (Date.now() + (skew || 0) - t) / 1000);
+    if(!t || s < 60) return "just now";
+    var m = Math.floor(s / 60);
+    if(m < 60) return m === 1 ? "1 minute ago" : m + " minutes ago";
+    var h = Math.floor(m / 60);
+    if(h < 24) return h === 1 ? "1 hour ago" : h + " hours ago";
+    var d = Math.floor(h / 24);
+    return d === 1 ? "1 day ago" : d + " days ago";
+  }
+
+  /* What the list shows. Connected: the server's posts, plus any of mine the
+     server has not got yet. Not connected: only mine, from this device. */
+  function visible(){
+    var mineIds = {};
+    state.mine.forEach(function(p){ mineIds[p.id] = p; });
+    var out = [];
+    if(state.server){
+      var seen = {};
+      state.server.posts.forEach(function(p){
+        seen[p.id] = true;
+        out.push({ id: p.id, name: p.name, text: p.text, time: p.time, skew: state.server.skew,
+          mine: p.mine || !!(p.id && mineIds[p.id]), status: "sent" });
+      });
+      state.mine.forEach(function(p){
+        if(p.status !== "sent" && !seen[p.id]) out.push({ id: p.id, name: p.name, text: p.text, time: p.time, skew: 0, mine: true, status: p.status });
+      });
+    } else {
+      state.mine.forEach(function(p){ out.push({ id: p.id, name: p.name, text: p.text, time: p.time, skew: 0, mine: true, status: p.status }); });
+    }
+    /* skew is server clock minus this device's clock, so time - skew puts every
+       post on this device's clock before comparing. */
+    out.sort(function(a, b){ return (b.time - b.skew) - (a.time - a.skew); });
+    return out;
+  }
+
+  function renderFeed(){
+    var items = visible();
+    el.feed.setAttribute("aria-busy", state.conn === "loading" ? "true" : "false");
+
+    /* the count, only when the class's posts are really there */
+    if(state.server){
+      var extra = 0;
+      items.forEach(function(p){ if(p.status !== "sent") extra++; });
+      var n = state.server.total + extra;
+      el.fcount.textContent = n === 0 ? "" : n === 1 ? BOARD.one : n + BOARD.many;
+    } else el.fcount.textContent = "";
+
+    /* the calm note */
+    var note = "";
+    if(state.conn === "off") note = ic("info") + '<span class="grow">' + esc(stored ? BOARD.offline : BOARD.offlineMem) + "</span>";
+    else if(state.conn === "fail") note = ic("info") + '<span class="grow">' + esc(BOARD.failed) +
+      '<br><button class="nav ghost" id="retry" type="button">' + ic("retry") + esc(BOARD.retryLabel) + "</button></span>";
+    el.note.hidden = !note;
+    el.note.innerHTML = note;
+    var retry = document.getElementById("retry");
+    if(retry) retry.addEventListener("click", function(){ if(!state.busy) refresh(true); });
+
+    /* the posts */
+    var h = "";
+    if(!items.length){
+      if(state.conn === "loading") h = '<li class="empty">' + ic("hourglass") + "<span>" + esc(BOARD.loading) + "</span></li>";
+      else if(state.conn === "ok") h = '<li class="empty">' + ic("pen") + "<span>" + esc(BOARD.emptyClass) + "</span></li>";
+      else h = '<li class="empty">' + ic("pen") + "<span>" + esc(BOARD.emptyMine) + "</span></li>";
+    }
+    items.forEach(function(p){
+      var name = clean(p.name) || BOARD.anon;
+      h += '<li class="post' + (p.mine ? " mine" : "") + '">' +
+        '<div class="who"><span class="nm">' + esc(name) + "</span>" +
+          (p.mine ? '<span class="you">' + ic("person") + esc(BOARD.you) + '<span class="sr">, your post</span></span>' : "") +
+          '<span class="ago" data-t="' + p.time + '" data-s="' + p.skew + '">' + esc(ago(p.time, p.skew)) + "</span></div>" +
+        '<p class="tx">' + esc(p.text) + "</p>" +
+        (p.status === "pending" && ENDPOINT ? '<p class="st">' + ic("device") + "<span>" + esc(stored ? BOARD.pendingLine : BOARD.pendingMem) + "</span></p>" : "") +
+        (p.status === "local" ? '<p class="st">' + ic("device") + "<span>" + esc(stored ? BOARD.localLine : BOARD.localMem) + "</span></p>" : "") +
+        "</li>";
+    });
+    var top = el.list.scrollTop;
+    el.list.innerHTML = h;
+    el.list.scrollTop = top;
+    syncMore();
+  }
+
+  /* "Scroll to see more" shows only while the list is taller than its box
+     (never on a phone, where the list is not a scroll box). */
+  function syncMore(){
+    if(!el.more.innerHTML) el.more.innerHTML = ic("down") + "<span>" + esc(BOARD.more) + "</span>";
+    var phone = window.matchMedia("(max-width:599px)").matches;
+    el.more.hidden = phone || el.list.scrollHeight <= el.list.clientHeight + 2;
+  }
+
+  function tickTimes(){
+    var spans = el.list.querySelectorAll(".ago");
+    for(var n = 0; n < spans.length; n++){
+      spans[n].textContent = ago(Number(spans[n].getAttribute("data-t")), Number(spans[n].getAttribute("data-s")));
+    }
+  }
+
+  /* ---------------- talking to the board ----------------
+     Send any of my posts the server has not confirmed, one at a time, then
+     read the board. Every answer has the same shape, so the last one wins. */
+  function refresh(showLoading){
+    if(!ENDPOINT){ state.conn = "off"; renderFeed(); return Promise.resolve(); }
+    var my = ++runId;
+    state.busy = true;
+    if(showLoading && !state.server){ state.conn = "loading"; renderFeed(); }
+
+    var queue = state.mine.filter(function(p){ return p.status === "pending"; });
+    queue.sort(function(a, b){ return a.time - b.time; });
+
+    function next(lastBoard){
+      if(my !== runId) return Promise.resolve(null);
+      var p = queue.shift();
+      if(!p) return lastBoard ? Promise.resolve(lastBoard) : call("GET");
+      return call("POST", { action: "post", board: BOARD_ID, name: p.name, text: p.text, client: clientId(), id: p.id })
+        .then(function(b){ markMine(p.id, "sent"); return next(b); }, function(e){
+          var m = e && e.message;
+          if(m === "too many posts" || m === "board full" || m === "too long" || m === "empty text" || m === "bad text" || m === "bad id"){
+            markMine(p.id, "local");
+            setMsg(m === "board full" ? BOARD.full : m === "too many posts" ? BOARD.tooMany : savedMsg(), "other");
+            return next(lastBoard);
+          }
+          if(m === "slow down"){
+            /* The server wants a short gap between posts. Try again after it. */
+            setMsg(BOARD.slowDown, "slowDown");
+            clearTimeout(gapTimer);
+            gapTimer = setTimeout(function(){ if(!state.busy) refresh(false); }, 11000);
+            return lastBoard ? Promise.resolve(lastBoard) : call("GET");
+          }
+          throw e;
+        });
+    }
+
+    return next(null).then(function(b){
+      if(my !== runId || !b) return;
+      state.busy = false;
+      state.server = b;
+      state.conn = "ok";
+      state.fails = 0;
+      /* A post that was waiting has now gone out: say so, in place of the old line. */
+      var waiting = state.mine.some(function(p){ return p.status === "pending"; });
+      if(!waiting && (state.msgKey === "slowDown" || state.msgKey === "saved")) setMsg(BOARD.posted, "posted");
+      renderFeed();
+    }, function(){
+      if(my !== runId) return;
+      state.busy = false;
+      /* One dropped request keeps the last list, under the calm note. Two in a
+         row clear it, so an old list is never left standing as if it were live. */
+      state.fails++;
+      if(state.fails >= 2) state.server = null;
+      state.conn = "fail";
+      if(state.msgKey === "slowDown") setMsg(savedMsg(), "saved");
+      renderFeed();
+    });
+  }
+
+  function markMine(id, status){
+    state.mine.forEach(function(p){ if(p.id === id) p.status = status; });
+    saveMine();
+  }
+  function setMsg(text, key){
+    state.msg = esc(text);
+    state.msgKey = key || "other";
+    if(!el.text.value) el.hint.innerHTML = state.msg;
+    say(text);
+  }
+
+  /* ---------------- posting ---------------- */
+  function submit(){
+    var raw = el.text.value;
+    if(raw.length > BOARD.maxText) return;
+    var text = clean(raw);
+    if(!text) return;
+    var name = cut(clean(el.name.value), BOARD.maxName).trim();
+    var p = { id: "p" + randomCode(20), name: name, text: text, time: Date.now(), status: "pending" };
+    state.mine.push(p);
+    saveMine();
+    sset(NAME_KEY, name);
+    sdel(DRAFT_KEY);
+    el.text.value = "";
+    var first = ENDPOINT ? BOARD.posted : savedMsg();
+    state.msg = esc(first); state.msgKey = ENDPOINT ? "posted" : "saved";
+    syncCompose();
+    renderFeed();
+    el.list.scrollTop = 0;
+    say(first + " " + text);
+    /* On a phone the list sits below the writing box, so bring the new post
+       into view. Elsewhere keep the cursor in the box for the next one. */
+    var phone = window.matchMedia("(max-width:599px)").matches;
+    if(phone){
+      var firstPost = el.list.querySelector(".post");
+      if(firstPost && firstPost.scrollIntoView){ try{ firstPost.scrollIntoView({ block: "nearest", behavior: "smooth" }); }catch(e){ firstPost.scrollIntoView(false); } }
+    } else {
+      try{ el.text.focus(); }catch(e){}
+    }
+    if(ENDPOINT){
+      state.busyPost = true; syncCompose();
+      refresh(false).then(function(){
+        state.busyPost = false; syncCompose();
+        if(state.conn === "fail" && state.msgKey === "posted") setMsg(savedMsg(), "saved");
+      });
+    }
+  }
+
+  el.form.addEventListener("submit", function(e){ e.preventDefault(); if(!el.post.disabled) submit(); });
+  el.text.addEventListener("input", function(){ state.msg = ""; state.msgKey = ""; sset(DRAFT_KEY, el.text.value); syncCompose(); });
+  el.text.addEventListener("keydown", function(e){
+    if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); if(!el.post.disabled) submit(); }
+  });
+  el.name.addEventListener("input", function(){ sset(NAME_KEY, el.name.value); });
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){ fit(); syncMore(); });
+
+  /* ---------------- start ---------------- */
+  function start(){
+    renderStatic();
+    syncCompose();
+    renderFeed();
+    refresh(true);
+  }
+  try{ start(); }
+  catch(e){
+    /* Last line of defence: the page must never be blank. */
+    try{ renderStatic(); syncCompose(); }catch(e2){}
+  }
+  fit();
+
+  /* Times stay fresh, and the board is reread while the page is in view. */
+  setInterval(tickTimes, 30000);
+  setInterval(function(){
+    var shown = true;
+    try{ shown = document.visibilityState !== "hidden"; }catch(e){}
+    if(ENDPOINT && shown && !state.busy) refresh(false);
+  }, BOARD.refreshMs);
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs uses this. One slide. reset() clears this device's posts
+     and draft for this board; it never touches the server. */
+  window.__ex = {
+    slides: 1,
+    goto: function(n){ if(n !== 0) return false; renderFeed(); return true; },
+    reset: function(){
+      sdel(POSTS_KEY); sdel(DRAFT_KEY); runId++;
+      state.mine = []; state.msg = ""; state.msgKey = ""; state.fails = 0; state.busy = false; state.busyPost = false;
+      el.text.value = ""; syncCompose(); renderFeed(); refresh(false);
+    },
+    state: function(){ return { conn: state.conn, mine: state.mine.slice(), server: state.server, endpoint: ENDPOINT }; }
+  };
+})();
+</script>
+</body>
+</html>
