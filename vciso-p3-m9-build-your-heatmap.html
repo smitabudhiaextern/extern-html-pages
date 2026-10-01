@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build Your Heatmap</title>
+<!--
+  vCISO P3 Step 3, Module 9, "Build your heatmap".
+  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html),
+  matched to the house look of vciso-p3-m2-three-buckets.html and
+  vciso-p3-m2-control-or-written-rule.html.
+  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6.
+  Spec: 06-content/project-03/step-03/module-09-internal.md, "Build note".
+
+  The chart is built from the student's own twelve scores. Nothing here holds
+  an expected answer: the right set for each question is worked out from what
+  the student typed in.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. The Extern five, plus the vCISO per-slide tint ramp
+     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
+     Tint carries no meaning. Every shade of navy in the chart is an
+     rgba() of #001D69. Every shade also carries a label in words, so
+     colour is never the only signal.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+    /* The shade ramp, light to darkest, checked in grayscale:
+       at or above #DCE1FF, one step 45% navy, two steps 70% navy, three or
+       more solid navy with #484646 hairlines. Text on each is AA. */
+    --mid:rgba(0,29,105,.45);   /* the one-step-short shade, laid over --bg */
+    --deep:rgba(0,29,105,.70);  /* the two-steps-short shade, laid over --bg */
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in
+     layout and let the transform do all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px;max-width:74ch}
+  .intro p{font-size:17px;line-height:1.5}
+  .intro p b{color:var(--title);font-weight:600}
+  button.jump{font-family:inherit;font-size:15px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:7px;padding:8px 15px;cursor:pointer}
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- the instruction strip, with the slide's main action on the right ---- */
+  .how{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:44px;background:var(--highlight);color:var(--title);
+    border-left:4px solid var(--on-highlight);border-radius:6px;padding:5px 6px 5px 12px;font-size:15px;line-height:1.35}
+  .how .ht{flex:1 1 auto;min-width:0}
+  .how b{font-weight:600}
+  .how .sc{flex:0 0 auto;font-weight:600;color:var(--on-highlight);font-size:14px;white-space:nowrap}
+  .how button.nav{padding:8px 18px}
+
+  /* ---- slide 1: the twelve score pickers ----
+     Every picker starts empty. Nothing is pre-selected, so nothing on the
+     screen can be mistaken for an answer. */
+  .grid{flex:0 0 auto;display:flex;flex-direction:column;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:1px 14px}
+  .gr{display:grid;grid-template-columns:minmax(0,1fr) 200px 200px;column-gap:20px;align-items:center;
+    min-height:42px;border-top:1px solid var(--tint2)}
+  .gr:first-child{border-top:0}
+  .gr.gh{min-height:28px;align-items:center}
+  .gr.gh span{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight);line-height:1.3}
+  .gr.gh span i{font-style:normal;font-weight:400;letter-spacing:0;text-transform:none;color:var(--body);font-size:13px}
+  .fname{min-width:0;display:flex;flex-direction:column;gap:1px;padding:2px 0}
+  .fname b{font-size:16px;font-weight:600;color:var(--title);line-height:1.15}
+  .fname span{font-size:13px;line-height:1.25;color:var(--body)}
+
+  .pc{min-width:0}
+  .pcap{display:none;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
+  .seg{display:flex;gap:5px;border:0}
+  .seg legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .seg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+  .seg label{flex:0 0 auto;width:36px;height:32px;border-radius:7px;border:1.5px solid var(--on-highlight);
+    background:transparent;color:var(--on-highlight);font-size:16px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-user-select:none;
+    font-variant-numeric:tabular-nums;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out)}
+  .seg label:hover{background:var(--tint2)}
+  .seg input:checked + label{background:var(--on-highlight);color:var(--bg)}
+  .seg input:focus-visible + label{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- the chart. One row per function, always in the framework's own
+         order, never sorted, so the order gives nothing away. ---- */
+  .chart{flex:0 0 auto;align-self:start;width:100%;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:4px 14px 6px}
+  .cr{display:grid;align-items:center;column-gap:12px;min-height:46px;border-top:1px solid var(--tint2)}
+  .cr:first-child{border-top:0}
+  .cr.ch{min-height:30px}
+  .cr.ch span{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight)}
+  .chart.num .cr.ch span{font-size:12px;letter-spacing:.02em}
+  .chart.hid .cr{grid-template-columns:96px minmax(0,1fr);min-height:42px}
+  .chart.num .cr{grid-template-columns:78px 64px 58px 36px minmax(0,1fr);column-gap:7px;min-height:50px}
+  .chart.fin .cr{grid-template-columns:120px 70px 70px 60px minmax(0,1fr);min-height:38px}
+  .chart .ctitle + .cr{border-top:0}
+  .chart.fin .ctitle{padding:6px 0 4px}
+  .chart.fin .capt{border-top:1px solid var(--tint2);padding:5px 0 0}
+  .cr .fn{font-size:16px;font-weight:600;color:var(--title)}
+  .cr .ctr{text-align:center}
+  .sq{justify-self:center;width:32px;height:30px;border-radius:6px;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);color:var(--on-highlight);font-size:15px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+  .gp{justify-self:center;font-size:15px;font-weight:600;color:var(--title);font-variant-numeric:tabular-nums}
+
+  /* The heat cell. Lightest at or above target, darkest furthest away.
+     Every shade carries its label in words. */
+  .hc{min-width:0;height:34px;border-radius:7px;display:flex;align-items:center;padding:0 10px;
+    font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+  .hc.h0{background:var(--highlight);border:1.5px solid var(--on-highlight);color:var(--title)}
+  .hc.h1{background:linear-gradient(var(--mid),var(--mid)),var(--bg);border:1.5px solid var(--on-highlight);color:var(--title)}
+  .hc.h2{background:linear-gradient(var(--deep),var(--deep)),var(--bg);border:1.5px solid var(--on-highlight);color:var(--bg)}
+  .hc.h3{background:repeating-linear-gradient(135deg,#001D69 0 6px,#484646 6px 8.5px);border:1.5px solid var(--on-highlight);color:var(--bg)}
+  .hc.h3 .lb{background:var(--on-highlight);border-radius:4px;padding:2px 6px}
+  .chart.fin .hc{height:30px;font-size:12.5px}
+  /* In the narrower numbers chart the longest label wraps onto two lines
+     rather than being cut off. */
+  .chart.num .hc{white-space:normal;height:auto;min-height:34px;padding:4px 8px;line-height:1.25}
+  .chart.num .hc.h3 .lb{-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:1px 5px}
+  .chart.in .hc{animation:rin var(--t-reveal) var(--ease-over) both}
+  @keyframes rin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* ---- slide 2: read the chart without the numbers, judged by shade ---- */
+  .board.read{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:10px 18px}
+  .board.read .how{grid-column:1/-1}
+  .qs{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .qb{display:flex;flex-direction:column;gap:7px}
+  .qh{font-size:16px;font-weight:600;line-height:1.3;color:var(--title)}
+  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  button.pk{font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:38px;padding:5px 10px;
+    background:var(--bg);color:var(--title);border:1.5px solid var(--on-highlight);border-radius:8px;
+    font-size:15px;font-weight:600;text-align:left;
+    transition:background var(--t-fast) var(--ease-out)}
+  button.pk:hover:not(:disabled){background:var(--highlight)}
+  button.pk:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.pk:disabled{cursor:default}
+  button.pk .bx{flex:0 0 auto;width:18px;height:18px;border-radius:4px;border:1.5px solid var(--on-highlight);
+    background:var(--bg);color:var(--bg);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
+  button.pk .bx svg{display:block;width:12px;height:12px}
+  button.pk[aria-pressed="true"]{background:var(--highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
+  button.pk[aria-pressed="true"] .bx{background:var(--on-highlight)}
+  /* After See the numbers: a right pick keeps its tick, a wrong pick gets a
+     cross on a dashed outline, and an unpicked chip stays plain. */
+  button.pk.mk-no{background:var(--bg);box-shadow:none;border-style:dashed}
+  button.pk.mk-no .bx{background:var(--bg);color:var(--on-highlight)}
+  button.pk.mk-nu .bx{background:var(--on-highlight)}
+  button.pk.mk-nu .bx i{display:block;width:6px;height:6px;border-radius:50%;background:var(--bg)}
+  button.pk:disabled:not([aria-pressed="true"]){color:var(--body)}
+  .qnote{font-size:14px;line-height:1.4;color:var(--body)}
+  .qnote b{color:var(--title);font-weight:600}
+
+  /* ---- slide 3: the numbers, and how your reading compares ---- */
+  .board.rev{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:16px;align-items:start}
+  .fbk{min-width:0;display:flex;flex-direction:column;gap:7px}
+  .fbk:focus{outline:none}
+  .fq{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;padding:7px 12px;
+    display:flex;flex-direction:column;gap:3px}
+  .fq.miss{border-style:dashed}
+  .fq .fqh{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight)}
+  .fq .fa{font-size:15px;line-height:1.35;color:var(--title)}
+  .fq .fa b{font-weight:600}
+  .fq .fy{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4;color:var(--body)}
+  .fq .fy b{color:var(--title);font-weight:600}
+  .gl{flex:0 0 auto;width:20px;height:20px;margin-top:0;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .gl svg{display:block;width:12px;height:12px}
+  .miss .gl{border-style:dashed}
+  .fnote{font-size:14px;line-height:1.38;color:var(--body);background:var(--tint);border-radius:8px;padding:6px 11px}
+  .fnote b{color:var(--title);font-weight:600}
+  .fend{background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:0 9px 9px 0;
+    padding:7px 12px;font-size:15px;line-height:1.38;font-weight:600;color:var(--title)}
+  .fbk.in > *{animation:rin var(--t-reveal) var(--ease-over) both}
+  /* Only when a long set of picks would push the panel past the bar. */
+  .fbk.tight{gap:5px}
+  .fbk.tight .fq{padding:5px 11px;gap:2px}
+  .fbk.tight .fq .fa{font-size:14px;line-height:1.3}
+  .fbk.tight .fq .fy,.fbk.tight .fnote{font-size:13px;line-height:1.32}
+  .fbk.tight .fnote{padding:4px 10px}
+
+  /* ---- slide 4: the clean chart, for the screenshot ---- */
+  .board.fin{gap:7px}
+  .capt{flex:0 0 auto;font-size:13px;line-height:1.4;color:var(--body)}
+  .ctitle{flex:0 0 auto;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight)}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:10px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:46px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+  /* Start again asks first, in the bar, before anything is cleared. */
+  #confirm{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--title)}
+  #confirm b{font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .intro p{font-size:16px}
+    .how{flex-wrap:wrap;font-size:16px;padding:10px 12px}
+    .how .sc{font-size:15px}
+    .board.read,.board.rev{display:flex;flex-direction:column;gap:14px}
+    .grid{padding:4px 12px}
+    .gr{grid-template-columns:1fr 1fr;row-gap:8px;padding:10px 0}
+    .gr .fname{grid-column:1/-1}
+    .gr.gh .ghf{display:none}
+    .fname b{font-size:17px}
+    .fname span{font-size:15px}
+    .pcap{display:block}
+    .seg{gap:4px}
+    .seg label{width:auto;flex:1 1 0;min-width:0;height:40px;font-size:17px}
+    .chart{padding:4px 12px 6px}
+    /* With numbers showing, each row is two lines on a phone: the name and
+       its three numbers, then the status bar at full width, so its label
+       stays on one line and every heading has room. */
+    .chart.num .cr,.chart.fin .cr{grid-template-columns:minmax(0,1fr) 60px 54px 34px;column-gap:6px;row-gap:6px;
+      min-height:0;padding:9px 0}
+    .chart.num .cr .hc,.chart.fin .cr .hc{grid-column:1/-1}
+    .chart.num .cr.ch,.chart.fin .cr.ch{padding:6px 0}
+    .chart.num .cr.ch span:last-child,.chart.fin .cr.ch span:last-child{display:none}
+    .chart.num .cr.ch span,.chart.fin .cr.ch span{font-size:12px;letter-spacing:0}
+    .chart.num .hc,.chart.fin .hc{height:auto;min-height:34px}
+    .chart.hid .cr{grid-template-columns:86px minmax(0,1fr);min-height:52px}
+    .cr .fn{font-size:15px}
+    .sq{width:30px}
+    .hc{white-space:normal;height:auto;min-height:38px;padding:4px 8px;font-size:12px;line-height:1.25}
+    .chips{grid-template-columns:repeat(2,minmax(0,1fr))}
+    button.pk{min-height:46px;font-size:16px}
+    .qh{font-size:17px}
+    .qnote,.fnote,.fq .fy{font-size:16px;line-height:1.5}
+    .fq .fa{font-size:17px}
+    .fend{font-size:16px}
+    .capt{font-size:14px}
+    button.jump{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+    #hint .kb{display:none}
+    #confirm{flex:1 1 100%;flex-wrap:wrap;font-size:16px}
+    #confq{flex:1 1 100%}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Your profile, in color">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 4</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="nav ghost" id="again" type="button">Start again</button>
+      <div id="confirm" role="group" aria-labelledby="confq" hidden>
+        <b id="confq">Clear all my scores?</b>
+        <button class="nav" id="confyes" type="button">Yes, clear them</button>
+        <button class="nav ghost" id="confno" type="button">Keep them</button>
+      </div>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf a{color:#001D69}
+  </style>
+  <div class="nsf">
+    <h2>Your profile, in color</h2>
+    <p>This interactive needs JavaScript, which is switched off here. You can build the same chart by hand from your profile.</p>
+    <h3>Work out each gap</h3>
+    <p>For each of the six functions (Govern, Identify, Protect, Detect, Respond and Recover), take its <strong>Target</strong> score and subtract its <strong>Current</strong> score. That number is the gap.</p>
+    <h3>Give each gap a label</h3>
+    <ul>
+      <li><strong>At target:</strong> a gap of 0.</li>
+      <li><strong>Above target:</strong> a gap below 0. The current score is higher than the target. Open your profile and check you did not swap the two numbers.</li>
+      <li><strong>One step short:</strong> a gap of 1.</li>
+      <li><strong>Two steps short:</strong> a gap of 2.</li>
+      <li><strong>Three or more steps short:</strong> a gap of 3 or 4.</li>
+    </ul>
+    <p>On a heatmap, the bigger the gap, the darker the color.</p>
+    <h3>Read it</h3>
+    <p>Which functions do you think are furthest behind? Which do you think are closest to target? Functions with the same label get the same shade and count as the same, so name all of them.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- content ----------------
+     Function names and "What it covers" questions: verbatim from the
+     Profile tab of CSF profile template.xlsx (SME drop 2026-09-25).
+     The 0 to 4 scale: verbatim from its "The scale" tab.
+     Status labels and shading rules: module-09-internal.md, Build note. */
+  var FUNCS = [
+    { id:"gv", name:"Govern",   q:"Is there real ownership, policy, and oversight of security?" },
+    { id:"id", name:"Identify", q:"Does the company know what it has and where its risks are?" },
+    { id:"pr", name:"Protect",  q:"Are the safeguards (access, patching, training, config) actually in place?" },
+    { id:"de", name:"Detect",   q:"Would the company notice something going wrong?" },
+    { id:"rs", name:"Respond",  q:"Is there a tested process for when something does?" },
+    { id:"rc", name:"Recover",  q:"Can the company get back to normal, and has it proven it?" }
+  ];
+  var SCALE = [
+    "Not done at all",
+    "Ad hoc: happens informally, if at all; nothing written, nobody owns it",
+    "Partly in place: done in some areas, inconsistently, or without records",
+    "Defined and operating: done consistently, with evidence it operates",
+    "Managed and measured: done, measured, and improved over time"
+  ];
+  /* The four shades. Band 0 holds both "at target" and "above target",
+     band 3 holds gaps of 3 and 4: the spec draws each pair the same way,
+     so the questions are judged by shade, and the wording says so. */
+  var BAND_WORDS = ["at or above target", "one step short", "two steps short", "three or more steps short"];
+  var END_LINE = "Continue to get the heatmap for your profile.";
+  var SHOT_LINE = "Take a screenshot of just the chart. On a Mac press Cmd+Ctrl+Shift+4, on Windows press Windows+Shift+S, then drag a box around the chart. Paste it on the Profile tab, under the table.";
+
+  var S = [
+    { id:"scores", kind:"scores", label:"Your scores",        h1:"Your profile, in color" },
+    { id:"read",   kind:"read",   label:"Read the chart",     h1:"Read your chart without the numbers" },
+    { id:"check",  kind:"check",  label:"Check yourself",     h1:"Here are the numbers behind the colors" },
+    { id:"final",  kind:"final",  label:"Your heatmap",       h1:"Your gap heatmap" }
+  ];
+
+  /* ---------------- state ----------------
+     Everything a student enters lives in the page. A copy is kept in
+     localStorage so the chart is still there when they come back for the
+     screenshot; if storage is blocked, the deck works the same without it. */
+  var KEY = "vciso-p3-m9-build-your-heatmap-v1";
+  function fresh(){
+    var o = { cur:{}, tgt:{}, built:false, checked:false, pa:{}, pb:{}, slide:0 };
+    FUNCS.forEach(function(f){ o.cur[f.id] = null; o.tgt[f.id] = null; });
+    return o;
+  }
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function okScore(v){ return v === 0 || v === 1 || v === 2 || v === 3 || v === 4; }
+  function load(){
+    var o = fresh();
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return o;
+      FUNCS.forEach(function(f){
+        if(isPlain(raw.cur) && okScore(raw.cur[f.id])) o.cur[f.id] = raw.cur[f.id];
+        if(isPlain(raw.tgt) && okScore(raw.tgt[f.id])) o.tgt[f.id] = raw.tgt[f.id];
+      });
+      if(filled(o) === 12 && raw.built === true){
+        o.built = true;
+        FUNCS.forEach(function(f){
+          if(isPlain(raw.pa) && raw.pa[f.id] === 1) o.pa[f.id] = 1;
+          if(isPlain(raw.pb) && raw.pb[f.id] === 1) o.pb[f.id] = 1;
+        });
+        o.checked = raw.checked === true && Object.keys(o.pa).length > 0 && Object.keys(o.pb).length > 0;
+        if(raw.slide === 1) o.slide = 1;
+      }
+    }catch(e){}
+    return o;
+  }
+  /* Where a returning student lands: on the clean chart once they have
+     seen the numbers, so the screenshot is one step away; otherwise on the
+     slide they left, if it is still open to them. */
+  function startSlide(o){
+    if(o.checked) return 3;
+    if(o.built) return o.slide === 1 ? 1 : 0;
+    return 0;
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  function filled(o){
+    var n = 0;
+    FUNCS.forEach(function(f){ if(okScore(o.cur[f.id])) n++; if(okScore(o.tgt[f.id])) n++; });
+    return n;
+  }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var GLYPH = {
+    ok:'<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 8.6l3.3 3.1L13 4.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    out:'<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'
+  };
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [], ids = {};
+    S.forEach(function(s, n){
+      if(!s.id) problems.push("slide " + (n+1) + " has no id");
+      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+      ids[s.id] = 1;
+    });
+    if(FUNCS.length !== 6) problems.push("expected six functions");
+    if(SCALE.length !== 5) problems.push("expected a 0 to 4 scale");
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="intro"><p><b>This deck has authoring errors:</b> ' + problems.join("; ") + "</p></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"), confirm:document.getElementById("confirm"),
+    confyes:document.getElementById("confyes"), confno:document.getElementById("confno"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = startSlide(st);
+  var changedNote = false;   /* a score changed after the chart was built */
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+
+  /* ---------------- the arithmetic ----------------
+     Gap = target minus current (module-09-internal.md source trace). */
+  function gap(f){ return st.tgt[f.id] - st.cur[f.id]; }
+  function band(g){ return g <= 0 ? 0 : (g >= 3 ? 3 : g); }
+  function label(g){
+    if(g < 0) return "Above target";
+    if(g === 0) return "At target";
+    if(g === 1) return "One step short";
+    if(g === 2) return "Two steps short";
+    return "Three or more steps short";
+  }
+  /* A plain number for a gap. Only a gap below 0 carries a sign. */
+  function fmtGap(g){ return g < 0 ? "−" + (-g) : String(g); }
+  function names(list){
+    var n = list.map(function(f){ return f.name; });
+    if(n.length < 2) return n.join("");
+    return n.slice(0, -1).join(", ") + " and " + n[n.length-1];
+  }
+  function bands(){
+    var out = {};
+    FUNCS.forEach(function(f){ out[f.id] = band(gap(f)); });
+    return out;
+  }
+  /* The right set for each question, from the student's own scores. Ties:
+     every function in the furthest (or closest) shade is right. */
+  function answerSets(){
+    var b = bands(), vals = FUNCS.map(function(f){ return b[f.id]; });
+    var hi = Math.max.apply(null, vals), lo = Math.min.apply(null, vals);
+    return {
+      hi:hi, lo:lo, same:(hi === lo),
+      far:FUNCS.filter(function(f){ return b[f.id] === hi; }),
+      near:FUNCS.filter(function(f){ return b[f.id] === lo; })
+    };
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    el.back.disabled = (i === 0);
+    el.again.disabled = filled(st) === 0;
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else {
+      el.next.textContent = "Continue";
+      if(s.kind === "scores") el.next.disabled = !st.built;
+      else if(s.kind === "read") el.next.disabled = !st.checked;
+      else el.next.disabled = !st.checked;
+    }
+    if(s.kind === "read" && st.built){ el.chip.hidden = false; el.chip.textContent = "Numbers hidden"; }
+    else if((s.kind === "check" || s.kind === "final") && st.checked){ el.chip.hidden = false; el.chip.textContent = "Numbers showing"; }
+    else { el.chip.hidden = true; el.chip.textContent = ""; }
+  }
+
+  function render(focusSel){
+    var s = S[i];
+    askClear(false);
+    if(st.slide !== i){ st.slide = i; save(st); }
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    if(s.kind === "scores") renderScores(focusSel);
+    else if(s.kind === "read") renderRead(focusSel);
+    else if(s.kind === "check") renderCheck();
+    else if(s.kind === "final") renderFinal();
+    else {
+      el.board.className = "board";
+      el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
+    }
+    header();
+  }
+
+  function gate(msg, btn, to){
+    el.board.className = "board";
+    el.board.innerHTML = '<div class="intro"><p>' + msg + '</p><button class="jump" type="button" id="gate">' + esc(btn) + "</button></div>";
+    el.board.querySelector("#gate").addEventListener("click", function(){ i = to; render(); toTop(); });
+    el.hint.textContent = "";
+  }
+
+  /* ---------------- slide 1: your twelve scores ---------------- */
+  var SCORES_HINT = 'Click a number to pick it. <span class="kb">On a keyboard, Tab moves to the next row and the arrow keys change the number.</span>';
+  function scoreHint(v){
+    el.hint.innerHTML = "<span><b>Score " + v + ".</b> " + esc(SCALE[v]) + "</span>";
+  }
+  function restHint(){
+    if(changedNote && !st.built) el.hint.innerHTML = "<span><b>You changed a score,</b> so the chart needs building again. Press Build.</span>";
+    else el.hint.innerHTML = "<span>" + SCORES_HINT + "</span>";
+  }
+
+  function segHTML(f, which){
+    var v = st[which][f.id];
+    var nm = "s-" + which + "-" + f.id;
+    var lab = f.name + ", " + (which === "cur" ? "current" : "target") + " score";
+    var h = '<fieldset class="seg"><legend>' + esc(lab) + "</legend>";
+    for(var n=0;n<=4;n++){
+      var id = nm + "-" + n;
+      h += '<input type="radio" name="' + nm + '" id="' + id + '" value="' + n + '" data-f="' + f.id + '" data-w="' + which + '"' + (v === n ? " checked" : "") + ">" +
+           '<label for="' + id + '" data-v="' + n + '" aria-label="' + n + ". " + esc(SCALE[n]) + '">' + n + "</label>";
+    }
+    return h + "</fieldset>";
+  }
+
+  function renderScores(focusSel){
+    var n = filled(st);
+    el.board.className = "board";
+    var how = '<div class="how"><span class="ht">Copy the Current and Target columns from your Cumberland CSF Profile. Each one is a whole number from 0 to 4.</span>' +
+      '<span class="sc" id="cnt">' + n + " of 12 filled</span>" +
+      '<button class="nav" id="build" type="button"' + (n === 12 ? "" : " disabled") + ">Build</button></div>";
+    var rows = '<div class="gr gh"><span class="ghf">Function</span>' +
+      "<span>Current <i>today</i></span>" +
+      "<span>Target <i>where it should be</i></span></div>";
+    FUNCS.forEach(function(f){
+      rows += '<div class="gr"><div class="fname"><b>' + esc(f.name) + "</b><span>" + esc(f.q) + "</span></div>" +
+        '<div class="pc"><span class="pcap" aria-hidden="true">Current</span>' + segHTML(f, "cur") + "</div>" +
+        '<div class="pc"><span class="pcap" aria-hidden="true">Target</span>' + segHTML(f, "tgt") + "</div></div>";
+    });
+    el.board.innerHTML = how + '<div class="grid">' + rows + "</div>";
+    wireScores();
+    restHint();
+    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
+  }
+
+  function wireScores(){
+    Array.prototype.forEach.call(el.board.querySelectorAll(".seg input"), function(inp){
+      inp.addEventListener("change", function(){
+        setScore(inp.dataset.f, inp.dataset.w, +inp.value);
+      });
+      inp.addEventListener("focus", function(){ scoreHint(+inp.value); });
+      inp.addEventListener("blur", function(){ restHint(); });
+    });
+    Array.prototype.forEach.call(el.board.querySelectorAll(".seg label"), function(lb){
+      lb.addEventListener("mouseenter", function(){ scoreHint(+lb.dataset.v); });
+      lb.addEventListener("mouseleave", function(){ restHint(); });
+    });
+    var b = el.board.querySelector("#build");
+    if(b) b.addEventListener("click", build);
+  }
+
+  function setScore(fid, which, v){
+    if(!okScore(v) || !(fid in st[which])) return;
+    if(st[which][fid] === v) return;
+    st[which][fid] = v;
+    if(st.built){
+      st.built = false; st.checked = false; st.pa = {}; st.pb = {};
+      changedNote = true;
+      restHint();
+    }
+    save(st);
+    var n = filled(st);
+    var cnt = el.board.querySelector("#cnt"), b = el.board.querySelector("#build");
+    if(cnt) cnt.textContent = n + " of 12 filled";
+    if(b) b.disabled = n !== 12;
+    header();
+    say(FUNCS.filter(function(f){ return f.id === fid; })[0].name + ", " + (which === "cur" ? "current" : "target") + ": " + v + ". " + n + " of 12 filled.");
+  }
+
+  function build(){
+    if(filled(st) !== 12) return;
+    /* Built already and no score has changed since: keep the answers. */
+    if(st.built){
+      i = 1; render(); toTop();
+      say("Slide 2 of " + S.length + ". " + S[1].h1 + ".");
+      return;
+    }
+    st.built = true; st.checked = false; st.pa = {}; st.pb = {};
+    changedNote = false;
+    save(st);
+    i = 1; render(); toTop();
+    say("Chart built. Slide 2 of " + S.length + ". " + S[1].h1 + ".");
+  }
+
+  /* ---------------- the chart ---------------- */
+  function cellHTML(f){
+    var g = gap(f), b = band(g), lb = esc(label(g).toUpperCase());
+    return '<div class="hc h' + b + '"><span class="lb">' + lb + "</span></div>";
+  }
+  function chartHTML(mode, anim){
+    var cls = "chart " + (mode === "hidden" ? "hid" : mode === "final" ? "fin" : "num") + (anim ? " in" : "");
+    var h = '<div class="' + cls + '">';
+    if(mode === "hidden"){
+      h += '<div class="cr ch"><span>Function</span><span>How far from target</span></div>';
+      FUNCS.forEach(function(f){
+        h += '<div class="cr"><span class="fn">' + esc(f.name) + "</span>" + cellHTML(f) + "</div>";
+      });
+    } else {
+      /* On the last slide the title and caption sit inside the chart's own
+         box, so "screenshot just the chart" means one bordered block. */
+      if(mode === "final") h += '<div class="ctitle">Cumberland Claims Services: current and target profile</div>';
+      h += '<div class="cr ch"><span>Function</span><span class="ctr">Current</span><span class="ctr">Target</span><span class="ctr">Gap</span><span>Status</span></div>';
+      FUNCS.forEach(function(f){
+        h += '<div class="cr"><span class="fn">' + esc(f.name) + "</span>" +
+          '<span class="sq">' + st.cur[f.id] + "</span>" +
+          '<span class="sq">' + st.tgt[f.id] + "</span>" +
+          '<span class="gp">' + fmtGap(gap(f)) + "</span>" + cellHTML(f) + "</div>";
+      });
+      if(mode === "final") h += '<p class="capt">Scored 0 to 4 against the six functions of NIST CSF 2.0. Gap is the target minus the current score.</p>';
+    }
+    return h + "</div>";
+  }
+
+  /* ---------------- slide 2: read the chart without the numbers ---------------- */
+  var QA = { key:"pa", q:"Which functions do you think are furthest behind?" };
+  var QB = { key:"pb", q:"Which do you think are closest to target?" };
+
+  /* Once the numbers have been seen, each pick is marked: "ok" right, "no"
+     not one of them, "nu" neutral when every row is in one shade and there
+     is no furthest or closest to be right about. A tick never sits on a
+     wrong pick. */
+  function markOf(Q, f){
+    if(!st.checked || st[Q.key][f.id] !== 1) return "";
+    var a = answerSets();
+    if(a.same) return "nu";
+    var right = Q.key === "pa" ? a.far : a.near;
+    return right.some(function(x){ return x.id === f.id; }) ? "ok" : "no";
+  }
+  var MARK_SR = { ok:", picked, right", no:", picked, not one of them", nu:", picked" };
+
+  function chipsHTML(Q){
+    var locked = st.checked;
+    return '<div class="qb" role="group" aria-label="' + esc(Q.q) + '"><div class="qh">' + esc(Q.q) + '</div><div class="chips">' +
+      FUNCS.map(function(f){
+        var on = st[Q.key][f.id] === 1, mk = markOf(Q, f);
+        var box = !on ? "" : (mk === "no" ? GLYPH.out : (mk === "nu" ? "<i></i>" : GLYPH.ok));
+        return '<button class="pk' + (mk ? " mk-" + mk : "") + '" type="button" data-q="' + Q.key + '" data-f="' + f.id + '" aria-pressed="' + on + '"' + (locked ? " disabled" : "") + ">" +
+          '<span class="bx" aria-hidden="true">' + box + "</span>" + esc(f.name) +
+          (mk ? '<span class="sr">' + esc(MARK_SR[mk]) + "</span>" : "") + "</button>";
+      }).join("") + "</div></div>";
+  }
+
+  function readyToCheck(){ return Object.keys(st.pa).length > 0 && Object.keys(st.pb).length > 0; }
+
+  function renderRead(focusSel){
+    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first. Your chart appears here.", "Go to your scores", 0); return; }
+    el.board.className = "board read";
+    var ready = readyToCheck();
+    var how = '<div class="how"><span class="ht">Each row is one function, with the numbers hidden. The darker the row, the further that function is from its target.</span>' +
+      (st.checked ? '<span class="sc">Your picks are marked.</span>'
+                  : '<button class="nav" id="chk" type="button"' + (ready ? "" : " disabled") + ">See the numbers</button>") + "</div>";
+    var qs = '<div class="qs">' + chipsHTML(QA) + chipsHTML(QB) +
+      '<p class="qnote">Pick as many as you think fit. Rows with the same shade count as the same.</p></div>';
+    el.board.innerHTML = how + chartHTML("hidden", false) + qs;
+    if(!st.checked){
+      Array.prototype.forEach.call(el.board.querySelectorAll("button.pk"), function(b){
+        b.addEventListener("click", function(){ togglePick(b.dataset.q, b.dataset.f); });
+      });
+      var c = el.board.querySelector("#chk");
+      if(c) c.addEventListener("click", check);
+    }
+    if(st.checked) el.hint.innerHTML = answerSets().same
+      ? "<span>Every row is in one shade, so no pick is marked right or wrong. Press <b>Continue</b> to see the numbers again.</span>"
+      : "<span>A tick is a right pick and a cross is not one of them. Press <b>Continue</b> to see the numbers again.</span>";
+    else if(ready) el.hint.innerHTML = "<span>Press <b>See the numbers</b>.</span>";
+    else el.hint.innerHTML = "<span>Pick at least one function for each question, then press <b>See the numbers</b>.</span>";
+    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
+  }
+
+  function togglePick(q, fid){
+    if(st.checked || !st.built || (q !== "pa" && q !== "pb")) return;
+    if(st[q][fid] === 1) delete st[q][fid]; else st[q][fid] = 1;
+    save(st);
+    renderRead('button.pk[data-q="' + q + '"][data-f="' + fid + '"]');
+    header();
+    var f = FUNCS.filter(function(x){ return x.id === fid; })[0];
+    say(f.name + (st[q][fid] === 1 ? " picked." : " not picked."));
+  }
+
+  /* See the numbers: locks the picks and goes straight to slide 3. */
+  function check(){
+    if(!st.built || !readyToCheck()) return;
+    st.checked = true;
+    save(st);
+    i = 2; render(); toTop();
+    var fb = el.board.querySelector("#fbk");
+    if(fb){ try{ fb.focus({preventScroll:true}); }catch(e){ fb.focus(); } }
+    say("Slide 3 of " + S.length + ". " + S[2].h1 + ".");
+  }
+
+  /* ---------------- slide 3: the numbers, and your reading ---------------- */
+  /* How a set of functions in one shade is described. Band 0 says "at
+     target" or "above target" when every function in it is the same. */
+  function words(list){
+    var b = band(gap(list[0]));
+    if(b > 0) return BAND_WORDS[b];
+    var at = list.filter(function(f){ return gap(f) === 0; }).length;
+    if(at === list.length) return "at target";
+    if(at === 0) return "above target";
+    return BAND_WORDS[0];
+  }
+  function pickedText(list){ return list.length === 6 ? "You picked all six." : "You picked " + names(list) + "."; }
+  function pickedOf(Q){ return FUNCS.filter(function(f){ return st[Q.key][f.id] === 1; }); }
+
+  /* The verdict on one question, built from the student's own picks. Right
+     picks are credited by name even when other picks are wrong, and every
+     wrong pick gets its shade as the reason. */
+  function verdict(Q, right, which){
+    var picked = pickedOf(Q);
+    var rightIds = {}; right.forEach(function(f){ rightIds[f.id] = 1; });
+    var hit = picked.filter(function(f){ return rightIds[f.id]; });
+    var extra = picked.filter(function(f){ return !rightIds[f.id]; });
+    var missing = right.filter(function(f){ return st[Q.key][f.id] !== 1; });
+    var you = pickedText(picked);
+    if(extra.length){
+      /* Group the wrong picks by shade, so the reason stays one sentence. */
+      var parts = [];
+      [0,1,2,3].forEach(function(b){
+        var g = extra.filter(function(f){ return band(gap(f)) === b; });
+        if(g.length) parts.push(names(g) + (g.length === 1 ? " is " : " are ") + words(g));
+      });
+      var credit = hit.length
+        ? "<b>" + esc(names(hit)) + (hit.length === 1 ? " is" : " are") + " right.</b> "
+        : "<b>Not quite.</b> ";
+      var why = esc(parts.join("; ")) + ", so " + (extra.length === 1 ? "it is not one of the " : "they are not among the ") + which + ".";
+      var rest = missing.length ? " You also missed " + esc(names(missing)) + "." : "";
+      return { ok:false, txt:you + " " + credit + why + rest };
+    }
+    if(missing.length){
+      return { ok:true, txt:you + " <b>Right, and there " + (missing.length === 1 ? "is one more" : "are more") +
+        " in the same shade:</b> " + esc(names(missing)) + "." };
+    }
+    return { ok:true, txt:you + " <b>Right.</b>" };
+  }
+
+  function blockHTML(head, Q, set, which){
+    var v = verdict(Q, set, which);
+    var each = set.length === 1 ? ", " : (set.length === 2 ? ", both " : ", each ");
+    var ans = "<b>" + esc(names(set)) + "</b>" + each + esc(words(set)) + ".";
+    return '<div class="fq' + (v.ok ? "" : " miss") + '"><div class="fqh">' + esc(head) + '</div>' +
+      '<div class="fa">' + ans + "</div>" +
+      '<div class="fy"><span class="gl" aria-hidden="true">' + (v.ok ? GLYPH.ok : GLYPH.out) + "</span><span>" +
+      '<span class="sr">' + (v.ok ? "Right. " : "Not all right. ") + "</span>" + v.txt + "</span></div></div>";
+  }
+
+  /* Every row in one shade: no tick and no cross, just what they picked. */
+  function sameBlockHTML(a){
+    var head, ans;
+    if(a.hi === 0){
+      head = "Nothing is behind";
+      ans = "Every function is at or above its target.";
+    } else {
+      head = "Every row is the same shade";
+      ans = "All six functions are in one shade: <b>" + esc(BAND_WORDS[a.hi]) + "</b>. None is further behind or closer to target than the others.";
+    }
+    return '<div class="fq"><div class="fqh">' + esc(head) + '</div><div class="fa">' + ans + "</div>" +
+      '<div class="fy"><span><b>Furthest behind:</b> ' + esc(pickedText(pickedOf(QA))) + "</span></div>" +
+      '<div class="fy"><span><b>Closest to target:</b> ' + esc(pickedText(pickedOf(QB))) + "</span></div></div>";
+  }
+
+  function aboveNote(above){
+    if(above.length === 1)
+      return "<b>" + esc(above[0].name) + "'s current score is higher than its target.</b> Open your profile and check you did not swap the two numbers.";
+    return "<b>" + esc(names(above)) + " each have a current score higher than the target.</b> Open your profile and check you did not swap the two numbers in those rows.";
+  }
+
+  function renderCheck(){
+    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first.", "Go to your scores", 0); return; }
+    if(!st.checked){ gate("Answer the two questions on the chart first, then press <b>See the numbers</b>.", "Go to the questions", 1); return; }
+    var a = answerSets(), anim = !reduce;
+    el.board.className = "board rev";
+    var notes = [];
+    var above = FUNCS.filter(function(f){ return gap(f) < 0; });
+    if(above.length) notes.push(aboveNote(above));
+    if(a.hi === 3){
+      var gs = {}; a.far.forEach(function(f){ gs[gap(f)] = 1; });
+      if(Object.keys(gs).length > 1) notes.push("<b>Gaps of 3 and 4 share one shade,</b> so all of these count as furthest behind. The Gap column shows the exact numbers.");
+    }
+    var nearPast = a.near.some(function(f){ return gap(f) < 0; });
+    var blocks = a.same
+      ? sameBlockHTML(a)
+      : blockHTML("Furthest behind", QA, a.far, "furthest behind") +
+        blockHTML(nearPast ? "Closest to (or past) target" : "Closest to target", QB, a.near, "closest to target");
+    var fb = '<div class="fbk' + (anim ? " in" : "") + '" tabindex="-1" id="fbk">' + blocks +
+      notes.map(function(n){ return '<div class="fnote">' + n + "</div>"; }).join("") +
+      '<div class="fend">' + esc(END_LINE) + "</div></div>";
+    el.board.innerHTML = chartHTML("numbers", anim) + fb;
+    el.hint.innerHTML = "<span>Gap is the target minus the current score.</span>";
+    /* A long set of picks can make the panel taller than the board. Then the
+       closing line moves into the hint bar, and if that is still not enough
+       the panel tightens. Never on a phone, where the page scrolls. */
+    if(!window.matchMedia("(max-width:599px)").matches){
+      var box = el.board.querySelector("#fbk");
+      var over = function(){ return box.getBoundingClientRect().bottom > el.board.getBoundingClientRect().bottom + 1; };
+      if(over()){
+        var end = box.querySelector(".fend"); if(end) end.remove();
+        el.hint.innerHTML = "<span><b>" + esc(END_LINE) + "</b></span>";
+        if(over()) box.classList.add("tight");
+      }
+    }
+  }
+
+  /* ---------------- slide 4: the clean chart, for the screenshot ---------------- */
+  function renderFinal(){
+    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first.", "Go to your scores", 0); return; }
+    if(!st.checked){ gate("Answer the two questions on the chart first, then press <b>See the numbers</b>.", "Go to the questions", 1); return; }
+    el.board.className = "board fin";
+    el.board.innerHTML = '<div class="how"><span class="ht">' + esc(SHOT_LINE) + "</span></div>" + chartHTML("final", !reduce);
+    el.hint.innerHTML = "";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function toTop(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && el.next.disabled) return;
+    i = n; render(); toTop();
+    say("Slide " + (i+1) + " of " + S.length + ". " + S[i].h1 + ".");
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  /* Start again asks first. Nothing is cleared until "Yes, clear them". */
+  function askClear(on){
+    if(!el.confirm) return;
+    var was = !el.confirm.hidden;
+    el.confirm.hidden = !on;
+    el.again.hidden = on;
+    el.hint.hidden = on;
+    if(on){ try{ el.confno.focus({preventScroll:true}); }catch(e){ el.confno.focus(); } say("Clear all my scores? Yes, clear them, or Keep them."); }
+    else if(was && document.activeElement && el.confirm.contains(document.activeElement)) el.again.focus();
+  }
+  el.again.addEventListener("click", function(){ askClear(true); });
+  el.confno.addEventListener("click", function(){ askClear(false); el.again.focus(); say("Your scores are kept."); });
+  el.confyes.addEventListener("click", function(){
+    st = fresh(); save(st); changedNote = false; i = 0; render(); toTop();
+    say("Started again. All twelve scores are empty.");
+  });
+  el.confirm.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){ e.preventDefault(); askClear(false); el.again.focus(); }
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox" || r === "radiogroup";
+  }
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps through the deck with this. Keep it on every deck. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    fill:function(cur, tgt){
+      FUNCS.forEach(function(f, k){
+        if(cur && okScore(cur[k])) setScore(f.id, "cur", cur[k]);
+        if(tgt && okScore(tgt[k])) setScore(f.id, "tgt", tgt[k]);
+      });
+      if(i === 0) render();
+      return filled(st);
+    },
+    build:function(){ build(); return st.built; },
+    pick:function(q, names){
+      names.forEach(function(nm){
+        var f = FUNCS.filter(function(x){ return x.name === nm; })[0];
+        if(f) togglePick(q === "a" ? "pa" : "pb", f.id);
+      });
+      return true;
+    },
+    check:function(){ check(); return st.checked; },
+    reset:function(){ st = fresh(); save(st); changedNote = false; i = 0; render(); },
+    state:function(){ return JSON.parse(JSON.stringify({ i:i, st:st })); }
+  };
+})();
+</script>
+</body>
+</html>

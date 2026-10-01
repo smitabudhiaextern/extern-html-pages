@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guess the Date</title>
+<!--
+  vCISO P3 Step 1, Module 3, interactive: Guess the date.
+  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html),
+  matched to the house look of 09-assets/final/vciso-p3-m2-control-or-written-rule.html
+  and vciso-p3-m2-three-buckets.html.
+  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6.
+  Spec: 06-content/project-03/step-01/module-03-internal.md, "Build note".
+  Source of every word on the policy page: Doc from SME/SME drop 2026-09-25/
+  P3 Sample Pack/Shared/Information Security Policy v1.2.md, verbatim.
+  Answer: P3-3 in the same drop's Interactive content sets - P3.md.
+
+  Brief decisions carried here: no age in years anywhere, and no statement of
+  what the date means. That is the module checkpoint.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. The Extern five, plus the vCISO per-slide tint ramp
+     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
+     Tint carries no meaning. Every tint of navy is an rgba() of
+     #001D69. No state is ever signalled by colour alone.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:640ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in
+     layout and let the transform do all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:16px}
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px;max-width:74ch}
+  .intro p{font-size:17px;line-height:1.5}
+  .intro p b{color:var(--title);font-weight:600}
+  button.jump{font-family:inherit;font-size:15px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:7px;padding:8px 15px;cursor:pointer}
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* ---- slide 1: the policy's first page ----
+     The page is a facsimile: wording is the SME's, layout is ours. The
+     document-control block sits in its own column so the whole first page
+     fits the frame at a readable size. */
+  .page{flex:0 0 auto;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;
+    box-shadow:0 1px 4px rgba(0,29,105,.10);padding:10px 20px 12px}
+  .page .pt{font-size:18px;line-height:1.3;font-weight:700;color:var(--title);margin-bottom:6px}
+  .pg{display:grid;grid-template-columns:344px minmax(0,1fr);gap:24px;align-items:start}
+
+  .dc{position:relative;border-radius:5px;overflow:hidden}
+  table.dct{width:100%;border-collapse:collapse;font-size:14.5px;line-height:1.35}
+  table.dct td{padding:3px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.dct tr:first-child td{border-top:1px solid var(--line)}
+  table.dct td.k{width:134px;font-weight:600;color:var(--title);white-space:nowrap}
+  table.dct td.v{color:var(--body)}
+  .dc.covered table.dct{visibility:hidden}
+  /* After the reveal, the two rows the next slide uses carry a fill and a
+     marker, so the eye lands there. A pointer, not a verdict. */
+  table.dct tr.hl td{background:var(--highlight)}
+  table.dct tr.hl td.v{color:var(--title);font-weight:600}
+  table.dct tr.hl td.k::before{content:"\25B8";display:inline-block;width:12px;margin-left:-4px;color:var(--on-highlight)}
+
+  .cover{position:absolute;inset:0;background:var(--highlight);border:1.5px solid var(--on-highlight);border-radius:5px;
+    display:flex;align-items:center;gap:14px;padding:0 22px}
+  .cover svg{flex:0 0 auto;width:34px;height:34px}
+  .cover .cl{font-size:16px;line-height:1.4;font-weight:600;color:var(--title)}
+  .cover .cs{display:block;font-size:14px;font-weight:400;color:var(--body);margin-top:2px}
+  .cover.lift{animation:lift var(--t-reveal) var(--ease-io) both}
+  @keyframes lift{from{transform:none;opacity:1}to{transform:translateY(-104%);opacity:0}}
+  .dc.shown table.dct{animation:rin var(--t-reveal) var(--ease-over) both}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .dr p.in{font-size:14.5px;line-height:1.42;font-style:italic;color:var(--body)}
+  .dr hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+  .dr h3{font-size:16px;line-height:1.3;font-weight:700;color:var(--title);margin-bottom:4px}
+  .dr p.tx{font-size:14.5px;line-height:1.42;color:var(--body)}
+  /* Our gloss, not the policy's words: set apart from the page text.
+     Phones only. On the 960 canvas it pushes the year row under the bar,
+     and every layout that made room for it shrank the dates table. */
+  .dr p.gl{display:none;margin-top:6px;font-size:13px;line-height:1.35;color:var(--title);
+    background:var(--tint);border-left:3px solid var(--on-highlight);padding:3px 8px}
+
+  /* ---- slide 1: the line under the heading ---- */
+  .board.s1{gap:10px}
+  p.lead{flex:0 0 auto;font-size:15px;line-height:1.35;color:var(--body);margin-top:-6px;max-width:82ch}
+
+  /* ---- slide 1: the year picker ----
+     Nine identical outline buttons. Nothing looks chosen until a click. */
+  .yr{flex:0 0 auto;display:flex;align-items:center;gap:6px;min-height:46px}
+  .yr .yl{flex:0 0 auto;font-size:15px;font-weight:600;color:var(--title);margin-right:8px}
+  button.y{font-family:inherit;flex:0 0 auto;width:60px;height:44px;border-radius:8px;cursor:pointer;
+    font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;
+    background:var(--bg);color:var(--title);border:1.5px solid var(--on-highlight);
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
+  /* Hover never touches the pick: on touch screens :hover sticks after a
+     tap, and a light hover fill on the pick made its light text vanish. */
+  button.y:hover:not(:disabled):not([aria-pressed="true"]){background:var(--highlight)}
+  button.y:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  /* The pick: filled, with an inner ring. Fill plus ring plus the
+     "Your guess" line in the hint bar, never colour alone. */
+  button.y[aria-pressed="true"],
+  button.y[aria-pressed="true"]:hover,
+  button.y[aria-pressed="true"]:active,
+  button.y[aria-pressed="true"]:disabled{background:var(--on-highlight);color:var(--bg);box-shadow:inset 0 0 0 2px var(--bg)}
+  button.y:disabled{cursor:default}
+  button.y.dim{opacity:.38}
+  button.go{font-family:inherit;margin-left:auto;flex:0 0 auto;font-size:15px;font-weight:600;padding:12px 18px;border-radius:8px;
+    cursor:pointer;border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);
+    transition:opacity var(--t-fast) var(--ease-out)}
+  button.go:disabled{opacity:.34;cursor:not-allowed}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .yr .done{margin-left:auto;font-size:15px;font-weight:600;color:var(--title)}
+
+  /* ---- slide 2: your guess next to the dates ---- */
+  .tiles{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .tile{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:14px 18px 16px;
+    display:flex;flex-direction:column;gap:4px}
+  .tile.pol{background:var(--highlight);border-left-width:5px;border-radius:0 10px 10px 0}
+  .tile .tl{font-size:15px;font-weight:600;color:var(--on-highlight)}
+  .tile .tv{font-size:30px;line-height:1.2;font-weight:600;color:var(--title);font-variant-numeric:tabular-nums}
+  .tile .ts{font-size:14px;line-height:1.4;color:var(--body)}
+  .q16{flex:0 0 auto;background:var(--bg);border:1.5px solid var(--line);border-left:4px solid var(--on-highlight);
+    border-radius:0 10px 10px 0;padding:16px 22px 18px;display:flex;flex-direction:column;gap:8px}
+  .q16 .qh{font-size:16px;line-height:1.4;color:var(--body)}
+  .q16 .qh b{color:var(--title);font-weight:600}
+  .q16 blockquote{font-size:23px;line-height:1.35;font-weight:600;color:var(--title)}
+  .q16 .qg{font-size:15px;line-height:1.4;color:var(--body)}
+  .q16 .qn{font-size:16px;line-height:1.4;font-weight:600;color:var(--title)}
+  .endline{align-self:center;font-size:14px;font-weight:600;color:var(--title)}
+  .tiles.in,.q16.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .q16.in{animation-delay:120ms}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:12px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .intro p{font-size:16px}
+    .page{padding:14px 14px 16px}
+    .page .pt{font-size:18px}
+    .pg{grid-template-columns:1fr;gap:14px}
+    p.lead{font-size:16px;margin-top:-4px}
+    table.dct{font-size:16px}
+    table.dct td.k{width:42%;white-space:normal}
+    .cover{padding:0 16px}
+    .cover .cs{font-size:15px}
+    .dr p.in,.dr p.tx{font-size:16px;line-height:1.5}
+    .dr p.gl{display:block;font-size:15px}
+    .board.s1{gap:14px}
+    .q16 .qn{font-size:16px}
+    .dr h3{font-size:17px}
+    .yr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .yr .yl{grid-column:1/-1;font-size:16px;margin:0}
+    button.y{width:auto;height:50px;font-size:18px}
+    button.go,.yr .done{grid-column:1/-1;margin:6px 0 0;font-size:16px}
+    .tiles{grid-template-columns:1fr;gap:10px}
+    .tile .tv{font-size:26px}
+    .tile .tl{font-size:16px}
+    .tile .ts{font-size:15px}
+    .q16{padding:14px 16px}
+    .q16 .qh,.q16 .qg{font-size:16px}
+    .q16 blockquote{font-size:20px}
+    button.jump{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Guess the date">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 2</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="nav ghost" id="again" type="button" hidden>Start again</button>
+      <span class="endline" id="endline" hidden>Go back to the module and open the full policy.</span>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf strong{color:#1C1B1B}
+    .nsf table{border-collapse:collapse;margin:0 0 14px}
+    .nsf td{padding:4px 12px 4px 0;border-bottom:1px solid rgba(0,29,105,.26);vertical-align:top}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Here is the first page of Cumberland's security policy.</h2>
+    <p>Every company policy carries a date showing when someone last checked it was still right. What year do you think that was for this one? Pick any year from 2018 to 2026 and write it down before you read on.</p>
+
+    <h3>The block at the top of the policy</h3>
+    <table>
+      <tr><td><strong>Document</strong></td><td>Information Security Policy</td></tr>
+      <tr><td><strong>Version</strong></td><td>1.2</td></tr>
+      <tr><td><strong>Owner</strong></td><td>Chief Operating Officer</td></tr>
+      <tr><td><strong>Approved by</strong></td><td>R. Okafor, COO</td></tr>
+      <tr><td><strong>Effective date</strong></td><td>14 March 2022</td></tr>
+      <tr><td><strong>Last reviewed</strong></td><td>14 March 2022</td></tr>
+      <tr><td><strong>Next review due</strong></td><td>March 2023</td></tr>
+      <tr><td><strong>Classification</strong></td><td>Internal</td></tr>
+    </table>
+
+    <h3>Your guess, next to the dates</h3>
+    <p>Put the year you wrote down next to <strong>Last reviewed: 14 March 2022</strong> and <strong>Next review due: March 2023</strong>.</p>
+    <div class="box">
+      <p>Here is what the policy's own last section, Section 16, says about reviews: <strong>"This policy shall be reviewed at least annually and after any significant change."</strong></p>
+      <p>Annually means once a year. Shall means must.</p>
+      <p>Look at the three dates and the rule together. What do you notice?</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================ content ================
+     Every word on the policy page is verbatim from the 25 September 2026
+     drop of Information Security Policy v1.2.md. Do not edit it here. */
+  var POLICY = {
+    title:"Cumberland Claims Services: Information Security Policy",
+    block:[
+      ["Document", "Information Security Policy"],
+      ["Version", "1.2"],
+      ["Owner", "Chief Operating Officer"],
+      ["Approved by", "R. Okafor, COO"],
+      ["Effective date", "14 March 2022"],
+      ["Last reviewed", "14 March 2022"],
+      ["Next review due", "March 2023"],
+      ["Classification", "Internal"]
+    ],
+    intro:"This document sets out how Cumberland Claims Services protects the information it holds. It applies to all staff, contractors, and third parties with access to company systems.",
+    s1head:"1. Purpose",
+    s1:"Cumberland Claims Services holds sensitive personal, health, and financial information on behalf of its clients and their patients. This policy establishes the controls the company maintains to keep that information confidential, accurate, and available, and to meet its obligations under HIPAA and its client contracts.",
+    s16num:"16",
+    s16head:"Compliance and review",
+    s16:"This policy shall be reviewed at least annually and after any significant change."
+  };
+  /* Our gloss, shown beside the policy text, never inside it. */
+  var GLOSS_HIPAA = "HIPAA is the US law on protecting health data.";
+  /* The two rows the reveal puts the guess beside (spec, Build note). */
+  var HL = { "Last reviewed":1, "Next review due":1 };
+  function blockVal(k){ for(var n=0;n<POLICY.block.length;n++) if(POLICY.block[n][0] === k) return POLICY.block[n][1]; return ""; }
+
+  /* The picker: 2018 to 2026 (spec). */
+  var YEARS = [];
+  for(var y=2018; y<=2026; y++) YEARS.push(y);
+
+  var S = [
+    { id:"guess", kind:"guess", label:"Your guess", h1:"Here is the first page of Cumberland's security policy.",
+      lead:"Every company policy carries a date showing when someone last checked it was still right. What year do you think that was for this one?" },
+    { id:"dates", kind:"dates", label:"The dates",  h1:"Here is your guess next to the policy's own dates." }
+  ];
+
+  /* ================ state ================
+     localStorage is wrapped: a blocked storage API must degrade silently. */
+  var KEY = "vciso-p3-m3-guess-the-date-v1";
+  function fresh(){ return { pick:null, done:false }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!raw || typeof raw !== "object" || Array.isArray(raw)) return fresh();
+      var pick = YEARS.indexOf(raw.pick) >= 0 ? raw.pick : null;
+      return { pick:pick, done:!!(raw.done && pick !== null) };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+     var problems = [], ids = {};
+     S.forEach(function(s, n){
+       if(!s.id) problems.push("slide " + (n+1) + " has no id");
+       if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+       ids[s.id] = 1;
+     });
+     Object.keys(HL).forEach(function(k){ if(!blockVal(k)) problems.push('no block row "' + k + '"'); });
+     if(problems.length){
+       document.getElementById("board").innerHTML =
+         '<div class="intro"><p><b>This deck has authoring errors and will not '
+         + 'behave correctly:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+         + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+       throw new Error("deck data invalid: " + problems.join("; "));
+     }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"), endline:document.getElementById("endline"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function toTop(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+
+  /* An outline eye with a slash: Phosphor style, one weight, navy. */
+  var ICON_HIDDEN = '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/>' +
+    '<circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></svg>';
+
+  /* ================ chrome ================ */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    el.again.hidden = !st.done;
+    /* The last slide has no Continue. A plain line says where to go next. */
+    var end = (i === S.length-1);
+    el.next.hidden = end;
+    el.next.textContent = "Continue"; el.next.disabled = end || !st.done;
+    el.endline.hidden = !(end && st.done);
+  }
+
+  function render(anim){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.board.className = "board";
+    el.hint.textContent = "";
+    if(s.kind === "guess") renderGuess(false);
+    else if(s.kind === "dates") renderDates(anim);
+    else el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
+    el.frame.setAttribute("aria-label", el.h1.textContent);
+    header();
+  }
+
+  /* ================ slide 1: the page, the cover, the guess ================ */
+  function pageHTML(lifting){
+    var rows = POLICY.block.map(function(r){
+      return "<tr" + (st.done && HL[r[0]] ? ' class="hl"' : "") + '><td class="k">' + esc(r[0]) + '</td><td class="v">' + esc(r[1]) + "</td></tr>";
+    }).join("");
+    var covered = !st.done;
+    var cover = (covered || lifting)
+      ? '<div class="cover' + (lifting ? " lift" : "") + '" id="cover"' + (lifting ? ' aria-hidden="true"' : "") + ">" + ICON_HIDDEN +
+        '<span class="cl">The dates are hidden here.<span class="cs">Pick a year below, then press Uncover the block.</span></span></div>'
+      : "";
+    return '<div class="page" aria-label="The first page of the policy">' +
+      '<div class="pt">' + esc(POLICY.title) + "</div>" +
+      '<div class="pg">' +
+        '<div class="dc' + (covered ? " covered" : (lifting ? " shown" : "")) + '" id="dc">' +
+          '<table class="dct"' + (covered ? ' aria-hidden="true"' : ' aria-label="Document details"') + ">" + rows + "</table>" + cover +
+        "</div>" +
+        '<div class="dr"><p class="in">' + esc(POLICY.intro) + "</p><hr>" +
+          "<h3>" + esc(POLICY.s1head) + '</h3><p class="tx">' + esc(POLICY.s1) + "</p>" +
+          '<p class="gl">' + esc(GLOSS_HIPAA) + "</p></div>" +
+      "</div></div>";
+  }
+
+  function pickerHTML(){
+    var btns = YEARS.map(function(yr){
+      var mine = st.pick === yr;
+      return '<button class="y' + (st.done && !mine ? " dim" : "") + '" type="button" data-y="' + yr + '"' +
+        ' aria-pressed="' + (mine ? "true" : "false") + '"' + (st.done ? " disabled" : "") +
+        ' aria-label="' + yr + (mine ? ", your guess" : "") + '">' + yr + "</button>";
+    }).join("");
+    /* After the reveal the filled button and the "Your guess" label say it
+       once. No second "Your guess: X" line. */
+    var action = st.done
+      ? ""
+      : '<button class="go" id="go" type="button"' + (st.pick === null ? " disabled" : "") + ">Uncover the block</button>";
+    return '<div class="yr" role="group" aria-label="Your guess, the year">' +
+      '<span class="yl" aria-hidden="true">Your guess</span>' + btns + action + "</div>";
+  }
+
+  function guessHint(){
+    if(st.done) el.hint.innerHTML = "<span>There are the dates. Press <b>Continue</b> to see them next to your guess.</span>";
+    else if(st.pick === null) el.hint.innerHTML = "<span>Pick a year. You can change it until you press <b>Uncover the block</b>.</span>";
+    else el.hint.innerHTML = "<span><b>Your guess: " + st.pick + ".</b> You can still change it. When you are sure, press <b>Uncover the block</b>.</span>";
+  }
+
+  function renderGuess(lifting){
+    el.board.className = "board s1";
+    el.board.innerHTML = '<p class="lead">' + esc(S[i].lead || "") + "</p>" + pageHTML(lifting) + pickerHTML();
+    guessHint();
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.y"), function(b){
+      b.addEventListener("click", function(){ choose(+b.dataset.y); });
+    });
+    var go = el.board.querySelector("#go");
+    if(go) go.addEventListener("click", commit);
+    if(lifting){
+      var cv = el.board.querySelector("#cover");
+      if(cv){
+        var gone = function(){ if(cv.parentNode) cv.parentNode.removeChild(cv); };
+        if(reduce) gone();
+        else { cv.addEventListener("animationend", gone); setTimeout(gone, 900); }
+      }
+    }
+  }
+
+  function choose(yr){
+    if(st.done || YEARS.indexOf(yr) < 0) return;
+    st.pick = yr; save(st);
+    renderGuess(false); header();
+    var b = el.board.querySelector('button.y[data-y="' + yr + '"]');
+    if(b) b.focus();
+    say("Your guess: " + yr + ". Press Uncover the block when you are sure.");
+  }
+
+  function commit(){
+    if(st.done || st.pick === null) return;
+    st.done = true; save(st);
+    renderGuess(true); header();
+    if(window.matchMedia("(max-width:599px)").matches){
+      var dcEl = document.getElementById("dc");
+      if(dcEl){ try{ dcEl.scrollIntoView({block:"center", behavior: reduce ? "auto" : "smooth"}); }catch(e){ dcEl.scrollIntoView(); } }
+    }
+    try{ el.next.focus({preventScroll:true}); }catch(e){ el.next.focus(); }
+    say("Uncovered. Last reviewed: " + blockVal("Last reviewed") + ". Next review due: " +
+      blockVal("Next review due") + ". Your guess: " + st.pick + ".");
+  }
+
+  /* ================ slide 2: the guess beside the dates, then section 16 ================ */
+  function renderDates(anim){
+    if(!st.done){
+      el.h1.textContent = "Make your guess first.";
+      el.board.innerHTML = '<div class="intro"><p>Make your guess first. Your guess and the policy\'s dates appear here once you uncover the block.</p>' +
+        '<button class="jump" type="button" id="toguess">Go to the guess</button></div>';
+      el.board.querySelector("#toguess").addEventListener("click", function(){ i = 0; render(); toTop(); });
+      return;
+    }
+    var a = (anim && !reduce) ? " in" : "";
+    el.board.innerHTML =
+      '<div class="tiles' + a + '">' +
+        '<div class="tile"><span class="tl">Your guess</span><span class="tv">' + st.pick + "</span></div>" +
+        '<div class="tile pol"><span class="tl">Last reviewed</span><span class="tv">' + esc(blockVal("Last reviewed")) + '</span><span class="ts">Policy, top of page 1</span></div>' +
+        '<div class="tile pol"><span class="tl">Next review due</span><span class="tv">' + esc(blockVal("Next review due")) + '</span><span class="ts">Policy, top of page 1</span></div>' +
+      "</div>" +
+      '<div class="q16' + a + '">' +
+        "<p class=\"qh\">Here is what the policy's own last section, <b>Section " + esc(POLICY.s16num) + "</b>, says about reviews:</p>" +
+        "<blockquote>“" + esc(POLICY.s16) + "”</blockquote>" +
+        '<p class="qg">Annually means once a year. Shall means must.</p>' +
+        '<p class="qn">Look at the three dates and the rule together. What do you notice?</p>' +
+      "</div>";
+  }
+
+  /* ================ start again ================ */
+  function resetAll(){ st = fresh(); save(st); i = 0; render(); }
+  el.again.addEventListener("click", function(){
+    resetAll(); toTop();
+    say("Cleared. The block is covered again. Pick a year.");
+  });
+
+  /* ================ navigation ================ */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && !st.done){
+      el.hint.innerHTML = (st.pick === null)
+        ? "<span>Pick a year. You can change it until you press <b>Uncover the block</b>.</span>"
+        : "<span>Press <b>Uncover the block</b> first. Your guess: " + st.pick + ".</span>";
+      return;
+    }
+    i = n; render(true); toTop();
+    say("Slide " + (i+1) + " of " + S.length + ". " + el.h1.textContent);
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ================ scale the fixed canvas down to fit, never up ================ */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render(false);
+  fit();
+
+  /* ================ the QA hook ================
+     measure-fit.mjs steps through the deck with this. Keep it on every deck.
+     goto ignores the guess-first lock, on purpose, so every slide can be measured. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(false); return true;
+    },
+    slides:S.length,
+    pick:function(yr){ i = 0; render(false); choose(yr); return st.pick === yr; },
+    commit:function(){ commit(); return st.done; },
+    reset:function(){ resetAll(); },
+    state:function(){ return { i:i, pick:st.pick, done:st.done }; }
+  };
+})();
+</script>
+</body>
+</html>

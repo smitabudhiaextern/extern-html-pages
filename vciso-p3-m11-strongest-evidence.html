@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strongest Evidence</title>
+<!--
+  vCISO P3 Step 3, Module 11, interactive: Which evidence is strongest?
+  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html),
+  matched to the house look of 09-assets/final/vciso-p3-m2-control-or-written-rule.html
+  and vciso-p3-m2-three-buckets.html.
+  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6, which
+  sets the larger type scale and the per-slide tint ramp used here.
+  Spec: 06-content/project-03/step-03/module-11-internal.md, "Build note".
+  Answer: P3 Sample Pack/Interactive content sets - P3.md, P3-11 (SME drop 2026-09-25).
+
+  One deck serves all four scopes. The live-site doc says that on every scope's
+  page exactly two of the three policy claims fail and one holds, so nothing
+  here changes by scope.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. The Extern five, plus the vCISO per-slide tint ramp
+     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
+     Tint carries no meaning. Every tint of navy is an rgba() of
+     #001D69. No state is ever signalled by colour alone: every
+     coloured state also carries a glyph or a label.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback: hover, press, focus, select */
+    --t-frame:300ms;   /* movement between slides                  */
+    --t-reveal:560ms;  /* a value or an answer resolving           */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);  /* the slight overshoot */
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    /* System stack, no webfont. A deck makes no network request. */
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. Shared with every
+     vCISO deck, so slide 2 here is the same colour as slide 2 elsewhere. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+
+  /* the 960x540 canvas, scaled down only, never up
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in
+     layout and let the transform do all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* header. Progress is visible from first paint. */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  /* vCISO 6a: heading 28px at 600. */
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px;max-width:74ch}
+  .intro p{font-size:17px;line-height:1.5}
+  .intro p b{color:var(--title);font-weight:600}
+  button.jump{font-family:inherit;font-size:15px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:7px;padding:8px 15px;cursor:pointer}
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  /* the instruction strip. Its height is fixed, so picking and checking
+         change its words, never its size. */
+  .how{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:42px;background:var(--highlight);color:var(--title);
+    border-left:4px solid var(--on-highlight);border-radius:6px;padding:4px 6px 4px 14px;font-size:16px;line-height:1.35}
+  .how .ht{flex:1 1 auto;min-width:0}
+  .how b{font-weight:600}
+  .how .gl{display:inline-block;width:1.2em;color:var(--on-highlight);font-weight:600}
+
+  /* slide 1 board. The Check button sits after the grid in the DOM, so Tab
+     reaches the six cards first and Check last. On the canvas, CSS lays it
+     back over the right end of the instruction strip; under 600px it stays
+     where the DOM puts it, right under the cards. */
+  .board.pickb{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);gap:10px 0}
+  .pickb .how{grid-column:1 / -1;grid-row:1}
+  .pickb .how.pre{padding-right:150px}
+  .pickb .grid{grid-column:1 / -1;grid-row:2}
+  .pickb .chkw{grid-column:2;grid-row:1;align-self:center;z-index:1;padding-right:6px}
+  .chkw button.nav{padding:7px 16px}
+
+  /* slide 1: six cards, one pick
+     Every card starts identical: same edge, same fill, same badge. Nothing
+     looks chosen until the student chooses it. */
+  .grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-rows:repeat(2,minmax(0,1fr));gap:10px 12px}
+  button.ev{font-family:inherit;cursor:pointer;text-align:left;min-width:0;min-height:0;position:relative;
+    display:flex;flex-direction:column;gap:5px;padding:11px 16px 8px;
+    background:var(--bg);color:var(--title);border:1.5px solid var(--line);border-radius:12px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
+  @media (hover:hover){
+    button.ev:hover:not(:disabled){border-color:var(--on-highlight)}
+  }
+  button.ev:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ev:disabled{cursor:default}
+  .ev .eh{display:flex;align-items:flex-start;gap:10px}
+  .ev .bk{flex:0 0 auto;width:28px;height:26px;border-radius:6px;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);font-size:14px;font-weight:600;color:var(--on-highlight);
+    display:flex;align-items:center;justify-content:center}
+  .ev .en{flex:1 1 auto;min-width:0;font-size:18px;line-height:1.2;font-weight:600}
+  .ev .es{font-size:16px;line-height:1.42;color:var(--body)}
+  /* The state tag ("Your pick", "The strongest") sits on the card's top
+     edge as a small label, so it takes no line of its own: the card copy
+     keeps 16px type and still fits the canvas. Empty until a pick. */
+  .ev .tg{position:absolute;top:-10px;right:12px;padding:1px 8px;border-radius:10px;background:var(--bg);
+    border:1.5px solid var(--on-highlight);font-size:13px;font-weight:600;line-height:1.2;color:var(--on-highlight);white-space:nowrap}
+  .ev .tg:empty{display:none}
+  /* Picked, not yet checked: filled with the highlight and ringed, and the
+     words "Your pick". No tick: nothing has been judged yet. */
+  button.ev.sel{background:var(--highlight);border-color:var(--on-highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
+  button.ev.sel .bk{background:var(--on-highlight);color:var(--bg)}
+  /* Checked. The strongest card is the filled one, with a tick and the word
+     Strongest. A wrong pick gets a cross, a struck name and a dashed edge.
+     The rest step back. Glyph and words every time, never colour alone. */
+  button.ev.is-right{background:var(--on-highlight);border-color:var(--on-highlight);box-shadow:none;color:var(--bg)}
+  button.ev.is-right .bk{background:var(--bg);border-color:var(--bg);color:var(--on-highlight)}
+  button.ev.is-right .es{color:var(--bg)}
+  button.ev.is-wrong{background:transparent;border:2px dashed var(--on-highlight);box-shadow:none}
+  button.ev.is-wrong .bk{background:transparent;color:var(--on-highlight)}
+  button.ev.is-wrong .en{text-decoration:line-through;text-decoration-thickness:1.5px;font-weight:400;color:var(--body)}
+  button.ev.is-wrong .tg{color:var(--title)}
+  button.ev.is-other{opacity:.55}
+  /* The card entry moves transform only. An opacity keyframe held by
+     fill-mode would pin the stepped-back cards at full opacity after a live
+     Check, so they would only fade on a reload. */
+  button.ev.in{animation:rinc var(--t-reveal) var(--ease-over) both}
+  @keyframes rinc{from{transform:translateY(-6px)}to{transform:none}}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* slide 2: the strongest one, and your pick */
+  .win{flex:1 1 auto;min-height:0;display:flex;gap:22px;align-items:center;
+    background:var(--highlight);border:1.5px solid var(--on-highlight);border-left-width:6px;border-radius:0 12px 12px 0;
+    padding:20px 26px}
+  .win .gm{flex:0 0 auto;width:52px;height:52px;border-radius:50%;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);font-size:26px;font-weight:600;
+    display:flex;align-items:center;justify-content:center}
+  .win .wb{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px}
+  .win .wl{font-size:14px;font-weight:600;letter-spacing:.03em;color:var(--on-highlight)}
+  .win .wn{font-size:24px;line-height:1.25;font-weight:600;color:var(--title)}
+  .win .wr{font-size:18px;line-height:1.5;color:var(--body);max-width:64ch}
+  .win .wr b{color:var(--title);font-weight:600}
+  .mine{flex:0 0 auto;display:flex;align-items:flex-start;gap:14px;background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:12px 18px}
+  .mine.miss{border:2px dashed var(--on-highlight)}
+  .mine .gl{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .mine.miss .gl{border-style:dashed}
+  .mine .mb{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .mine .mh{font-size:17px;line-height:1.35;font-weight:600;color:var(--title)}
+  .mine .mr{font-size:16px;line-height:1.45;color:var(--body)}
+  .win.in,.mine.in,.wk.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  /* slide 3: why the other five are weaker */
+  .lead{flex:0 0 auto;font-size:17px;line-height:1.4;color:var(--body);margin-top:-4px}
+  .lead b{color:var(--title);font-weight:600}
+  /* Row flow, so the two cards in a row share one height and the five read
+     in card order, left to right. */
+  .weak{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    grid-auto-rows:auto;gap:7px 16px;align-content:start}
+  .wk{min-width:0;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:6px 14px 7px;
+    display:flex;flex-direction:column;gap:2px}
+  .wk.mine-row{border:2px dashed var(--on-highlight)}
+  .wk .wh{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:1.3;font-weight:600;color:var(--title)}
+  .wk .wh .n{flex:1 1 auto;min-width:0}
+  .wk .wh .yp{flex:0 0 auto;font-size:13px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+  .wk .wt{font-size:16px;line-height:1.42;color:var(--body)}
+
+  /* the bar. margin-top:auto plus flex:0 0 auto means overflow above
+         can never displace this row. */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:10px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+  /* the end pointer, shown on the last slide in place of Continue */
+  .endnote{flex:1 1 auto;min-width:0;align-self:center;background:var(--highlight);border-left:4px solid var(--on-highlight);
+    border-radius:0 8px 8px 0;padding:7px 12px;font-size:16px;line-height:1.35;font-weight:600;color:var(--title)}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* under 600px: a portrait restack, not a shrunken slide */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    .board{gap:12px}
+    .intro p{font-size:16px}
+    .how{flex-wrap:wrap;font-size:16px;padding:10px 12px}
+    .grid{grid-template-columns:1fr;grid-template-rows:none;gap:10px}
+    .board.pickb{display:flex;flex-direction:column}
+    .pickb .how.pre{padding-right:12px}
+    .pickb .how.done{order:2}
+    .pickb .chkw{padding-right:0;align-self:stretch}
+    .chkw button.nav{width:100%;padding:13px 20px}
+    button.ev{padding:14px 14px 12px}
+    .ev .en{font-size:18px}
+    .ev .es{font-size:16px;line-height:1.45}
+    .ev .tg{font-size:14px;top:-11px}
+    .win{flex:0 0 auto;flex-direction:column;gap:12px;padding:16px}
+    .win .gm{width:40px;height:40px;font-size:20px}
+    .win .wn{font-size:20px}
+    .win .wr{font-size:16px}
+    .mine{padding:12px 14px}
+    .mine .mh{font-size:17px}
+    .mine .mr{font-size:16px;line-height:1.5}
+    .lead{font-size:16px}
+    .weak{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row}
+    .wk .wh{font-size:17px}
+    .wk .wt{font-size:16px;line-height:1.5}
+    button.jump{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+    .endnote{flex:1 1 100%;order:-1;font-size:16px;padding:10px 12px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Which evidence is strongest?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 3</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div class="endnote" id="endnote" hidden></div>
+      <button class="nav ghost" id="again" type="button">Start again</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol,.nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Which of these is the strongest piece of evidence in the whole project?</h2>
+    <p>Here are the six things you made in this project. Pick the one you think is strongest before you read on.</p>
+    <ol>
+      <li><strong>The controls list.</strong> Every rule the policy claims, each marked operating (you saw it happen) or unverified (you did not).</li>
+      <li><strong>The three live checks.</strong> Three promises from the policy, and what Cumberland's website really does.</li>
+      <li><strong>The inherent risk score.</strong> How risky Cumberland's line of work is on its own, from twelve questions scored 1 to&nbsp;4.</li>
+      <li><strong>The current and target profile.</strong> Cumberland's security scored 0 to 4 in six areas, once for today and once for where it should be.</li>
+      <li><strong>The gap heatmap.</strong> Your profile, drawn as a chart of colors.</li>
+      <li><strong>The nine questionnaire answers.</strong> Your answers to Meridian's nine questions on who owns security, who can log in, and whether anyone would notice trouble.</li>
+    </ol>
+
+    <h3>The strongest: the three live checks</h3>
+    <!-- SME P3-11 says 'the places where the policy and the live system disagree'; dropped because one of three claims holds (P3-5). Ask Chaitanya to review. -->
+    <div class="box"><p>You took three things the policy promises and checked them on Cumberland's real website. You wrote down what the site actually does. Anyone can open the same page and see the same thing. Everything else is a score someone could argue with; <strong>that one is proof.</strong></p></div>
+
+    <h3>Why the other five are weaker</h3>
+    <p>All five are still evidence. Each one is weaker than a check anyone can repeat.</p>
+    <ul>
+      <li><strong>The controls list.</strong> The rows come straight from the policy. Most say unverified, which only means you never saw them happen. You cannot show they work, and you cannot show they fail.</li>
+      <li><strong>The inherent risk score.</strong> You chose each score from written options, and someone could argue for a different one on some questions. It also describes the business, not its security.</li>
+      <li><strong>The current and target profile.</strong> You picked all twelve scores yourself. You can explain each one, but someone else could score it differently.</li>
+      <li><strong>The gap heatmap.</strong> It is your profile, turned into colors. It can only be as strong as the scores it was built from.</li>
+      <li><strong>The nine questionnaire answers.</strong> Each answer points back at evidence you collected somewhere else, like your live checks. So it can only be as strong as the evidence behind it.</li>
+    </ul>
+    <p><strong>Keep your Live Checks tab open. Go back to the module and keep going: you will use it on slide 5.</strong></p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /*  content 
+     The six items, their order and the answer are Chaitanya's: P3-11,
+     "Interactive content sets - P3.md" (SME drop 2026-09-25), which lists
+     controls list, three verification results, inherent risk score,
+     profile, heatmap, nine answers, and names the three live verification
+     results as the answer.
+     `name` follows the module 11 spec card labels. `sub` is a plain-words
+     reminder of what each one is, ours. `why` is the explanation: the live
+     checks reason follows P3-11 and P3-5; the five others are our draft
+     wording from the SME facts, pending owner approval (module-11-internal
+     flag). */
+  var CARDS = [
+    { id:"controls", n:1, ok:false, name:"The controls list",
+      sub:"Every rule the policy claims, each marked operating (you saw it happen) or unverified (you did not).",
+      why:"The rows come straight from the policy. Most say unverified, which only means you never saw them happen. You cannot show they work, and you cannot show they fail." },
+    /* The last sentence of this `why` is the SME line from P3-11, verbatim,
+       with his bold on "that one is proof." Do not reword it. */
+    /* SME P3-11 also says "the places where the policy and the live system
+       disagree". Dropped, see the HTML comment on the noscript reveal. */
+    { id:"live", n:2, ok:true, name:"The three live checks",
+      sub:"Three promises from the policy, and what Cumberland's website really does.",
+      why:"You took three things the policy promises and checked them on Cumberland's real website. You wrote down what the site actually does. Anyone can open the same page and see the same thing. Everything else is a score someone could argue with; <b>that one is proof.</b>" },
+    { id:"risk", n:3, ok:false, name:"The inherent risk score",
+      sub:"How risky Cumberland's line of work is on its own, from twelve questions scored 1 to\u00A04.",
+      why:"You chose each score from written options, and someone could argue for a different one on some questions. It also describes the business, not its security." },
+    { id:"profile", n:4, ok:false, name:"The current and target profile",
+      sub:"Cumberland's security scored 0 to 4 in six areas, once for today and once for where it should be.",
+      why:"You picked all twelve scores yourself. You can explain each one, but someone else could score it differently." },
+    { id:"heatmap", n:5, ok:false, name:"The gap heatmap",
+      sub:"Your profile, drawn as a chart of colors.",
+      why:"It is your profile, turned into colors. It can only be as strong as the scores it was built from." },
+    { id:"answers", n:6, ok:false, name:"The nine questionnaire answers",
+      sub:"Your answers to Meridian's nine questions on who owns security, who can log in, and whether anyone would notice trouble.",
+      why:"Each answer points back at evidence you collected somewhere else, like your live checks. So it can only be as strong as the evidence behind it." }
+  ];
+  /* The close line, shown in the bar on the last slide in place of
+     Continue. Owner wording after QA, 2 October 2026. */
+  var CLOSE = "Keep your Live Checks tab open. Go back to the module and keep going: you will use it on slide 5.";
+
+  var S = [
+    { id:"pick",  kind:"pick",  label:"Pick one", h1:"Which is the strongest evidence in the whole project?" },
+    { id:"best",  kind:"best",  label:"The strongest", h1:"The three live checks are the strongest evidence" },
+    { id:"weak",  kind:"weak",  label:"The other five", h1:"Why the other five are weaker" }
+  ];
+
+  /*  state 
+     localStorage is wrapped: a blocked storage API must degrade silently. */
+  var KEY = "vciso-p3-m11-strongest-evidence-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { pick:null, checked:false }; }
+  function cardOf(id){ for(var k=0;k<CARDS.length;k++) if(CARDS[k].id === id) return CARDS[k]; return null; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw) || !cardOf(raw.pick)) return fresh();
+      return { pick:raw.pick, checked:raw.checked === true };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var GLYPH = { out:"✕", ok:"✓" };
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+     var problems = [], ids = {}, cids = {}, right = 0;
+     S.forEach(function(s, n){
+       if(!s.id) problems.push("slide " + (n+1) + " has no id");
+       if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+       ids[s.id] = 1;
+     });
+     CARDS.forEach(function(c){
+       if(cids[c.id]) problems.push('duplicate card id "' + c.id + '"');
+       cids[c.id] = 1;
+       if(c.ok) right++;
+       if(!c.why || !c.name || !c.sub) problems.push('card "' + c.id + '" is missing a name, a line or a reason');
+     });
+     if(right !== 1) problems.push("exactly one card must be the strongest, found " + right);
+     if(problems.length){
+       document.getElementById("board").innerHTML =
+         '<div class="intro"><p><b>This deck has authoring errors and will not '
+         + 'behave correctly:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+         + problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+       throw new Error("deck data invalid: " + problems.join("; "));
+     }
+  })();
+  var BEST = CARDS.filter(function(c){ return c.ok; })[0];
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"), endnote:document.getElementById("endnote"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function plain(html){ return String(html).replace(/<[^>]+>/g, ""); }
+  function say(m){ el.live.textContent = m; }
+  function gotRight(){ return st.checked && st.pick === BEST.id; }
+  /* "the gap heatmap" reads inside a sentence; the card name starts with "The". */
+  function lower(name){ return name.charAt(0).toLowerCase() + name.slice(1); }
+
+  /*  chrome  */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+
+    el.back.disabled = (i === 0);
+    el.again.disabled = !st.pick && !st.checked;
+    /* On the last slide Continue gives way to a pointer back to the module. */
+    var last = (i === S.length-1);
+    el.next.hidden = last;
+    el.hint.hidden = last;
+    el.endnote.hidden = !(last && st.checked);
+    el.endnote.textContent = CLOSE;
+    el.next.disabled = !st.checked;
+    el.next.textContent = "Continue";
+
+    if(st.checked && s.kind !== "pick"){
+      el.chip.hidden = false;
+      el.chip.textContent = gotRight() ? GLYPH.ok + " You picked the strongest" : "Your pick: " + lower(cardOf(st.pick).name);
+    } else { el.chip.hidden = true; el.chip.textContent = ""; }
+  }
+
+  function render(focusSel){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    /* Before a pick is checked, slides 2 and 3 must not show their headings:
+       slide 2's heading is the answer. */
+    var gated = s.kind !== "pick" && !st.checked;
+    el.h1.textContent = gated ? "Pick one first" : s.h1;
+    el.frame.setAttribute("aria-label", el.h1.textContent);
+    el.hint.textContent = "";
+    el.board.className = "board";
+    if(s.kind === "pick") renderPick(focusSel);
+    else if(!st.checked) renderGate();
+    else if(s.kind === "best") renderBest();
+    else if(s.kind === "weak") renderWeak();
+    else {
+      el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
+    }
+    header();
+  }
+
+  /*  slide 1: pick one 
+     Tap a card to pick it, tap another to change your mind, then Check.
+     After Check the cards lock and show the answer. */
+  function cardHTML(c, anim){
+    var done = st.checked, mine = st.pick === c.id;
+    var cls = "ev", tag = "", sr = "";
+    if(done){
+      if(c.ok){
+        cls += " is-right";
+        tag = GLYPH.ok + (mine ? " Your pick, the strongest" : " The strongest");
+        sr = mine ? " Your pick. The strongest." : " The strongest.";
+      } else if(mine){
+        /* Never a tick on a wrong pick: a cross, a struck name, a dashed edge. */
+        cls += " is-wrong";
+        tag = GLYPH.out + " Your pick";
+        sr = " Your pick. Not the strongest.";
+      } else cls += " is-other";
+      cls += anim;
+    } else if(mine){
+      cls += " sel";
+      tag = "Your pick";
+      sr = " Your pick.";
+    }
+    return '<button class="' + cls + '" type="button" data-c="' + c.id + '"' +
+      (done ? " disabled" : ' aria-pressed="' + (mine ? "true" : "false") + '"') + ">" +
+      '<span class="eh"><span class="bk" aria-hidden="true">' + c.n + "</span>" +
+      '<span class="en">' + esc(c.name) + "</span></span>" +
+      '<span class="es">' + esc(c.sub) + "</span>" +
+      '<span class="tg" aria-hidden="true">' + tag + "</span>" +
+      (sr ? '<span class="sr">' + sr + "</span>" : "") + "</button>";
+  }
+
+  function renderPick(focusSel, animate){
+    var done = st.checked;
+    var anim = animate && !reduce ? " in" : "";
+    var how;
+    if(!done){
+      how = '<div class="how pre"><span class="ht">Pick the one you think is strongest. You can change your mind until you check.</span></div>';
+    } else {
+      how = '<div class="how done"><span class="ht"><span class="gl" aria-hidden="true">' + (gotRight() ? GLYPH.ok : GLYPH.out) + "</span>" +
+        (gotRight() ? "<b>You picked the strongest one.</b> Continue to see why."
+                    : "<b>Your pick is not the strongest.</b> The three live checks are. Continue to see why.") + "</span></div>";
+    }
+    /* Check comes after the grid in the DOM, so Tab reaches it after the
+       cards. CSS puts it back on the strip on the canvas. */
+    var chk = done ? "" : '<div class="chkw"><button class="nav" id="chk" type="button"' + (st.pick ? "" : " disabled") + ">Check my pick</button></div>";
+    el.board.className = "board pickb";
+    el.board.innerHTML = how + '<div class="grid" role="group" aria-label="Six pieces of evidence" aria-describedby="kbhelp">' +
+      CARDS.map(function(c){ return cardHTML(c, anim); }).join("") + "</div>" + chk +
+      '<span class="sr" id="kbhelp">On a keyboard, press 1 to 6 to pick a card, or Tab to a card and press Enter. Then Tab to Check my pick.</span>';
+    el.hint.textContent = "";
+    if(!done){
+      Array.prototype.forEach.call(el.board.querySelectorAll("button.ev"), function(b){
+        b.addEventListener("click", function(){ pick(b.dataset.c); });
+      });
+      el.board.querySelector("#chk").addEventListener("click", check);
+      el.hint.innerHTML = st.pick
+        ? "<span><b>Your pick: " + esc(lower(cardOf(st.pick).name)) + ".</b> Press Check my pick, or pick a different card.</span>"
+        : "<span>Click a card to pick it.</span>";
+    }
+    if(focusSel){ var f = el.board.querySelector(focusSel); if(f) f.focus(); }
+  }
+
+  function pick(id){
+    if(st.checked || !cardOf(id)) return;
+    st.pick = id; save(st);
+    renderPick('.ev[data-c="' + id + '"]');
+    header();
+    say("Your pick: " + cardOf(id).name + ". Press Check my pick, or pick a different card.");
+  }
+
+  function check(){
+    if(st.checked || !st.pick) return;
+    st.checked = true; save(st);
+    renderPick(null, true);
+    header();
+    try{ el.next.focus({preventScroll:true}); }catch(e){ el.next.focus(); }
+    say(gotRight()
+      ? "Checked. You picked the strongest one: " + BEST.name + ". Continue to see why."
+      : "Checked. " + cardOf(st.pick).name + " is not the strongest. The strongest is " + lower(BEST.name) + ". Continue to see why.");
+  }
+
+  /*  slides 2 and 3 before a pick is checked  */
+  function renderGate(){
+    el.board.innerHTML = '<div class="intro"><p>Pick one card on the first slide and press <b>Check my pick</b>. The answer appears here after that.</p>' +
+      '<button class="jump" type="button" id="topick">Go to the six cards</button></div>';
+    el.board.querySelector("#topick").addEventListener("click", function(){ i = 0; render(); toTop(); });
+  }
+
+  /*  slide 2: the strongest, and your pick  */
+  function renderBest(){
+    var anim = reduce ? "" : " in";
+    var mine = cardOf(st.pick), right = gotRight();
+    var panel = right
+      ? '<div class="mine' + anim + '"><span class="gl" aria-hidden="true">' + GLYPH.ok + "</span>" +
+          '<div class="mb"><div class="mh">You picked this one.</div>' +
+          '<div class="mr">The next slide says why each of the other five is weaker.</div></div></div>'
+      : '<div class="mine miss' + anim + '"><span class="gl" aria-hidden="true">' + GLYPH.out + "</span>" +
+          '<div class="mb"><div class="mh">You picked ' + esc(lower(mine.name)) + ". Here is why it is weaker.</div>" +
+          '<div class="mr">' + mine.why + "</div></div></div>";
+    el.board.innerHTML =
+      '<div class="win' + anim + '"><span class="gm" aria-hidden="true">' + GLYPH.ok + "</span>" +
+        '<div class="wb"><div class="wl">THE STRONGEST</div>' +
+        '<div class="wn">' + esc(BEST.name) + "</div>" +
+        '<div class="wr">' + BEST.why + "</div></div></div>" + panel;
+  }
+
+  /*  slide 3: the other five  */
+  function renderWeak(){
+    var anim = reduce ? "" : " in";
+    var rest = CARDS.filter(function(c){ return !c.ok; });
+    el.board.innerHTML =
+      '<p class="lead"><b>All five are still evidence.</b> Each one is weaker than a check anyone can repeat.</p>' +
+      '<div class="weak">' + rest.map(function(c){
+        var mine = st.pick === c.id;
+        return '<div class="wk' + (mine ? " mine-row" : "") + anim + '">' +
+          '<div class="wh"><span class="n">' + esc(c.name) + "</span>" +
+          (mine ? '<span class="yp">' + GLYPH.out + " Your pick</span>" : "") + "</div>" +
+          '<div class="wt">' + c.why + "</div></div>";
+      }).join("") + "</div>";
+  }
+
+  /*  navigation  */
+  function toTop(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && !st.checked){
+      if(S[i].kind === "pick") el.hint.innerHTML = "<span><b>Pick one and check it first.</b> Then the answer opens.</span>";
+      return;
+    }
+    i = n; render(); toTop();
+    say("Slide " + (i+1) + " of " + S.length + ". " + el.h1.textContent + ".");
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  el.again.addEventListener("click", function(){
+    st = fresh(); save(st); i = 0; render(); toTop();
+    say("Started again. No card is picked.");
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(S[i].kind !== "pick" || st.checked) return;
+    var n = "123456".indexOf(e.key);
+    if(n >= 0 && CARDS[n]){ e.preventDefault(); pick(CARDS[n].id); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /*  scale the fixed canvas down to fit, never up  */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /*  the QA hook 
+     measure-fit.mjs steps through the deck with this. Keep it on every deck.
+     goto ignores the check-first lock, on purpose, so every slide can be
+     measured. pick and check let a QA run reach the answered states. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    pick:function(id){ i = 0; render(); pick(id); return st.pick === id; },
+    check:function(){ check(); return st.checked; },
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    state:function(){ return { i:i, pick:st.pick, checked:st.checked }; }
+  };
+})();
+</script>
+</body>
+</html>
