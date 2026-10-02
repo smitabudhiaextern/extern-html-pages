@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find the Repeats in a Scan</title>
+<!--
+  vCISO P2 Step 4, Module 13: Triage the Scan Results. Step 3, "Group the Rows by Cause".
+  Replaces the drag-the-cards build vciso-p2-m13-from-rows-to-a-working-list.html (kept, not edited).
+
+  Teaches the method a student uses to check Claude's grouping of their real scan:
+  Finding first (same name, same problem), then Host (one machine or many, still one
+  problem), then CVE and Severity (no code and Medium or Low is a small setting, and all
+  settings go in one group), then Severity Info (not a problem, set aside).
+
+  The example sheet is made up. "Example" and EX-MAIL01 are the module's own made-up
+  company and machine. No Cumberland data. CVE codes use the year 2099 so they can never
+  match a real flaw. No update numbers.
+  12 rows = 3 real problems + 2 Info rows set aside:
+    4 x Missing March 2024 security updates, EX-MAIL01, CVE-2099-0001 to 0004   (problem 1)
+    1 x Web server remote code execution, EX-WEB01, CVE-2099-0005               (problem 2)
+    3 x SMB signing not required, Medium, on EX-MAIL01, EX-WEB01, EX-FILE01     (problem 3, settings)
+    1 x Cleartext HTTP service, Low, EX-WEB01                                   (problem 3, settings)
+    1 x TLS 1.0 enabled, Medium, EX-FILE01                                      (problem 3, settings)
+    2 x Operating system identified, Info, EX-WEB01 and EX-FILE01               (set aside)
+
+  Governing authority: output/programs/vciso/CLAUDE.md section 6. Chrome, options,
+  right and wrong states, navigation, scale-to-fit and phone layout match
+  vciso-p2-m11-is-cumberland-actually-affected.html. The right and wrong colours are used
+  only for right and wrong, always with an icon and a word. No per-slide tint.
+
+  Answer rules (owner): a wrong pick turns red with a cross and "Not quite" plus a hint,
+  and the student tries again. After a second wrong pick the right answer is shown in
+  its right state. On a two-option question one wrong pick leaves only the right one to try.
+  Next opens only once the question on the slide is answered right or shown.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* right and wrong states only, always paired with an icon and a word */
+    --ok:#146C2E;
+    --ok-tint:#E6F4EA;
+    --no:#B3261E;
+    --no-tint:#FCE8E6;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+    --bandB:rgba(0,29,105,.085);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:460ms;
+    --t-sort:750ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto;background:var(--bg)}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:6px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:26px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:25px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:6px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:9px}
+  .ask{flex:0 0 auto;display:flex;flex-direction:column;gap:3px}
+  .lead{font-size:15px;line-height:1.42;color:var(--body)}
+  .lead b{color:var(--title);font-weight:600}
+  .q{font-size:16.5px;font-weight:700;line-height:1.3;color:var(--title)}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .split{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:530px minmax(0,1fr);gap:16px;align-items:start}
+
+  /* ---- the sheet ---- */
+  .sheet{position:relative;min-width:0;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:8px;overflow:hidden}
+  .sh,.sr-row{display:grid;grid-template-columns:76px minmax(0,1fr) 106px 62px;
+    grid-template-areas:"host fnd cve sev";column-gap:8px;padding:0 10px;align-items:center}
+  .c-host{grid-area:host}.c-fnd{grid-area:fnd}.c-cve{grid-area:cve}.c-sev{grid-area:sev}
+  .sh{background:var(--on-highlight);color:var(--bg);font-size:11.5px;font-weight:600;letter-spacing:.04em;height:26px;text-transform:uppercase}
+  .sh span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .sh .sorted-ic{width:13px;height:13px;stroke-width:2.4}
+  .rows{position:relative}
+  .sheet:not(.grouped) .rows{padding-bottom:5px}
+  .sr-row{min-height:22px;font-size:13px;line-height:1.25;color:var(--title);
+    border-top:1px solid rgba(0,29,105,.12);background:var(--bg);
+    transition:background var(--t-frame) var(--ease-io)}
+  .sr-row:first-child{border-top:0}
+  .sr-row span{min-width:0;padding:2px 0;white-space:nowrap}
+  .sr-row .c-host{font-weight:600}
+  .sr-row .c-cve{font-variant-numeric:tabular-nums}
+  /* after sorting: each group of the same Finding gets one shade, and a navy line sits between groups */
+  .sheet.grouped .sr-row.bA{background:var(--highlight)}
+  .sheet.grouped .sr-row.bB{background:var(--bandB)}
+  .sheet.grouped .sr-row.gstart{border-top:2px solid var(--on-highlight)}
+  .sheet.grouped .sr-row.gstart:first-child{border-top:0}
+  .sheet.moving .sr-row{transition:transform var(--t-sort) var(--ease-io)}
+  /* the last slide: a label row above each group */
+  .sr-row.glabel{display:flex;align-items:center;gap:7px;min-height:21px;background:var(--on-highlight);color:var(--bg);
+    font-size:13px;font-weight:700;border-top:0}
+  .sr-row.glabel svg.ic{width:15px;height:15px;flex:0 0 auto}
+  .sr-row.glabel span{padding:2px 0;white-space:normal}
+
+  /* the box around the rows a question is about */
+  .fbox{position:absolute;left:3px;right:3px;border:3px solid var(--on-highlight);border-radius:6px;pointer-events:none}
+  .fbox.in{animation:pop var(--t-reveal) var(--ease-over) both}
+  .colbox{position:absolute;top:2px;bottom:1px;border:3px solid var(--on-highlight);border-radius:6px;pointer-events:none}
+  .colbox.in{animation:pop var(--t-reveal) var(--ease-over) both}
+
+  /* ---- the side panel ---- */
+  .side{min-width:0;background:var(--highlight);border-radius:12px;padding:12px 14px 13px;display:flex;flex-direction:column;gap:7px}
+  .sub{font-size:13.5px;line-height:1.38;color:var(--body)}
+  .sub b{color:var(--title);font-weight:600}
+  .pq{font-size:16.5px;font-weight:600;line-height:1.3;color:var(--title)}
+
+  /* ---- options ---- */
+  .opts{display:flex;flex-direction:column;gap:6px}
+  button.opt{font-family:inherit;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;
+    padding:5px 11px;cursor:pointer;display:flex;gap:10px;align-items:center;min-height:44px;width:100%;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt .g{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;background:transparent}
+  button.opt .g svg.ic{width:14px;height:14px;stroke-width:2.6}
+  button.opt .txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.opt .lr{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  button.opt .ol{font-size:15.5px;font-weight:700;line-height:1.25;color:var(--title)}
+  button.opt .om{font-size:13px;line-height:1.3;color:var(--body)}
+  button.opt .tg{flex:0 0 auto;font-size:13px;font-weight:700;white-space:nowrap}
+  button.opt:hover:not(:disabled){background:var(--highlight)}
+  html.fresh button.opt:hover:not(:disabled){background:var(--bg)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  button.opt.idle:disabled{border-style:dashed;border-color:var(--line)}
+  button.opt.idle:disabled .g{border-color:var(--line)}
+  button.opt.idle:disabled .ol{color:var(--body)}
+  button.opt.ok{background:var(--ok-tint);border:2px solid var(--ok)}
+  button.opt.ok .g{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+  button.opt.ok .tg{color:var(--ok)}
+  button.opt.no{background:var(--no-tint);border:2px solid var(--no)}
+  button.opt.no .g{background:var(--no);border-color:var(--no);color:var(--bg)}
+  button.opt.no .tg{color:var(--no)}
+
+  /* ---- feedback ---- */
+  .fb{border-radius:10px;padding:6px 13px 8px;border-left:6px solid;display:flex;flex-direction:column;gap:2px}
+  .fb.ok{background:var(--ok-tint);border-color:var(--ok)}
+  .fb.no{background:var(--no-tint);border-color:var(--no)}
+  .fb .fh{display:flex;align-items:center;gap:7px;font-size:15.5px;font-weight:700}
+  .fb.ok .fh{color:var(--ok)}
+  .fb.no .fh{color:var(--no)}
+  .fb .fh svg.ic{width:19px;height:19px;stroke-width:2}
+  .fb .ft{font-size:13.5px;line-height:1.36;color:var(--title)}
+  .fb.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .fb:focus{outline:none}
+
+  /* ---- the sort button ---- */
+  button.go{font-family:inherit;font-size:16px;font-weight:600;padding:11px 18px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start;
+    display:inline-flex;align-items:center;gap:9px}
+  button.go svg.ic{width:20px;height:20px}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.go:disabled{opacity:.5;cursor:default}
+
+  /* ---- the last slide ---- */
+  .tot{font-size:16.5px;font-weight:700;line-height:1.32;color:var(--title)}
+  .cols{display:flex;flex-direction:column;gap:6px;list-style:none}
+  .cols li{background:var(--bg);border-left:4px solid var(--on-highlight);border-radius:0 8px 8px 0;padding:6px 10px;
+    font-size:13.5px;line-height:1.36;color:var(--body)}
+  .cols li b{color:var(--title);font-weight:700}
+
+  .side.in > *{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:52px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:9px 20px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.36;color:var(--body)}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .segs i{width:22px}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .q,.pq{font-size:17px}
+    .board{flex:0 0 auto}
+    .split{grid-template-columns:1fr}
+    /* each row stacks: machine, code and severity on top, the Finding under them */
+    .sh,.sr-row{grid-template-columns:minmax(0,1fr) 126px 66px;
+      grid-template-areas:"host cve sev" "fnd fnd fnd";column-gap:8px;padding:3px 10px}
+    .sh{height:auto;font-size:12px;padding-top:4px;padding-bottom:4px}
+    .sr-row{font-size:15px}
+    .sr-row .c-fnd{white-space:normal;padding-top:0}
+    .sr-row.glabel{font-size:15px}
+    .sub{font-size:15px}
+    button.opt{padding:10px 12px}
+    button.opt .ol{font-size:16px}
+    button.opt .om{font-size:15px}
+    .fb .ft{font-size:15.5px}
+    .fb{scroll-margin:16px}
+    .tot{font-size:18px}
+    .cols li{font-size:15.5px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0;scroll-margin-bottom:16px}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{font-size:15px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Find the Repeats in a Scan">
+
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip">Made-up company: Example</span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <div id="hint"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 16px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .tw{overflow-x:auto}
+    .nsf table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 14px}
+    .nsf th{background:#001D69;color:#FDF8F8;text-align:left;padding:5px 8px}
+    .nsf td{padding:5px 8px;border-bottom:1px solid #DCE1FF;color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Find the Repeats in a Scan</h2>
+    <p>Here is a small scan from a made-up company called Example. It has 12 rows, but some of them are the same problem. Its CVE codes, the ID numbers of known flaws, are made up too. The sheet is already sorted A to Z by the Finding column, so rows with the same Finding name sit next to each other.</p>
+    <div class="tw"><table>
+      <tr><th>Host</th><th>Finding</th><th>CVE</th><th>Severity</th></tr>
+      <tr><td>EX-WEB01</td><td>Cleartext HTTP service</td><td></td><td>Low</td></tr>
+      <tr><td>EX-MAIL01</td><td>Missing March 2024 security updates</td><td>CVE-2099-0001</td><td>Critical</td></tr>
+      <tr><td>EX-MAIL01</td><td>Missing March 2024 security updates</td><td>CVE-2099-0002</td><td>High</td></tr>
+      <tr><td>EX-MAIL01</td><td>Missing March 2024 security updates</td><td>CVE-2099-0003</td><td>High</td></tr>
+      <tr><td>EX-MAIL01</td><td>Missing March 2024 security updates</td><td>CVE-2099-0004</td><td>Critical</td></tr>
+      <tr><td>EX-WEB01</td><td>Operating system identified</td><td></td><td>Info</td></tr>
+      <tr><td>EX-FILE01</td><td>Operating system identified</td><td></td><td>Info</td></tr>
+      <tr><td>EX-FILE01</td><td>SMB signing not required</td><td></td><td>Medium</td></tr>
+      <tr><td>EX-MAIL01</td><td>SMB signing not required</td><td></td><td>Medium</td></tr>
+      <tr><td>EX-WEB01</td><td>SMB signing not required</td><td></td><td>Medium</td></tr>
+      <tr><td>EX-FILE01</td><td>TLS 1.0 enabled</td><td></td><td>Medium</td></tr>
+      <tr><td>EX-WEB01</td><td>Web server remote code execution</td><td>CVE-2099-0005</td><td>Critical</td></tr>
+    </table></div>
+    <h3>Read the columns in this order</h3>
+    <ul>
+      <li><strong>Finding.</strong> When the same Finding name repeats, it is the same problem. Sorting the sheet A to Z by Finding puts those rows next to each other.</li>
+      <li><strong>Host.</strong> The four Missing March 2024 security updates rows are all on EX-MAIL01. Each has its own CVE code, but installing the one missing update fixes all four, so they are one problem. The three SMB signing not required rows are on three different machines, but it is the same setting, wrong on each one and fixed the same way, so they are one problem too. SMB signing is a Windows setting that checks that shared files are not changed on their way between machines.</li>
+      <li><strong>CVE and Severity.</strong> Five rows have no CVE code and say Medium or Low: the three SMB signing rows, Cleartext HTTP service and TLS 1.0 enabled. These are small settings problems. They all go in one settings group, even with different Finding names and on different machines, and they are fixed in one clean-up.</li>
+      <li><strong>Severity Info.</strong> The two rows that say Info only report a fact, such as which operating system (the main software on a computer, such as Windows) the machine runs. They are not problems, so you set them aside.</li>
+    </ul>
+    <div class="box"><p><strong>12 rows, 3 real problems, and 2 Info rows that you set aside.</strong> The three problems are the missing March 2024 updates on EX-MAIL01, the web server flaw on EX-WEB01, and the settings group.</p></div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    x:'<path d="M7 7l10 10M17 7L7 17"/>',
+    okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8 5.4-5.6"/>',
+    noc:'<circle cx="12" cy="12" r="9"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/>',
+    sort:'<path d="M4 6h9M4 12h6M4 18h3"/><path d="M17 5v14"/><path d="M13.5 15.5 17 19l3.5-3.5"/>',
+    down:'<path d="M12 5v14"/><path d="M6.5 13.5 12 19l5.5-5.5"/>',
+    stack:'<path d="M12 3.5 3 8l9 4.5L21 8z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16l9 4.5 9-4.5"/>',
+    aside:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>'
+  };
+  function icon(k, cls){ return '<svg class="ic' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- the made-up sheet ----------------
+     Jumbled order, the way the scan arrives. id is the row's place in that order. */
+  var MISS = "Missing March 2024 security updates", WEB = "Web server remote code execution",
+      SMB = "SMB signing not required", HTTP = "Cleartext HTTP service",
+      TLS = "TLS 1.0 enabled", OS = "Operating system identified";
+  var ROWS = [
+    { id:0,  host:"EX-WEB01",  finding:OS,   cve:"",              sev:"Info" },
+    { id:1,  host:"EX-MAIL01", finding:MISS, cve:"CVE-2099-0001", sev:"Critical" },
+    { id:2,  host:"EX-FILE01", finding:SMB,  cve:"",              sev:"Medium" },
+    { id:3,  host:"EX-WEB01",  finding:WEB,  cve:"CVE-2099-0005", sev:"Critical" },
+    { id:4,  host:"EX-MAIL01", finding:MISS, cve:"CVE-2099-0002", sev:"High" },
+    { id:5,  host:"EX-FILE01", finding:TLS,  cve:"",              sev:"Medium" },
+    { id:6,  host:"EX-WEB01",  finding:HTTP, cve:"",              sev:"Low" },
+    { id:7,  host:"EX-MAIL01", finding:SMB,  cve:"",              sev:"Medium" },
+    { id:8,  host:"EX-MAIL01", finding:MISS, cve:"CVE-2099-0003", sev:"High" },
+    { id:9,  host:"EX-FILE01", finding:OS,   cve:"",              sev:"Info" },
+    { id:10, host:"EX-WEB01",  finding:SMB,  cve:"",              sev:"Medium" },
+    { id:11, host:"EX-MAIL01", finding:MISS, cve:"CVE-2099-0004", sev:"Critical" }
+  ];
+  /* A to Z by Finding; rows with the same Finding keep their scan order. */
+  var SORTED = ROWS.slice().sort(function(a, b){
+    var c = a.finding.localeCompare(b.finding, "en", { sensitivity:"base" });
+    return c !== 0 ? c : a.id - b.id;
+  });
+  var GROUPS = [];
+  SORTED.forEach(function(r){ if(GROUPS.indexOf(r.finding) < 0) GROUPS.push(r.finding); });
+  function isSetting(r){ return r.cve === "" && (r.sev === "Medium" || r.sev === "Low"); }
+
+  /* The last slide: the rows put into their groups, each under a label. */
+  var SUMG = [
+    { t:"Problem 1: one missing update on EX-MAIL01 (4 rows)", ic:"stack", has:function(r){ return r.finding === MISS; } },
+    { t:"Problem 2: one web server flaw on EX-WEB01 (1 row)", ic:"stack", has:function(r){ return r.finding === WEB; } },
+    { t:"Problem 3: small settings problems (5 rows)", ic:"stack", has:isSetting },
+    { t:"Set aside: Info rows (2 rows)", ic:"aside", has:function(r){ return r.sev === "Info"; } }
+  ];
+
+  /* ---------------- the questions ---------------- */
+  var Q = {
+    q1:{ opts:[
+           { o:"host", l:"Host", m:"The name of the machine." },
+           { o:"finding", l:"Finding", m:"The problem that the scanner found." },
+           { o:"sev", l:"Severity", m:"How serious the scanner thinks it is." } ],
+         ok:"finding",
+         right:"When the same Finding name shows up more than once, those rows are the same problem.",
+         why:{ host:"Host names the machine, and one machine can have several different problems. Try another answer.",
+               sev:"Different problems can share the same Severity, such as Medium. Try another answer." } },
+    q2:{ opts:[
+           { o:"four", l:"4 problems", m:"Each row is a separate problem to fix." },
+           { o:"one", l:"1 problem", m:"The four rows are one problem to fix." } ],
+         ok:"one",
+         right:"All four rows are on EX-MAIL01. Each has its own CVE code, but installing the one missing update fixes all four.",
+         why:{ four:"The Host column says EX-MAIL01 on all four rows, so it is one machine missing one update. Try the other answer." } },
+    q3:{ opts:[
+           { o:"three", l:"3 problems", m:"Each machine has its own problem." },
+           { o:"one", l:"1 problem", m:"The three rows are one problem to fix." } ],
+         ok:"one",
+         right:"It is the same setting, wrong on every machine, and you fix it the same way on each one.",
+         why:{ three:"Three machines do not make three problems here. The Finding name is the same on all three rows. Try the other answer." } },
+    q4:{ opts:[
+           { o:"five", l:"5 problems", m:"Each row is its own problem." },
+           { o:"three", l:"3 problems", m:"One problem for each Finding name." },
+           { o:"one", l:"1 problem", m:"All five rows go in one settings group." } ],
+         ok:"one",
+         right:"Small settings problems go together as one settings problem, and they are fixed in one clean-up.",
+         why:{ five:"The three SMB signing rows are already one problem, so it cannot be five. Try another answer.",
+               three:"Rows with no CVE code and Medium or Low go in one group, even with different Finding names. Try another answer." } },
+    q5:{ opts:[
+           { o:"yes", l:"Yes", m:"They are problems that need fixing." },
+           { o:"no", l:"No", m:"They are not problems to fix." } ],
+         ok:"no",
+         right:"They only report a fact, such as which operating system the machine runs. There is nothing to fix.",
+         why:{ yes:"Both rows say Operating system identified. That is a fact about the machine, not something broken. Try the other answer." } }
+  };
+  var SHOWN = "The right answer is now marked Right answer.";
+
+  var S = [
+    { id:"col",  kind:"q", q:"q1", label:"Question 1 of 5", h1:"Look at a Small Scan" },
+    { id:"sort", kind:"q", q:"q2", label:"Question 2 of 5", h1:"Sort the Sheet by Finding" },
+    { id:"many", kind:"q", q:"q3", label:"Question 3 of 5", h1:"The Same Finding on Three Machines" },
+    { id:"set",  kind:"q", q:"q4", label:"Question 4 of 5", h1:"Rows With No CVE Code" },
+    { id:"info", kind:"q", q:"q5", label:"Question 5 of 5", h1:"The Rows That Say Info" },
+    { id:"sum",  kind:"sum", label:"What you found", h1:"12 Rows, 3 Real Problems" }
+  ];
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var p = [];
+    function n(f){ return ROWS.filter(f).length; }
+    if(ROWS.length !== 12) p.push("the sheet has " + ROWS.length + " rows, not 12");
+    if(n(function(r){ return r.finding === MISS && r.host === "EX-MAIL01" && /^CVE-2099-000[1-4]$/.test(r.cve); }) !== 4) p.push("the four update rows are wrong");
+    if(n(function(r){ return r.finding === WEB && r.cve === "CVE-2099-0005"; }) !== 1) p.push("the web server row is wrong");
+    if(n(function(r){ return r.finding === SMB && isSetting(r); }) !== 3) p.push("SMB signing rows are not 3 settings rows");
+    if(n(isSetting) !== 5) p.push("there are not 5 settings rows");
+    if(n(function(r){ return r.sev === "Info" && r.finding === OS && r.cve === ""; }) !== 2) p.push("Info rows are not 2");
+    ROWS.forEach(function(r){ if(r.cve && !/^CVE-2099-\d{4}$/.test(r.cve)) p.push("a CVE code is not a made-up 2099 code"); });
+    var smbHosts = ROWS.filter(function(r){ return r.finding === SMB; }).map(function(r){ return r.host; });
+    if(smbHosts.filter(function(h, k){ return smbHosts.indexOf(h) === k; }).length !== 3) p.push("SMB signing rows are not on three machines");
+    var placed = 0;
+    ROWS.forEach(function(r){ var c = SUMG.filter(function(g){ return g.has(r); }).length; if(c !== 1) p.push("row " + r.id + " is in " + c + " summary groups"); else placed++; });
+    if(SUMG.filter(function(g){ return g.ic === "stack"; }).length !== 3) p.push("the summary does not show 3 problems");
+    if(GROUPS.join("|") !== [HTTP, MISS, OS, SMB, TLS, WEB].join("|")) p.push("sorted group order is wrong");
+    Object.keys(Q).forEach(function(k){
+      var d = Q[k], ids = d.opts.map(function(x){ return x.o; });
+      if(ids.indexOf(d.ok) < 0) p.push(k + " has no right answer among its options");
+      ids.forEach(function(o){ if(o !== d.ok && !d.why[o]) p.push(k + " option " + o + " has no hint"); });
+    });
+    if(p.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This interactive has authoring errors:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + p.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("data invalid: " + p.join("; "));
+    }
+  })();
+
+  /* ---------------- state ---------------- */
+  var KEY = "vciso-p2-m13-find-the-repeats-v2";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function blank(){ return { out:{}, done:null }; }
+  function fresh(){ var a = {}; Object.keys(Q).forEach(function(k){ a[k] = blank(); }); return { sorted:false, a:a }; }
+  function load(){
+    var f = fresh();
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return f;
+      f.sorted = raw.sorted === true;
+      if(isPlain(raw.a)) Object.keys(Q).forEach(function(k){
+        var r = raw.a[k];
+        if(!isPlain(r)) return;
+        var ids = Q[k].opts.map(function(x){ return x.o; });
+        if(isPlain(r.out)) Object.keys(r.out).forEach(function(o){ if(ids.indexOf(o) >= 0 && o !== Q[k].ok) f.a[k].out[o] = 1; });
+        if(r.done === "right" || r.done === "shown") f.a[k].done = r.done;
+      });
+      /* question 2 is only asked once the sheet is sorted */
+      if(!f.sorted) f.a.q2 = blank();
+      return f;
+    }catch(e){ return f; }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), h1:document.getElementById("h1"),
+    board:document.getElementById("board"), back:document.getElementById("back"),
+    next:document.getElementById("next"), hint:document.getElementById("hint"),
+    live:document.getElementById("live")
+  };
+  var i = 0;
+  var sortTimer = null;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function strip(s){ return String(s).replace(/<[^>]+>/g,""); }
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+  function phone(){ return window.matchMedia("(max-width:599px)").matches; }
+  function done(s){ return s.kind !== "q" || !!st.a[s.q].done; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k === i ? "here" : (k < i || (S[k].kind === "q" && done(S[k]))) ? "on" : "") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    el.next.disabled = false;
+    el.next.textContent = (i === S.length - 2) ? "See what you found" : "Next";
+    el.hint.textContent = "";
+    if(i === S.length - 1){
+      el.next.disabled = true; el.next.textContent = "You are at the end";
+      el.hint.textContent = "Go back to the page for the next step.";
+    } else if(s.id === "sort" && !st.sorted){
+      el.next.disabled = true; el.hint.textContent = "Press the sort button to carry on.";
+    } else if(!done(s)){
+      el.next.disabled = true; el.hint.textContent = "Pick an answer to carry on.";
+    }
+  }
+
+  /* ---------------- the sheet ---------------- */
+  function bandOf(f){ return GROUPS.indexOf(f) % 2 === 0 ? "bA" : "bB"; }
+  function cells(r){
+    return '<span class="c-host" role="cell">' + esc(r.host) + "</span>"
+      + '<span class="c-fnd" role="cell">' + esc(r.finding) + "</span>"
+      + '<span class="c-cve" role="cell">' + (r.cve ? esc(r.cve) : '<span class="sr">empty</span>') + "</span>"
+      + '<span class="c-sev" role="cell">' + esc(r.sev) + "</span>";
+  }
+  function headHTML(sortedMark){
+    return '<div class="sh" role="row"><span class="c-host" role="columnheader">Host</span>'
+      + '<span class="c-fnd" role="columnheader" id="hFind">Finding' + (sortedMark ? icon("down", "sorted-ic") + '<span class="sr">, sorted A to Z</span>' : "") + "</span>"
+      + '<span class="c-cve" role="columnheader">CVE</span>'
+      + '<span class="c-sev" role="columnheader">Severity</span></div>';
+  }
+  function sheetHTML(order, grouped){
+    var h = '<div class="sheet' + (grouped ? " grouped" : "") + '" id="sheet" role="table" aria-label="Example scan, '
+      + (grouped ? "sorted A to Z by Finding" : "in the order the scan gave it") + '">'
+      + headHTML(grouped) + '<div class="rows" id="rows" role="rowgroup">';
+    order.forEach(function(r, k){
+      var start = k === 0 || order[k-1].finding !== r.finding;
+      h += '<div class="sr-row ' + bandOf(r.finding) + (start ? " gstart" : "") + '" role="row" data-id="' + r.id + '">' + cells(r) + "</div>";
+    });
+    return h + "</div></div>";
+  }
+  function sumSheetHTML(){
+    var h = '<div class="sheet grouped" id="sheet" role="table" aria-label="Example scan, with its rows put into their groups">'
+      + headHTML(false) + '<div class="rows" id="rows" role="rowgroup">';
+    SUMG.forEach(function(g, n){
+      h += '<div class="sr-row glabel" role="row"><span role="cell" style="display:flex;align-items:center;gap:7px">' + icon(g.ic)
+        + "<span>" + esc(g.t).replace(/(EX-[A-Z0-9]+)/g, '<span style="white-space:nowrap">$1</span>') + "</span></span></div>";
+      SORTED.filter(g.has).forEach(function(r){
+        h += '<div class="sr-row ' + (n % 2 === 0 ? "bA" : "bB") + '" role="row" data-id="' + r.id + '">' + cells(r) + "</div>";
+      });
+    });
+    return h + "</div></div>";
+  }
+  /* A navy box around each run of rows that a question is about. */
+  function boxRows(test, animate){
+    var rows = document.getElementById("rows");
+    if(!rows) return;
+    Array.prototype.forEach.call(rows.querySelectorAll(".fbox"), function(b){ b.remove(); });
+    var list = Array.prototype.slice.call(rows.querySelectorAll(".sr-row"));
+    var runs = [], cur = null;
+    list.forEach(function(r){
+      var row = ROWS[+r.dataset.id];
+      if(row && test(row)){ if(!cur){ cur = [r]; runs.push(cur); } else cur.push(r); }
+      else cur = null;
+    });
+    runs.forEach(function(run){
+      var top = run[0].offsetTop, last = run[run.length-1];
+      var b = document.createElement("div");
+      b.className = "fbox" + (animate && !reduce ? " in" : "");
+      b.setAttribute("aria-hidden", "true");
+      b.style.top = (top + 1) + "px";
+      b.style.height = (last.offsetTop + last.offsetHeight - top - 2) + "px";
+      rows.appendChild(b);
+    });
+  }
+  /* A navy box around the Finding column. */
+  function boxColumn(animate){
+    var sheet = document.getElementById("sheet"), hf = document.getElementById("hFind");
+    if(!sheet || !hf) return;
+    var old = sheet.querySelector(".colbox"); if(old) old.remove();
+    var b = document.createElement("div");
+    b.className = "colbox" + (animate && !reduce ? " in" : "");
+    b.setAttribute("aria-hidden", "true");
+    b.style.left = (hf.offsetLeft - 6) + "px";
+    b.style.width = (hf.offsetWidth + 12) + "px";
+    sheet.appendChild(b);
+  }
+  var FOCUS = {
+    q2:function(r){ return r.finding === MISS; },
+    q3:function(r){ return r.finding === SMB; },
+    q4:isSetting,
+    q5:function(r){ return r.sev === "Info"; }
+  };
+  function placeBoxes(animate){
+    var s = S[i];
+    if(s.kind !== "q") return;
+    if(s.q === "q1"){ if(st.a.q1.done && !phone()) boxColumn(animate); return; }
+    if(s.q === "q2" && !st.sorted) return;
+    boxRows(FOCUS[s.q], animate);
+  }
+
+  /* ---------------- options and feedback ---------------- */
+  function optHTML(x, cls, ico, tag, disabled){
+    return '<button class="opt' + (cls ? " " + cls : "") + '" type="button" data-o="' + x.o + '"'
+      + (disabled ? ' disabled aria-disabled="true"' : "") + ">"
+      + '<span class="g" aria-hidden="true">' + (ico ? icon(ico) : "") + "</span>"
+      + '<span class="txt"><span class="lr"><span class="ol">' + esc(x.l) + "</span>"
+      + (tag ? '<span class="tg">' + tag + "</span>" : "") + "</span>"
+      + '<span class="om">' + esc(x.m) + "</span></span></button>";
+  }
+  function optsHTML(k){
+    var d = Q[k], a = st.a[k];
+    return '<div class="opts" role="group" aria-label="Answers">' + d.opts.map(function(x){
+      if(a.done && x.o === d.ok) return optHTML(x, "ok", "check", a.done === "right" ? "Right" : "Right answer", true);
+      if(a.out[x.o]) return optHTML(x, "no", "x", "Not quite", true);
+      if(a.done) return optHTML(x, "idle", "", "", true);
+      return optHTML(x, "", "", "", false);
+    }).join("") + "</div>";
+  }
+  function fbHTML(good, text){
+    return '<div class="fb ' + (good ? "ok" : "no") + '" id="fb" tabindex="-1">'
+      + '<span class="fh">' + icon(good ? "okc" : "noc") + (good ? "Right" : "Not quite") + "</span>"
+      + '<p class="ft">' + esc(text) + "</p></div>";
+  }
+  function feedback(k){
+    var d = Q[k], a = st.a[k];
+    if(a.done === "right") return fbHTML(true, d.right);
+    if(a.done === "shown") return fbHTML(false, SHOWN + " " + d.right);
+    var outs = Object.keys(a.out);
+    if(outs.length) return fbHTML(false, d.why[outs[outs.length-1]]);
+    return "";
+  }
+  function wire(k){
+    var d = Q[k], a = st.a[k];
+    Array.prototype.forEach.call(el.board.querySelectorAll(".opts button.opt:not(:disabled)"), function(b){
+      b.addEventListener("click", function(){
+        var o = b.dataset.o;
+        if(o === d.ok) a.done = "right";
+        else {
+          a.out[o] = 1;
+          if(Object.keys(a.out).length >= 2) a.done = "shown";
+        }
+        save(st);
+        render(true);
+        afterPick(!!a.done);
+      });
+    });
+  }
+  function afterPick(isDone){
+    var fb = el.board.querySelector("#fb");
+    if(fb && !reduce){ fb.classList.remove("in"); void fb.offsetWidth; fb.classList.add("in"); }
+    if(fb) say(strip(fb.innerHTML.replace(/<\/p>/g, " ").replace(/<\/span>/g, ". ")));
+    var ph = phone(), opt = ph ? { preventScroll:true } : undefined;
+    if(isDone) el.next.focus(opt);
+    else { var f = el.board.querySelector(".opts button.opt:not(:disabled)"); if(f) f.focus(opt); }
+    if(fb && ph) (isDone ? document.querySelector(".bar") : fb).scrollIntoView({ block:"end", behavior: reduce ? "auto" : "smooth" });
+  }
+
+  /* ---------------- slides ---------------- */
+  var LEAD = {
+    q1:"Here is a small scan from a made-up company called Example. It has 12 rows, but some of them are the same problem. Its CVE codes, the ID numbers of known flaws, are made up too.",
+    q2pre:"Next, we are going to sort the sheet A to Z by the Finding column. Press the button and watch where the rows go.",
+    q2:"Look at the four rows that say <b>Missing March 2024 security updates</b>. Look at their Host column.",
+    q3:"Now look at the three rows that say <b>SMB signing not required</b>. They are on three different machines.",
+    q4:"Now look at the CVE and Severity columns of these five rows. None of them has a CVE code, and all of them are Medium or Low. These are small settings problems.",
+    q5:"Two rows say <b>Info</b> in the Severity column."
+  };
+  var ASK = {
+    q1:"Which column do you think will help you spot rows that are the same problem?",
+    q2:"How many problems do you think these four rows are?",
+    q3:"How many problems do you think these are?",
+    q4:"How many problems do you think these five rows are?",
+    q5:"Do you think these are problems?"
+  };
+  var SUB = {
+    q3:"SMB signing is a Windows setting that checks that shared files are not changed on their way between machines.",
+    q5:"An operating system is the main software on a computer, such as Windows."
+  };
+
+  function renderQ(s){
+    var k = s.q;
+    var preSort = (k === "q2" && !st.sorted);
+    var order = (k === "q1" || preSort) ? ROWS : SORTED;
+    var h = '<div class="ask"><p class="lead">' + (preSort ? LEAD.q2pre : LEAD[k]) + "</p>"
+      + (preSort ? "" : '<p class="q" id="askq">' + esc(ASK[k]) + "</p>") + "</div>"
+      + '<div class="split">' + sheetHTML(order, !(k === "q1" || preSort))
+      + '<div class="side" id="side">';
+    if(preSort){
+      h += '<p class="pq">Sorting A to Z puts rows with the same Finding name next to each other.</p>'
+        + '<p class="sub">It works the same way as sorting a column in Google Sheets.</p>'
+        + '<button class="go" type="button" id="sortbtn">' + icon("sort") + "Sort by Finding, A to Z</button>";
+    } else {
+      h += (SUB[k] ? '<p class="sub">' + esc(SUB[k]) + "</p>" : "")
+        + optsHTML(k) + feedback(k);
+    }
+    h += "</div></div>";
+    el.board.innerHTML = h;
+    if(preSort) el.board.querySelector("#sortbtn").addEventListener("click", doSort);
+    else wire(k);
+    return s.h1;
+  }
+
+  /* The sort: each row slides from where it was to where it lands (FLIP), then the
+     groups take their shade and the question appears. */
+  function doSort(){
+    var btn = document.getElementById("sortbtn");
+    if(btn) btn.disabled = true;
+    var rows = document.getElementById("rows"), sheet = document.getElementById("sheet");
+    var before = {};
+    Array.prototype.forEach.call(rows.children, function(r){ before[r.dataset.id] = r.offsetTop; });
+    SORTED.forEach(function(r){ rows.appendChild(rows.querySelector('[data-id="' + r.id + '"]')); });
+    st.sorted = true; save(st);
+    say("Sorted A to Z by Finding. Rows with the same Finding name are now next to each other.");
+    if(reduce){ finish(); return; }
+    Array.prototype.forEach.call(rows.children, function(r){
+      r.style.transform = "translateY(" + (before[r.dataset.id] - r.offsetTop) + "px)";
+    });
+    void rows.offsetHeight;
+    sheet.classList.add("moving");
+    Array.prototype.forEach.call(rows.children, function(r){ r.style.transform = ""; });
+    clearTimeout(sortTimer);
+    sortTimer = setTimeout(function(){
+      sheet.classList.remove("moving");
+      sheet.classList.add("grouped");
+      sortTimer = setTimeout(finish, 380);
+    }, 780);
+    function finish(){
+      sortTimer = null;
+      if(S[i].id !== "sort") return;
+      render(true);
+      var side = document.getElementById("side");
+      if(side && !reduce) side.classList.add("in");
+      var first = el.board.querySelector(".opts button.opt:not(:disabled)");
+      if(first) first.focus(phone() ? { preventScroll:true } : undefined);
+      say(strip(LEAD.q2) + " " + ASK.q2);
+    }
+  }
+
+  function renderSum(){
+    el.board.innerHTML = '<div class="split">' + sumSheetHTML()
+      + '<div class="side">'
+      + '<p class="sub">Here is the same sheet, with its rows put into their groups.</p>'
+      + '<p class="tot">12 rows, 3 real problems, and 2 Info rows that you set aside.</p>'
+      + '<ul class="cols">'
+      + "<li><b>Finding:</b> the same name means the same problem.</li>"
+      + "<li><b>Host:</b> the rows can be on one machine or on many. Either way, they are one problem.</li>"
+      + "<li><b>CVE and Severity:</b> no CVE code and Medium or Low means a small setting. All the settings go in one group.</li>"
+      + "<li><b>Severity Info:</b> Info means it is not a problem, so you set it aside.</li>"
+      + "</ul></div></div>";
+    return S[i].h1;
+  }
+
+  function render(fromPick){
+    var s = S[i];
+    if(sortTimer && s.id !== "sort"){ clearTimeout(sortTimer); sortTimer = null; }
+    document.documentElement.classList.add("fresh");
+    var title = (s.kind === "q") ? renderQ(s) : renderSum();
+    el.h1.textContent = title;
+    el.frame.setAttribute("aria-label", title);
+    header();
+    placeBoxes(!!fromPick);
+    return title;
+  }
+
+  /* ---------------- navigation ---------------- */
+  function focusTop(){
+    var ph = phone();
+    el.frame.focus(ph ? { preventScroll:true } : undefined);
+    if(ph) window.scrollTo(0, 0);
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && !done(S[i])) return;
+    i = n; var t = render(); focusTop();
+    var s = S[i];
+    say(el.prog.textContent + ". " + t + ". "
+      + (s.kind === "q" ? (s.q === "q2" && !st.sorted ? strip(LEAD.q2pre) : strip(LEAD[s.q]) + " " + ASK[s.q]) : ""));
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ if(!el.next.disabled) go(1); });
+
+  var lastPt = null;
+  document.addEventListener("pointermove", function(e){
+    var p = e.clientX + "," + e.clientY;
+    if(lastPt !== null && p !== lastPt) document.documentElement.classList.remove("fresh");
+    lastPt = p;
+  }, true);
+  document.addEventListener("keydown", function(e){
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(phone()) stage.style.transform = "";
+    else {
+      var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + s + ")";
+    }
+    if(!sortTimer) placeBoxes(false);
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length,
+    reset:function(){ clearTimeout(sortTimer); sortTimer = null; st = fresh(); save(st); i = 0; render(); },
+    state:function(){ return { i:i, sorted:st.sorted, a:st.a }; }
+  };
+})();
+</script>
+</body>
+</html>
