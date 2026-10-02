@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Do the Failures Have in Common?</title>
+<!--
+  vCISO P4 Step 2, Module 8: Grade the Client's Eight Claims, and Read the Pattern.
+  Build spec in 06-content/project-04/step-02/module-08-internal.md (Build Note).
+  Governing authority: output/programs/vciso/CLAUDE.md section 6. Look, navigation,
+  state handling, scale-to-fit and phone layout match
+  vciso-p2-m11-is-cumberland-actually-affected.html and
+  vciso-p2-m12-day-8-why-is-it-still-spreading.html.
+
+  Sources for every fact:
+  - The eight claims, rows and grades: P4 Sample Pack, "Prior questionnaire and
+    evidence - answer key.md" section 1, and "Interactive content sets - P4.md",
+    P4-7. Grades are identical in every scope, so there is no scope picker.
+  - File or gap text per claim: the spec's screen 2 list (P4-7 table, 25 Sep, and
+    key section 1). Claim 5 is the cell text Chaitanya approved (25 Sep, item 10b).
+    Claim 4's extra line is the lead writer's L3 pointer from the spec.
+    Firewall file name per Chaitanya 25 Sep, item 10e.
+  - The pattern: P4-7 and key section 2, verbatim apart from dashes.
+  - Grade definitions under each option: module 5 (P4-5 and key section 4).
+  - Plain-words lines for MFA and Entra ID reuse P3 module 4's definitions.
+    The firewall line reuses vciso-p2-m11.
+
+  Owner rules applied (Project 2, 1 October 2026), in place of the spec's
+  "enter all eight, then check" screen: one claim per slide, "Question N of 8".
+  A right pick turns green with a tick and "Right"; a wrong pick turns red with
+  a cross and "Not quite", with a short reason, then try again. After two wrong
+  tries the right grade is shown green, "Right answer". The first pick on each
+  claim is kept as "Your first pick" and compared on the summary slide
+  (Matches in green, Differs in navy, never red), which is the spec's
+  Matches or Differs label. The pattern question has no single right answer,
+  says so, and never shows red. "Governance item" is not used (spec).
+  Not shown, per spec: MEDFLOW-TEST in claim 3, host lists, restore tests.
+  Green #146C2E on #E6F4EA (5.7:1), red #B3261E on #FCE8E6 (5.6:1).
+
+  Ask Chaitanya to review: claim 3, a filtered export graded Proven against
+  the claim's "all servers and workstations" (answer key: "Installed today is
+  real evidence for the claim as written"). The grade is unchanged; only the
+  explanation under the card says why it still counts.
+  "Form row" (chip and summary column) is the module's "Question" column,
+  renamed here so that "Question N of 8" means only the slide count.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* right and wrong states only, always paired with an icon and a word */
+    --ok:#146C2E;
+    --ok-tint:#E6F4EA;
+    --no:#B3261E;
+    --no-tint:#FCE8E6;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-reveal:460ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto;background:var(--bg)}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:6px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:24px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:6px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:9px;overflow-y:auto;padding:4px 6px;margin:-4px -6px}
+  .lead{flex:0 0 auto;font-size:15px;line-height:1.45;color:var(--body)}
+  .lead b{color:var(--title);font-weight:600}
+  .sub{flex:0 0 auto;font-size:14px;line-height:1.4;color:var(--body)}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- a claim slide ---- */
+  .pick{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1.12fr;gap:16px}
+  .opts{display:flex;flex-direction:column;gap:8px;min-height:0}
+  button.opt{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:6px 8px 6px 12px;flex:1 1 auto;min-height:0;
+    display:grid;grid-template-columns:36px 1fr 66px;gap:10px;align-items:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  @media (hover:hover){ button.opt:hover:not(:disabled){background:var(--highlight)}
+    html.fresh button.opt:hover:not(:disabled){background:var(--bg)} }
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  button.opt .oi{width:36px;height:36px;border-radius:10px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.opt .oi svg.ic{width:22px;height:22px}
+  button.opt .ot{display:flex;flex-direction:column;gap:2px;min-width:0}
+  button.opt .on{font-size:16.5px;font-weight:600;line-height:1.25;color:var(--title)}
+  button.opt .od{font-size:13.5px;line-height:1.32;color:var(--body)}
+  button.opt .mk{display:flex;flex-direction:column;align-items:center;gap:3px;justify-self:center}
+  button.opt .lb{font-size:12.5px;font-weight:700;line-height:1.15;text-align:center}
+  /* The state marker: an empty ring until clicked. Never filled before a pick. */
+  button.opt .g{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;background:transparent}
+  button.opt .g svg.ic{width:14px;height:14px;stroke-width:2.6}
+  button.opt.ok{background:var(--ok-tint);border:2px solid var(--ok)}
+  button.opt.ok .g{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+  button.opt.ok .lb{color:var(--ok)}
+  button.opt.ok .oi{background:var(--bg);border-color:var(--ok);color:var(--ok)}
+  button.opt.no{background:var(--no-tint);border:2px solid var(--no)}
+  button.opt.no .g{background:var(--no);border-color:var(--no);color:var(--bg)}
+  button.opt.no .lb{color:var(--no)}
+  button.opt.no .oi{background:var(--bg);border-color:var(--no);color:var(--no)}
+  button.opt.idle{border-style:dashed;border-color:var(--line)}
+  button.opt.idle .g{border-color:var(--line)}
+  button.opt.idle .on{color:var(--body)}
+
+  .panel{min-height:0;border-radius:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+  .panel:focus{outline:none}
+  .panel.empty{background:var(--tint);border:1.5px dashed var(--line);padding:16px 18px;justify-content:center;gap:12px}
+  .panel .pe{font-size:16px;line-height:1.45;color:var(--body)}
+  .panel .pe b{color:var(--title);font-weight:600}
+
+  .fb{flex:0 0 auto;border-radius:10px;padding:8px 14px 9px;border-left:6px solid;display:flex;flex-direction:column;gap:4px}
+  .fb.ok{background:var(--ok-tint);border-color:var(--ok)}
+  .fb.no{background:var(--no-tint);border-color:var(--no)}
+  .fb .fh{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700}
+  .fb.ok .fh{color:var(--ok)}
+  .fb.no .fh{color:var(--no)}
+  .fb .fh svg.ic{width:22px;height:22px;stroke-width:2}
+  .fb .ft{font-size:14.5px;line-height:1.4;color:var(--title)}
+  .fb .ft b{font-weight:700}
+  .fb.in,.ev.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .ev{flex:0 0 auto;background:var(--highlight);border-radius:10px;padding:9px 14px 10px;display:flex;flex-direction:column;gap:5px}
+  .ev .el{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .ev .el svg.ic{width:18px;height:18px}
+  .fn{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;font-weight:600;
+    color:var(--title);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 6px;word-break:break-all}
+  .fns{display:flex;flex-wrap:wrap;gap:5px}
+  .ev p{font-size:14px;line-height:1.4;color:var(--title)}
+  .ev p.gl{font-size:13px;line-height:1.36;color:var(--body)}
+  .ev p.x3{font-size:13.5px;border-top:1.5px solid var(--line);padding-top:5px}
+  .tagrow{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.3;color:var(--body)}
+  .tag{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--on-highlight);background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:20px;padding:1px 9px}
+  .tag svg.ic{width:13px;height:13px;stroke-width:2.2}
+
+  /* ---- the summary table ---- */
+  .ctab{flex:0 0 auto;width:100%;border-collapse:collapse;table-layout:fixed;background:var(--bg);
+    font-size:13.5px;line-height:1.3;color:var(--title)}
+  .ctab th{background:var(--on-highlight);color:var(--bg);text-align:left;font-size:11px;font-weight:600;
+    letter-spacing:.03em;text-transform:uppercase;padding:6px 8px;vertical-align:bottom;line-height:1.25}
+  .ctab th:nth-child(1){width:4%} .ctab th:nth-child(2){width:9.5%} .ctab th:nth-child(3){width:46.5%}
+  .ctab th:nth-child(4){width:14%} .ctab th:nth-child(5){width:14%} .ctab th:nth-child(6){width:12%}
+  .ctab td{padding:5px 8px;border-bottom:1.5px solid var(--line);vertical-align:middle}
+  .ctab td.n{font-weight:700}
+  .ctab td.cg{font-weight:700}
+  .mk2{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:700;white-space:nowrap}
+  .mk2 svg.ic{width:15px;height:15px;stroke-width:2.6;flex:0 0 auto}
+  .mk2.ok{color:var(--ok)}
+  .mk2.df{color:var(--on-highlight)}
+  .lead .mk2{vertical-align:-2px}
+  .statement{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);
+    border-radius:0 10px 10px 0;padding:9px 18px}
+  .statement p{font-size:16px;line-height:1.4;font-weight:700;color:var(--title)}
+  .statement p.sm{font-size:14.5px;line-height:1.4;font-weight:400;color:var(--body);margin-top:3px}
+  .statement span.sm{font-size:14.5px;font-weight:400;color:var(--body);margin-left:6px}
+
+  /* ---- the two columns ---- */
+  .cols{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .col{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:12px;padding:9px 14px 10px;
+    display:flex;flex-direction:column;gap:6px;min-width:0}
+  .col .chd{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700;color:var(--title);line-height:1.25;
+    padding-bottom:6px;border-bottom:1.5px solid var(--line)}
+  .col .chd .bi{width:32px;height:32px;border-radius:9px;background:var(--highlight);border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .col .chd .bi svg.ic{width:19px;height:19px}
+  .col ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+  .col li{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:start;font-size:13.5px;line-height:1.33;color:var(--title)}
+  .col li .cn{font-weight:700;color:var(--on-highlight)}
+  .col li .lw{display:flex;flex-direction:column;gap:1px}
+  .col li .lw b{font-weight:700}
+  .col li .lw span{font-size:12.5px;line-height:1.3;color:var(--body)}
+  .col.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .ask{flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
+  .ask label{font-size:15px;font-weight:600;color:var(--title)}
+  .ask textarea{font-family:inherit;font-size:15px;line-height:1.4;color:var(--title);background:var(--bg);
+    border:1.5px solid var(--on-highlight);border-radius:10px;padding:8px 12px;resize:none;height:62px;width:100%}
+  .ask textarea::placeholder{color:var(--body);opacity:1}
+  .ask textarea:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .yours{flex:0 0 auto;background:var(--bg);border:1.5px dashed var(--on-highlight);border-radius:10px;padding:8px 14px;
+    display:flex;flex-direction:column;gap:3px}
+  .yours .yl{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .yours .yl svg.ic{width:17px;height:17px}
+  .yours .yh{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap}
+  .yours .yq{font-size:13.5px;line-height:1.35;color:var(--body)}
+  .yours p{font-size:14.5px;line-height:1.4;color:var(--title);white-space:pre-wrap;word-break:break-word}
+
+  .gate{flex:0 0 auto;background:var(--highlight);border-radius:12px;padding:22px 24px;display:flex;flex-direction:column;gap:14px}
+  .gate p{font-size:15px;line-height:1.45;color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:9px 17px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg);align-self:flex-start}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  /* Added by render() only when a screen would not fit the 540px canvas
+     (desktop only): slightly tighter spacing, nothing hidden. */
+  .frame.tight .board{gap:6px}
+  .frame.tight .ev{gap:3px;padding:7px 13px 8px}
+  .frame.tight .ev p{font-size:13.5px;line-height:1.36}
+  .frame.tight .fb{padding:6px 14px 7px;gap:2px}
+  .frame.tight .fb .ft{font-size:14px;line-height:1.35}
+  .frame.tight .panel{gap:6px}
+  .frame.tight .ctab td{padding-top:4px;padding-bottom:4px}
+  .frame.tight .col{gap:4px;padding-top:7px;padding-bottom:8px}
+  .frame.tight .col ul{gap:3px}
+  .frame.tight .statement{padding:7px 16px}
+  .frame.tight .statement p{font-size:15px;line-height:1.36}
+  .frame.tight .col .chd{font-size:15px;padding-bottom:4px}
+  .frame.tight .col li .lw span{font-size:12px;line-height:1.25}
+  .frame.tight .col li{line-height:1.28}
+  .frame.tight .col .chd .bi{width:28px;height:28px}
+  .frame.tight .yours{padding:6px 14px}
+  .frame.tight .yours p{font-size:14px;line-height:1.32}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:52px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:9px 20px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.36;color:var(--body)}
+  .bar.asking #hint{order:-1;color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .segs i{width:18px}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    h1{font-size:21px}
+    .lead{font-size:16px}
+    .sub{font-size:15px}
+    .board{flex:0 0 auto;overflow:visible}
+    .pick{grid-template-columns:1fr}
+    button.opt{flex:0 0 auto;padding:12px 10px 12px 12px;grid-template-columns:36px 1fr 62px}
+    button.opt .od{font-size:15px}
+    .panel{overflow:visible;scroll-margin:16px}
+    .panel.empty{padding:14px 16px}
+    .fb .ft,.ev p{font-size:15.5px}
+    .ev p.gl,.ev p.x3{font-size:15px}
+    .tagrow{font-size:15px}
+    .fn{font-size:13px}
+    .ctab,.ctab tbody,.ctab tr,.ctab td{display:block;width:100%}
+    .ctab thead{display:none}
+    .ctab{font-size:15px;background:transparent}
+    .ctab tr{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 0}
+    .ctab td{border:0;padding:3px 12px}
+    .ctab td::before{content:attr(data-l);display:block;font-size:12.5px;font-weight:600;letter-spacing:.04em;
+      text-transform:uppercase;color:var(--on-highlight)}
+    .ctab td.n,.ctab td.qr{display:inline-block;width:auto;padding-right:0;color:var(--on-highlight);font-weight:700}
+    .ctab td.n::before,.ctab td.qr::before,.ctab td.cl::before{display:none}
+    .ctab td.n::after{content:" \00B7";}
+    .ctab td.fp,.ctab td.cg{display:inline-block;width:50%;vertical-align:top}
+    .ctab tr{padding:8px 0}
+    .mk2{font-size:14px}
+    .statement p{font-size:18px}
+    .statement p.sm{font-size:15.5px}
+    .statement span.sm{display:block;margin:4px 0 0;font-size:15.5px}
+    .cols{grid-template-columns:1fr}
+    .col li{font-size:15.5px}
+    .col li .lw span{font-size:14.5px}
+    .ask label{font-size:16px}
+    .ask textarea{font-size:16px;height:110px}
+    .yours p{font-size:16px}
+    .yours .yq{font-size:15px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0;scroll-margin-bottom:16px}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{font-size:15px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="What Do the Failures Have in Common?">
+
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar" id="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <div id="hint"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:24px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:10px}
+    .nsf strong{color:#1C1B1B}
+    .nsf code{font-size:15px;background:#DCE1FF;padding:0 4px;border-radius:3px;word-break:break-all}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>What Do the Failures Have in Common?</h2>
+    <p>This page needs JavaScript to check your grades one at a time. Here are the checked grades for Cumberland's eight claims. Compare each one with the grade you gave it in your Eight Claims tab.</p>
+    <ol>
+      <li><strong>D5, "A network firewall is in place between our systems and the internet": Proven.</strong> <code>CCS-FW01_backup_2026-06-02.conf</code>, the firewall's own configuration export, dated in its file name, showing the device and its policy set.</li>
+      <li><strong>C1, "Patient data is backed up daily": Proven.</strong> <code>veeam-backup-report.pdf</code>, the backup application's own job report: nightly Success across a 30-day window.</li>
+      <li><strong>D4, "Anti-malware is installed on all servers and workstations": Proven.</strong> <code>endpoint-protection-console-export.csv</code>. Installed on the listed machines at the moment of export. The export's own header says it is filtered to servers in the assessed service plus sampled workstations.</li>
+      <li><strong>B1, "MFA is required for administrative access": Proven.</strong> <code>admin-mfa-policy.pdf</code> and <code>admin-signin-sample.csv</code>: the rule, and a log showing it satisfied. Proven for Cumberland's own administrators. The provider's shared account, <code>ridgeline-svc</code>, may not go through Entra ID at all. Look again at your Project 3 answers to questions 16 and 19.</li>
+      <li><strong>A2, "We keep a list of every system that holds patient data": Can't be proven (nothing).</strong> Nothing that answers the claim. Nate's system list exists (Project 1), but it lists servers and applications, never says which of them hold patient data, leaves out the data stores, and calls the test copy of live patient data decommissioned. No file shows which systems hold patient data.</li>
+      <li><strong>D6, "Firewall rules are reviewed on a regular schedule (quarterly)": Partly proven (weak).</strong> <code>firewall-review-emails.pdf</code>. Two informal 2024 emails. They show it happened twice, not that it is a quarterly process. No email for Q4 2024, none for 2025, no written scope.</li>
+      <li><strong>A3, "All staff complete security awareness training annually": Partly proven (weak).</strong> <code>awareness-training-attendance-2024.pdf</code>. One January 2024 delivery with a real attendance record. No session since.</li>
+      <li><strong>B4, "Access is removed the same day a staff member leaves": Can't be proven (nothing).</strong> Nothing. No leaver checklist, no ticket, no record that this happens.</li>
+    </ol>
+    <p>Proven: 4. Partly proven: 2. Can't be proven: 2.</p>
+    <h3>What do the four that failed have in common?</h3>
+    <p>Write your own answer first. Then read on.</p>
+    <div class="box">
+      <p><strong>Proven: a system did it.</strong> Firewall, backups, endpoint console, identity provider.</p>
+      <p><strong>Unproven: a person had to decide to write it down.</strong> Keeping a list, reviewing, training, revoking access.</p>
+      <p>The failures aren't spread evenly. Things a system does leave a record whether anyone remembers or not. Things people decide happen in conversations, and nobody writes a conversation down.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG drawn to the Phosphor outline style: one weight, uniform size,
+     #001D69 through currentColor. No icon font, no network request. */
+  var IC = {
+    proven:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="m9 14.2 2.1 2.1 4-4.2"/>',
+    partly:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="M9 12.5h6"/><path d="M9 16h2.5" stroke-dasharray="1.2 2.2"/>',
+    cant:'<path d="M14 3H6v18h12.5V7.5" stroke-dasharray="2.4 2.6"/><path d="M14 3v4.5h4.5"/>',
+    file:'<path d="M6 3h8l4.5 4.5V21H6z"/><path d="M14 3v4.5h4.5"/><path d="M9 12.5h6M9 16h6"/>',
+    search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+    gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/><circle cx="12" cy="12" r="6.2"/>',
+    person:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.3-3.6 4.2-5.5 7.5-5.5s6.2 1.9 7.5 5.5"/>',
+    pencil:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    x:'<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
+    okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8 5.4-5.6"/>',
+    noc:'<circle cx="12" cy="12" r="9"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/>',
+    weak:'<path d="M4 12h3l2-5 3 10 2-5h6"/>',
+    none:'<circle cx="12" cy="12" r="8.5"/><path d="M6 18 18 6"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- content ----------------
+     Grades: answer key section 1 and P4-7. Card text: the spec's screen 2
+     list. "gl" is the plain-words line under each claim (definitions only).
+     "why" is the short reason shown after a wrong pick (no new facts). */
+  var GRADES = {
+    proven:{ name:"Proven", ic:"proven", def:"An artifact you could hand an auditor today." },
+    partly:{ name:"Partly proven", ic:"partly", def:"Something exists but is incomplete, undated, or covers only part of the claim." },
+    cant:{ name:"Can't be proven", ic:"cant", def:"Nothing exists." }
+  };
+  var G_ORDER = ["proven","partly","cant"];
+  var TAGS = {
+    weak:{ name:"Weak", ic:"weak", def:"There is a record, but it falls short of the claim." },
+    none:{ name:"Nothing", ic:"none", def:"There is no record that answers the claim." }
+  };
+
+  var CLAIMS = [
+    { n:1, row:"D5", text:"A network firewall is in place between our systems and the internet",
+      gl:"A firewall is the device that decides which internet traffic can get in.",
+      ok:"proven", tag:null, evl:"The file that backs it",
+      files:["CCS-FW01_backup_2026-06-02.conf"],
+      ev:"The firewall's own configuration export, dated in its file name, showing the device and its policy set.",
+      evgl:"A configuration export is a copy of every setting on a device, saved by the device itself. The policy set is the list of rules the firewall follows.",
+      why:{ partly:"Partly proven is for a file that leaves out part of the claim. Read the claim again, word by word, then look at what the firewall's configuration export shows: the device and its rules, dated.",
+            cant:"There is a file for this claim in your folder. Look for the firewall's configuration export, the file whose name ends in .conf." } },
+    { n:2, row:"C1", text:"Patient data is backed up daily",
+      gl:"A backup is a saved copy of data, so that it can be brought back if it is lost.",
+      ok:"proven", tag:null, evl:"The file that backs it",
+      files:["veeam-backup-report.pdf"],
+      ev:"The backup application's own job report: nightly Success across a 30-day window.",
+      evgl:"The backup application is the program that makes the copies. Each nightly copy is one job.",
+      why:{ partly:"Partly proven is for a file that leaves out part of the claim. Read the claim again, word by word, then look at what the backup report shows: a nightly Success across 30 days.",
+            cant:"There is a file for this claim in your folder. Open the backup report, veeam-backup-report.pdf." } },
+    { n:3, row:"D4", text:"Anti-malware is installed on all servers and workstations",
+      gl:"Anti-malware is software that finds and blocks harmful programs. Workstations are staff computers.",
+      ok:"proven", tag:null, evl:"The file that backs it",
+      files:["endpoint-protection-console-export.csv"],
+      ev:"Installed on the listed machines at the moment of export. The export's own header says it is filtered to servers in the assessed service plus sampled workstations.",
+      evgl:"The console is the screen that manages the anti-malware. Filtered means the export shows only some of the machines, not all of them. It still counts as Proven, because the claim says anti-malware is installed, and every machine the export shows has it installed.",
+      why:{ partly:"The export is filtered, so this is a fair worry, and a careful auditor would note it. Read the claim again: it says anti-malware is installed. Does the export show it installed on the machines it lists?",
+            cant:"There is a file for this claim in your folder. Open the endpoint protection console export, the file whose name ends in .csv." } },
+    { n:4, row:"B1", text:"MFA is required for administrative access",
+      gl:"MFA means proving who you are in two ways, like a password and a code on your phone. Administrative access means signing in to the accounts that can change settings.",
+      ok:"proven", tag:null, evl:"The files that back it",
+      files:["admin-mfa-policy.pdf","admin-signin-sample.csv"],
+      ev:"The rule, and a log showing it satisfied.",
+      evgl:"The policy is the rule that requires MFA. The sign-in sample is a log of real logins, showing the rule being met.",
+      x3:"Proven for Cumberland's own administrators. The provider's shared account, ridgeline-svc, may not go through Entra ID at all. Entra ID is the Microsoft service that handles Cumberland's logins. Look again at your Project 3 answers to questions 16 and 19.",
+      why:{ partly:"There are two files for this claim: the rule that requires MFA, and a log of sign-ins that shows the rule being met. Read the claim again. Is any part of it not shown by those two files?",
+            cant:"There are two files for this claim in your folder: the MFA policy and the sign-in sample." } },
+    { n:5, row:"A2", text:"We keep a list of every system that holds patient data",
+      gl:"A system here means any server, program or place that stores or handles data.",
+      ok:"cant", tag:"none", evl:"What's missing",
+      files:[],
+      ev:"Nothing that answers the claim. Nate's system list exists (Project 1), but it lists servers and applications, never says which of them hold patient data, leaves out the data stores, and calls the test copy of live patient data decommissioned. No file shows which systems hold patient data.",
+      evgl:"Data stores are the places where data is kept. Decommissioned means taken out of use for good.",
+      why:{ proven:"Which file would you hand an auditor for this? Look for one that names the systems holding patient data.",
+            partly:"Nate's system list exists, so this is the easy trap. Read the claim again. Does any file say which systems hold patient data?" } },
+    { n:6, row:"D6", text:"Firewall rules are reviewed on a regular schedule (quarterly)",
+      gl:"Firewall rules decide which traffic the firewall lets through. Quarterly means every three months.",
+      ok:"partly", tag:"weak", evl:"The file, and what it leaves out",
+      files:["firewall-review-emails.pdf"],
+      ev:"Two informal 2024 emails. They show it happened twice, not that it is a quarterly process. No email for Q4 2024, none for 2025, no written scope.",
+      evgl:"Q4 2024 is the last three months of 2024. A written scope would say what each review checks.",
+      why:{ proven:"The emails are real, and they are dated. Now count them. Do two emails show a review every three months?",
+            cant:"Can't be proven means no file at all. Is there really nothing in your folder about firewall reviews?" } },
+    { n:7, row:"A3", text:"All staff complete security awareness training annually",
+      gl:"Security awareness training teaches staff to spot and avoid security risks. Annually means once a year.",
+      ok:"partly", tag:"weak", evl:"The file, and what it leaves out",
+      files:["awareness-training-attendance-2024.pdf"],
+      ev:"One January 2024 delivery with a real attendance record. No session since.",
+      evgl:"A delivery is one time the training was given. An attendance record lists who came.",
+      why:{ proven:"The attendance record is real. But it is for one session, in January 2024. Does one session show training every year?",
+            cant:"Can't be proven means no file at all. Is there really nothing in your folder about staff training?" } },
+    { n:8, row:"B4", text:"Access is removed the same day a staff member leaves",
+      gl:"Removing access means switching off a leaver's accounts, so that they can no longer log in. A leaver is a person leaving the company.",
+      ok:"cant", tag:"none", evl:"What's missing",
+      files:[],
+      ev:"Nothing. No leaver checklist, no ticket, no record that this happens.",
+      evgl:"A ticket is a request that is written down and tracked, such as a request to switch off an account.",
+      why:{ proven:"Which file would you hand an auditor for this? Look for anything in your folder about staff who leave.",
+            partly:"Partly proven needs at least a weak file. Is there any file in your folder about staff who leave?" } }
+  ];
+  var NQ = CLAIMS.length;
+
+  /* The reveal: P4-7 and key section 2. Labels verbatim; the small line under
+     each is the claim number and a plain-words meaning. */
+  var REVEAL = {
+    left:{ h:"Proven: a system did it.", ic:"gear", items:[
+      { n:1, l:"firewall", s:"Claim 1. The firewall saves its own settings." },
+      { n:2, l:"backups", s:"Claim 2. The backup program logs its own jobs." },
+      { n:3, l:"endpoint console", s:"Claim 3. The screen that manages the anti-malware." },
+      { n:4, l:"identity provider", s:"Claim 4. Entra ID, the service that handles logins." } ] },
+    right:{ h:"Unproven: a person had to decide to write it down.", ic:"person", items:[
+      { n:5, l:"keeping a list", s:"Claim 5. The systems that hold patient data." },
+      { n:6, l:"reviewing", s:"Claim 6. Checking the firewall rules." },
+      { n:7, l:"training", s:"Claim 7. Training staff every year." },
+      { n:8, l:"revoking access", s:"Claim 8. Taking away a leaver's access." } ] }
+  };
+  var PATTERN = "The failures aren't spread evenly. Things a system does leave a record whether anyone remembers or not. Things people decide happen in conversations, and nobody writes a conversation down.";
+
+  var AGAIN = "Try another grade.";
+  var MAXWRONG = 2;
+
+  var S = [];
+  CLAIMS.forEach(function(c, k){ S.push({ kind:"q", c:k }); });
+  S.push({ kind:"sum" });
+  S.push({ kind:"commit" });
+  S.push({ kind:"reveal" });
+
+  /* ---------------- state ----------------
+     a[n] = { first, out:[wrong picks in order], done:null|"right"|"shown" }
+     txt = the student's pattern sentence. */
+  var KEY = "vciso-p4-m8-what-do-the-failures-have-in-common-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function fresh(){ return { a:{}, txt:"" }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return fresh();
+      var o = fresh();
+      if(isPlain(raw.a)) CLAIMS.forEach(function(c){
+        var r = raw.a[c.n];
+        if(!isPlain(r)) return;
+        var out = [];
+        if(Array.isArray(r.out)) r.out.forEach(function(g){
+          if(G_ORDER.indexOf(g) >= 0 && g !== c.ok && out.indexOf(g) < 0 && out.length < MAXWRONG) out.push(g);
+        });
+        var done = null;
+        if(out.length >= MAXWRONG) done = "shown";
+        else if(r.done === "right") done = "right";
+        var first = G_ORDER.indexOf(r.first) >= 0 ? r.first : (out[0] || (done === "right" ? c.ok : null));
+        if(first || out.length || done) o.a[c.n] = { first:first, out:out, done:done };
+      });
+      if(typeof raw.txt === "string") o.txt = raw.txt.slice(0, 280);
+      return o;
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var p = [];
+    if(NQ !== 8) p.push("need 8 claims");
+    var count = { proven:0, partly:0, cant:0 };
+    CLAIMS.forEach(function(c){
+      if(!GRADES[c.ok]) p.push("claim " + c.n + " bad grade");
+      else count[c.ok]++;
+      G_ORDER.forEach(function(g){ if(g !== c.ok && !c.why[g]) p.push("claim " + c.n + " no reason for " + g); });
+      if(c.tag && !TAGS[c.tag]) p.push("claim " + c.n + " bad tag");
+    });
+    if(count.proven !== 4 || count.partly !== 2 || count.cant !== 2) p.push("grades must be 4, 2, 2");
+    if(p.length){
+      document.getElementById("board").innerHTML = '<div class="lead"><b>This page has authoring errors:</b> ' + p.join("; ") + "</div>";
+      throw new Error("data invalid: " + p.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    bar:document.getElementById("bar"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0, gated = false, confirming = false;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function strip(s){ return String(s).replace(/<[^>]+>/g,""); }
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+  function phone(){ return window.matchMedia("(max-width:599px)").matches; }
+  function ans(c){ return st.a[c.n] || { first:null, out:[], done:null }; }
+  function allDone(){ return CLAIMS.every(function(c){ return !!ans(c).done; }); }
+  function firstOpen(){ for(var k=0;k<NQ;k++){ if(!ans(CLAIMS[k]).done) return k; } return -1; }
+  function hasTxt(){ return !!(st.txt && st.txt.replace(/\s+/g,"").length); }
+  function q(s){ return "“" + s + "”"; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    var p;
+    if(s.kind === "q") p = "Question " + (s.c+1) + " of " + NQ;
+    else if(s.kind === "sum") p = "Your eight grades, checked";
+    else if(s.kind === "commit") p = "The pattern · Your turn";
+    else p = "The pattern";
+    el.prog.textContent = p;
+    var h = "";
+    for(var k=0;k<NQ;k++){
+      var here = s.kind === "q" && s.c === k;
+      h += "<i class='" + (here ? "here" : ans(CLAIMS[k]).done ? "on" : "") + "'></i>";
+    }
+    el.segs.innerHTML = h;
+    if(s.kind === "q"){ el.chip.hidden = false; el.chip.textContent = "Claim " + CLAIMS[s.c].n + " · Form row " + CLAIMS[s.c].row; }
+    else el.chip.hidden = true;
+
+    el.bar.classList.remove("asking");
+    el.back.disabled = (i === 0);
+    el.back.textContent = "Back";
+    el.next.disabled = false;
+    el.next.classList.remove("ghost");
+    el.next.textContent = "Next";
+    el.hint.textContent = "";
+
+    if(gated){ el.next.disabled = true; return; }
+    if(s.kind === "q"){
+      var a = ans(CLAIMS[s.c]);
+      if(s.c === NQ-1) el.next.textContent = "See all eight";
+      if(!a.done){ el.next.disabled = true; el.hint.textContent = a.out.length ? "Try another grade to carry on." : "Pick a grade to carry on."; }
+    }
+    else if(s.kind === "commit"){
+      el.next.textContent = "Show the pattern";
+      if(!hasTxt()){ el.next.disabled = true; el.hint.textContent = "Write a sentence to carry on."; }
+    }
+    else if(s.kind === "reveal"){
+      el.next.textContent = "Start over"; el.next.classList.add("ghost");
+      el.hint.textContent = "You're done here. Go back to the module and finish Step 5.";
+      if(confirming){
+        el.bar.classList.add("asking");
+        el.hint.textContent = "This clears all your grades and your sentence. Do you want to start over?";
+        el.back.textContent = "No, keep my answers";
+        el.next.textContent = "Yes, start over";
+        el.next.classList.remove("ghost");
+      }
+    }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    document.documentElement.classList.add("fresh");
+    el.board.innerHTML = "";
+    gated = false;
+    confirming = false;
+    var title;
+    if(s.kind === "q"){
+      var open = firstOpen();
+      if(open >= 0 && open < s.c) title = gate("<b>Grade the claim before this one first.</b> The claims go in order.", "Go to that claim", open);
+      else title = renderQ(s.c);
+    }
+    else if(!allDone()) title = gate("<b>Grade all eight claims first.</b> This screen uses your eight grades.", "Go to the next claim to grade", firstOpen());
+    else if(s.kind === "sum") title = renderSum();
+    else if(s.kind === "commit") title = renderCommit();
+    else if(!hasTxt()) title = gate("<b>Write your sentence first.</b> Say what you think the four that failed have in common, then come back.", "Go back to your sentence", S.length-2);
+    else title = renderReveal();
+    el.h1.innerHTML = title;
+    el.frame.setAttribute("aria-label", strip(title));
+    header();
+    fitTight();
+    return title;
+  }
+  function fitTight(){
+    el.frame.classList.remove("tight");
+    if(phone()) return;
+    var p = el.board.querySelector(".panel");
+    if(el.board.scrollHeight > el.board.clientHeight + 1 || (p && p.scrollHeight > p.clientHeight + 1)) el.frame.classList.add("tight");
+  }
+
+  function gate(msg, btn, to){
+    gated = true;
+    el.board.innerHTML = '<div class="gate"><p>' + msg + '</p><button class="go" type="button" id="gobtn">' + btn + "</button></div>";
+    el.board.querySelector("#gobtn").addEventListener("click", function(){ i = to; render(); focusTop(); });
+    return "One Step Back";
+  }
+
+  /* ---- a claim slide ---- */
+  function stateOf(c, a, g){
+    if(g === c.ok && a.done) return { cls:"ok", ico:"check", tag: a.done === "right" ? "Right" : "Right answer" };
+    if(a.out.indexOf(g) >= 0) return { cls:"no", ico:"x", tag:"Not quite" };
+    if(a.done) return { cls:"idle", ico:"", tag:"" };
+    return { cls:"", ico:"", tag:"" };
+  }
+  function optHTML(c, a, g){
+    var s = stateOf(c, a, g), G = GRADES[g];
+    var sr = s.cls === "ok" ? (a.done === "right" ? "Right. You picked this one." : "Right answer.")
+      : s.cls === "no" ? "Not quite. You picked this one." : s.cls === "idle" ? "Not picked." : "";
+    return '<button class="opt' + (s.cls ? " " + s.cls : "") + '" type="button" data-g="' + g + '"'
+      + (s.cls ? ' disabled aria-disabled="true"' : "") + ">"
+      + '<span class="oi">' + icon(G.ic) + "</span>"
+      + '<span class="ot"><span class="on">' + esc(G.name) + '</span><span class="od">' + esc(G.def) + "</span></span>"
+      + '<span class="mk"><span class="g" aria-hidden="true">' + (s.ico ? icon(s.ico) : "") + "</span>"
+      +   (s.tag ? '<span class="lb" aria-hidden="true">' + s.tag + "</span>" : "") + "</span>"
+      + (sr ? '<span class="sr">' + sr + "</span>" : "")
+      + "</button>";
+  }
+  function tagHTML(t){
+    var T = TAGS[t];
+    return '<span class="tagrow"><span class="tag">' + icon(T.ic) + esc(T.name) + "</span><span>" + esc(T.def) + "</span></span>";
+  }
+  function evHTML(c){
+    return '<div class="ev" id="ev">'
+      + '<span class="el">' + icon(c.files.length ? "file" : "search") + esc(c.evl) + "</span>"
+      + (c.files.length ? '<span class="fns">' + c.files.map(function(f){ return '<span class="fn">' + esc(f) + "</span>"; }).join("") + "</span>" : "")
+      + "<p>" + esc(c.ev) + "</p>"
+      + (c.evgl ? '<p class="gl">' + esc(c.evgl) + "</p>" : "")
+      + (c.tag ? tagHTML(c.tag) : "")
+      + (c.x3 ? '<p class="x3">' + esc(c.x3) + "</p>" : "")
+      + "</div>";
+  }
+  function panelHTML(c, a){
+    if(!a.out.length && !a.done){
+      return '<div class="panel empty" id="panel" tabindex="-1">'
+        + '<p class="pe">This is what Cumberland told Meridian. <b>Pick the grade that you think is right.</b> Start with the one you gave this claim in your Eight Claims tab.</p>'
+        + '<p class="pe">If your pick is not right, you can try again. After two wrong tries, we show you the right one.</p></div>';
+    }
+    var h = '<div class="panel" id="panel" tabindex="-1">';
+    if(a.done === "right"){
+      h += '<div class="fb ok" id="fb"><span class="fh">' + icon("okc") + "Right</span>"
+        + '<p class="ft">The grade the files support is <b>' + esc(GRADES[c.ok].name) + "</b>.</p></div>";
+    } else {
+      var last = a.out[a.out.length-1];
+      h += '<div class="fb no" id="fb"><span class="fh">' + icon("noc") + "Not quite</span>"
+        + '<p class="ft">' + esc(c.why[last]) + "</p>"
+        + '<p class="ft"><b>' + (a.done === "shown" ? "The right answer is " + esc(GRADES[c.ok].name) + ", marked green." : AGAIN) + "</b></p></div>";
+    }
+    if(a.done) h += evHTML(c);
+    return h + "</div>";
+  }
+  function renderQ(k){
+    var c = CLAIMS[k], a = ans(c);
+    el.board.innerHTML = '<p class="sub">' + esc(c.gl) + "</p>"
+      + '<div class="pick">'
+      +   '<div class="opts" role="group" aria-label="Grades">' + G_ORDER.map(function(g){ return optHTML(c, a, g); }).join("") + "</div>"
+      +   panelHTML(c, a)
+      + "</div>";
+    if(!a.done) Array.prototype.forEach.call(el.board.querySelectorAll("button.opt:not(:disabled)"), function(b){
+      b.addEventListener("click", function(){ choose(k, b.dataset.g); });
+    });
+    return esc(q(c.text));
+  }
+  function choose(k, g){
+    var c = CLAIMS[k];
+    var a = st.a[c.n] || (st.a[c.n] = { first:null, out:[], done:null });
+    if(a.done || a.out.indexOf(g) >= 0 || !GRADES[g]) return;
+    if(!a.first) a.first = g;
+    if(g === c.ok) a.done = "right";
+    else { a.out.push(g); if(a.out.length >= MAXWRONG) a.done = "shown"; }
+    save(st);
+    render();
+    var fb = el.board.querySelector("#fb"), ev = el.board.querySelector("#ev");
+    if(!reduce){ [fb, ev].forEach(function(n){ if(n){ n.classList.remove("in"); void n.offsetWidth; n.classList.add("in"); } }); }
+    var p = el.board.querySelector("#panel");
+    if(p) say(strip(p.innerHTML.replace(/<\/p>/g, " ").replace(/<\/span>/g, ". ")).replace(/\.\s*\./g, "."));
+    var ph = phone(), fo = ph ? { preventScroll:true } : undefined;
+    if(a.done) el.next.focus(fo);
+    else { var f = el.board.querySelector("button.opt:not(:disabled)"); if(f) f.focus(fo); }
+    if(ph && p) (a.done ? el.bar : p).scrollIntoView({ block: a.done ? "end" : "start", behavior: reduce ? "auto" : "smooth" });
+  }
+
+  /* ---- the summary ---- */
+  function mark(match){
+    return '<span class="mk2 ' + (match ? "ok" : "df") + '">' + icon(match ? "check" : "info") + (match ? "Matches" : "Differs") + "</span>";
+  }
+  function renderSum(){
+    function cell(l, v, cls){ return '<td data-l="' + l + '"' + (cls ? ' class="' + cls + '"' : "") + ">" + v + "</td>"; }
+    var rows = CLAIMS.map(function(c){
+      var a = ans(c), first = a.first || c.ok;
+      return "<tr>" + cell("#", c.n, "n") + cell("Form row", c.row, "qr") + cell("Claim", esc(c.text), "cl")
+        + cell("Your first pick", esc(GRADES[first].name), "fp")
+        + cell("Checked grade", esc(GRADES[c.ok].name), "cg")
+        + cell("Result", mark(first === c.ok), "rs") + "</tr>";
+    }).join("");
+    el.board.innerHTML = '<p class="lead">' + mark(true) + " means your first pick was the checked grade, the grade the files actually support. " + mark(false) + " means it was not.</p>"
+      + '<table class="ctab"><thead><tr><th scope="col">#</th><th scope="col">Form row</th><th scope="col">Claim</th>'
+      + '<th scope="col">Your first pick</th><th scope="col">Checked grade</th><th scope="col">Result</th></tr></thead><tbody>'
+      + rows + "</tbody></table>"
+      + '<div class="statement"><p>Proven: 4. Partly proven: 2. Can\'t be proven: 2. <span class="sm">In row 11 you guessed how many claims you could back up with a file. Four came out fully Proven. How close was your guess?</span></p></div>';
+    return "Your Eight Grades, Checked";
+  }
+
+  /* ---- the two columns ---- */
+  function colHTML(head, ic, items, anim){
+    return '<div class="col' + (anim ? " in" : "") + '"><span class="chd"><span class="bi">' + icon(ic) + "</span>" + head + "</span><ul>"
+      + items.map(function(it){ return "<li>" + it + "</li>"; }).join("") + "</ul></div>";
+  }
+  function renderCommit(){
+    function item(c){
+      return '<span class="cn">' + c.n + '</span><span class="lw"><b>' + esc(c.text) + "</b></span>"
+        + (c.tag ? '<span class="tag">' + icon(TAGS[c.tag].ic) + TAGS[c.tag].name + "</span>" : "<span></span>");
+    }
+    el.board.innerHTML = '<p class="lead">Here are the eight claims again, split by their checked grade. Look at the four that are not Proven. There is no single right answer to the question below, so write what you see.</p>'
+      + '<div class="cols">'
+      + colHTML("Proven", "proven", CLAIMS.slice(0,4).map(item))
+      + colHTML("Partly proven or Can't be proven", "partly", CLAIMS.slice(4).map(item))
+      + "</div>"
+      + '<div class="ask"><label for="txt">What do you think the four that are not Proven have in common?</label>'
+      + '<textarea id="txt" maxlength="280" placeholder="Paste your sentence from row 17 of your Scoreboard tab, or write a new one."></textarea></div>';
+    var ta = el.board.querySelector("#txt");
+    ta.value = st.txt || "";
+    ta.addEventListener("input", function(){
+      st.txt = ta.value; save(st);
+      var ok = hasTxt();
+      el.next.disabled = !ok;
+      el.hint.textContent = ok ? "" : "Write a sentence to carry on.";
+    });
+    return "What Do the Four That Failed Have in Common?";
+  }
+
+  function renderReveal(){
+    function item(it){
+      var c = CLAIMS[it.n-1];
+      return '<span class="cn">' + it.n + '</span><span class="lw"><b>' + esc(it.l) + "</b><span>" + esc(it.s) + "</span></span>"
+        + (c.tag ? '<span class="tag">' + icon(TAGS[c.tag].ic) + TAGS[c.tag].name + "</span>" : "<span></span>");
+    }
+    el.board.innerHTML = '<div class="cols">'
+      + colHTML(esc(REVEAL.left.h), REVEAL.left.ic, REVEAL.left.items.map(item), !reduce)
+      + colHTML(esc(REVEAL.right.h), REVEAL.right.ic, REVEAL.right.items.map(item), !reduce)
+      + "</div>"
+      + '<p class="sub">Unproven here means Partly proven or Can\'t be proven.</p>'
+      + '<div class="statement"><p>' + esc(PATTERN) + "</p></div>"
+      + '<div class="yours"><div class="yh"><span class="yl">' + icon("pencil") + "What you wrote</span>"
+      +   '<span class="yq">There is no single right answer. Read the split next to what you wrote. Did you see the same thing?</span></div>'
+      +   "<p>" + esc(st.txt.trim().replace(/\s+/g, " ")) + "</p></div>";
+    return "What the Failures Have in Common";
+  }
+
+  /* ---------------- navigation ---------------- */
+  function focusTop(){
+    var ph = phone();
+    el.frame.focus(ph ? { preventScroll:true } : undefined);
+    if(ph) window.scrollTo(0, 0);
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; var t = render(); focusTop();
+    say(el.prog.textContent + ". " + strip(t));
+  }
+  function startOver(){
+    st = fresh(); save(st); i = 0; render(); focusTop();
+    say("Your answers are cleared. Question 1 of " + NQ + ".");
+  }
+  el.back.addEventListener("click", function(){
+    if(confirming){ confirming = false; header(); el.next.focus(); say("Your answers are kept."); return; }
+    go(-1);
+  });
+  el.next.addEventListener("click", function(){
+    if(i !== S.length-1){ go(1); return; }
+    if(!confirming){ confirming = true; header(); el.next.focus(); say(el.hint.textContent); return; }
+    startOver();
+  });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    return t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
+  }
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled && i < S.length-1) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); if(!confirming) go(-1); }
+  });
+
+  /* A cursor resting where new content lands must not tint an option. */
+  var lastPt = null;
+  document.addEventListener("pointermove", function(e){
+    var p = e.clientX + "," + e.clientY;
+    if(lastPt !== null && p !== lastPt) document.documentElement.classList.remove("fresh");
+    lastPt = p;
+  }, true);
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    if(ownsKeys(e.target)){ tx = null; return; }
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if(dx < 0){ if(!el.next.disabled && i < S.length-1) go(1); } else if(!confirming) go(-1);
+    }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(phone()){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", function(){ fit(); fitTight(); });
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ---------------- */
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length,
+    reset:function(){ st = fresh(); save(st); i = 0; render(); },
+    state:function(){ return { i:i, a:JSON.parse(JSON.stringify(st.a)), txt:st.txt, tight:el.frame.classList.contains("tight") }; }
+  };
+})();
+</script>
+</body>
+</html>
