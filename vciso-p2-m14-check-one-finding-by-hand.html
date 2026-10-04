@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check One Finding by Hand</title>
+<!--
+  vCISO P2 Step 4, Module 14: Decide What Cumberland Should Fix First. Step 3,
+  "Check Every Finding Against the Exploited List"
+  (06-content/project-02/step-04/module-14-task-make-the-severity-defensible.md).
+
+  A scene by scene animation with no questions. It shows, by hand, how the two
+  Working List cells Claude fills for every finding are worked out for one finding:
+    Score: the highest CVSS number among the finding's rows.
+    On the Exploited List: yes and the code if any one of its CVE codes is on
+    CISA's Known Exploited Vulnerabilities catalog, no if none is, no code if
+    the finding has no CVE.
+
+  Data: the company "Example" and every machine name are made up. CVE codes with
+  the year 2099 are made up so they can never match a real flaw. CVE-2014-0160
+  (Heartbleed) is real and public; its CVSS 3.x base score is 7.5 and it is on the
+  KEV catalog. The KEV entry text is copied from the module's screenshot of the
+  real CISA page (vciso-p2-m14-kev-search.png).
+
+  Same chrome, tint ramp, bar, Replay and scale-to-fit as
+  vciso-p2-m6-what-is-a-lookup.html. Sheet styling follows
+  vciso-p2-m13-find-the-repeats.html. Green is used only to mark "on the list",
+  always with a tick and words. "Not on the list" is neutral, never red.
+
+  Every scene animates on entry and has Replay. Under reduced motion every
+  scene shows its end state at once.
+
+  Verify before shipping:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs --allow '#146C2E,#E6F4EA' this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* "on the list" only, always with a tick and words */
+    --ok:#146C2E;
+    --ok-tint:#E6F4EA;
+
+    --line:rgba(0,29,105,.26);
+    --grid:rgba(0,29,105,.15);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp (09-assets/deck-palette.json), in slide order. Tint carries no meaning. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+  body.t3{background:#F2E3D2}
+  body.t4{background:#DEEBDA}
+  body.t5{background:#F0E4EF}
+  body.t6{background:#D0EEF1}
+  body.t7{background:#EEDAD6}
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .lead{flex:0 0 auto;font-size:16px;line-height:1.45;color:var(--body);max-width:96ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .mono{font-family:var(--mono)}
+  .nw{white-space:nowrap}
+
+  /* ---- the reveal primitive: layout never moves, only opacity and transform,
+         so reduced motion (every step applied at once) shows the end state. ---- */
+  .fx{opacity:0;transform:translateY(8px);transition:opacity 480ms var(--ease-out),transform 480ms var(--ease-over)}
+  .fx.on{opacity:1;transform:none}
+
+  .statement{background:var(--highlight);border-left:5px solid var(--on-highlight);border-radius:0 12px 12px 0;
+    padding:12px 18px;font-size:18px;line-height:1.4;font-weight:600;color:var(--title)}
+  .cap{flex:0 0 auto;font-size:15px;line-height:1.4;color:var(--title);display:flex;align-items:center;gap:10px}
+  .cap svg.ic{width:22px;height:22px;color:var(--on-highlight);flex:0 0 auto}
+
+  /* ---- the spreadsheet ---- */
+  .gs{position:relative;min-width:0;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:8px;overflow:hidden;flex:0 0 auto}
+  .gr{display:grid;align-items:stretch}
+  .gr > span{min-width:0;padding:3px 8px;border-left:1px solid var(--grid);display:flex;align-items:center;line-height:1.25}
+  .gr > span:first-child{border-left:0;justify-content:center;padding:3px 0;background:var(--tint);font-size:11px;color:var(--body)}
+  .gl{background:var(--tint);font-size:11px;color:var(--body);min-height:19px}
+  .gl > span{justify-content:center}
+  .gh{background:var(--highlight);font-weight:700;color:var(--on-highlight);font-size:13px;min-height:26px;border-top:1px solid var(--grid)}
+  .gd{font-size:13px;color:var(--title);min-height:24px;border-top:1px solid var(--grid);
+    transition:background var(--t-frame) var(--ease-io),opacity var(--t-frame) var(--ease-io),box-shadow var(--t-frame) var(--ease-io)}
+  .gd > span.num{justify-content:flex-end;font-variant-numeric:tabular-nums}
+  .gd .empty{color:var(--body)}
+  .tabs{display:flex;gap:4px;background:var(--tint);border-top:1px solid var(--grid);padding:0 8px;height:28px;align-items:stretch}
+  .tab{font-size:12.5px;padding:0 12px;display:flex;align-items:center;color:var(--body)}
+  .tab.on{background:var(--bg);color:var(--on-highlight);font-weight:700;box-shadow:inset 0 -3px 0 var(--on-highlight)}
+
+  /* Working List columns: row number, A Finding, B Rows, C Hosts, D Notes, E Score, F On the Exploited List */
+  .wl .gr{grid-template-columns:30px minmax(0,1.5fr) 54px 92px minmax(0,1.2fr) 70px 184px}
+  .wl.big .gh{font-size:14.5px;min-height:32px}
+  .wl.big .gd{font-size:15px;min-height:36px}
+  .wl.big .gl{min-height:21px}
+  .wcell{position:relative}
+  .wcell.mark{box-shadow:inset 0 0 0 2.5px var(--on-highlight);background:var(--tint)}
+  .wcell.lit{background:var(--highlight);font-weight:700}
+  .wcell .wv{white-space:nowrap}
+  .wcell .wq{font-size:12px;font-style:italic;color:var(--body);font-weight:400}
+
+  /* Scan columns: row number, A Host, E Finding, F CVE, G Severity, H CVSS, L Group */
+  .sc .gr{grid-template-columns:30px 92px minmax(0,1.2fr) 114px 68px 50px minmax(0,1fr)}
+  .sc .gd{font-size:12.5px}
+  .sc .gd > span.hn{white-space:nowrap}
+  .sc .gd.scan{box-shadow:inset 0 0 0 2px var(--on-highlight)}
+  .sc .gd.hit{background:var(--highlight);box-shadow:inset 5px 0 0 var(--on-highlight)}
+  .sc .gd.hit > span{font-weight:700}
+  .sc .gd.miss{opacity:.32}
+  .colbox{position:absolute;border:3px solid var(--on-highlight);border-radius:6px;pointer-events:none}
+  .collab{position:absolute;right:6px;top:-1px;background:var(--on-highlight);color:var(--bg);font-size:11.5px;font-weight:700;
+    padding:1px 8px;border-radius:0 0 6px 6px}
+
+  /* Score scene: the three rows only. Row number, E Finding, F CVE, H CVSS */
+  .s3 .gr{grid-template-columns:30px minmax(0,1fr) 140px 64px}
+  .s3 .gd > span.cv{transition:background var(--t-frame) var(--ease-io),box-shadow var(--t-frame) var(--ease-io)}
+  .s3 .gd > span.cv.lit{background:var(--highlight);box-shadow:inset 0 0 0 2.5px var(--on-highlight);font-weight:700}
+  .cmp{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:center}
+  .tiles{display:flex;gap:12px;align-items:flex-start}
+  .tl{width:92px;height:76px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .tv{width:92px;height:54px;flex:0 0 auto;border-radius:10px;border:1.5px solid var(--on-highlight);background:var(--bg);
+    display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--title);font-variant-numeric:tabular-nums;
+    transition:opacity var(--t-frame) var(--ease-out),border-width var(--t-fast),background var(--t-frame)}
+  .tt{font-size:12px;font-weight:700;color:var(--on-highlight);display:flex;align-items:center;gap:4px;height:18px;opacity:0;
+    transition:opacity var(--t-frame) var(--ease-out)}
+  .tt svg.ic{width:15px;height:15px;stroke-width:2.2}
+  .tl.top .tv{border:3px solid var(--on-highlight);background:var(--highlight)}
+  .tl.top .tt{opacity:1}
+  .tl.dim .tv{opacity:.4}
+  .slab{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight);flex:0 0 auto;
+    display:flex;align-items:center;gap:7px}
+  .slab svg.ic{width:17px;height:17px}
+
+  /* the thing that moves from one place to another */
+  .flyer{position:absolute;z-index:6;pointer-events:none;background:var(--highlight);border:2px solid var(--on-highlight);border-radius:7px;
+    padding:2px 9px;font-weight:700;color:var(--title);white-space:nowrap;font-size:17px;
+    transition:transform 850ms var(--ease-io)}
+
+  /* ---- CISA's exploited list, drawn ---- */
+  .kwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:226px minmax(0,1fr);gap:16px;align-items:start}
+  .codes{background:var(--highlight);border-radius:12px;padding:11px 12px 12px;display:flex;flex-direction:column;gap:7px}
+  .codes .ch{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .cc{background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:6px 9px;display:flex;gap:9px;align-items:center;
+    transition:background var(--t-frame) var(--ease-out),border-color var(--t-frame) var(--ease-out)}
+  .cc .cg{flex:0 0 auto;width:22px;height:22px;color:var(--on-highlight)}
+  .cc .cg svg.ic{width:22px;height:22px}
+  .cc .ct{display:flex;flex-direction:column;min-width:0}
+  .cc .cn{font-family:var(--mono);font-size:13.5px;font-weight:700;color:var(--title);white-space:nowrap}
+  .cc .cs{font-size:13px;color:var(--body);line-height:1.3}
+  .cc.cur{border:2px solid var(--on-highlight);padding:5.5px 8.5px}
+  .cc.cur .cs{color:var(--on-highlight);font-weight:600}
+  .cc.yes{background:var(--ok-tint);border:2px solid var(--ok);padding:5.5px 8.5px}
+  .cc.yes .cg{color:var(--ok)}
+  .cc.yes .cs{color:var(--ok);font-weight:700}
+  .cc.no{border:1.5px solid var(--on-highlight)}
+  .cc.no .cs{color:var(--title);font-weight:600}
+  .codes .st{font-size:14.5px;line-height:1.42;color:var(--title);font-weight:600;border-top:1.5px solid var(--line);padding-top:8px}
+
+  .kev{min-width:0;background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;overflow:hidden}
+  .kbar{height:26px;background:var(--tint);border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:10px;padding:0 10px}
+  .kbar .dots{display:flex;gap:5px}
+  .kbar .dots i{width:8px;height:8px;border-radius:50%;border:1.3px solid var(--line)}
+  .kbar .url{flex:1 1 auto;min-width:0;background:var(--bg);border-radius:9px;font-size:11.5px;color:var(--body);padding:1px 10px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kbody{display:grid;grid-template-columns:186px minmax(0,1fr);gap:20px;padding:12px 16px 14px}
+  .kside{display:flex;flex-direction:column;gap:7px}
+  .kh{font-size:14px;font-weight:700;line-height:1.25;color:var(--title)}
+  .klab{font-size:12.5px;color:var(--title);margin-top:4px}
+  .kin{height:34px;border:1.5px solid var(--line);background:var(--bg);border-radius:2px;display:flex;align-items:center;gap:7px;padding:0 8px;
+    transition:box-shadow var(--t-fast) var(--ease-out)}
+  .kin.act{box-shadow:0 0 0 2.5px var(--on-highlight)}
+  .kin svg.ic{width:16px;height:16px;color:var(--body);flex:0 0 auto}
+  .kin .ty{font-family:var(--mono);font-size:13px;color:var(--title);white-space:nowrap}
+  .kin .caret{display:inline-block;width:1.5px;height:16px;background:var(--on-highlight);margin-left:1px;opacity:0}
+  .kin.act .caret{opacity:1}
+  .kapply{align-self:flex-start;margin-top:4px;background:var(--on-highlight);color:var(--bg);border:2px solid var(--on-highlight);
+    font-size:12.5px;font-weight:600;letter-spacing:.08em;padding:6px 16px;transition:background var(--t-fast),color var(--t-fast)}
+  .kapply.press{background:var(--bg);color:var(--on-highlight)}
+  .kmain{min-width:0;display:flex;flex-direction:column}
+  .kt{font-size:23px;line-height:1.15;color:var(--on-highlight);font-weight:500}
+  .kskel{display:flex;flex-direction:column;gap:7px;margin:10px 0 12px}
+  .kskel i{display:block;height:7px;border-radius:4px;background:var(--tint2)}
+  .kline{height:1.5px;background:var(--on-highlight)}
+  .kres{position:relative;min-height:128px;padding-top:9px}
+  .kres .kshow{font-size:12px;color:var(--body)}
+  .kres .kven{font-size:11.5px;font-weight:700;letter-spacing:.03em;color:var(--body);margin-top:3px}
+  .kcode{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap}
+  .kcl{display:inline-flex;align-items:center;gap:7px;font-size:18px;font-weight:600;color:var(--on-highlight);text-decoration:underline;
+    border-radius:4px;padding:1px 4px;box-shadow:0 0 0 0 transparent;transition:box-shadow var(--t-frame) var(--ease-out)}
+  .kcl svg.ic{width:20px;height:20px}
+  .kcl.boxed{box-shadow:0 0 0 2.5px var(--on-highlight)}
+  .okt{display:inline-flex;align-items:center;gap:5px;background:var(--ok-tint);border:2px solid var(--ok);color:var(--ok);
+    border-radius:14px;padding:1px 10px 1px 7px;font-size:13px;font-weight:700}
+  .okt svg.ic{width:16px;height:16px;stroke-width:2.4}
+  .kdesc{font-size:12.5px;line-height:1.4;color:var(--title);margin-top:7px}
+  .kdesc b{font-weight:700}
+  .knone{position:absolute;left:0;right:0;top:12px;height:96px;border:2px dashed var(--on-highlight);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;color:var(--on-highlight)}
+  .knone svg.ic{width:20px;height:20px}
+
+  /* ---- scene 6 and 7 ---- */
+  .codes.row{flex-direction:row;align-items:center;gap:10px;padding:8px 10px;flex:0 0 auto}
+  .codes.row .ch{flex:0 0 auto;width:118px;line-height:1.25}
+  .codes.row .cc{flex:1 1 0;min-width:0}
+  .rules{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .rule{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;padding:9px 12px;display:flex;gap:10px;align-items:flex-start}
+  .rule .rg{flex:0 0 auto;width:30px;height:30px;border-radius:8px;background:var(--highlight);border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  .rule .rg svg.ic{width:19px;height:19px}
+  .rule.yes{border:2px solid var(--ok);background:var(--ok-tint)}
+  .rule.yes .rg{background:var(--bg);border-color:var(--ok);color:var(--ok)}
+  .rule p{font-size:14.5px;line-height:1.38;color:var(--title)}
+  .rule p b{font-weight:700}
+  .sums{flex:0 0 auto;display:flex;flex-direction:column;gap:10px}
+  .sums .statement b{color:var(--on-highlight)}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out);
+    display:inline-flex;align-items:center;gap:7px}
+  button.nav svg.ic{width:17px;height:17px}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled,button.nav.ghost:disabled{background:transparent;color:var(--on-highlight);border-style:dashed;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:40px;font-size:13.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #replay{margin-left:auto}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .board{flex:0 0 auto}
+    .statement{font-size:17px;padding:12px 14px}
+    .cap{font-size:16px;align-items:flex-start}
+
+    .gr > span{padding:4px 6px}
+    .gd,.wl.big .gd{font-size:14.5px}
+    .gh,.wl.big .gh{font-size:13.5px}
+    /* the phone shows fewer columns, so nothing scrolls sideways */
+    .hp{display:none!important}
+    .wl .gr{grid-template-columns:26px minmax(0,1fr) 50px 142px}
+    .sc .gr{grid-template-columns:26px minmax(0,1fr) 48px minmax(0,1fr)}
+    .s3 .gr{grid-template-columns:26px minmax(0,1fr) 126px 50px}
+    .wcell .wv{white-space:normal}
+
+    .cmp{grid-template-columns:1fr;gap:12px}
+    .tl,.tv{width:84px}
+    .kwrap{grid-template-columns:1fr;gap:12px}
+    .kwrap .kev{order:-1}
+    .kbody{grid-template-columns:1fr;gap:14px;padding:12px}
+    .kt{font-size:21px}
+    .kdesc{font-size:14.5px}
+    .kres .kshow,.kres .kven{font-size:13.5px}
+    .klab{font-size:14px}
+    .kh{font-size:16px}
+    .kin .ty{font-size:15px}
+    .cc .cs{font-size:15px}
+    .cc .cn{font-size:15px}
+    .codes .st{font-size:16px}
+    .codes.row{flex-direction:column;align-items:stretch}
+    .codes.row .ch{width:auto}
+    .rules{grid-template-columns:1fr}
+    .rule p{font-size:16px}
+    .slab{font-size:13.5px}
+
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #replay{margin-left:0}
+    #hint{height:auto;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Check One Finding by Hand">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 7</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip">Made-up company: Example</span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <div id="hint" aria-hidden="true"></div>
+      <button class="nav ghost" id="replay" type="button"></button>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 16px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .tw{overflow-x:auto}
+    .nsf table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 14px}
+    .nsf th{background:#DCE1FF;color:#001D69;text-align:left;padding:5px 8px}
+    .nsf td{padding:5px 8px;border-bottom:1px solid #DCE1FF;color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Check One Finding by Hand</h2>
+    <p>Here is one finding on the Working List of a made-up company called Example. We are going to show you how to fill in its two empty cells, Score and On the Exploited List, by hand. Claude will do this for every finding, but knowing how lets you check its work.</p>
+    <div class="tw"><table>
+      <tr><th>Finding</th><th>Rows</th><th>Hosts</th><th>Notes</th><th>Score</th><th>On the Exploited List</th></tr>
+      <tr><td>Old OpenSSL on EX-WEB02</td><td>3</td><td>EX-WEB02</td><td>One update fixes it.</td><td></td><td></td></tr>
+    </table></div>
+    <h3>1. Find the finding's rows in the Scan tab</h3>
+    <p>Go to the Scan tab and look for the finding's name, Old OpenSSL on EX-WEB02, in the Group column, column L. Three rows have this name. These are the finding's rows.</p>
+    <div class="tw"><table>
+      <tr><th>Host</th><th>Finding</th><th>CVE</th><th>Severity</th><th>CVSS</th><th>Group</th></tr>
+      <tr><td>EX-MAIL01</td><td>Missing March 2024 security updates</td><td>CVE-2099-0001</td><td>Critical</td><td>8.8</td><td>Missing March 2024 updates on EX-MAIL01</td></tr>
+      <tr><td><strong>EX-WEB02</strong></td><td><strong>OpenSSL information disclosure (Heartbleed)</strong></td><td><strong>CVE-2014-0160</strong></td><td><strong>High</strong></td><td><strong>7.5</strong></td><td><strong>Old OpenSSL on EX-WEB02</strong></td></tr>
+      <tr><td>EX-FILE01</td><td>SMB signing not required</td><td></td><td>Medium</td><td>5.3</td><td>Small settings problems</td></tr>
+      <tr><td><strong>EX-WEB02</strong></td><td><strong>OpenSSL denial of service</strong></td><td><strong>CVE-2099-0011</strong></td><td><strong>Medium</strong></td><td><strong>5.9</strong></td><td><strong>Old OpenSSL on EX-WEB02</strong></td></tr>
+      <tr><td>EX-MAIL01</td><td>TLS 1.0 enabled</td><td></td><td>Medium</td><td>5.3</td><td>Small settings problems</td></tr>
+      <tr><td><strong>EX-WEB02</strong></td><td><strong>OpenSSL weak cipher accepted</strong></td><td><strong>CVE-2099-0012</strong></td><td><strong>Medium</strong></td><td><strong>5.3</strong></td><td><strong>Old OpenSSL on EX-WEB02</strong></td></tr>
+    </table></div>
+    <h3>2. Score: the highest CVSS number</h3>
+    <p>The CVSS column holds each row's danger score, a number from 0 to 10. The finding's three rows score 7.5, 5.9 and 5.3. The Score is the highest CVSS number among the finding's rows, so the Score is 7.5.</p>
+    <h3>3. Search each code on the exploited list</h3>
+    <p>Next, search each of the finding's three codes on CISA's exploited list of flaws that attackers have really used, one at a time. Use the search box on the left, under "Search by keyword, term, or phrase", then press Apply.</p>
+    <p><strong>CVE-2014-0160</strong>, a real flaw from 2014 called Heartbleed: one entry appears below the line, under "Showing 1 to 1 of 1 results", with CVE-2014-0160 at the top. The code at the top of the entry is the one we typed, so this code is on the list.</p>
+    <p><strong>CVE-2099-0011</strong> and <strong>CVE-2099-0012</strong>: nothing appears below the line for either code, so they are not on the list. These two codes are made up anyway.</p>
+    <h3>4. Write the answer on the Working List</h3>
+    <p>One of the three codes is on the list, so write <strong>yes, CVE-2014-0160</strong> in On the Exploited List.</p>
+    <ul>
+      <li>Write yes and that code if any one of the finding's codes is on the list.</li>
+      <li>Write no if none of its codes is on the list.</li>
+      <li>Write no code if the finding has no CVE at all.</li>
+    </ul>
+    <div class="tw"><table>
+      <tr><th>Finding</th><th>Rows</th><th>Hosts</th><th>Notes</th><th>Score</th><th>On the Exploited List</th></tr>
+      <tr><td>Old OpenSSL on EX-WEB02</td><td>3</td><td>EX-WEB02</td><td>One update fixes it.</td><td>7.5</td><td>yes, CVE-2014-0160</td></tr>
+    </table></div>
+    <div class="box">
+      <p><strong>Score:</strong> the highest CVSS number among the finding's rows.</p>
+      <p><strong>On the Exploited List:</strong> yes and the code if any one of its codes is on the list.</p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons: inline SVG, Phosphor outline style, one weight ---------------- */
+  var IC = {
+    sheet:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/>',
+    search:'<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>',
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8 5.4-5.6"/>',
+    minus:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+    wait:'<circle cx="12" cy="12" r="9" stroke-dasharray="3 3.2"/>',
+    dot:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+    up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+    arrow:'<path d="M4 12h15M13 6l6 6-6 6"/>',
+    pencil:'<path d="M4 20l1.2-4.4L15.8 5a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.4 18.8z"/><path d="M13.8 7l3.2 3.2"/>',
+    bug:'<rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M12 11v8.5M7 13H3.5M20.5 13H17M7.6 17.5 4.5 19.5M16.4 17.5l3.1 2M7.6 9.5 4.5 7.5M16.4 9.5l3.1-2M9 7.5a3 3 0 0 1 6 0"/>',
+    nocode:'<rect x="4" y="5" width="16" height="14" rx="2" stroke-dasharray="3 2.6"/>',
+    replay:'<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v4.5h4.5"/>'
+  };
+  function icon(k, cls){ return '<svg class="ic' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  /* keep a machine name such as EX-MAIL01 on one line */
+  function kevHTML(s){ return esc(s).replace(/(CVE-\d{4}-\d{4})/g, '<span class="nw">$1</span>'); }
+  function nwEx(s){ return esc(s).replace(/(EX-[A-Z0-9]+)/g, '<span class="nw">$1</span>'); }
+
+  /* ---------------- the made-up data ---------------- */
+  var FIND = "Old OpenSSL on EX-WEB02";
+  var MAILG = "Missing March 2024 updates on EX-MAIL01", SETG = "Small settings problems";
+  /* Scan tab rows, in sheet order. n is the sheet row number (the header is row 7). */
+  var SCAN = [
+    { n:8,  host:"EX-MAIL01", fnd:"Missing March 2024 security updates",          cve:"CVE-2099-0001", sev:"Critical", cvss:"8.8", grp:MAILG },
+    { n:9,  host:"EX-WEB02",  fnd:"OpenSSL information disclosure (Heartbleed)",  cve:"CVE-2014-0160", sev:"High",     cvss:"7.5", grp:FIND },
+    { n:10, host:"EX-FILE01", fnd:"SMB signing not required",                     cve:"",              sev:"Medium",   cvss:"5.3", grp:SETG },
+    { n:11, host:"EX-WEB02",  fnd:"OpenSSL denial of service",                    cve:"CVE-2099-0011", sev:"Medium",   cvss:"5.9", grp:FIND },
+    { n:12, host:"EX-MAIL01", fnd:"TLS 1.0 enabled",                              cve:"",              sev:"Medium",   cvss:"5.3", grp:SETG },
+    { n:13, host:"EX-WEB02",  fnd:"OpenSSL weak cipher accepted",                 cve:"CVE-2099-0012", sev:"Medium",   cvss:"5.3", grp:FIND }
+  ];
+  var MINE = SCAN.filter(function(r){ return r.grp === FIND; });
+  var TOP = MINE.reduce(function(a, r){ return parseFloat(r.cvss) > parseFloat(a.cvss) ? r : a; });
+  var KEV = { "CVE-2014-0160":true };
+  var ANSWER = "yes, CVE-2014-0160";
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var p = [];
+    if(MINE.length !== 3) p.push("the finding does not have 3 rows");
+    if(TOP.cvss !== "7.5" || TOP.cve !== "CVE-2014-0160") p.push("the highest CVSS is not 7.5 on CVE-2014-0160");
+    MINE.forEach(function(r){ if(r.cve !== "CVE-2014-0160" && !/^CVE-2099-\d{4}$/.test(r.cve)) p.push("a made-up code does not use 2099"); });
+    var onList = MINE.filter(function(r){ return KEV[r.cve]; });
+    if(onList.length !== 1 || ANSWER !== "yes, " + onList[0].cve) p.push("the exploited list answer is wrong");
+    if(p.length){
+      document.getElementById("board").innerHTML = '<p class="lead"><b>This interactive has authoring errors:</b> ' + p.join("; ") + "</p>";
+      throw new Error("data invalid: " + p.join("; "));
+    }
+  })();
+
+  /* ---------------- sheet builders ---------------- */
+  function wlSheet(o){
+    /* o = { big, score, kev, mark } */
+    var sc = o.score ? '<span class="wv">' + esc(o.score) + "</span>" : "";
+    var kv = o.kev ? '<span class="wv">' + kevHTML(o.kev) + "</span>" : "";
+    return '<div class="gs wl' + (o.big ? " big" : "") + ' fx" data-k="wl" role="table" aria-label="Working List tab">'
+      + '<div class="gr gl" aria-hidden="true"><span></span><span>A</span><span class="hp">B</span><span class="hp">C</span><span class="hp">D</span><span>E</span><span>F</span></div>'
+      + '<div class="gr gh" role="row"><span aria-hidden="true">2</span><span role="columnheader">Finding</span><span class="hp" role="columnheader">Rows</span><span class="hp" role="columnheader">Hosts</span><span class="hp" role="columnheader">Notes</span><span role="columnheader">Score</span><span role="columnheader">On the Exploited List</span></div>'
+      + '<div class="gr gd" role="row"><span aria-hidden="true">3</span><span role="cell">' + esc(FIND) + '</span><span class="hp num" role="cell">3</span><span class="hp" role="cell">EX-WEB02</span><span class="hp" role="cell">One update fixes it.</span>'
+      + '<span class="wcell" id="cScore" role="cell">' + (sc || '<span class="sr">empty</span>') + "</span>"
+      + '<span class="wcell" id="cKev" role="cell">' + (kv || '<span class="sr">empty</span>') + "</span></div>"
+      + (o.pad ? [4, 5].map(function(n){ return '<div class="gr gd" aria-hidden="true"><span>' + n + '</span><span></span><span class="hp"></span><span class="hp"></span><span class="hp"></span><span></span><span></span></div>'; }).join("") : "")
+      + '<div class="tabs" aria-hidden="true"><span class="tab">Scan</span><span class="tab on">Working List</span></div>'
+      + "</div>";
+  }
+  function scanSheet(){
+    var h = '<div class="gs sc fx" data-k="sc" id="scan" role="table" aria-label="Scan tab">'
+      + '<div class="gr gl" aria-hidden="true"><span></span><span class="hp">A</span><span>E</span><span class="hp">F</span><span class="hp">G</span><span>H</span><span>L</span></div>'
+      + '<div class="gr gh" role="row"><span aria-hidden="true">7</span><span class="hp" role="columnheader">Host</span><span role="columnheader">Finding</span><span class="hp" role="columnheader">CVE</span><span class="hp" role="columnheader">Severity</span><span role="columnheader">CVSS</span><span role="columnheader" id="hGroup">Group</span></div>';
+    SCAN.forEach(function(r, k){
+      h += '<div class="gr gd" role="row" data-r="' + k + '"><span aria-hidden="true">' + r.n + "</span>"
+        + '<span class="hp hn" role="cell">' + esc(r.host) + '</span><span role="cell">' + esc(r.fnd) + "</span>"
+        + '<span class="hp mono" role="cell" style="font-size:12px">' + (r.cve ? esc(r.cve) : '<span class="sr">empty</span>') + "</span>"
+        + '<span class="hp" role="cell">' + esc(r.sev) + '</span><span class="num" role="cell">' + esc(r.cvss) + '</span><span role="cell"><span>' + nwEx(r.grp) + "</span></span></div>";
+    });
+    return h + '<div class="tabs" aria-hidden="true"><span class="tab on">Scan</span><span class="tab">Working List</span></div></div>';
+  }
+  function threeSheet(){
+    var h = '<div class="gs s3 fx" data-k="s3" role="table" aria-label="The finding\'s three rows in the Scan tab">'
+      + '<div class="gr gl" aria-hidden="true"><span></span><span>E</span><span>F</span><span>H</span></div>'
+      + '<div class="gr gh" role="row"><span aria-hidden="true">7</span><span role="columnheader">Finding</span><span role="columnheader">CVE</span><span role="columnheader">CVSS</span></div>';
+    MINE.forEach(function(r, k){
+      h += '<div class="gr gd" role="row"><span aria-hidden="true">' + r.n + '</span><span role="cell">' + esc(r.fnd) + '</span><span class="mono" role="cell" style="font-size:12.5px">' + esc(r.cve)
+        + '</span><span class="num cv" role="cell" data-cv="' + k + '">' + esc(r.cvss) + "</span></div>";
+    });
+    return h + "</div>";
+  }
+
+  /* The panel of the finding's three codes. st = array of "wait" | "cur" | "yes" | "no" */
+  var CSTATE = {
+    wait:{ ic:"wait",  t:"Not checked yet" },
+    cur: { ic:"dot",   t:"Searching now" },
+    yes: { ic:"okc",   t:"On the list" },
+    no:  { ic:"minus", t:"Not on the list" }
+  };
+  function codeCard(k, s){
+    var c = CSTATE[s];
+    return '<div class="cc ' + s + '" data-c="' + k + '"><span class="cg">' + icon(c.ic) + '</span><span class="ct"><span class="cn">' + MINE[k].cve
+      + '</span><span class="cs">' + c.t + "</span></span></div>";
+  }
+  function setCard(k, s){
+    var n = q('.cc[data-c="' + k + '"]');
+    if(!n) return;
+    var c = CSTATE[s];
+    n.className = "cc " + s;
+    n.querySelector(".cg").innerHTML = icon(c.ic);
+    n.querySelector(".cs").textContent = c.t;
+  }
+
+  /* CISA's exploited list, drawn after the real page. */
+  function kevMock(){
+    return '<div class="kev fx" data-k="kev" role="group" aria-label="CISA\'s Known Exploited Vulnerabilities Catalog page">'
+      + '<div class="kbar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url">cisa.gov/known-exploited-vulnerabilities-catalog</span></div>'
+      + '<div class="kbody"><div class="kside">'
+      + '<div class="kh">Search all Known Exploited Vulnerabilities Catalog</div>'
+      + '<div class="klab">Search by keyword, term, or phrase</div>'
+      + '<div class="kin" id="kin">' + icon("search") + '<span class="ty" id="typed"></span><span class="caret" aria-hidden="true"></span></div>'
+      + '<span class="kapply" id="kapply">APPLY</span>'
+      + '</div><div class="kmain">'
+      + '<div class="kt">Known Exploited Vulnerabilities Catalog</div>'
+      + '<div class="kskel" aria-hidden="true"><i></i><i></i><i style="width:62%"></i></div>'
+      + '<div class="kline" aria-hidden="true"></div>'
+      + '<div class="kres" id="kres"></div>'
+      + "</div></div></div>";
+  }
+  function kevHit(){
+    return '<div class="fx" data-k="hit"><div class="kshow">Showing 1 to 1 of 1 results</div>'
+      + '<div class="kven">OPENSSL | OPENSSL</div>'
+      + '<div class="kcode"><span class="kcl" id="kcl">' + icon("bug") + "CVE-2014-0160</span>"
+      + '<span class="okt fx" data-k="okt">' + icon("check") + "On the list</span></div>"
+      + '<p class="kdesc"><b>OpenSSL Information Disclosure Vulnerability:</b> <i>The TLS and DTLS implementations in OpenSSL do not properly handle Heartbeat Extension packets, which allows remote attackers to obtain sensitive information.</i></p></div>';
+  }
+
+  /* ---------------- scenes ---------------- */
+  var S = [
+    { id:"row", label:"The row", h1:"Two Empty Cells to Fill In",
+      build:function(){
+        return '<p class="lead">Here is one finding on the Working List of a made-up company called Example. Its <b>Score</b> and <b>On the Exploited List</b> cells are still empty. We are going to show you how to fill in these two cells by hand for this one finding.</p>'
+          + wlSheet({ big:true, pad:true })
+          + '<div class="statement fx" data-k="st">Claude will do it for every finding, but knowing how lets you check its work.</div>';
+      },
+      play:function(){
+        at(150, "wl");
+        T(1000, function(){ var c = q("#cScore"); c.classList.add("mark"); c.innerHTML = '<span class="wq">empty</span>'; });
+        T(1600, function(){ var c = q("#cKev"); c.classList.add("mark"); c.innerHTML = '<span class="wq">empty</span>'; });
+        at(2500, "st");
+        return 3000;
+      } },
+
+    { id:"rows", label:"Find the rows", h1:"Find the Finding's Rows in the Scan Tab",
+      build:function(){
+        return '<p class="lead">Now we go to the Scan tab. To find this finding\'s rows, we look for its name, <b>' + esc(FIND) + '</b>, in the Group column, column L.</p>'
+          + scanSheet()
+          + '<p class="cap fx" data-k="cap">' + icon("arrow") + "Three rows have this name in the Group column. These are the finding's rows.</p>";
+      },
+      play:function(){
+        at(100, "sc");
+        T(800, function(){ boxGroup(); });
+        var t = 1500;
+        SCAN.forEach(function(r, k){
+          var row = q('.gd[data-r="' + k + '"]');
+          T(t, function(){ row.classList.add("scan"); });
+          T(t + 420, function(){ row.classList.remove("scan"); row.classList.add(r.grp === FIND ? "hit" : "miss"); if(q(".colbox")) boxGroup(); });
+          t += 520;
+        });
+        at(t + 300, "cap");
+        return t + 800;
+      } },
+
+    { id:"score", label:"Score", h1:"The Score Is the Highest CVSS Number",
+      build:function(){
+        var tiles = MINE.map(function(r, k){
+          return '<div class="tl fx" data-k="t' + k + '" data-t="' + k + '"><span class="tt">' + icon("up") + 'Highest</span><span class="tv">' + r.cvss + "</span></div>";
+        }).join("");
+        return '<p class="lead">Next, look at the CVSS column of the finding\'s three rows. Each number is that row\'s danger score, from 0 to 10.</p>'
+          + threeSheet()
+          + '<div class="cmp"><div class="tiles">' + tiles + "</div>"
+          + '<div class="statement fx" data-k="st">The Score is the highest CVSS number among the finding\'s rows. Here, that is 7.5.</div></div>'
+          + wlSheet({});
+      },
+      play:function(){
+        at(100, "s3"); at(250, "wl");
+        MINE.forEach(function(r, k){
+          T(900 + k*600, function(){ var c = q('[data-cv="' + k + '"]'); if(c) c.classList.add("lit"); });
+          at(1100 + k*600, "t" + k);
+        });
+        var top = MINE.indexOf(TOP);
+        T(3200, function(){
+          qa(".tl").forEach(function(n){ n.classList.add(+n.dataset.t === top ? "top" : "dim"); });
+          qa(".s3 .cv").forEach(function(n){ if(+n.dataset.cv !== top) n.classList.remove("lit"); });
+        });
+        T(4100, function(){
+          var cell = q("#cScore");
+          fly(q('.tl[data-t="' + top + '"] .tv'), cell, TOP.cvss, function(){
+            cell.classList.add("lit"); cell.innerHTML = '<span class="wv">' + TOP.cvss + "</span>";
+          });
+        });
+        at(5200, "st");
+        return 5700;
+      } },
+
+    { id:"kev1", label:"First code", h1:"Search the First Code on the Exploited List",
+      build:function(){
+        return '<p class="lead">Next, we search each of the finding\'s three codes on CISA\'s exploited list of flaws that attackers have really used, one at a time. We start with <b>CVE-2014-0160</b>, a real flaw from 2014 called Heartbleed.</p>'
+          + '<div class="kwrap"><div class="codes fx" data-k="codes"><div class="ch">The finding\'s codes</div>'
+          + codeCard(0, "wait") + codeCard(1, "wait") + codeCard(2, "wait")
+          + '<p class="st fx" data-k="st">The code at the top of the entry is the one we typed, so this code is on the list.</p></div>'
+          + kevMock() + "</div>";
+      },
+      play:function(){
+        at(100, "codes"); at(250, "kev");
+        T(900, function(){ setCard(0, "cur"); q("#kin").classList.add("act"); });
+        typeInto(q("#typed"), "CVE-2014-0160", 1300, 85);
+        T(2600, function(){ q("#kapply").classList.add("press"); });
+        T(2850, function(){ q("#kapply").classList.remove("press"); q("#kin").classList.remove("act"); q("#kres").innerHTML = kevHit(); });
+        at(3000, "hit");
+        T(3900, function(){ var c = q("#kcl"); if(c) c.classList.add("boxed"); });
+        at(4600, "okt");
+        T(4700, function(){ setCard(0, "yes"); });
+        at(5500, "st");
+        return 6000;
+      } },
+
+    { id:"kev2", label:"Other codes", h1:"Search the Other Two Codes",
+      build:function(){
+        return '<p class="lead">Now we do the same for the other two codes, <b>CVE-2099-0011</b> and <b>CVE-2099-0012</b>. We type each one into the same search box and press Apply.</p>'
+          + '<div class="kwrap"><div class="codes fx on" data-k="codes"><div class="ch">The finding\'s codes</div>'
+          + codeCard(0, "yes") + codeCard(1, "wait") + codeCard(2, "wait")
+          + '<p class="st fx" data-k="st">Nothing appears below the line for either code, so they are not on the list. These two codes are made up anyway.</p></div>'
+          + kevMock() + "</div>";
+      },
+      play:function(){
+        at(50, "kev");
+        var t = 600;
+        [1, 2].forEach(function(k){
+          var code = MINE[k].cve;
+          T(t, function(){ setCard(k, "cur"); q("#typed").textContent = ""; q("#kres").innerHTML = ""; q("#kin").classList.add("act"); });
+          typeInto(q("#typed"), code, t + 400, 80);
+          var a = t + 400 + code.length*80 + 300;
+          T(a, function(){ q("#kapply").classList.add("press"); });
+          T(a + 250, function(){
+            q("#kapply").classList.remove("press"); q("#kin").classList.remove("act");
+            q("#kres").innerHTML = '<div class="knone fx" data-k="none' + k + '">' + icon("minus") + "Nothing below the line</div>";
+          });
+          at(a + 400, "none" + k);
+          T(a + 1300, function(){ setCard(k, "no"); });
+          t = a + 2100;
+        });
+        at(t, "st");
+        return t + 500;
+      } },
+
+    { id:"write", label:"The answer", h1:"Write the Answer on the Working List",
+      build:function(){
+        return '<p class="lead">Now we go back to the Working List. One of the finding\'s three codes is on the list, so we write <b>yes</b> and that code in On the Exploited List.</p>'
+          + '<div class="codes row fx" data-k="codes"><div class="ch">The finding\'s codes</div>' + codeCard(0, "yes") + codeCard(1, "no") + codeCard(2, "no") + "</div>"
+          + wlSheet({ score:TOP.cvss })
+          + '<div class="rules">'
+          + '<div class="rule yes fx" data-k="r0"><span class="rg">' + icon("check") + '</span><p>Write <b>yes</b> and that code if any one of the finding\'s codes is on the list.</p></div>'
+          + '<div class="rule fx" data-k="r1"><span class="rg">' + icon("minus") + '</span><p>Write <b>no</b> if none of its codes is on the list.</p></div>'
+          + '<div class="rule fx" data-k="r2"><span class="rg">' + icon("nocode") + '</span><p>Write <b>no code</b> if the finding has no CVE at all.</p></div>'
+          + "</div>";
+      },
+      play:function(){
+        at(100, "codes"); at(250, "wl");
+        T(1000, function(){
+          var cell = q("#cKev");
+          fly(q('.cc[data-c="0"] .cn'), cell, "CVE-2014-0160", function(){
+            cell.classList.add("lit");
+            cell.innerHTML = '<span class="wv"></span>';
+            typeInto(cell.querySelector(".wv"), ANSWER, 0, 55, true);
+            timers.push(setTimeout(function(){ cell.innerHTML = '<span class="wv">' + kevHTML(ANSWER) + "</span>"; }, reduce ? 0 : (ANSWER.length + 1) * 55));
+          });
+        });
+        at(3300, "r0"); at(4100, "r1"); at(4900, "r2");
+        return 5400;
+      } },
+
+    { id:"sum", label:"Summary", h1:"One Finding, Checked by Hand",
+      build:function(){
+        return '<p class="lead">Here is the finding\'s row with both cells filled in.</p>'
+          + wlSheet({ big:true, score:TOP.cvss, kev:ANSWER })
+          + '<div class="sums">'
+          + '<div class="statement fx" data-k="s1"><b>Score:</b> the highest CVSS number among the finding\'s rows.</div>'
+          + '<div class="statement fx" data-k="s2"><b>On the Exploited List:</b> yes and the code if any one of its codes is on the list.</div>'
+          + "</div>"
+          + '<p class="cap fx" data-k="nx">' + icon("pencil") + "Claude will fill in both cells for every finding. You can check any of them the same way.</p>";
+      },
+      play:function(){
+        at(100, "wl");
+        T(600, function(){ q("#cScore").classList.add("lit"); q("#cKev").classList.add("lit"); });
+        at(1300, "s1"); at(2300, "s2"); at(3300, "nx");
+        return 3800;
+      } }
+  ];
+
+  /* ---------------- state and timeline ---------------- */
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var timers = [];
+  var gen = 0;
+  var playing = false;
+  function T(ms, fn){ if(reduce){ fn(); return; } timers.push(setTimeout(fn, ms)); }
+  function stop(){ timers.forEach(clearTimeout); timers = []; }
+  function q(s){ return el.board.querySelector(s); }
+  function qa(s){ return Array.prototype.slice.call(el.board.querySelectorAll(s)); }
+  function at(ms, key){ T(ms, function(){ qa('[data-k="' + key + '"]').forEach(function(n){ n.classList.add("on"); }); }); }
+  /* Type text into a node one character at a time. now = start from inside a running step. */
+  function typeInto(node, text, start, per, now){
+    if(!node) return;
+    for(var c = 1; c <= text.length; c++){
+      (function(n){
+        var f = function(){ node.textContent = text.slice(0, n); };
+        if(reduce) f(); else if(now) timers.push(setTimeout(f, start + n*per)); else T(start + n*per, f);
+      })(c);
+    }
+  }
+  /* Move a copy of what is in src over to dst, then call done. */
+  function fly(src, dst, text, done){
+    if(reduce || !src || !dst){ done(); return; }
+    var fr = el.frame.getBoundingClientRect(), sc = (fr.width / el.frame.offsetWidth) || 1;
+    var a = src.getBoundingClientRect(), b = dst.getBoundingClientRect();
+    var f = document.createElement("div");
+    f.className = "flyer"; f.textContent = text; f.setAttribute("aria-hidden", "true");
+    el.frame.appendChild(f);
+    var fw = f.offsetWidth, fh = f.offsetHeight;
+    var x0 = (a.left + a.width/2 - fr.left)/sc - fw/2, y0 = (a.top + a.height/2 - fr.top)/sc - fh/2;
+    var x1 = (b.left + b.width/2 - fr.left)/sc - fw/2, y1 = (b.top + b.height/2 - fr.top)/sc - fh/2;
+    f.style.left = x0 + "px"; f.style.top = y0 + "px";
+    void f.offsetWidth;
+    f.style.transform = "translate(" + (x1 - x0) + "px," + (y1 - y0) + "px)";
+    timers.push(setTimeout(function(){ f.remove(); done(); }, 900));
+  }
+  /* A navy box around the Group column of the Scan tab. */
+  function boxGroup(){
+    var sheet = document.getElementById("scan"), hg = document.getElementById("hGroup");
+    if(!sheet || !hg) return;
+    var old = sheet.querySelector(".colbox"); if(old) old.remove();
+    var tabs = sheet.querySelector(".tabs");
+    var b = document.createElement("div");
+    b.className = "colbox"; b.setAttribute("aria-hidden", "true");
+    b.style.left = (hg.offsetLeft + 1) + "px";
+    b.style.width = (hg.offsetWidth - 2) + "px";
+    b.style.top = "1px";
+    b.style.height = (tabs.offsetTop - 2) + "px";
+    b.innerHTML = '<span class="collab">Column L</span>';
+    sheet.appendChild(b);
+  }
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), h1:document.getElementById("h1"),
+    board:document.getElementById("board"), back:document.getElementById("back"),
+    next:document.getElementById("next"), hint:document.getElementById("hint"),
+    replay:document.getElementById("replay"), live:document.getElementById("live")
+  };
+  el.replay.innerHTML = icon("replay") + "Replay";
+  var i = 0;
+
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else { el.next.disabled = false; el.next.textContent = "Next"; }
+  }
+
+  function render(){
+    stop();
+    Array.prototype.forEach.call(el.frame.querySelectorAll(".flyer"), function(n){ n.remove(); });
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    el.board.innerHTML = s.build();
+    header();
+    el.live.textContent = "Scene " + (i+1) + " of " + S.length + ". " + s.h1 + ".";
+    playing = true;
+    el.hint.textContent = "";
+    void el.board.offsetWidth;
+    var my = ++gen;
+    var run = function(){
+      if(my !== gen) return;
+      var end = s.play();
+      T(end, function(){ playing = false; window.__ex.done = true; });
+    };
+    window.__ex && (window.__ex.done = false);
+    if(reduce) run(); else requestAnimationFrame(function(){ requestAnimationFrame(run); });
+  }
+
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render();
+    var ph = window.matchMedia("(max-width:599px)").matches;
+    el.frame.focus(ph ? { preventScroll:true } : undefined);
+    if(ph) window.scrollTo(0, 0);
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+  el.replay.addEventListener("click", function(){ render(); });
+
+  document.addEventListener("keydown", function(e){
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); if(!el.next.disabled) go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5){ if(dx < 0){ if(!el.next.disabled) go(1); } else go(-1); }
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches) stage.style.transform = "";
+    else {
+      var sc = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + sc + ")";
+    }
+    if(document.querySelector("#scan .colbox")) boxGroup();
+  }
+  window.addEventListener("resize", fit);
+
+  window.__ex = {
+    goto:function(n){ if(!Number.isInteger(n) || n < 0 || n >= S.length) return false; i = n; render(); return true; },
+    slides:S.length, done:false,
+    reset:function(){ i = 0; render(); },
+    state:function(){ return { i:i, playing:playing }; }
+  };
+
+  render();
+  fit();
+})();
+</script>
+</body>
+</html>
