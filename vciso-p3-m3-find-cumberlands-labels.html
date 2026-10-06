@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find Cumberland's Labels</title>
+<!--
+  vCISO P3 Step 1, Module 3 (Find the Controls on Paper), end of Step 3: Find Cumberland's labels.
+  Governing authority: output/programs/vciso/CLAUDE.md section 6 and HANDOVER-2026-10-02-P2.md
+  section 2 ("Interactives"). Chrome, options, right and wrong states, navigation, scale-to-fit
+  and phone layout match vciso-p2-m13-find-the-repeats.html and vciso-p2-m11-is-cumberland-actually-affected.html.
+  The right and wrong colours are used only for right and wrong, always with an icon and a word.
+
+  SME data, never altered:
+  - Stores per scope and the expected section 4 label: SME drop 2026-09-25/P3 Sample Pack/
+    Interactive content sets - P3.md, P3-3 "Second interactive" table. Policy answer key.md section 2.
+    A: A7 Claims database, A2 MedFlow-TEST, A6 CCS-SFTP01 (three only). All Restricted.
+    B: B3 Remittance file drop, B8 Finance reconciliation spreadsheets, B9 Payment posting export,
+       S3 Microsoft 365 tenant. All Restricted.
+    C: C3 Archive store, C4 Monthly export file, C6 Backup repository: Restricted.
+       C7 Dormant AWS account: cannot be labelled, nobody knows what is inside it.
+    D: S2 CCS-FS01, S3 Microsoft 365 tenant, D5 Staff laptop fleet: Restricted.
+       D2 Entra ID: Confidential, it holds identities, not patient data.
+  - The four labels: Shared/Information Security Policy v1.2.md section 4 (meaning and handling
+    put in plain words here).
+  - What each store is: SME drop 2026-09-25/Environment Record.md, "The 45 assets".
+  - Every list row: P1 Sample Pack/Client Records/SYSTEM LIST - CCS (Nate_s copy).xlsx and
+    Supplier list - FINANCE.xlsx, read with openpyxl, cell text verbatim, dates and amounts shown
+    in each cell's own number format. Neither file has any classification column or value.
+  The "why" sentences and wrong-answer hints are ours (the writer's part), not SME data.
+
+  Answer rules (owner): a wrong pick turns red with a cross and "Not quite" plus a hint, and the
+  student tries again. After a second wrong pick the right answer is shown in green with the reason.
+  Next opens only once the question on the slide is answered right or shown.
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* right and wrong states only, always paired with an icon and a word */
+    --ok:#146C2E;
+    --ok-tint:#E6F4EA;
+    --no:#B3261E;
+    --no-tint:#FCE8E6;
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-reveal:460ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto;background:var(--bg)}
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:6px;min-height:28px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
+    padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+  button.ref{font-family:inherit;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    background:var(--bg);color:var(--on-highlight);border:1.5px solid var(--on-highlight);border-radius:20px;
+    padding:3px 11px 3px 8px;font-size:12.5px;font-weight:600}
+  button.ref svg.ic{width:16px;height:16px}
+  button.ref:hover{background:var(--highlight)}
+  button.ref[aria-expanded="true"]{background:var(--on-highlight);color:var(--bg)}
+  button.ref:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .chip + button.ref{margin-left:0}
+  .top .push{margin-left:auto}
+
+  h1{font-size:25px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:8px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;position:relative}
+  .lead{font-size:15.5px;line-height:1.45;color:var(--body);max-width:84ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: the scope picker ---- */
+  .scopes{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:4px}
+  button.sc{font-family:inherit;text-align:left;cursor:pointer;background:var(--bg);color:var(--title);
+    border:1.5px dashed var(--on-highlight);border-radius:12px;padding:16px 16px 14px;
+    display:flex;flex-direction:column;gap:9px;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.sc:hover{background:var(--highlight)}
+  html.fresh button.sc:not(.on):hover{background:var(--bg)}
+  button.sc:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.sc .si{width:52px;height:52px;border-radius:12px;background:var(--highlight);color:var(--on-highlight);
+    border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  button.sc .si svg.ic{width:30px;height:30px}
+  button.sc .sl{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  button.sc .sn{font-size:19px;font-weight:600;line-height:1.22;color:var(--title);min-height:46px}
+  button.sc .sd{font-size:13.5px;line-height:1.38;color:var(--body);flex:1 1 auto;min-height:74px}
+  button.sc .ss{font-size:14px;font-weight:600;color:var(--on-highlight);display:flex;align-items:center;gap:7px;
+    border-top:1.5px dashed var(--line);padding-top:8px}
+  .gl{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    font-size:12px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  button.sc.on{background:var(--on-highlight);border:2px solid var(--on-highlight);color:var(--bg)}
+  button.sc.on .sl,button.sc.on .sn,button.sc.on .sd,button.sc.on .ss{color:var(--bg)}
+  button.sc.on .ss{border-top:1.5px solid var(--bg)}
+  button.sc.on .gl{border-color:var(--bg);background:var(--bg);color:var(--on-highlight)}
+  button.sc.on .si{background:var(--bg)}
+  .note2{flex:0 0 auto;font-size:14.5px;line-height:1.45;color:var(--body)}
+  .note2 b{color:var(--title)}
+
+  /* ---- slide 2 and the pop-up: the four labels ---- */
+  table.lab{width:100%;border-collapse:separate;border-spacing:0;font-size:14px;line-height:1.36;
+    border:1.5px solid var(--on-highlight);border-radius:10px;overflow:hidden}
+  table.lab th{background:var(--on-highlight);color:var(--bg);text-align:left;font-size:12.5px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;padding:6px 12px}
+  table.lab td{padding:5px 12px;border-top:1px solid var(--line);vertical-align:top;color:var(--body);background:var(--bg)}
+  table.lab tr:nth-child(even) td{background:var(--tint)}
+  table.lab td.ln{font-weight:700;color:var(--title);white-space:nowrap;width:130px}
+  table.lab td.ln span{display:inline-flex;align-items:center;gap:7px}
+  table.lab td.ln svg.ic{width:17px;height:17px;color:var(--on-highlight)}
+  .defbox{flex:0 0 auto;background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:0 10px 10px 0;
+    padding:8px 16px 9px;display:flex;flex-direction:column;gap:3px}
+  .defbox .dq{font-size:15.5px;font-weight:700;color:var(--title)}
+  .defbox .da{font-size:14.5px;line-height:1.42;color:var(--title)}
+  .tipline{font-size:13.5px;line-height:1.4;color:var(--body);display:flex;align-items:center;gap:7px}
+  .tipline svg.ic{width:17px;height:17px;color:var(--on-highlight);flex:0 0 auto}
+  .tipline b{color:var(--title)}
+
+  .refpop{position:absolute;inset:0;z-index:5;background:var(--bg);border:2px solid var(--on-highlight);border-radius:12px;
+    box-shadow:0 6px 22px rgba(0,29,105,.18);padding:12px 16px 12px;display:flex;flex-direction:column;gap:8px}
+  .refpop .rh{display:flex;align-items:center;gap:10px}
+  .refpop .rt{font-size:17px;font-weight:700;color:var(--title);flex:1 1 auto}
+  .refpop table.lab{font-size:13.5px;line-height:1.34}
+  .refpop table.lab td{padding:5px 11px}
+  .refpop .defbox{padding:7px 14px 8px}
+  .refpop .defbox .dq{font-size:14px}
+  .refpop .defbox .da{font-size:13.5px}
+  .refpop.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .refpop:focus{outline:none}
+
+  /* ---- store slides ---- */
+  .split{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 404px;gap:18px;align-items:start}
+  .leftcol{min-width:0;display:flex;flex-direction:column;gap:10px}
+  .card{background:var(--highlight);border-radius:12px;padding:13px 16px 14px;display:flex;flex-direction:column;gap:6px}
+  .card .ck{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .card .ck svg.ic{width:18px;height:18px}
+  .card .cn{font-size:19px;font-weight:700;line-height:1.28;color:var(--title)}
+  .card .cw{font-size:14.5px;line-height:1.45;color:var(--title)}
+  .card .cg{font-size:13.5px;line-height:1.4;color:var(--body);border-top:1px solid var(--line);padding-top:6px}
+
+  .side{min-width:0;display:flex;flex-direction:column;gap:7px}
+  .pq{font-size:15.5px;font-weight:700;line-height:1.3;color:var(--title)}
+
+  /* ---- options ---- */
+  .opts{display:flex;flex-direction:column;gap:6px}
+  button.opt{font-family:inherit;text-align:left;color:var(--title);
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;
+    padding:5px 11px;cursor:pointer;display:flex;gap:10px;align-items:center;min-height:44px;width:100%;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt .g{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center;background:transparent}
+  button.opt .g svg.ic{width:14px;height:14px;stroke-width:2.6}
+  button.opt .txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.opt .lr{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  button.opt .ol{font-size:15.5px;font-weight:700;line-height:1.25;color:var(--title)}
+  button.opt .om{font-size:13px;line-height:1.3;color:var(--body)}
+  button.opt .tg{flex:0 0 auto;font-size:13px;font-weight:700;white-space:nowrap}
+  button.opt:hover:not(:disabled){background:var(--highlight)}
+  html.fresh button.opt:hover:not(:disabled){background:var(--bg)}
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  button.opt.idle:disabled{border-style:dashed;border-color:var(--line)}
+  button.opt.idle:disabled .g{border-color:var(--line)}
+  button.opt.idle:disabled .ol{color:var(--body)}
+  button.opt.ok{background:var(--ok-tint);border:2px solid var(--ok)}
+  button.opt.ok .g{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+  button.opt.ok .tg{color:var(--ok)}
+  button.opt.no{background:var(--no-tint);border:2px solid var(--no)}
+  button.opt.no .g{background:var(--no);border-color:var(--no);color:var(--bg)}
+  button.opt.no .tg{color:var(--no)}
+
+  /* ---- feedback ---- */
+  .fb{border-radius:10px;padding:7px 13px 9px;border-left:6px solid;display:flex;flex-direction:column;gap:3px}
+  .fb.ok{background:var(--ok-tint);border-color:var(--ok)}
+  .fb.no{background:var(--no-tint);border-color:var(--no)}
+  .fb .fh{display:flex;align-items:center;gap:7px;font-size:15.5px;font-weight:700}
+  .fb.ok .fh{color:var(--ok)}
+  .fb.no .fh{color:var(--no)}
+  .fb .fh svg.ic{width:19px;height:19px;stroke-width:2}
+  .fb .ft{font-size:14px;line-height:1.4;color:var(--title)}
+  .fb.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .fb:focus{outline:none}
+
+  /* ---- the lists slide ---- */
+  .split.lists{grid-template-columns:minmax(0,1fr) 340px;gap:16px}
+  .lists .opts{gap:5px}
+  .lists button.opt{min-height:40px;padding:4px 10px}
+  .lists button.opt .ol{font-size:14.5px}
+  .lists .pq{font-size:15px}
+  .lists button.opt .om{font-size:12.5px}
+  .lists .fb{padding:6px 12px 8px}
+  .lists .fb .ft{font-size:13.5px;line-height:1.36}
+  .sheetcap{display:flex;align-items:baseline;gap:8px;font-size:13.5px;font-weight:700;color:var(--title);margin-bottom:3px}
+  .sheetcap span{font-size:12px;font-weight:400;color:var(--body)}
+  .xl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12.5px;line-height:1.3;background:var(--bg);
+    border:1.5px solid var(--on-highlight)}
+  .xl th{background:var(--tint2);color:var(--title);font-weight:700;text-align:left;padding:3px 6px;border:1px solid var(--line);line-height:1.2}
+  .xl td{padding:2px 6px;border:1px solid var(--line);color:var(--title);vertical-align:top;overflow-wrap:break-word}
+  .xl td:first-child{white-space:nowrap}
+  .xl td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .xl td.blank{background:var(--tint)}
+  .noneline{font-size:13px;line-height:1.35;color:var(--body);font-style:italic;padding:2px 0}
+  .where{list-style:none;display:flex;flex-direction:column;gap:2px;background:var(--highlight);border-radius:10px;padding:6px 12px 7px}
+  .where .wh{font-size:13px;font-weight:700;color:var(--title);margin-bottom:1px}
+  .where li{font-size:13px;line-height:1.3;color:var(--title);display:flex;gap:7px;align-items:flex-start}
+  .where li svg.ic{width:15px;height:15px;flex:0 0 auto;margin-top:1px;color:var(--on-highlight)}
+  .where li b{font-weight:700}
+
+  /* ---- the last slide ---- */
+  .sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:4px}
+  .sum .tile{background:var(--highlight);border-radius:12px;padding:16px 18px 18px;display:flex;flex-direction:column;gap:9px}
+  .sum .tile .ti{width:46px;height:46px;border-radius:12px;background:var(--bg);border:1.5px solid var(--on-highlight);
+    color:var(--on-highlight);display:flex;align-items:center;justify-content:center}
+  .sum .tile .ti svg.ic{width:26px;height:26px}
+  .sum .tile .tk{font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-highlight)}
+  .sum .tile .tt{font-size:17px;line-height:1.42;color:var(--title)}
+  .sum .tile.last{background:var(--on-highlight)}
+  .sum .tile.last .tk,.sum .tile.last .tt{color:var(--bg)}
+  .sum .tile.last .tt{font-weight:600}
+  .sum.in .tile{animation:rin var(--t-reveal) var(--ease-over) both}
+  .sum.in .tile:nth-child(2){animation-delay:110ms}
+  .sum.in .tile:nth-child(3){animation-delay:220ms}
+
+  /* ---- the gate, when a slide needs an earlier answer ---- */
+  .gate{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+  .gate p{font-size:16px;line-height:1.45;color:var(--body)}
+  .gate p b{color:var(--title)}
+  button.go{font-family:inherit;font-size:15px;font-weight:600;padding:10px 18px;border-radius:8px;cursor:pointer;
+    border:2px solid var(--on-highlight);background:var(--on-highlight);color:var(--bg)}
+  button.go:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:52px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:9px 20px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.36;color:var(--body)}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px;white-space:normal}
+    .top .push{margin-left:0}
+    button.ref{font-size:14px;padding:6px 12px 6px 9px}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .board{flex:0 0 auto}
+    .scopes{grid-template-columns:1fr;gap:10px}
+    button.sc{flex-direction:column}
+    button.sc .sn{min-height:0}
+    button.sc .sd{min-height:0;font-size:15px}
+    .note2{font-size:15px}
+    table.lab{font-size:15px}
+    table.lab td.ln{width:auto;white-space:normal}
+    .defbox .da{font-size:15.5px}
+    .tipline{font-size:15px}
+    .refpop{position:fixed;inset:10px;overflow-y:auto}
+    .split,.split.lists{grid-template-columns:1fr}
+    .card .cw{font-size:16px}
+    .card .cg{font-size:15px}
+    .pq{font-size:17px}
+    button.opt{padding:10px 12px}
+    button.opt .ol,.lists button.opt .ol{font-size:16px}
+    button.opt .om,.lists button.opt .om{font-size:15px}
+    .fb .ft,.lists .fb .ft{font-size:15.5px}
+    .fb{scroll-margin:16px}
+    .xl{font-size:14px;min-width:640px}
+    .sheetcap{display:block}
+    .sheetcap span{display:block}
+    .tw{overflow-x:auto}
+    .where li{font-size:15px}
+    .sum{grid-template-columns:1fr;gap:10px}
+    .sum .tile .tt{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0;scroll-margin-bottom:16px}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{font-size:15px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Find Cumberland's Labels">
+
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+      <button class="ref" id="ref" type="button" aria-expanded="false" aria-controls="refpop" hidden></button>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <button class="nav ghost" id="again" type="button" hidden>Start again</button>
+      <div id="hint"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;overflow-x:hidden}
+    .nsf{max-width:780px;margin:0 auto;padding:28px 16px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
+    .nsf h4{font-size:16px;color:#1C1B1B;margin:14px 0 4px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .tw{overflow-x:auto}
+    .nsf table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 14px}
+    .nsf th{background:#001D69;color:#FDF8F8;text-align:left;padding:5px 8px}
+    .nsf td{padding:5px 8px;border-bottom:1px solid #DCE1FF;color:#1C1B1B;vertical-align:top}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:12px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Find Cumberland's Labels</h2>
+    <p>You will pick the label you think each of your data stores should carry, then look for the label Cumberland itself gave it.</p>
+    <h3>The four labels from section 4</h3>
+    <div class="tw"><table>
+      <tr><th>Label</th><th>What it is for</th><th>How it must be handled</th></tr>
+      <tr><td><strong>Restricted</strong></td><td>Patient health information and financial account data, such as bank and payment details.</td><td>Encrypted, which means scrambled so only the right people can read it, both where it is kept and when it is sent. Only people who need it can open it.</td></tr>
+      <tr><td><strong>Confidential</strong></td><td>Business information that is not for sharing outside the company.</td><td>Only staff can open it. It is not shared outside the company without approval.</td></tr>
+      <tr><td><strong>Internal</strong></td><td>Everyday work information.</td><td>Any staff member can see it.</td></tr>
+      <tr><td><strong>Public</strong></td><td>Information the company has approved for anyone to see.</td><td>No limits.</td></tr>
+    </table></div>
+    <p>Every system and data store must carry the label of the most sensitive thing it holds.</p>
+    <div class="box"><p><strong>What is a data store?</strong> Anywhere data sits and waits, such as a database, a shared drive or a file one system drops for another.</p></div>
+    <h3>Your data stores</h3>
+    <p>Find your scope below. For each store, write down the label you think it should carry before you read on.</p>
+    <h4>Scope A, Claims Intake</h4>
+    <ul><li>The Claims database</li><li>MedFlow-TEST</li><li>CCS-SFTP01, where batch claim files sit between runs</li></ul>
+    <h4>Scope B, Payments and Remittance</h4>
+    <ul><li>The Remittance file drop</li><li>The Finance reconciliation spreadsheets</li><li>The Payment posting export</li><li>The Microsoft 365 tenant</li></ul>
+    <h4>Scope C, Patient Records and Archive</h4>
+    <ul><li>The Archive store</li><li>The Monthly export file</li><li>The Backup repository</li><li>The Dormant AWS account</li></ul>
+    <h4>Scope D, Remote and Corporate</h4>
+    <ul><li>CCS-FS01, the file server</li><li>The Microsoft 365 tenant</li><li>The Staff laptop fleet</li><li>Entra ID</li></ul>
+    <h3>Check your labels</h3>
+    <p>Every store is <strong>Restricted</strong>, because each one holds patient health information or payment details, with two exceptions. In Scope C, nobody knows what is inside the Dormant AWS account, so it cannot be labelled. In Scope D, Entra ID holds staff accounts, not patient data, so it is <strong>Confidential</strong>.</p>
+    <h3>Now look for the label Cumberland itself gave these</h3>
+    <p>Here are the columns of Cumberland's two lists.</p>
+    <ul>
+      <li><strong>Nate's system list</strong> (SYSTEM LIST - CCS): System, Vendor, Owner, Installed, Notes.</li>
+      <li><strong>The supplier list</strong> (Supplier list - FINANCE): Vendor, What for, Contract owner, Contract start, Annual (USD), Notes.</li>
+    </ul>
+    <p>What label did Cumberland put on them?</p>
+    <div class="box"><p><strong>There is no label anywhere.</strong> Neither list has a column for a label, and no row mentions one.</p></div>
+    <h3>What you found</h3>
+    <ul>
+      <li>The policy sets out four labels and says every system and data store must carry one.</li>
+      <li>Cumberland's own lists carry none.</li>
+      <li>A rule like this, written down and used nowhere, is only on paper.</li>
+    </ul>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, outline, uniform size, #001D69
+     through currentColor. No icon font, no network request. */
+  var IC = {
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    x:'<path d="M7 7l10 10M17 7L7 17"/>',
+    okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8 5.4-5.6"/>',
+    noc:'<circle cx="12" cy="12" r="9"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/>',
+    claims:'<rect x="5" y="4.5" width="14" height="16.5" rx="1.8"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    coin:'<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.4c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 1.9s1 1.6 2.6 1.9 2.6.9 2.6 2-1.1 2-2.6 2c-1.2 0-2.1-.5-2.6-1.3M12 6.6v1.5M12 15.9v1.5"/>',
+    archive:'<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 12.5h4"/>',
+    laptop:'<rect x="4.5" y="5" width="15" height="10.5" rx="1.2"/><path d="M2.5 18.5h19"/>',
+    tag:'<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1 1 0 0 1 0 1.4l-7.7 7.7a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.4"/>',
+    db:'<ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
+    doc:'<path d="M14 3.5H6.5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V8z"/><path d="M14 3.5V8h4.5"/><path d="M9 12.5h6M9 16h6"/>',
+    rows:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.2"/><path d="M3.5 9.5h17M3.5 14.5h17M9 4.5v15"/>',
+    paper:'<path d="M6.5 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>',
+    pin:'<circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="8.5"/>',
+    close:'<path d="M7 7l10 10M17 7L7 17"/>'
+  };
+  function icon(k, cls){ return '<svg class="ic' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
+  /* ---------------- the four labels, policy section 4 in plain words ---------------- */
+  var LABELS = [
+    { k:"R", l:"Restricted",
+      what:"Patient health information and financial account data, such as bank and payment details.",
+      how:"Encrypted, which means scrambled so only the right people can read it, both where it is kept and when it is sent. Only people who need it can open it.",
+      opt:"For patient health information or bank and payment details.",
+      lopt:"Marked as patient or payment data." },
+    { k:"C", l:"Confidential",
+      what:"Business information that is not for sharing outside the company.",
+      how:"Only staff can open it. It is not shared outside the company without approval.",
+      opt:"For business information that must stay inside the company.",
+      lopt:"Marked as private business data." },
+    { k:"I", l:"Internal",
+      what:"Everyday work information.",
+      how:"Any staff member can see it.",
+      opt:"For everyday work information any staff member can see.",
+      lopt:"Marked as everyday staff data." },
+    { k:"P", l:"Public",
+      what:"Information the company has approved for anyone to see.",
+      how:"No limits.",
+      opt:"For information anyone outside the company may see.",
+      lopt:"Marked as fine for anyone to see." }
+  ];
+  var CANT = { k:"X", l:"I can't tell what is inside it", opt:"You do not know what it holds, so you cannot pick a label." };
+  var NONE = { k:"N", l:"There is no label anywhere", lopt:"Neither list gives any of them a label." };
+  var DATASTORE_Q = "What is a data store?";
+  var DATASTORE_A = "Anywhere data sits and waits, such as a database, a shared drive or a file one system drops for another.";
+
+  /* ---------------- Cumberland's two lists, verbatim ----------------
+     Every cell as it shows in the .xlsx, dates and amounts in each cell's own number format.
+     An empty string is an empty cell. */
+  var NATE_HEAD = ["System", "Vendor", "Owner", "Installed", "Notes"];
+  var NATE = {
+    "MedFlow-TEST": ["MedFlow-TEST", "MedFlow", "", "03/2019", "decommissioned 2024 - leave alone"],
+    "CCS-SQL01":    ["CCS-SQL01", "MS", "Nate", "03/2019", "SQL 2016 on Svr 2019. db support thru Ridgeline"],
+    "CCS-SFTP01":   ["CCS-SFTP01", "(Ubuntu)", "Nate", "", "set up 2019 for Waypoint"],
+    "CCS-FS01":     ["CCS-FS01", "Dell / MS", "Nate", "2014", "Win Svr 2012 R2 - needs replacing. raised 2022 + 2023"],
+    "M365 tenant":  ["M365 tenant", "Microsoft", "", "", "exchange / sharepoint / teams"],
+    "Entra ID":     ["Entra ID", "Microsoft", "Nate", "", "MFA admins only"],
+    "Laptops":      ["Laptops", "Dell / MS", "Nate", "", "~180. mix of win10 + win11"]
+  };
+  var SUP_HEAD = ["Vendor", "What for", "Contract owner", "Contract start", "Annual (USD)", "Notes"];
+  var SUP = {
+    "MedFlow test": ["MedFlow", "Billing platform, test environment", "Ray Okafor", "01 Mar 2019", "11,400", "separate line item"],
+    "Microsoft":    ["Microsoft", "M365 licensing", "Marcy Dunn", "01 Jul 2024", "41,000", "180 seats"],
+    "Veeam":        ["Veeam", "Backup software licence", "Nate Brody", "2020", "3,100", ""]
+  };
+
+  /* ---------------- scopes and their stores ----------------
+     ok: the label section 4 expects (SME, P3-3). R Restricted, C Confidential, X cannot be labelled. */
+  var SC = {
+    A:{ name:"Claims Intake", ic:"claims",
+        desc:"How the 41 clinics send in their bills, and how Cumberland passes them on to be paid.",
+        stores:[
+          { short:"the Claims database", name:"The Claims database", ok:"R",
+            what:"Where Cumberland keeps its live claims. A claim is the bill a clinic sends for a patient's care.",
+            why:"Claims carry patient health information, and section 4 puts that in Restricted." },
+          { short:"MedFlow-TEST", name:"MedFlow-TEST", ok:"R",
+            what:"A test copy of MedFlow, the billing system. It holds a full copy of the real patient data.",
+            why:"It holds a full copy of real patient data, so it needs Restricted, even though it is only a test copy." },
+          { short:"CCS-SFTP01", name:"CCS-SFTP01, where batch claim files sit between runs", ok:"R",
+            what:"The machine that sends claim files out to be paid. A batch is a bundle of claims sent together, and the files wait here between sends.",
+            why:"The claim files waiting on it carry patient health information, so it needs Restricted." }
+        ],
+        nate:["MedFlow-TEST", "CCS-SQL01", "CCS-SFTP01"],
+        sup:["MedFlow test"],
+        where:[
+          ["MedFlow-TEST", "is on both lists."],
+          ["CCS-SFTP01", "is on Nate's list."],
+          ["The Claims database", "is not on either list. It runs on CCS-SQL01, which is on Nate's list."]
+        ] },
+    B:{ name:"Payments and Remittance", ic:"coin",
+        desc:"How money comes back from the insurers that pay, and how it gets matched to the right bills.",
+        stores:[
+          { short:"the Remittance file drop", name:"The Remittance file drop", ok:"R",
+            what:"A folder on the file server CCS-FS01 where files from payers land. A payer is the insurer that pays a clinic's bill.",
+            why:"The payers' files list payments for patients' care, so they hold patient and payment information. That is Restricted." },
+          { short:"the Finance reconciliation spreadsheets", name:"The Finance reconciliation spreadsheets", ok:"R",
+            what:"Spreadsheets on the file server CCS-FS01 that finance uses to check payments against bills. They hold account and payment details.",
+            why:"They hold account and payment details, and section 4 puts financial account data in Restricted." },
+          { short:"the Payment posting export", name:"The Payment posting export", ok:"R",
+            what:"A file Cumberland sends back to the clinics every month, showing the payments it has recorded.",
+            why:"It lists the payments made for each clinic's patients, so it holds patient and payment information. That is Restricted." },
+          { short:"the Microsoft 365 tenant", name:"The Microsoft 365 tenant", ok:"R",
+            what:"Cumberland's own space in Microsoft 365, which holds staff email, shared files and chat.",
+            why:"Staff email and shared files carry patient and payment details. A store takes the label of the most sensitive thing it holds, so it is Restricted." }
+        ],
+        nate:["CCS-FS01", "M365 tenant"],
+        sup:["Microsoft"],
+        where:[
+          ["The Microsoft 365 tenant", "is on both lists."],
+          ["The Remittance file drop", "is not on either list. It sits on CCS-FS01, which is on Nate's list."],
+          ["The Finance reconciliation spreadsheets", "are not on either list. They sit on CCS-FS01 too."],
+          ["The Payment posting export", "is not on either list at all."]
+        ] },
+    C:{ name:"Patient Records and Archive", ic:"archive",
+        desc:"Where seven years of old claims are kept, how patients ask for their records, and the backups.",
+        stores:[
+          { short:"the Archive store", name:"The Archive store", ok:"R",
+            what:"Seven years of closed claims, kept after the bills are finished.",
+            why:"Closed claims still carry patient health information, so the archive needs Restricted." },
+          { short:"the Monthly export file", name:"The Monthly export file", ok:"R",
+            what:"A file that MedFlow, the billing system, writes to the file server CCS-FS01. Nobody has set a date to delete it.",
+            why:"It comes out of the billing system that holds patients' claims, so it carries patient health information. That is Restricted." },
+          { short:"the Backup repository", name:"The Backup repository", ok:"R",
+            what:"Where the backups are kept: spare copies of Cumberland's data, made by the backup software Veeam.",
+            why:"A backup is a copy of Cumberland's data, patient records included, so it needs the highest label, Restricted." },
+          { short:"the Dormant AWS account", name:"The Dormant AWS account", ok:"X",
+            what:"An account on AWS, Amazon's service for renting computers and storage online. It was opened in 2021 for a project that was dropped. Dormant means asleep: nobody logs in to it, but it is still being paid for.",
+            why:"Nobody knows what is inside it, so nobody can say which label it needs. You cannot label what you cannot see." }
+        ],
+        nate:["CCS-FS01"],
+        sup:["Veeam"],
+        where:[
+          ["The Backup repository", "is on the supplier list, as Veeam, the backup software."],
+          ["The Monthly export file", "is not on either list. It is written to CCS-FS01, which is on Nate's list."],
+          ["The Archive store", "is not on either list at all."],
+          ["The Dormant AWS account", "is not on either list at all."]
+        ] },
+    D:{ name:"Remote and Corporate", ic:"laptop",
+        desc:"How the 180 staff sign in, work on their laptops and connect from outside the office.",
+        stores:[
+          { short:"CCS-FS01", name:"CCS-FS01, the file server", ok:"R",
+            what:"The machine where staff keep shared folders and files.",
+            why:"Shared folders on it hold payment and patient files, so the whole server takes the highest label, Restricted." },
+          { short:"the Microsoft 365 tenant", name:"The Microsoft 365 tenant", ok:"R",
+            what:"Cumberland's own space in Microsoft 365, which holds staff email, shared files and chat.",
+            why:"Staff email and shared files carry patient and payment details. A store takes the label of the most sensitive thing it holds, so it is Restricted." },
+          { short:"the Staff laptop fleet", name:"The Staff laptop fleet", ok:"R",
+            what:"All the laptops staff work on, about 180 of them.",
+            why:"Staff open patient and payment files on their laptops, so the laptops hold that information too. That is Restricted." },
+          { short:"Entra ID", name:"Entra ID", ok:"C",
+            what:"Microsoft's list of every staff account. It checks who you are when you sign in to Microsoft 365.",
+            why:"It holds who people are and how they sign in, not patient data. That is private business information, so it is Confidential." }
+        ],
+        nate:["CCS-FS01", "M365 tenant", "Laptops", "Entra ID"],
+        sup:["Microsoft"],
+        where:[
+          ["CCS-FS01", "is on Nate's list."],
+          ["The Microsoft 365 tenant", "is on both lists."],
+          ["The Staff laptop fleet", "is on Nate's list, as Laptops."],
+          ["Entra ID", "is on Nate's list."]
+        ] }
+  };
+  var ORDER = ["A", "B", "C", "D"];
+
+  /* Wrong-pick hints, by the label section 4 expects. Ours, not SME data. */
+  var HINTS = {
+    R:{ C:"Confidential is for business information. Read the card again: this store holds patient or payment information. Try again.",
+        I:"Internal is for everyday information that any staff member can see. Should every staff member see what is in this store? Try again.",
+        P:"Public is for information anyone outside the company may see. What is in this store is private. Try again.",
+        X:"The card says what this store holds, so you can pick a label. Try again." },
+    X:{ R:"It might hold patient data, or nothing at all. Does anyone know what is inside it? Try again.",
+        C:"To pick a label, you need to know what a store holds. Does anyone know what is inside this one? Try again.",
+        I:"To pick a label, you need to know what a store holds. Does anyone know what is inside this one? Try again.",
+        P:"To pick a label, you need to know what a store holds. Does anyone know what is inside this one? Try again." },
+    C:{ R:"Restricted is for patient health information and bank or payment details. Entra ID holds staff accounts, not either of those. Try again.",
+        I:"Internal is for information any staff member can see. Should every staff member see everyone's sign-in details? Try again.",
+        P:"Public is for information anyone outside the company may see. Sign-in details must never be public. Try again.",
+        X:"The card says what Entra ID holds: staff accounts. Try again." }
+  };
+  var LIST_RIGHT = "Neither list has a column for a label, and no row mentions one.";
+  var LIST_HINT = "Look at the column headings of both lists again. Is there a column for a label, or a label written in any row? Try again.";
+
+  function labelName(k){
+    if(k === "X") return CANT.l;
+    if(k === "N") return NONE.l;
+    for(var n=0;n<LABELS.length;n++) if(LABELS[n].k === k) return LABELS[n].l;
+    return "";
+  }
+
+  /* ---------------- data validation, at load, loud ---------------- */
+  (function validate(){
+    var p = [];
+    var EXPECT = { A:"RRR", B:"RRRR", C:"RRRX", D:"RRRC" };
+    ORDER.forEach(function(k){
+      var s = SC[k];
+      if(s.stores.map(function(x){ return x.ok; }).join("") !== EXPECT[k]) p.push("scope " + k + " expected labels changed");
+      s.nate.forEach(function(r){ if(!NATE[r]) p.push("scope " + k + " unknown Nate row " + r); });
+      s.sup.forEach(function(r){ if(!SUP[r]) p.push("scope " + k + " unknown supplier row " + r); });
+      s.stores.forEach(function(x, n){
+        if(x.ok === "R" || x.ok === "X" || x.ok === "C"){
+          ["R","C","I","P","X"].forEach(function(o){ if(o !== x.ok && !HINTS[x.ok][o]) p.push("scope " + k + " store " + (n+1) + " option " + o + " has no hint"); });
+        } else p.push("scope " + k + " store " + (n+1) + " has an unknown label");
+      });
+    });
+    /* Neither list may carry a label word anywhere. */
+    var words = /restricted|confidential|internal|public/i;
+    Object.keys(NATE).forEach(function(r){ if(words.test(NATE[r].join(" "))) p.push("Nate row " + r + " carries a label word"); });
+    Object.keys(SUP).forEach(function(r){ if(words.test(SUP[r].join(" "))) p.push("supplier row " + r + " carries a label word"); });
+    if(words.test(NATE_HEAD.concat(SUP_HEAD).join(" "))) p.push("a column heading carries a label word");
+    if(p.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This interactive has authoring errors:</b></p><ul style="font-size:13px;line-height:1.6;padding-left:18px">'
+        + p.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("data invalid: " + p.join("; "));
+    }
+  })();
+
+  /* ---------------- state ----------------
+     Each scope keeps its own answers. localStorage is wrapped: a blocked
+     storage API must degrade silently. */
+  var KEY = "vciso-p3-m3-find-cumberlands-labels-v1";
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function blank(){ return { out:{}, done:null }; }
+  function fresh(){ return { scope:null, a:{} }; }
+  function load(){
+    var f = fresh();
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!isPlain(raw)) return f;
+      if(ORDER.indexOf(raw.scope) >= 0) f.scope = raw.scope;
+      if(isPlain(raw.a)) ORDER.forEach(function(k){
+        var r = raw.a[k];
+        if(!isPlain(r)) return;
+        f.a[k] = {};
+        Object.keys(r).forEach(function(q){
+          var v = r[q];
+          if(!isPlain(v)) return;
+          var ok = okOf(k, q);
+          if(!ok) return;
+          var b = blank();
+          if(isPlain(v.out)) Object.keys(v.out).forEach(function(o){ if(o !== ok && optIds(q).indexOf(o) >= 0) b.out[o] = 1; });
+          if(v.done === "right" || v.done === "shown") b.done = v.done;
+          f.a[k][q] = b;
+        });
+      });
+      return f;
+    }catch(e){ return f; }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+
+  /* q ids: "s0", "s1", ... for the stores, "lists" for the lists question. */
+  function okOf(k, q){
+    if(q === "lists") return "N";
+    var m = /^s(\d)$/.exec(q);
+    if(!m || !SC[k].stores[+m[1]]) return null;
+    return SC[k].stores[+m[1]].ok;
+  }
+  function optIds(q){ return q === "lists" ? ["R","C","I","P","N"] : ["R","C","I","P","X"]; }
+
+  var st = load();
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------------- the slides ----------------
+     Built from the scope: one slide per data store. Before a scope is
+     picked, the count assumes four stores. */
+  var S = [];
+  function build(){
+    var n = st.scope ? SC[st.scope].stores.length : 4;
+    S = [ { kind:"scope", label:"Your scope" }, { kind:"card", label:"The four labels" } ];
+    for(var k=0;k<n;k++) S.push({ kind:"store", n:k, q:"s" + k, label:"Data store " + (k+1) + " of " + n });
+    S.push({ kind:"lists", q:"lists", label:"Cumberland's lists" });
+    S.push({ kind:"end", label:"What you found" });
+    if(window.__ex) window.__ex.slides = S.length;
+  }
+  build();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    ref:document.getElementById("ref"), h1:document.getElementById("h1"),
+    board:document.getElementById("board"), back:document.getElementById("back"),
+    next:document.getElementById("next"), again:document.getElementById("again"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+  var refOpen = false;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function strip(s){ return String(s).replace(/<[^>]+>/g,""); }
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+  function phone(){ return window.matchMedia("(max-width:599px)").matches; }
+  function ans(q){
+    if(!st.scope) return blank();
+    if(!isPlain(st.a[st.scope])) st.a[st.scope] = {};
+    if(!isPlain(st.a[st.scope][q])) st.a[st.scope][q] = blank();
+    return st.a[st.scope][q];
+  }
+  function done(s){
+    if(s.kind === "scope") return !!st.scope;
+    if(s.kind === "store" || s.kind === "lists") return !!ans(s.q).done;
+    return true;
+  }
+  /* Every question before slide n is answered (the gate for the lists and end slides). */
+  function allBefore(n){
+    if(!st.scope) return false;
+    for(var k=0;k<n;k++) if(!done(S[k])) return false;
+    return true;
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k === i ? "here" : (k < i || ((S[k].kind === "store" || S[k].kind === "lists") && st.scope && done(S[k]))) ? "on" : "") + "'></i>";
+    el.segs.innerHTML = h;
+    if(st.scope && i > 0){ el.chip.hidden = false; el.chip.textContent = "Scope " + st.scope + ", " + SC[st.scope].name; }
+    else el.chip.hidden = true;
+    var showRef = (i >= 2 && !!st.scope);
+    el.ref.hidden = !showRef;
+    el.ref.classList.toggle("push", el.chip.hidden);
+    el.ref.innerHTML = icon("tag") + (refOpen ? "Hide the four labels" : "See the four labels");
+    el.ref.setAttribute("aria-expanded", refOpen ? "true" : "false");
+    el.back.disabled = (i === 0);
+    el.next.hidden = false; el.next.disabled = false;
+    el.again.hidden = true;
+    el.next.textContent = (s.kind === "lists") ? "See what you found" : "Next";
+    el.hint.textContent = "";
+    if(s.kind === "end"){
+      el.next.hidden = true; el.again.hidden = false;
+      el.hint.textContent = "Go back to the module for the next step.";
+    } else if(s.kind === "scope" && !st.scope){
+      el.next.disabled = true; el.hint.textContent = "Pick your scope to carry on.";
+    } else if(!st.scope && i > 0){
+      el.next.disabled = true;
+    } else if(!done(s)){
+      el.next.disabled = true; el.hint.textContent = "Pick an answer to carry on.";
+    }
+  }
+
+  /* ---------------- shared pieces ---------------- */
+  function labTable(){
+    return '<table class="lab"><thead><tr><th scope="col">Label</th><th scope="col">What it is for</th><th scope="col">How it must be handled</th></tr></thead><tbody>'
+      + LABELS.map(function(x){
+          return '<tr><td class="ln"><span>' + icon("tag") + esc(x.l) + "</span></td><td>" + esc(x.what) + "</td><td>" + esc(x.how) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+  }
+  function defBox(){
+    return '<div class="defbox"><p class="dq">' + esc(DATASTORE_Q) + '</p><p class="da">' + esc(DATASTORE_A) + "</p></div>";
+  }
+
+  function optHTML(o, l, m, cls, ico, tag, disabled){
+    return '<button class="opt' + (cls ? " " + cls : "") + '" type="button" data-o="' + o + '"'
+      + (disabled ? ' disabled aria-disabled="true"' : "") + ">"
+      + '<span class="g" aria-hidden="true">' + (ico ? icon(ico) : "") + "</span>"
+      + '<span class="txt"><span class="lr"><span class="ol">' + esc(l) + "</span>"
+      + (tag ? '<span class="tg">' + tag + "</span>" : "") + "</span>"
+      + '<span class="om">' + esc(m) + "</span></span></button>";
+  }
+  function optsHTML(q, list, ok){
+    var a = ans(q);
+    return '<div class="opts" role="group" aria-label="Answers">' + list.map(function(x){
+      if(a.done && x.o === ok) return optHTML(x.o, x.l, x.m, "ok", "check", a.done === "right" ? "Right" : "Right answer", true);
+      if(a.out[x.o]) return optHTML(x.o, x.l, x.m, "no", "x", "Not quite", true);
+      if(a.done) return optHTML(x.o, x.l, x.m, "idle", "", "", true);
+      return optHTML(x.o, x.l, x.m, "", "", "", false);
+    }).join("") + "</div>";
+  }
+  function fbHTML(kind, head, text){
+    var good = kind !== "no";
+    return '<div class="fb ' + (good ? "ok" : "no") + '" id="fb" tabindex="-1">'
+      + '<span class="fh">' + icon(good ? "okc" : "noc") + esc(head) + "</span>"
+      + '<p class="ft">' + esc(text) + "</p></div>";
+  }
+  function feedback(q, ok, right, hintOf, shownHead){
+    var a = ans(q);
+    if(a.done === "right") return fbHTML("ok", "Right", right);
+    if(a.done === "shown") return fbHTML("ok", shownHead || ("The right answer: " + labelName(ok)), right);
+    var outs = Object.keys(a.out);
+    if(outs.length) return fbHTML("no", "Not quite", hintOf(outs[outs.length-1]));
+    return "";
+  }
+  function wire(q, ok){
+    var a = ans(q);
+    Array.prototype.forEach.call(el.board.querySelectorAll(".opts button.opt:not(:disabled)"), function(b){
+      b.addEventListener("click", function(){
+        var o = b.dataset.o;
+        if(o === ok) a.done = "right";
+        else {
+          a.out[o] = 1;
+          if(Object.keys(a.out).length >= 2) a.done = "shown";
+        }
+        save(st);
+        render(true);
+        afterPick(!!a.done);
+      });
+    });
+  }
+  function afterPick(isDone){
+    var fb = el.board.querySelector("#fb");
+    if(fb && !reduce){ fb.classList.remove("in"); void fb.offsetWidth; fb.classList.add("in"); }
+    if(fb) say(strip(fb.innerHTML.replace(/<\/p>/g, " ").replace(/<\/span>/g, ". ")));
+    var ph = phone(), opt = ph ? { preventScroll:true } : undefined;
+    if(isDone) el.next.focus(opt);
+    else { var f = el.board.querySelector(".opts button.opt:not(:disabled)"); if(f) f.focus(opt); }
+    if(fb && ph) (isDone ? document.querySelector(".bar") : fb).scrollIntoView({ block:"end", behavior: reduce ? "auto" : "smooth" });
+  }
+
+  /* ---------------- slide 1: the scope ---------------- */
+  function renderScope(){
+    el.board.innerHTML = '<p class="lead">In this interactive, you will pick the label you think each of your data stores should carry. Then you will look for the label Cumberland itself gave it.</p>'
+      + '<div class="scopes" role="group" aria-label="Scopes">' + ORDER.map(function(k){
+          var on = st.scope === k;
+          return '<button class="sc' + (on ? " on" : "") + '" type="button" data-k="' + k + '" aria-pressed="' + on + '">'
+            + '<span class="si">' + icon(SC[k].ic) + "</span>"
+            + '<span class="sl">Scope ' + k + "</span>"
+            + '<span class="sn">' + esc(SC[k].name) + "</span>"
+            + '<span class="sd">' + esc(SC[k].desc) + "</span>"
+            + '<span class="ss">' + (on ? '<span class="gl" aria-hidden="true">✓</span>Your scope'
+                                        : '<span class="gl" aria-hidden="true">+</span>Pick this one') + "</span>"
+            + "</button>";
+        }).join("") + "</div>"
+      + '<p class="note2">You can switch later. <b>Each scope keeps its own answers</b>, so switching loses nothing.</p>';
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.sc"), function(b){
+      b.addEventListener("click", function(){
+        st.scope = b.dataset.k; save(st); build(); render();
+        var nb = el.board.querySelector('button.sc[data-k="' + st.scope + '"]');
+        if(nb) nb.focus();
+        say("Scope " + st.scope + ", " + SC[st.scope].name + ", picked. Press Next to carry on.");
+      });
+    });
+    return "Which scope did you choose?";
+  }
+
+  /* ---------------- slide 2: the four labels ---------------- */
+  function renderCard(){
+    el.board.innerHTML = '<p class="lead">Section 4 of Cumberland\'s policy sets out four labels. Every system and data store must carry one: the label for the most sensitive thing it holds.</p>'
+      + labTable() + defBox()
+      + '<p class="tipline">' + icon("tag") + "<span>On the next slides, press <b>See the four labels</b> at the top to open this card again.</span></p>";
+    return "Here are the four labels from section 4.";
+  }
+
+  /* ---------------- the store slides ---------------- */
+  function renderStore(s){
+    var sc = SC[st.scope], x = sc.stores[s.n];
+    var list = LABELS.map(function(L){ return { o:L.k, l:L.l, m:L.opt }; }).concat([{ o:CANT.k, l:CANT.l, m:CANT.opt }]);
+    el.board.innerHTML = '<div class="split">'
+      + '<div class="leftcol"><div class="card">'
+      +   '<span class="ck">' + icon("db") + "Your data store " + (s.n+1) + " of " + sc.stores.length + "</span>"
+      +   '<p class="cn">' + esc(x.name) + "</p>"
+      +   '<p class="cw">' + esc(x.what) + "</p>"
+      +   '<p class="cg">Pick the label you think it should carry. If you cannot tell what it holds, say so.</p>'
+      + "</div>" + feedback(s.q, x.ok, x.why, function(o){ return HINTS[x.ok][o]; }) + "</div>"
+      + '<div class="side">' + optsHTML(s.q, list, x.ok) + "</div>"
+      + "</div>";
+    wire(s.q, x.ok);
+    return "Which label do you think " + x.short + " should carry?";
+  }
+
+  /* ---------------- the lists slide ---------------- */
+  function xlTable(head, rows, numCol, widths){
+    return '<table class="xl"><colgroup>' + widths.map(function(w){ return '<col style="width:' + w + '">'; }).join("") + "</colgroup>"
+      + "<thead><tr>" + head.map(function(h){ return '<th scope="col">' + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>"
+      + rows.map(function(r){
+          return "<tr>" + r.map(function(c, n){
+            var cls = (c === "" ? "blank" : "") + (n === numCol ? " num" : "");
+            return "<td" + (cls.trim() ? ' class="' + cls.trim() + '"' : "") + ">" + (c === "" ? '<span class="sr">empty</span>' : esc(c)) + "</td>";
+          }).join("") + "</tr>";
+        }).join("") + "</tbody></table>";
+  }
+  function renderLists(s){
+    var sc = SC[st.scope];
+    var list = LABELS.map(function(L){ return { o:L.k, l:L.l, m:L.lopt }; }).concat([{ o:NONE.k, l:NONE.l, m:NONE.lopt }]);
+    var nateRows = sc.nate.map(function(r){ return NATE[r]; });
+    var supRows = sc.sup.map(function(r){ return SUP[r]; });
+    el.board.innerHTML = '<div class="split lists">'
+      + '<div class="leftcol">'
+      +   '<div><p class="sheetcap">Nate\'s system list <span>SYSTEM LIST - CCS (Nate\'s copy), the rows for your stores</span></p>'
+      +   '<div class="tw">' + xlTable(NATE_HEAD, nateRows, -1, ["19%", "14%", "11%", "13%", "43%"]) + "</div></div>"
+      +   '<div><p class="sheetcap">The supplier list <span>Supplier list - FINANCE, the rows for your stores</span></p>'
+      +   (supRows.length ? '<div class="tw">' + xlTable(SUP_HEAD, supRows, 4, ["14%", "22%", "18%", "17%", "12%", "17%"]) + "</div>"
+                          : '<p class="noneline">None of your stores is on this list.</p>') + "</div>"
+      +   '<ul class="where" aria-label="Where your stores are"><li class="wh">Where your stores are</li>'
+      +   sc.where.map(function(w){ return "<li>" + icon("pin") + "<span><b>" + esc(w[0]) + "</b> " + esc(w[1]) + "</span></li>"; }).join("")
+      +   "</ul>"
+      + "</div>"
+      + '<div class="side"><p class="pq">What label did Cumberland put on them?</p>'
+      +   optsHTML(s.q, list, "N")
+      +   feedback(s.q, "N", LIST_RIGHT, function(){ return LIST_HINT; }, "Here is the right answer")
+      + "</div></div>";
+    wire(s.q, "N");
+    return "Now look for the label Cumberland itself gave these.";
+  }
+
+  /* ---------------- the last slide ---------------- */
+  function renderEnd(anim){
+    var a = (anim && !reduce) ? " in" : "";
+    el.board.innerHTML = '<div class="sum' + a + '">'
+      + '<div class="tile"><span class="ti">' + icon("doc") + '</span><span class="tk">The policy</span>'
+      +   '<p class="tt">Section 4 sets out four labels and says every system and data store must carry one.</p></div>'
+      + '<div class="tile"><span class="ti">' + icon("rows") + '</span><span class="tk">Cumberland\'s own lists</span>'
+      +   "<p class=\"tt\">Nate's system list and the supplier list carry none. Not one row has a label.</p></div>"
+      + '<div class="tile last"><span class="ti">' + icon("paper") + '</span><span class="tk">So</span>'
+      +   '<p class="tt">A rule like this, written down and used nowhere, is only on paper.</p></div>'
+      + "</div>";
+    return "What you found";
+  }
+
+  /* ---------------- the gate ---------------- */
+  function gate(msg, btn, to){
+    el.board.innerHTML = '<div class="gate"><p>' + msg + '</p><button class="go" type="button" id="gobtn">' + btn + "</button></div>";
+    el.board.querySelector("#gobtn").addEventListener("click", function(){ i = to; render(); focusTop(); });
+    return "One step back";
+  }
+  function firstOpen(){
+    for(var k=0;k<S.length;k++) if(!done(S[k])) return k;
+    return S.length - 1;
+  }
+
+  /* ---------------- the labels pop-up ---------------- */
+  function refHTML(){
+    return '<div class="refpop' + (reduce ? "" : " in") + '" id="refpop" role="dialog" aria-modal="false" aria-label="The four labels from section 4" tabindex="-1">'
+      + '<div class="rh"><p class="rt">The four labels from section 4</p>'
+      + '<button class="nav ghost" type="button" id="refclose">Close</button></div>'
+      + labTable() + defBox() + "</div>";
+  }
+  function openRef(){
+    if(refOpen) return;
+    refOpen = true;
+    el.board.insertAdjacentHTML("beforeend", refHTML());
+    el.board.querySelector("#refclose").addEventListener("click", closeRef);
+    header();
+    var p = el.board.querySelector("#refpop");
+    if(p) p.focus(phone() ? undefined : { preventScroll:true });
+    say("The four labels from section 4. Press Escape or Close to go back.");
+  }
+  function closeRef(){
+    if(!refOpen) return;
+    refOpen = false;
+    var p = el.board.querySelector("#refpop");
+    if(p) p.remove();
+    header();
+    el.ref.focus();
+  }
+  el.ref.addEventListener("click", function(){ if(refOpen) closeRef(); else openRef(); });
+
+  /* ---------------- render ---------------- */
+  function render(fromPick){
+    var s = S[i];
+    refOpen = false;
+    document.documentElement.classList.add("fresh");
+    var title;
+    if(s.kind === "scope") title = renderScope();
+    else if(s.kind === "card") title = st.scope ? renderCard() : gate("<b>Pick your scope first.</b> Your data stores depend on it.", "Go to the scope picker", 0);
+    else if(!st.scope) title = gate("<b>Pick your scope first.</b> Your data stores depend on it.", "Go to the scope picker", 0);
+    else if(s.kind === "store") title = renderStore(s);
+    else if(s.kind === "lists") title = allBefore(i) ? renderLists(s) : gate("<b>Label your data stores first.</b> Then you can look for Cumberland's own labels.", "Go to the first one left", firstOpen());
+    else title = allBefore(i) ? renderEnd(!fromPick) : gate("<b>Answer the earlier questions first.</b>", "Go to the first one left", firstOpen());
+    el.h1.textContent = title;
+    el.frame.setAttribute("aria-label", title);
+    header();
+    return title;
+  }
+
+  /* ---------------- start again ---------------- */
+  function resetAll(){ st = fresh(); save(st); build(); i = 0; render(); }
+  el.again.addEventListener("click", function(){
+    resetAll(); focusTop();
+    say("Cleared. Pick your scope to start again.");
+  });
+
+  /* ---------------- navigation ---------------- */
+  function focusTop(){
+    var ph = phone();
+    el.frame.focus(ph ? { preventScroll:true } : undefined);
+    if(ph) window.scrollTo(0, 0);
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && (el.next.disabled || el.next.hidden)) return;
+    i = n; var t = render(); focusTop();
+    say(el.prog.textContent + ". " + t);
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  var lastPt = null;
+  document.addEventListener("pointermove", function(e){
+    var p = e.clientX + "," + e.clientY;
+    if(lastPt !== null && p !== lastPt) document.documentElement.classList.remove("fresh");
+    lastPt = p;
+  }, true);
+  document.addEventListener("keydown", function(e){
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    if(e.key === "Escape" && refOpen){ e.preventDefault(); closeRef(); return; }
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){ tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(phone()) stage.style.transform = "";
+    else {
+      var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + s + ")";
+    }
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     goto ignores the answer gates on purpose, so every slide can be measured. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    reset:function(){ resetAll(); },
+    pick:function(k){ if(ORDER.indexOf(k) < 0) return false; st.scope = k; save(st); build(); i = 0; render(); return true; },
+    state:function(){ return { i:i, scope:st.scope, slides:S.length, a:st.a }; }
+  };
+})();
+</script>
+</body>
+</html>
