@@ -4,36 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Build Your Heatmap</title>
+<link rel="icon" href="data:,">
 <!--
   vCISO P3 Step 3, Module 9, "Build your heatmap".
-  Built from the Extern deck shell (.claude/skills/build-html-slides/assets/deck-shell.html),
-  matched to the house look of vciso-p3-m2-three-buckets.html and
-  vciso-p3-m2-control-or-written-rule.html.
-  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6.
   Spec: 06-content/project-03/step-03/module-09-internal.md, "Build note".
+  Answer rule: P3 Sample Pack/Interactive content sets - P3.md, P3-9 (SME drop
+  2026-09-25): read the chart cold, numbers hidden, then reveal; ties are right
+  ("a student who names all three 'closest' is right; don't mark that wrong").
+
+  QA fix pass 8 October 2026: rebuilt to the owner's interactive rules
+  (HANDOVER-2026-10-02-P2.md section 2) and to the layout of the fixed
+  vciso-p3-m6-six-words-three-problems.html.
+    - One question per slide: "furthest behind" and "closest" were on one slide.
+    - Right = green tick and "Right"; wrong = red cross and "Not quite", then try
+      again; after the second wrong try the right answer shows in green. The old
+      build judged once, in navy only, on a separate slide.
+    - A plain line under each option says what the function means.
+    - The old slide 3 (numbers plus a verdict panel) and slide 4 (numbers for the
+      screenshot) showed the same chart twice. They are now one last slide.
+    - The per-slide background tints are gone, because the green and red
+      feedback tints did not read against them.
 
   The chart is built from the student's own twelve scores. Nothing here holds
   an expected answer: the right set for each question is worked out from what
-  the student typed in.
+  the student put in. Every row in the furthest (or closest) shade is right;
+  naming only some of them is right too, and the feedback names the rest.
+  When every row is the same shade there is no right answer: the picks show in
+  navy as "Your pick" and the panel is green, never red.
 
-  Verify before shipping, both gates, every time:
-    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+  The right and wrong colours are used only for right and wrong, always with an
+  icon and a word. Every shade of navy in the chart also carries its label in
+  words, so colour is never the only signal.
+
+  Layout: every grid sits in normal flow, so nothing can be drawn over anything
+  else. No absolute positioning on the board.
+
+  Verify before shipping:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs --allow '#146C2E,#E6F4EA,#B3261E,#FCE8E6' this-deck.html
     node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
 -->
 <style>
-  /* ===============================================================
-     The palette. The Extern five, plus the vCISO per-slide tint ramp
-     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
-     Tint carries no meaning. Every shade of navy in the chart is an
-     rgba() of #001D69. Every shade also carries a label in words, so
-     colour is never the only signal.
-     =============================================================== */
   :root{
-    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
-    --on-highlight:#001D69; /* accents, icons, borders, fills      */
-    --bg:#FDF8F8;           /* canvas background, and text on navy */
-    --body:#484646;         /* body copy, captions                 */
-    --title:#1C1B1B;        /* headings, primary text              */
+    --highlight:#DCE1FF;
+    --on-highlight:#001D69;
+    --bg:#FDF8F8;
+    --body:#484646;
+    --title:#1C1B1B;
+
+    /* right and wrong states only, always paired with an icon and a word */
+    --ok:#146C2E;
+    --ok-tint:#E6F4EA;
+    --no:#B3261E;
+    --no-tint:#FCE8E6;
 
     --line:rgba(0,29,105,.26);
     --tint:rgba(0,29,105,.055);
@@ -41,15 +63,13 @@
     /* The shade ramp, light to darkest, checked in grayscale:
        at or above #DCE1FF, one step 45% navy, two steps 70% navy, three or
        more solid navy with #484646 hairlines. Text on each is AA. */
-    --mid:rgba(0,29,105,.45);   /* the one-step-short shade, laid over --bg */
-    --deep:rgba(0,29,105,.70);  /* the two-steps-short shade, laid over --bg */
+    --mid:rgba(0,29,105,.45);
+    --deep:rgba(0,29,105,.70);
 
     --t-fast:160ms;
-    --t-frame:300ms;
-    --t-reveal:560ms;
+    --t-reveal:460ms;
     --ease-out:cubic-bezier(.2,.7,.3,1);
     --ease-over:cubic-bezier(.2,.9,.25,1.06);
-    --ease-io:cubic-bezier(.4,0,.2,1);
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
@@ -61,39 +81,28 @@
     color:var(--body);
     display:flex;align-items:center;justify-content:center;
     -webkit-font-smoothing:antialiased;
-    transition:background var(--t-frame) var(--ease-io);
   }
-  /* The vCISO tint ramp, one per slide, in slide order. */
-  body.t1{background:#F2DAE0}
-  body.t2{background:#DAEAE2}
-  body.t3{background:#F2E3D2}
-  body.t4{background:#DEEBDA}
 
-  /* ---- the 960x540 canvas, scaled down only, never up ----
-     flex:0 0 auto is load bearing: the canvas must always hold 960 in
-     layout and let the transform do all of the fitting. */
-  #stage{
-    width:960px;height:540px;position:relative;transform-origin:center center;
-    flex:0 0 auto;
-  }
+  #stage{width:960px;height:540px;position:relative;transform-origin:center center;flex:0 0 auto;background:var(--bg)}
   .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
   .frame:focus{outline:none}
 
-  /* ---- header ---- */
-  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  /* header */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:6px;min-height:28px}
   .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
-  .segs{display:flex;gap:4px}
-  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
-    transition:background var(--t-fast) var(--ease-out)}
-  .segs i.on{background:var(--on-highlight)}
-  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .dots{display:flex;gap:7px;align-items:center}
+  .dots i{display:block;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--on-highlight);background:transparent}
+  .dots i.on{background:var(--on-highlight)}
+  .dots i.here{background:var(--on-highlight);width:12px;height:12px;box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--on-highlight)}
   .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;
     padding:3px 10px;font-size:12px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
 
-  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+  h1{font-size:25px;line-height:1.22;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
 
   .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
-  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px;max-width:74ch}
+  .lead{font-size:16px;line-height:1.48;color:var(--body);max-width:96ch}
+  .lead b{color:var(--title);font-weight:600}
+  .intro{display:flex;flex-direction:column;gap:14px;max-width:74ch}
   .intro p{font-size:17px;line-height:1.5}
   .intro p b{color:var(--title);font-weight:600}
   button.jump{font-family:inherit;font-size:15px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
@@ -101,7 +110,9 @@
   button.jump:hover{background:var(--tint2)}
   button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
 
-  /* ---- the instruction strip, with the slide's main action on the right ---- */
+  svg.ic{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* the instruction strip on slide 1, with Build on the right, in flow */
   .how{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:46px;background:var(--highlight);color:var(--title);
     border-left:4px solid var(--on-highlight);border-radius:6px;padding:5px 6px 5px 14px;font-size:16px;line-height:1.4}
   .how .ht{flex:1 1 auto;min-width:0}
@@ -109,19 +120,17 @@
   .how .sc{flex:0 0 auto;font-weight:600;color:var(--on-highlight);font-size:15px;white-space:nowrap}
   .how button.nav{padding:8px 18px}
 
-  /* ---- slide 1: the twelve score pickers ----
-     Every picker starts empty. Nothing is pre-selected, so nothing on the
-     screen can be mistaken for an answer. */
+  /* ---------- slide 1: the twelve score pickers ----------
+     Every picker starts empty. Nothing is pre-selected. */
   .grid{flex:0 0 auto;display:flex;flex-direction:column;
     background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:1px 14px}
   .gr{display:grid;grid-template-columns:minmax(0,1fr) 230px 230px;column-gap:28px;align-items:center;
     min-height:45px;border-top:1px solid var(--tint2)}
   .gr:first-child{border-top:0}
-  .gr.gh{min-height:30px;align-items:center}
+  .gr.gh{min-height:30px}
   .gr.gh span{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--on-highlight);line-height:1.3}
   .fname{min-width:0;display:flex;flex-direction:column;padding:2px 0}
   .fname b{font-size:19px;font-weight:600;color:var(--title);line-height:1.2}
-
   .pc{min-width:0}
   .pcap{display:none;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight);margin-bottom:4px}
   .seg{display:flex;gap:5px;border:0}
@@ -130,131 +139,114 @@
   .seg label{flex:0 0 auto;width:42px;height:36px;border-radius:8px;border:1.5px solid var(--on-highlight);
     background:transparent;color:var(--on-highlight);font-size:17px;font-weight:600;
     display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-user-select:none;
-    font-variant-numeric:tabular-nums;
-    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out)}
+    font-variant-numeric:tabular-nums;transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out)}
   .seg label:hover{background:var(--tint2)}
   .seg input:checked + label{background:var(--on-highlight);color:var(--bg)}
   .seg input:focus-visible + label{outline:3px solid var(--on-highlight);outline-offset:2px}
 
-  /* ---- the chart. One row per function, always in the framework's own
-         order, never sorted, so the order gives nothing away. ---- */
-  .chart{flex:0 0 auto;align-self:start;width:100%;min-width:0;display:flex;flex-direction:column;
-    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:4px 14px 6px}
-  .cr{display:grid;align-items:center;column-gap:12px;min-height:46px;border-top:1px solid var(--tint2)}
-  .cr:first-child{border-top:0}
-  .cr.ch{min-height:30px}
-  .cr.ch span{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight)}
-  .chart.num .cr.ch span{font-size:12px;letter-spacing:.02em}
-  .chart.hid .cr{grid-template-columns:96px minmax(0,1fr);min-height:42px}
-  .chart.num .cr{grid-template-columns:78px 64px 58px 36px minmax(0,1fr);column-gap:7px;min-height:50px}
-  .chart.fin .cr{grid-template-columns:120px 70px 70px 60px minmax(0,1fr);min-height:34px}
-  .chart .ctitle + .cr{border-top:0}
-  .chart.fin .ctitle{padding:6px 0 4px}
-  .chart.fin .capt{border-top:1px solid var(--tint2);padding:5px 0 0}
-  .cr .fn{font-size:17px;font-weight:600;color:var(--title)}
-  .cr .ctr{text-align:center}
-  .sq{justify-self:center;width:32px;height:30px;border-radius:6px;border:1.5px solid var(--on-highlight);
-    background:var(--highlight);color:var(--on-highlight);font-size:15px;font-weight:600;
-    display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
-  .gp{justify-self:center;font-size:15px;font-weight:600;color:var(--title);font-variant-numeric:tabular-nums}
-
   /* The heat cell. Lightest at or above target, darkest furthest away.
      Every shade carries its label in words. */
-  .hc{min-width:0;height:34px;border-radius:7px;display:flex;align-items:center;padding:0 12px;
-    font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden}
+  .hc{min-width:0;min-height:34px;border-radius:7px;display:flex;align-items:center;padding:4px 12px;
+    font-size:15px;font-weight:600;line-height:1.25;text-align:left}
   .hc.h0{background:var(--highlight);border:1.5px solid var(--on-highlight);color:var(--title)}
   .hc.h1{background:linear-gradient(var(--mid),var(--mid)),var(--bg);border:1.5px solid var(--on-highlight);color:var(--title)}
   .hc.h2{background:linear-gradient(var(--deep),var(--deep)),var(--bg);border:1.5px solid var(--on-highlight);color:var(--bg)}
   .hc.h3{background:repeating-linear-gradient(135deg,#001D69 0 6px,#484646 6px 8.5px);border:1.5px solid var(--on-highlight);color:var(--bg)}
-  .hc.h3 .lb{background:var(--on-highlight);border-radius:4px;padding:2px 6px}
-  .chart.fin .hc{height:30px;font-size:15px}
-  /* In the narrower numbers chart the longest label wraps onto two lines
-     rather than being cut off. */
-  .chart.num .hc{white-space:normal;height:auto;min-height:34px;padding:4px 10px;line-height:1.25}
-  .chart.num .hc.h3 .lb{-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:1px 5px}
+  .hc.h3 .lb{background:var(--on-highlight);border-radius:4px;padding:1px 6px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+
+  /* ---------- slides 2 and 3: one question each ----------
+     Each chart row is an option: the function, a plain line on what it
+     means, and its shade. Picks are judged with Check. */
+  .q{display:grid;grid-template-columns:minmax(0,1fr) 268px;column-gap:22px;align-items:start;min-height:0}
+  .rows{min-width:0;display:grid;grid-auto-rows:auto;gap:6px}
+  button.opt{font-family:inherit;text-align:left;color:var(--title);min-width:0;width:100%;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:10px;
+    padding:5px 8px 5px 10px;cursor:pointer;display:grid;grid-template-columns:28px minmax(0,1fr) 238px;column-gap:10px;align-items:center;
+    transition:background var(--t-fast) var(--ease-out),border-color var(--t-fast) var(--ease-out)}
+  button.opt .g{width:28px;height:28px;border-radius:7px;border:1.5px solid var(--on-highlight);
+    color:var(--bg);display:flex;align-items:center;justify-content:center;background:var(--bg)}
+  button.opt .g svg.ic{width:17px;height:17px;stroke-width:2.6}
+  button.opt .txt{min-width:0;display:flex;flex-direction:column;gap:1px}
+  button.opt .lr{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  button.opt .ol{font-size:16.5px;font-weight:700;line-height:1.2;color:var(--title)}
+  button.opt .om{font-size:13.5px;line-height:1.3;color:var(--body)}
+  button.opt .tg{flex:0 0 auto;font-size:13px;font-weight:700;white-space:nowrap}
+  @media (hover:hover){ button.opt:hover:not(:disabled):not(.sel){background:var(--highlight)} }
+  button.opt:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.opt:disabled{cursor:default}
+  /* picked, not yet judged: navy, "Your pick" */
+  button.opt.sel{background:var(--highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
+  button.opt.sel .g{background:var(--on-highlight)}
+  button.opt.sel .tg{color:var(--on-highlight)}
+  button.opt.idle:disabled{border-style:dashed;border-color:var(--line)}
+  button.opt.idle:disabled .g{border-color:var(--line)}
+  button.opt.idle:disabled .ol{color:var(--body)}
+  button.opt.ok{background:var(--ok-tint);border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
+  button.opt.ok .g{background:var(--ok);border-color:var(--ok)}
+  button.opt.ok .tg{color:var(--ok)}
+  button.opt.no{background:var(--no-tint);border-color:var(--no);box-shadow:0 0 0 1px var(--no)}
+  button.opt.no .g{background:var(--no);border-color:var(--no)}
+  button.opt.no .tg{color:var(--no)}
+
+  .side{min-width:0;display:flex;flex-direction:column;gap:10px}
+  .ask{font-size:15px;line-height:1.42;color:var(--body)}
+  .ask b{color:var(--title);font-weight:600}
+  .side button.nav{align-self:flex-start}
+  .fb{border-radius:10px;padding:9px 14px 11px;border-left:6px solid;display:flex;flex-direction:column;gap:4px}
+  .fb.ok{background:var(--ok-tint);border-color:var(--ok)}
+  .fb.no{background:var(--no-tint);border-color:var(--no)}
+  .fb .fh{display:flex;align-items:center;gap:7px;font-size:16px;font-weight:700}
+  .fb.ok .fh{color:var(--ok)}
+  .fb.no .fh{color:var(--no)}
+  .fb .fh svg.ic{width:20px;height:20px;stroke-width:2}
+  .fb .ft{font-size:14.5px;line-height:1.42;color:var(--title)}
+  .fb.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  .fb:focus{outline:none}
+
+  /* ---------- slide 4: the chart with numbers, for the screenshot ---------- */
+  .fin{display:grid;grid-template-columns:minmax(0,1fr) 262px;column-gap:20px;align-items:start;min-height:0}
+  .chart{min-width:0;display:flex;flex-direction:column;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:6px 14px 6px}
+  .ctitle{font-size:15px;font-weight:600;color:var(--title);padding:2px 0 4px;line-height:1.3}
+  .cr{display:grid;grid-template-columns:86px 66px 58px 36px minmax(0,1fr);column-gap:8px;align-items:center;
+    min-height:40px;border-top:1px solid var(--tint2)}
+  .cr.ch{min-height:26px;border-top:0}
+  .cr.ch span{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight)}
+  .cr .fn{font-size:16px;font-weight:600;color:var(--title)}
+  .ctr{text-align:center}
+  .sq{justify-self:center;width:32px;height:30px;border-radius:6px;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);color:var(--on-highlight);font-size:15px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+  .gp{justify-self:center;font-size:15px;font-weight:600;color:var(--title);font-variant-numeric:tabular-nums}
+  .chart .hc{min-height:32px;padding:3px 10px}
+  .capt{border-top:1px solid var(--tint2);padding:5px 0 0;font-size:13.5px;line-height:1.38;color:var(--body)}
   .chart.in .hc{animation:rin var(--t-reveal) var(--ease-over) both}
-  @keyframes rin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .notes{min-width:0;display:flex;flex-direction:column;gap:10px}
+  .shot{background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:0 9px 9px 0;
+    padding:9px 13px;font-size:15px;line-height:1.42;color:var(--title)}
+  .shot b{font-weight:600}
+  .fnote{font-size:14.5px;line-height:1.42;color:var(--title);border:1.5px solid var(--on-highlight);border-radius:9px;padding:8px 12px}
+  .fnote b{font-weight:600}
 
-  /* ---- slide 2: read the chart without the numbers, judged by shade ---- */
-  .board.read{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:10px 18px}
-  .board.read .how{grid-column:1/-1}
-  .qs{min-width:0;min-height:0;display:flex;flex-direction:column;gap:14px}
-  .qb{display:flex;flex-direction:column;gap:7px}
-  .qh{font-size:18px;font-weight:600;line-height:1.3;color:var(--title)}
-  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
-  button.pk{font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:40px;padding:5px 10px;
-    background:var(--bg);color:var(--title);border:1.5px solid var(--on-highlight);border-radius:8px;
-    font-size:16px;font-weight:600;text-align:left;
-    transition:background var(--t-fast) var(--ease-out)}
-  button.pk:hover:not(:disabled){background:var(--highlight)}
-  button.pk:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
-  button.pk:disabled{cursor:default}
-  button.pk .bx{flex:0 0 auto;width:18px;height:18px;border-radius:4px;border:1.5px solid var(--on-highlight);
-    background:var(--bg);color:var(--bg);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
-  button.pk .bx svg{display:block;width:12px;height:12px}
-  button.pk[aria-pressed="true"]{background:var(--highlight);box-shadow:inset 0 0 0 1.5px var(--on-highlight)}
-  button.pk[aria-pressed="true"] .bx{background:var(--on-highlight)}
-  /* After See the numbers: a right pick keeps its tick, a wrong pick gets a
-     cross on a dashed outline, and an unpicked chip stays plain. */
-  button.pk.mk-no{background:var(--bg);box-shadow:none;border-style:dashed}
-  button.pk.mk-no .bx{background:var(--bg);color:var(--on-highlight)}
-  button.pk.mk-nu .bx{background:var(--on-highlight)}
-  button.pk.mk-nu .bx i{display:block;width:6px;height:6px;border-radius:50%;background:var(--bg)}
-  button.pk:disabled:not([aria-pressed="true"]){color:var(--body)}
-  .qnote{font-size:15px;line-height:1.4;color:var(--body)}
-  .qnote b{color:var(--title);font-weight:600}
-
-  /* ---- slide 3: the numbers, and how your reading compares ---- */
-  .board.rev{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:16px;align-items:start}
-  .fbk{min-width:0;display:flex;flex-direction:column;gap:7px}
-  .fbk:focus{outline:none}
-  .fq{background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;padding:8px 13px;
-    display:flex;flex-direction:column;gap:4px}
-  .fq.miss{border-style:dashed}
-  .fq .fqh{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-highlight)}
-  .fq .fa{font-size:16px;line-height:1.35;color:var(--title)}
-  .fq .fa b{font-weight:600}
-  .fq .fy{display:flex;align-items:flex-start;gap:8px;font-size:15px;line-height:1.4;color:var(--body)}
-  .fq .fy b{color:var(--title);font-weight:600}
-  .gl{flex:0 0 auto;width:20px;height:20px;margin-top:0;border-radius:50%;border:1.5px solid var(--on-highlight);
-    color:var(--on-highlight);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
-  .gl svg{display:block;width:12px;height:12px}
-  .miss .gl{border-style:dashed}
-  .fnote{font-size:15px;line-height:1.38;color:var(--body);background:var(--tint);border-radius:8px;padding:6px 11px}
-  .fnote b{color:var(--title);font-weight:600}
-  .fend{background:var(--highlight);border-left:4px solid var(--on-highlight);border-radius:0 9px 9px 0;
-    padding:8px 13px;font-size:16px;line-height:1.38;font-weight:600;color:var(--title)}
-  .fbk.in > *{animation:rin var(--t-reveal) var(--ease-over) both}
-  /* Only when a long set of picks would push the panel past the bar. */
-  .fbk.tight{gap:5px}
-  .fbk.tight .fq{padding:5px 11px;gap:2px}
-  .fbk.tight .fq .fa{font-size:15px;line-height:1.3}
-  .fbk.tight .fq .fy,.fbk.tight .fnote{font-size:14px;line-height:1.32}
-  .fbk.tight .fnote{padding:4px 10px}
-
-  /* ---- slide 4: the clean chart, for the screenshot ---- */
-  .board.fin{gap:7px}
-  .capt{flex:0 0 auto;font-size:14px;line-height:1.4;color:var(--body)}
-  .ctitle{flex:0 0 auto;font-size:15px;font-weight:600;color:var(--title)}
-
-  /* ---- the bar ---- */
-  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:10px}
-  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+  /* the bar */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:52px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:15px;font-weight:600;padding:9px 20px;border-radius:8px;
     cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
     background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
   button.nav.ghost{background:transparent;color:var(--on-highlight)}
   button.nav:disabled{opacity:.34;cursor:not-allowed}
   button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
-  #hint{flex:1 1 auto;min-width:0;height:46px;overflow-y:auto;font-size:13px;line-height:1.36;
-    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.36;color:var(--body)}
   #hint b{color:var(--title);font-weight:600}
   /* Start again asks first, in the bar, before anything is cleared. */
-  #confirm{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--title)}
+  #confirm{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;font-size:15px;color:var(--title)}
   #confirm b{font-weight:600}
 
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* under 600px: a portrait restack, not a shrunken slide */
   @media (max-width:599px){
     body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
     #stage{width:100%!important;max-width:100%!important;min-width:0!important;
@@ -264,10 +256,10 @@
     .prog{font-size:14px;white-space:normal}
     .chip{margin-left:0;font-size:13px}
     h1{font-size:22px}
+    .lead{font-size:16px}
     .intro p{font-size:16px}
+    .board{flex:0 0 auto;gap:14px}
     .how{flex-wrap:wrap;font-size:16px;padding:10px 12px}
-    .how .sc{font-size:15px}
-    .board.read,.board.rev{display:flex;flex-direction:column;gap:14px}
     .grid{padding:4px 12px}
     .gr{grid-template-columns:1fr 1fr;row-gap:8px;padding:10px 0}
     .gr .fname{grid-column:1/-1}
@@ -277,32 +269,24 @@
     .pcap{display:block}
     .seg{gap:4px}
     .seg label{width:auto;flex:1 1 0;min-width:0;height:40px;font-size:17px}
-    .chart{padding:4px 12px 6px}
-    /* With numbers showing, each row is two lines on a phone: the name and
-       its three numbers, then the status bar at full width, so its label
-       stays on one line and every heading has room. */
-    .chart.num .cr,.chart.fin .cr{grid-template-columns:minmax(0,1fr) 60px 54px 34px;column-gap:6px;row-gap:6px;
-      min-height:0;padding:9px 0}
-    .chart.num .cr .hc,.chart.fin .cr .hc{grid-column:1/-1}
-    .chart.num .cr.ch,.chart.fin .cr.ch{padding:6px 0}
-    .chart.num .cr.ch span:last-child,.chart.fin .cr.ch span:last-child{display:none}
-    .chart.num .cr.ch span,.chart.fin .cr.ch span{font-size:12px;letter-spacing:0}
-    .chart.num .hc,.chart.fin .hc{height:auto;min-height:34px}
-    .chart.hid .cr{grid-template-columns:86px minmax(0,1fr);min-height:52px}
-    .cr .fn{font-size:15px}
-    .sq{width:30px}
-    .hc{white-space:normal;height:auto;min-height:38px;padding:4px 10px;font-size:15px;line-height:1.25}
-    .chips{grid-template-columns:repeat(2,minmax(0,1fr))}
-    button.pk{min-height:46px;font-size:16px}
-    .qh{font-size:17px}
-    .qnote,.fnote,.fq .fy{font-size:16px;line-height:1.5}
-    .fq .fa{font-size:17px}
-    .fend{font-size:16px}
+    .q,.fin{display:flex;flex-direction:column;gap:14px}
+    button.opt{grid-template-columns:28px minmax(0,1fr);row-gap:8px;padding:10px 12px}
+    button.opt .hc{grid-column:1/-1}
+    button.opt .om{font-size:15px}
+    .ask{font-size:16px}
+    .side button.nav{align-self:stretch}
+    .fb .ft{font-size:15.5px}
+    .fb{scroll-margin:16px}
+    .cr{grid-template-columns:minmax(0,1fr) 66px 58px 36px;column-gap:6px;row-gap:6px;padding:8px 0}
+    .cr .hc{grid-column:1/-1}
+    .cr.ch{padding:4px 0}
+    .cr.ch span:last-child{display:none}
+    .shot,.fnote{font-size:16px;line-height:1.5}
     .capt{font-size:14px}
     button.jump{font-size:16px}
     .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
     button.nav{font-size:16px;padding:13px 20px}
-    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+    #hint{font-size:15px;flex:1 1 100%;margin-top:4px}
     #hint .kb{display:none}
     #confirm{flex:1 1 100%;flex-wrap:wrap;font-size:16px}
     #confq{flex:1 1 100%}
@@ -319,8 +303,8 @@
   <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Put in your twelve scores">
 
     <div class="top">
-      <span class="prog" id="prog">1 of 4</span>
-      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="prog" id="prog"></span>
+      <span class="dots" id="segs" aria-hidden="true"></span>
       <span class="chip" id="chip" hidden></span>
     </div>
 
@@ -330,14 +314,14 @@
 
     <div class="bar">
       <button class="nav ghost" id="back" type="button">Back</button>
-      <button class="nav" id="next" type="button">Continue</button>
-      <button class="nav ghost" id="again" type="button">Start again</button>
+      <button class="nav" id="next" type="button">Next</button>
+      <button class="nav ghost" id="again" type="button" hidden>Start again</button>
       <div id="confirm" role="group" aria-labelledby="confq" hidden>
         <b id="confq">Clear all my scores?</b>
         <button class="nav" id="confyes" type="button">Yes, clear them</button>
         <button class="nav ghost" id="confno" type="button">Keep them</button>
       </div>
-      <div id="hint" role="status" aria-live="polite"></div>
+      <div id="hint"></div>
     </div>
 
     <div class="sr" id="live" role="status" aria-live="polite"></div>
@@ -348,15 +332,14 @@
   <style>
     #stage{display:none!important}
     html,body{height:auto}
-    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
-    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    body{display:block!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 16px 48px;font-size:17px;line-height:1.55;color:#484646}
     .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
-    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf h3{font-size:18px;color:#1C1B1B;margin:22px 0 6px}
     .nsf p{margin-bottom:12px}
-    .nsf ol,.nsf ul{margin:0 0 12px 22px}
-    .nsf li{margin-bottom:6px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:8px}
     .nsf strong{color:#1C1B1B}
-    .nsf a{color:#001D69}
   </style>
   <div class="nsf">
     <h2>Build your heatmap</h2>
@@ -381,20 +364,28 @@
 (function(){
   "use strict";
 
+  var IC = {
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    x:'<path d="M7 7l10 10M17 7L7 17"/>',
+    okc:'<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8 5.4-5.6"/>',
+    noc:'<circle cx="12" cy="12" r="9"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/>',
+    book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15.5H5.5A1.5 1.5 0 0 0 4 21z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15.5h5.5A1.5 1.5 0 0 1 20 21z"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
+
   /* ---------------- content ----------------
      Function names: verbatim from the Profile tab of CSF profile
-     template.xlsx (SME drop 2026-09-25). The "What it covers" line under
-     each name was cut on 8 Oct 2026 to keep slide 1 to what the student
-     copies: the name and two numbers.
-     The 0 to 4 scale: verbatim from its "The scale" tab.
-     Status labels and shading rules: module-09-internal.md, Build note. */
+     template.xlsx (SME drop 2026-09-25). The 0 to 4 scale: verbatim from its
+     "The scale" tab. Status labels and shading rules: module-09-internal.md,
+     Build note. short: the plain line under each option, ours, from the
+     NIST CSF 2.0 function definitions, matching vciso-p3-m6-six-words-three-problems.html. */
   var FUNCS = [
-    { id:"gv", name:"Govern" },
-    { id:"id", name:"Identify" },
-    { id:"pr", name:"Protect" },
-    { id:"de", name:"Detect" },
-    { id:"rs", name:"Respond" },
-    { id:"rc", name:"Recover" }
+    { id:"gv", name:"Govern",   short:"Who is in charge, and the rules" },
+    { id:"id", name:"Identify", short:"Knowing what you have" },
+    { id:"pr", name:"Protect",  short:"Safeguards, like locks" },
+    { id:"de", name:"Detect",   short:"Noticing when something goes wrong" },
+    { id:"rs", name:"Respond",  short:"Acting when something goes wrong" },
+    { id:"rc", name:"Recover",  short:"Getting back to normal" }
   ];
   var SCALE = [
     "Not done at all",
@@ -405,31 +396,66 @@
   ];
   /* The four shades. Band 0 holds both "at target" and "above target",
      band 3 holds gaps of 3 and 4: the spec draws each pair the same way,
-     so the questions are judged by shade, and the wording says so. */
+     so the questions are judged by shade. */
   var BAND_WORDS = ["at or above target", "one step short", "two steps short", "three or more steps short"];
-  var END_LINE = "Press Continue to get a clean chart for your screenshot.";
-  var SHOT_LINE = "Take a screenshot of just this chart and paste it on the Profile tab, under the table. On a Mac, press Cmd+Ctrl+Shift+4. On Windows, press Windows+Shift+S. Then drag a box around the chart.";
+  var SHOT_LINE = "Take a screenshot of just the chart and paste it on the Profile tab, under the table. On a Mac, press <b>Cmd+Ctrl+Shift+4</b>. On Windows, press <b>Windows+Shift+S</b>. Then drag a box around the chart.";
   var DONE_LINE = "You are done here. Go back to the module for the next step.";
 
+  /* The two questions. far: the darkest shade is right. */
+  var Q = {
+    pa:{ far:true,  q:"Which functions do you think are furthest behind?", end:"darkest" },
+    pb:{ far:false, q:"Which functions do you think are closest to their target?", end:"lightest" }
+  };
+
   var S = [
-    { id:"scores", kind:"scores", label:"Your scores",        h1:"Put in your twelve scores" },
-    { id:"read",   kind:"read",   label:"Read the chart",     h1:"Read your chart without the numbers" },
-    { id:"check",  kind:"check",  label:"Check yourself",     h1:"Here are the numbers behind the colors" },
-    { id:"final",  kind:"final",  label:"Your heatmap",       h1:"Your gap heatmap" }
+    { kind:"scores", label:"Your scores",       h1:"Put in your twelve scores" },
+    { kind:"q", qk:"pa", label:"Furthest behind",   h1:Q.pa.q },
+    { kind:"q", qk:"pb", label:"Closest to target", h1:Q.pb.q },
+    { kind:"final", label:"Your heatmap",        h1:"Here are the numbers behind your colors" }
   ];
 
+  /* data validation, at load, loud */
+  (function validate(){
+    var p = [];
+    if(FUNCS.length !== 6) p.push("expected six functions");
+    if(SCALE.length !== 5) p.push("expected a 0 to 4 scale");
+    FUNCS.forEach(function(f){ if(!f.short) p.push(f.id + " has no plain line"); });
+    if(p.length){
+      document.getElementById("board").innerHTML = '<p class="lead"><b>This interactive has authoring errors:</b> ' + p.join("; ") + "</p>";
+      throw new Error("data invalid: " + p.join("; "));
+    }
+  })();
+
   /* ---------------- state ----------------
-     Everything a student enters lives in the page. A copy is kept in
-     localStorage so the chart is still there when they come back for the
-     screenshot; if storage is blocked, the deck works the same without it. */
-  var KEY = "vciso-p3-m9-build-your-heatmap-v1";
+     A copy is kept in localStorage so the chart is still there when the
+     student comes back for the screenshot; if storage is blocked, the
+     interactive works the same without it. */
+  var KEY = "vciso-p3-m9-build-your-heatmap-v2";
+  function freshQ(){ return { sel:{}, out:{}, tries:0, done:null }; }
   function fresh(){
-    var o = { cur:{}, tgt:{}, built:false, checked:false, pa:{}, pb:{}, slide:0 };
+    var o = { cur:{}, tgt:{}, built:false, pa:freshQ(), pb:freshQ() };
     FUNCS.forEach(function(f){ o.cur[f.id] = null; o.tgt[f.id] = null; });
     return o;
   }
   function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
   function okScore(v){ return v === 0 || v === 1 || v === 2 || v === 3 || v === 4; }
+  function fOf(id){ for(var k=0;k<FUNCS.length;k++) if(FUNCS[k].id === id) return FUNCS[k]; return null; }
+  function filled(o){
+    var n = 0;
+    FUNCS.forEach(function(f){ if(okScore(o.cur[f.id])) n++; if(okScore(o.tgt[f.id])) n++; });
+    return n;
+  }
+  function loadQ(r){
+    var q = freshQ();
+    if(!isPlain(r)) return q;
+    ["sel","out","lastOut","kept"].forEach(function(k){
+      if(k === "lastOut" || k === "kept") q[k] = {};
+      if(isPlain(r[k])) FUNCS.forEach(function(f){ if(r[k][f.id] === 1) q[k][f.id] = 1; });
+    });
+    if(r.tries === 1 || r.tries === 2) q.tries = r.tries;
+    if(r.done === "right" || r.done === "shown" || r.done === "read") q.done = r.done;
+    return q;
+  }
   function load(){
     var o = fresh();
     try{
@@ -441,55 +467,23 @@
       });
       if(filled(o) === 12 && raw.built === true){
         o.built = true;
-        FUNCS.forEach(function(f){
-          if(isPlain(raw.pa) && raw.pa[f.id] === 1) o.pa[f.id] = 1;
-          if(isPlain(raw.pb) && raw.pb[f.id] === 1) o.pb[f.id] = 1;
-        });
-        o.checked = raw.checked === true && Object.keys(o.pa).length > 0 && Object.keys(o.pb).length > 0;
-        if(raw.slide === 1) o.slide = 1;
+        o.pa = loadQ(raw.pa);
+        o.pb = o.pa.done ? loadQ(raw.pb) : freshQ();
       }
     }catch(e){}
     return o;
   }
-  /* Where a returning student lands: on the clean chart once they have
-     seen the numbers, so the screenshot is one step away; otherwise on the
-     slide they left, if it is still open to them. */
-  function startSlide(o){
-    if(o.checked) return 3;
-    if(o.built) return o.slide === 1 ? 1 : 0;
-    return 0;
-  }
   function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
-  function filled(o){
-    var n = 0;
-    FUNCS.forEach(function(f){ if(okScore(o.cur[f.id])) n++; if(okScore(o.tgt[f.id])) n++; });
-    return n;
-  }
   var st = load();
+  /* A returning student lands on the furthest slide still open to them. */
+  function startSlide(o){
+    if(!o.built) return 0;
+    if(o.pb.done) return 3;
+    if(o.pa.done) return 2;
+    return 1;
+  }
 
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var GLYPH = {
-    ok:'<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 8.6l3.3 3.1L13 4.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    out:'<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'
-  };
-
-  /* Data validation, at load, loud. */
-  (function validate(){
-    var problems = [], ids = {};
-    S.forEach(function(s, n){
-      if(!s.id) problems.push("slide " + (n+1) + " has no id");
-      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
-      ids[s.id] = 1;
-    });
-    if(FUNCS.length !== 6) problems.push("expected six functions");
-    if(SCALE.length !== 5) problems.push("expected a 0 to 4 scale");
-    if(problems.length){
-      document.getElementById("board").innerHTML =
-        '<div class="intro"><p><b>This deck has authoring errors:</b> ' + problems.join("; ") + "</p></div>";
-      throw new Error("deck data invalid: " + problems.join("; "));
-    }
-  })();
-
   var el = {
     frame:document.getElementById("frame"), prog:document.getElementById("prog"),
     segs:document.getElementById("segs"), chip:document.getElementById("chip"),
@@ -502,8 +496,9 @@
   var i = startSlide(st);
   var changedNote = false;   /* a score changed after the chart was built */
 
-  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-  function say(m){ el.live.textContent = m; }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
+  function phone(){ return window.matchMedia("(max-width:599px)").matches; }
 
   /* ---------------- the arithmetic ----------------
      Gap = target minus current (module-09-internal.md source trace). */
@@ -516,281 +511,13 @@
     if(g === 2) return "Two steps short";
     return "Three or more steps short";
   }
-  /* A plain number for a gap. Only a gap below 0 carries a sign. */
   function fmtGap(g){ return g < 0 ? "−" + (-g) : String(g); }
   function names(list){
     var n = list.map(function(f){ return f.name; });
     if(n.length < 2) return n.join("");
     return n.slice(0, -1).join(", ") + " and " + n[n.length-1];
   }
-  function bands(){
-    var out = {};
-    FUNCS.forEach(function(f){ out[f.id] = band(gap(f)); });
-    return out;
-  }
-  /* The right set for each question, from the student's own scores. Ties:
-     every function in the furthest (or closest) shade is right. */
-  function answerSets(){
-    var b = bands(), vals = FUNCS.map(function(f){ return b[f.id]; });
-    var hi = Math.max.apply(null, vals), lo = Math.min.apply(null, vals);
-    return {
-      hi:hi, lo:lo, same:(hi === lo),
-      far:FUNCS.filter(function(f){ return b[f.id] === hi; }),
-      near:FUNCS.filter(function(f){ return b[f.id] === lo; })
-    };
-  }
-
-  /* ---------------- chrome ---------------- */
-  function header(){
-    var s = S[i];
-    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
-    var h = "";
-    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
-    el.segs.innerHTML = h;
-
-    el.back.disabled = (i === 0);
-    /* As in the Step 1 decks: Start again shows only on the last slide, and
-       the last slide has no Continue, just a line saying where to go. */
-    var end = (i === S.length-1);
-    el.again.hidden = !end || !el.confirm.hidden;
-    el.again.disabled = filled(st) === 0;
-    el.next.hidden = end;
-    if(end){ el.next.disabled = true; }
-    else {
-      el.next.textContent = "Continue";
-      if(s.kind === "scores") el.next.disabled = !st.built;
-      else if(s.kind === "read") el.next.disabled = !st.checked;
-      else el.next.disabled = !st.checked;
-    }
-    if(s.kind === "read" && st.built){ el.chip.hidden = false; el.chip.textContent = "Numbers hidden"; }
-    else if((s.kind === "check" || s.kind === "final") && st.checked){ el.chip.hidden = false; el.chip.textContent = "Numbers showing"; }
-    else { el.chip.hidden = true; el.chip.textContent = ""; }
-  }
-
-  function render(focusSel){
-    var s = S[i];
-    askClear(false);
-    if(st.slide !== i){ st.slide = i; save(st); }
-    document.body.className = "t" + (i+1);
-    el.h1.textContent = s.h1;
-    el.frame.setAttribute("aria-label", s.h1);
-    if(s.kind === "scores") renderScores(focusSel);
-    else if(s.kind === "read") renderRead(focusSel);
-    else if(s.kind === "check") renderCheck();
-    else if(s.kind === "final") renderFinal();
-    else {
-      el.board.className = "board";
-      el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
-    }
-    header();
-  }
-
-  function gate(msg, btn, to){
-    el.board.className = "board";
-    el.board.innerHTML = '<div class="intro"><p>' + msg + '</p><button class="jump" type="button" id="gate">' + esc(btn) + "</button></div>";
-    el.board.querySelector("#gate").addEventListener("click", function(){ i = to; render(); toTop(); });
-    el.hint.textContent = "";
-  }
-
-  /* ---------------- slide 1: your twelve scores ---------------- */
-  var SCORES_HINT = 'Click a number to pick it. <span class="kb">On a keyboard, use Tab and the arrow keys.</span>';
-  function scoreHint(v){
-    el.hint.innerHTML = "<span><b>Score " + v + ".</b> " + esc(SCALE[v]) + "</span>";
-  }
-  function restHint(){
-    if(changedNote && !st.built) el.hint.innerHTML = "<span><b>You changed a score.</b> Press <b>Build</b> to make the chart again.</span>";
-    else el.hint.innerHTML = "<span>" + SCORES_HINT + "</span>";
-  }
-
-  function segHTML(f, which){
-    var v = st[which][f.id];
-    var nm = "s-" + which + "-" + f.id;
-    var lab = f.name + ", " + (which === "cur" ? "current" : "target") + " score";
-    var h = '<fieldset class="seg"><legend>' + esc(lab) + "</legend>";
-    for(var n=0;n<=4;n++){
-      var id = nm + "-" + n;
-      h += '<input type="radio" name="' + nm + '" id="' + id + '" value="' + n + '" data-f="' + f.id + '" data-w="' + which + '"' + (v === n ? " checked" : "") + ">" +
-           '<label for="' + id + '" data-v="' + n + '" aria-label="' + n + ". " + esc(SCALE[n]) + '">' + n + "</label>";
-    }
-    return h + "</fieldset>";
-  }
-
-  function renderScores(focusSel){
-    var n = filled(st);
-    el.board.className = "board";
-    var how = '<div class="how"><span class="ht">Copy the Current and Target scores from your profile. Then press <b>Build</b>.</span>' +
-      '<span class="sc" id="cnt">' + n + " of 12 filled</span>" +
-      '<button class="nav" id="build" type="button"' + (n === 12 ? "" : " disabled") + ">Build</button></div>";
-    var rows = '<div class="gr gh"><span class="ghf">Function</span>' +
-      "<span>Current</span>" +
-      "<span>Target</span></div>";
-    FUNCS.forEach(function(f){
-      rows += '<div class="gr"><div class="fname"><b>' + esc(f.name) + "</b></div>" +
-        '<div class="pc"><span class="pcap" aria-hidden="true">Current</span>' + segHTML(f, "cur") + "</div>" +
-        '<div class="pc"><span class="pcap" aria-hidden="true">Target</span>' + segHTML(f, "tgt") + "</div></div>";
-    });
-    el.board.innerHTML = how + '<div class="grid">' + rows + "</div>";
-    wireScores();
-    restHint();
-    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
-  }
-
-  function wireScores(){
-    Array.prototype.forEach.call(el.board.querySelectorAll(".seg input"), function(inp){
-      inp.addEventListener("change", function(){
-        setScore(inp.dataset.f, inp.dataset.w, +inp.value);
-      });
-      inp.addEventListener("focus", function(){ scoreHint(+inp.value); });
-      inp.addEventListener("blur", function(){ restHint(); });
-    });
-    Array.prototype.forEach.call(el.board.querySelectorAll(".seg label"), function(lb){
-      lb.addEventListener("mouseenter", function(){ scoreHint(+lb.dataset.v); });
-      lb.addEventListener("mouseleave", function(){ restHint(); });
-    });
-    var b = el.board.querySelector("#build");
-    if(b) b.addEventListener("click", build);
-  }
-
-  function setScore(fid, which, v){
-    if(!okScore(v) || !(fid in st[which])) return;
-    if(st[which][fid] === v) return;
-    st[which][fid] = v;
-    if(st.built){
-      st.built = false; st.checked = false; st.pa = {}; st.pb = {};
-      changedNote = true;
-      restHint();
-    }
-    save(st);
-    var n = filled(st);
-    var cnt = el.board.querySelector("#cnt"), b = el.board.querySelector("#build");
-    if(cnt) cnt.textContent = n + " of 12 filled";
-    if(b) b.disabled = n !== 12;
-    header();
-    say(FUNCS.filter(function(f){ return f.id === fid; })[0].name + ", " + (which === "cur" ? "current" : "target") + ": " + v + ". " + n + " of 12 filled.");
-  }
-
-  function build(){
-    if(filled(st) !== 12) return;
-    /* Built already and no score has changed since: keep the answers. */
-    if(st.built){
-      i = 1; render(); toTop();
-      say("Slide 2 of " + S.length + ". " + S[1].h1 + ".");
-      return;
-    }
-    st.built = true; st.checked = false; st.pa = {}; st.pb = {};
-    changedNote = false;
-    save(st);
-    i = 1; render(); toTop();
-    say("Chart built. Slide 2 of " + S.length + ". " + S[1].h1 + ".");
-  }
-
-  /* ---------------- the chart ---------------- */
-  function cellHTML(f){
-    var g = gap(f), b = band(g), lb = esc(label(g));
-    return '<div class="hc h' + b + '"><span class="lb">' + lb + "</span></div>";
-  }
-  function chartHTML(mode, anim){
-    var cls = "chart " + (mode === "hidden" ? "hid" : mode === "final" ? "fin" : "num") + (anim ? " in" : "");
-    var h = '<div class="' + cls + '">';
-    if(mode === "hidden"){
-      h += '<div class="cr ch"><span>Function</span><span>How far from target</span></div>';
-      FUNCS.forEach(function(f){
-        h += '<div class="cr"><span class="fn">' + esc(f.name) + "</span>" + cellHTML(f) + "</div>";
-      });
-    } else {
-      /* On the last slide the title and caption sit inside the chart's own
-         box, so "screenshot just the chart" means one bordered block. */
-      if(mode === "final") h += '<div class="ctitle">Cumberland Claims Services: current and target profile</div>';
-      h += '<div class="cr ch"><span>Function</span><span class="ctr">Current</span><span class="ctr">Target</span><span class="ctr">Gap</span><span>Status</span></div>';
-      FUNCS.forEach(function(f){
-        h += '<div class="cr"><span class="fn">' + esc(f.name) + "</span>" +
-          '<span class="sq">' + st.cur[f.id] + "</span>" +
-          '<span class="sq">' + st.tgt[f.id] + "</span>" +
-          '<span class="gp">' + fmtGap(gap(f)) + "</span>" + cellHTML(f) + "</div>";
-      });
-      if(mode === "final") h += '<p class="capt">Scored 0 to 4 against the six functions of NIST CSF 2.0. Gap is the target minus the current score.</p>';
-    }
-    return h + "</div>";
-  }
-
-  /* ---------------- slide 2: read the chart without the numbers ---------------- */
-  var QA = { key:"pa", q:"Which functions do you think are furthest behind?" };
-  var QB = { key:"pb", q:"Which functions do you think are closest to their target?" };
-
-  /* Once the numbers have been seen, each pick is marked: "ok" right, "no"
-     not one of them, "nu" neutral when every row is in one shade and there
-     is no furthest or closest to be right about. A tick never sits on a
-     wrong pick. */
-  function markOf(Q, f){
-    if(!st.checked || st[Q.key][f.id] !== 1) return "";
-    var a = answerSets();
-    if(a.same) return "nu";
-    var right = Q.key === "pa" ? a.far : a.near;
-    return right.some(function(x){ return x.id === f.id; }) ? "ok" : "no";
-  }
-  var MARK_SR = { ok:", picked, right", no:", picked, not one of them", nu:", picked" };
-
-  function chipsHTML(Q){
-    var locked = st.checked;
-    return '<div class="qb" role="group" aria-label="' + esc(Q.q) + '"><div class="qh">' + esc(Q.q) + '</div><div class="chips">' +
-      FUNCS.map(function(f){
-        var on = st[Q.key][f.id] === 1, mk = markOf(Q, f);
-        var box = !on ? "" : (mk === "no" ? GLYPH.out : (mk === "nu" ? "<i></i>" : GLYPH.ok));
-        return '<button class="pk' + (mk ? " mk-" + mk : "") + '" type="button" data-q="' + Q.key + '" data-f="' + f.id + '" aria-pressed="' + on + '"' + (locked ? " disabled" : "") + ">" +
-          '<span class="bx" aria-hidden="true">' + box + "</span>" + esc(f.name) +
-          (mk ? '<span class="sr">' + esc(MARK_SR[mk]) + "</span>" : "") + "</button>";
-      }).join("") + "</div></div>";
-  }
-
-  function readyToCheck(){ return Object.keys(st.pa).length > 0 && Object.keys(st.pb).length > 0; }
-
-  function renderRead(focusSel){
-    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first. Your chart shows up here.", "Go to your scores", 0); return; }
-    el.board.className = "board read";
-    var ready = readyToCheck();
-    var how = '<div class="how"><span class="ht">Here is your chart with the numbers hidden. The darker the row, the further that function is from its target.</span>' +
-      (st.checked ? '<span class="sc">Your picks are marked.</span>'
-                  : '<button class="nav" id="chk" type="button"' + (ready ? "" : " disabled") + ">See the numbers</button>") + "</div>";
-    var qs = '<div class="qs">' + chipsHTML(QA) + chipsHTML(QB) +
-      '<p class="qnote">You can pick more than one. Rows in the same shade are tied.</p></div>';
-    el.board.innerHTML = how + chartHTML("hidden", false) + qs;
-    if(!st.checked){
-      Array.prototype.forEach.call(el.board.querySelectorAll("button.pk"), function(b){
-        b.addEventListener("click", function(){ togglePick(b.dataset.q, b.dataset.f); });
-      });
-      var c = el.board.querySelector("#chk");
-      if(c) c.addEventListener("click", check);
-    }
-    if(st.checked) el.hint.innerHTML = answerSets().same
-      ? "<span>Every row is in one shade, so no pick is marked right or wrong.</span>"
-      : "<span>A tick means a right pick. A cross means it is not one of them.</span>";
-    else if(ready) el.hint.innerHTML = "<span>Press <b>See the numbers</b> to check yourself.</span>";
-    else el.hint.innerHTML = "<span>Pick at least one function for each question. Then press <b>See the numbers</b>.</span>";
-    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
-  }
-
-  function togglePick(q, fid){
-    if(st.checked || !st.built || (q !== "pa" && q !== "pb")) return;
-    if(st[q][fid] === 1) delete st[q][fid]; else st[q][fid] = 1;
-    save(st);
-    renderRead('button.pk[data-q="' + q + '"][data-f="' + fid + '"]');
-    header();
-    var f = FUNCS.filter(function(x){ return x.id === fid; })[0];
-    say(f.name + (st[q][fid] === 1 ? " picked." : " not picked."));
-  }
-
-  /* See the numbers: locks the picks and goes straight to slide 3. */
-  function check(){
-    if(!st.built || !readyToCheck()) return;
-    st.checked = true;
-    save(st);
-    i = 2; render(); toTop();
-    var fb = el.board.querySelector("#fbk");
-    if(fb){ try{ fb.focus({preventScroll:true}); }catch(e){ fb.focus(); } }
-    say("Slide 3 of " + S.length + ". " + S[2].h1 + ".");
-  }
-
-  /* ---------------- slide 3: the numbers, and your reading ---------------- */
+  function isAre(list){ return list.length === 1 ? " is " : " are "; }
   /* How a set of functions in one shade is described. Band 0 says "at
      target" or "above target" when every function in it is the same. */
   function words(list){
@@ -801,127 +528,292 @@
     if(at === 0) return "above target";
     return BAND_WORDS[0];
   }
-  function pickedText(list){ return list.length === 6 ? "You picked all six." : "You picked " + names(list) + "."; }
-  function pickedOf(Q){ return FUNCS.filter(function(f){ return st[Q.key][f.id] === 1; }); }
+  /* The right set for each question, from the student's own scores. Ties:
+     every function in the furthest (or closest) shade is right. */
+  function answerSets(){
+    var vals = FUNCS.map(function(f){ return band(gap(f)); });
+    var hi = Math.max.apply(null, vals), lo = Math.min.apply(null, vals);
+    return {
+      hi:hi, lo:lo, same:(hi === lo),
+      pa:FUNCS.filter(function(f){ return band(gap(f)) === hi; }),
+      pb:FUNCS.filter(function(f){ return band(gap(f)) === lo; })
+    };
+  }
+  function rightSet(qk){ return answerSets()[qk]; }
+  function inSet(list, f){ return list.some(function(x){ return x.id === f.id; }); }
 
-  /* The verdict on one question, built from the student's own picks. Right
-     picks are credited by name even when other picks are wrong, and every
-     wrong pick gets its shade as the reason. */
-  function verdict(Q, right){
-    var picked = pickedOf(Q);
-    var rightIds = {}; right.forEach(function(f){ rightIds[f.id] = 1; });
-    var hit = picked.filter(function(f){ return rightIds[f.id]; });
-    var extra = picked.filter(function(f){ return !rightIds[f.id]; });
-    var missing = right.filter(function(f){ return st[Q.key][f.id] !== 1; });
-    var you = esc(pickedText(picked));
-    if(extra.length){
-      /* The chart beside this panel shows each row's status, so a wrong
-         pick is named, not explained again. */
-      var credit = hit.length ? " <b>" + esc(names(hit)) + (hit.length === 1 ? " is" : " are") + " right.</b>" : "";
-      var why = hit.length
-        ? " " + esc(names(extra)) + (extra.length === 1 ? " is not one of them." : " are not among them.")
-        : (extra.length === 1 ? " That is not one of them." : " Those are not among them.");
-      var rest = (hit.length && missing.length) ? " You missed " + esc(names(missing)) + "." : "";
-      return { ok:false, txt:you + credit + why + rest };
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k === i ? "here" : k < i ? "on" : "") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    var end = (i === S.length - 1);
+    el.next.hidden = end;
+    el.again.hidden = !end || !el.confirm.hidden;
+    el.again.disabled = filled(st) === 0;
+    if(!end){
+      if(s.kind === "scores") el.next.disabled = !st.built;
+      else el.next.disabled = !(st.built && st[s.qk].done);
     }
-    if(missing.length){
-      return { ok:true, txt:you + " <b>" + (hit.length === 1 ? "That is" : "They are") + " right.</b> " + esc(names(missing)) +
-        (missing.length === 1 ? " is" : " are") + " in the same shade, so " + (missing.length === 1 ? "it counts" : "they count") + " too." };
-    }
-    return { ok:true, txt:you + " <b>You got it.</b>" };
+    if(s.kind === "q" && st.built){ el.chip.hidden = false; el.chip.textContent = "Numbers hidden"; }
+    else if(s.kind === "final" && st.built && st.pb.done){ el.chip.hidden = false; el.chip.textContent = "Numbers showing"; }
+    else { el.chip.hidden = true; el.chip.textContent = ""; }
   }
 
-  function blockHTML(head, Q, set){
-    var v = verdict(Q, set);
-    var each = set.length === 1 ? " It is " : (set.length === 2 ? " Both are " : " Each one is ");
-    var ans = "Did you pick <b>" + esc(names(set)) + "</b>? That is the right answer." + each + esc(words(set)) + ".";
-    return '<div class="fq' + (v.ok ? "" : " miss") + '"><div class="fqh">' + esc(head) + '</div>' +
-      '<div class="fa">' + ans + "</div>" +
-      '<div class="fy"><span class="gl" aria-hidden="true">' + (v.ok ? GLYPH.ok : GLYPH.out) + "</span><span>" +
-      '<span class="sr">' + (v.ok ? "Right. " : "Not all right. ") + "</span>" + v.txt + "</span></div></div>";
+  function render(focusSel){
+    var s = S[i];
+    askClear(false);
+    el.h1.textContent = s.h1;
+    el.frame.setAttribute("aria-label", s.h1);
+    el.hint.innerHTML = "";
+    if(s.kind === "scores") renderScores(focusSel);
+    else if(s.kind === "q") renderQ(s.qk, focusSel);
+    else renderFinal();
+    header();
   }
 
-  /* Every row in one shade: no tick and no cross, just what they picked. */
-  function sameBlockHTML(a){
-    var head, ans;
-    if(a.hi === 0){
-      head = "Nothing is behind";
-      ans = "Every function is at or above its target.";
+  function gate(msg, btn, to){
+    el.board.innerHTML = '<div class="intro"><p>' + msg + '</p><button class="jump" type="button" id="gate">' + esc(btn) + "</button></div>";
+    el.board.querySelector("#gate").addEventListener("click", function(){ i = to; render(); focusTop(); });
+  }
+
+  /* ---------------- slide 1: your twelve scores ---------------- */
+  var SCORES_HINT = 'Click a number to pick it.<span class="kb"> On a keyboard, use Tab and the arrow keys.</span>';
+  function scoreHint(v){ el.hint.innerHTML = "<b>Score " + v + ".</b> " + esc(SCALE[v]); }
+  function restHint(){
+    if(changedNote && !st.built) el.hint.innerHTML = "<b>You changed a score.</b> Press <b>Build</b> to make the chart again.";
+    else el.hint.innerHTML = SCORES_HINT;
+  }
+  function segHTML(f, which){
+    var v = st[which][f.id];
+    var nm = "s-" + which + "-" + f.id;
+    var lab = f.name + ", " + (which === "cur" ? "current" : "target") + " score";
+    var h = '<fieldset class="seg"><legend>' + esc(lab) + "</legend>";
+    for(var n=0;n<=4;n++){
+      var id = nm + "-" + n;
+      h += '<input type="radio" name="' + nm + '" id="' + id + '" value="' + n + '" data-f="' + f.id + '" data-w="' + which + '"' + (v === n ? " checked" : "") + ">"
+        + '<label for="' + id + '" data-v="' + n + '" aria-label="' + n + ". " + esc(SCALE[n]) + '">' + n + "</label>";
+    }
+    return h + "</fieldset>";
+  }
+  function renderScores(focusSel){
+    var n = filled(st);
+    var how = '<div class="how"><span class="ht">Copy the Current and Target scores from your profile. Then press <b>Build</b>.</span>'
+      + '<span class="sc" id="cnt">' + n + " of 12 filled</span>"
+      + '<button class="nav" id="build" type="button"' + (n === 12 ? "" : " disabled") + ">Build</button></div>";
+    var rows = '<div class="gr gh"><span>Function</span><span>Current</span><span>Target</span></div>';
+    FUNCS.forEach(function(f){
+      rows += '<div class="gr"><div class="fname"><b>' + esc(f.name) + "</b></div>"
+        + '<div class="pc"><span class="pcap" aria-hidden="true">Current</span>' + segHTML(f, "cur") + "</div>"
+        + '<div class="pc"><span class="pcap" aria-hidden="true">Target</span>' + segHTML(f, "tgt") + "</div></div>";
+    });
+    el.board.innerHTML = how + '<div class="grid">' + rows + "</div>";
+    Array.prototype.forEach.call(el.board.querySelectorAll(".seg input"), function(inp){
+      inp.addEventListener("change", function(){ setScore(inp.dataset.f, inp.dataset.w, +inp.value); });
+      inp.addEventListener("focus", function(){ scoreHint(+inp.value); });
+      inp.addEventListener("blur", function(){ restHint(); });
+    });
+    Array.prototype.forEach.call(el.board.querySelectorAll(".seg label"), function(lb){
+      lb.addEventListener("mouseenter", function(){ scoreHint(+lb.dataset.v); });
+      lb.addEventListener("mouseleave", function(){ restHint(); });
+    });
+    el.board.querySelector("#build").addEventListener("click", build);
+    restHint();
+    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
+  }
+  function setScore(fid, which, v){
+    if(!okScore(v) || !(fid in st[which])) return;
+    if(st[which][fid] === v) return;
+    st[which][fid] = v;
+    if(st.built){
+      st.built = false; st.pa = freshQ(); st.pb = freshQ();
+      changedNote = true;
+      restHint();
+    }
+    save(st);
+    var n = filled(st);
+    var cnt = el.board.querySelector("#cnt"), b = el.board.querySelector("#build");
+    if(cnt) cnt.textContent = n + " of 12 filled";
+    if(b) b.disabled = n !== 12;
+    header();
+    say(fOf(fid).name + ", " + (which === "cur" ? "current" : "target") + ": " + v + ". " + n + " of 12 filled.");
+  }
+  function build(){
+    if(filled(st) !== 12) return;
+    if(!st.built){
+      st.built = true; st.pa = freshQ(); st.pb = freshQ();
+      changedNote = false;
+      save(st);
+    }
+    i = 1; render(); focusTop();
+    say("Chart built. " + el.prog.textContent + ". " + S[1].h1);
+  }
+
+  /* ---------------- slides 2 and 3: one question each ---------------- */
+  function cellHTML(f, hide){
+    return '<span class="hc h' + band(gap(f)) + '"' + (hide ? ' aria-hidden="true"' : "") + '><span class="lb">' + esc(label(gap(f))) + "</span></span>";
+  }
+  function optHTML(f, cls, ico, tag, disabled, pressed){
+    return '<button class="opt' + (cls ? " " + cls : "") + '" type="button" data-f="' + f.id + '"'
+      + (disabled ? ' disabled aria-disabled="true"' : ' aria-pressed="' + (pressed ? "true" : "false") + '"')
+      + ' aria-label="' + esc(f.name + ". " + f.short + ". " + label(gap(f)) + "." + (tag ? " " + tag + "." : "")) + '">'
+      + '<span class="g" aria-hidden="true">' + (ico ? icon(ico) : "") + "</span>"
+      + '<span class="txt" aria-hidden="true"><span class="lr"><span class="ol">' + esc(f.name) + "</span>"
+      + (tag ? '<span class="tg">' + esc(tag) + "</span>" : "") + "</span>"
+      + '<span class="om">' + esc(f.short) + "</span></span>"
+      + cellHTML(f, true) + "</button>";
+  }
+  function rowsHTML(qk){
+    var q = st[qk], right = rightSet(qk), same = answerSets().same;
+    return '<div class="rows" role="group" aria-label="Your chart, one row per function">' + FUNCS.map(function(f){
+      var isAns = inSet(right, f);
+      if(q.done === "read") return q.sel[f.id] ? optHTML(f, "sel", "check", "Your pick", true) : optHTML(f, "idle", "", "", true);
+      if(q.done && isAns && !same){
+        var tag = q.done === "right" ? (q.sel[f.id] ? "Right" : "Also right") : "Right answer";
+        return optHTML(f, "ok", "check", tag, true);
+      }
+      if(q.out[f.id]) return optHTML(f, "no", "x", "Not quite", true);
+      if(q.done) return optHTML(f, "idle", "", "", true);
+      if(q.sel[f.id]) return optHTML(f, "sel", "check", "Your pick", false, true);
+      return optHTML(f, "", "", "", false, false);
+    }).join("") + "</div>";
+  }
+  function fbHTML(kind, head, text){
+    return '<div class="fb ' + (kind === "no" ? "no" : "ok") + '" id="fb" tabindex="-1">'
+      + '<span class="fh">' + icon(kind === "no" ? "noc" : kind === "read" ? "book" : "okc") + esc(head) + "</span>"
+      + '<p class="ft">' + esc(text) + "</p></div>";
+  }
+  function feedback(qk){
+    var q = st[qk], Qd = Q[qk], a = answerSets(), right = a[qk];
+    var picked = FUNCS.filter(function(f){ return q.sel[f.id]; });
+    var they = right.length === 1 ? "It is the " + Qd.end + " row" : "They are the " + Qd.end + " rows";
+    if(q.done === "read"){
+      var t = a.hi === 0
+        ? "There is no right answer here. Every function is at or above its target, so none of them is behind."
+        : "There is no right answer here. Every row on your chart is the same shade: all six functions are " + BAND_WORDS[a.hi] + ". None is further behind or closer than the others.";
+      return fbHTML("read", "Read", t);
+    }
+    if(q.done === "right"){
+      var miss = right.filter(function(f){ return !q.sel[f.id]; });
+      var txt = names(picked) + isAre(picked) + words(right) + ". " + (picked.length === 1 ? "It is the " : "They are the ") + Qd.end + (picked.length === 1 ? " row" : " rows") + " on your chart.";
+      if(miss.length) txt += " " + names(miss) + isAre(miss) + "in the same shade, so " + (miss.length === 1 ? "it counts" : "they count") + " too.";
+      return fbHTML("ok", "Right", txt);
+    }
+    if(q.done === "shown")
+      return fbHTML("ok", right.length === 1 ? "Here is the right answer" : "Here are the right answers",
+        names(right) + isAre(right) + words(right) + ". " + they + " on your chart.");
+    if(q.tries){
+      var last = FUNCS.filter(function(f){ return q.out[f.id] && q.lastOut && q.lastOut[f.id]; });
+      if(!last.length) last = FUNCS.filter(function(f){ return q.out[f.id]; });
+      var kl = FUNCS.filter(function(f){ return q.kept && q.kept[f.id]; });
+      var kept = kl.length ? names(kl) + isAre(kl) + "right, so " + (kl.length === 1 ? "it stays" : "they stay") + " picked. " : "";
+      var hint = names(last) + isAre(last) + (last.length === 1 ? "not one of the " : "not among the ") + Qd.end + " rows. Look for the " + Qd.end + " shade on your chart. ";
+      return fbHTML("no", "Not quite", hint + kept + "Then press Check again.");
+    }
+    return "";
+  }
+  function renderQ(qk, focusSel){
+    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first. Your chart shows up here.", "Go to your scores", 0); return; }
+    if(qk === "pb" && !st.pa.done){ gate("Answer the first question first.", "Go to the first question", 1); return; }
+    var q = st[qk], n = Object.keys(q.sel).length;
+    var ask = q.done ? "" : '<p class="ask">Pick every function you think fits. You can pick more than one, because rows in the same shade are tied. Then press <b>Check</b>.</p>'
+      + '<button class="nav" id="chk" type="button"' + (n ? "" : " disabled") + ">Check</button>";
+    el.board.innerHTML = '<p class="lead">Here is your chart with the numbers hidden. The darker the row, the further that function is from its target.</p>'
+      + '<div class="q">' + rowsHTML(qk) + '<div class="side">' + ask + feedback(qk) + "</div></div>";
+    if(!q.done){
+      Array.prototype.forEach.call(el.board.querySelectorAll(".rows button.opt:not(:disabled)"), function(b){
+        b.addEventListener("click", function(){ toggle(qk, b.dataset.f); });
+      });
+      el.board.querySelector("#chk").addEventListener("click", function(){ check(qk); });
+      el.hint.innerHTML = n ? "Press <b>Check</b> when you are happy with your picks." : "Click a row to pick it. Click it again to take it back.";
     } else {
-      head = "Every row is the same shade";
-      ans = "All six functions are <b>" + esc(BAND_WORDS[a.hi]) + "</b>. None is further behind or closer than the others.";
+      el.hint.textContent = qk === "pa" ? "Press Next for the second question." : "Press Next to see the numbers behind your colors.";
     }
-    return '<div class="fq"><div class="fqh">' + esc(head) + '</div><div class="fa">' + ans + "</div>" +
-      '<div class="fy"><span><b>Furthest behind:</b> ' + esc(pickedText(pickedOf(QA))) + "</span></div>" +
-      '<div class="fy"><span><b>Closest to target:</b> ' + esc(pickedText(pickedOf(QB))) + "</span></div></div>";
+    if(focusSel){ var x = el.board.querySelector(focusSel); if(x) x.focus(); }
   }
-
-  function aboveNote(above){
-    if(above.length === 1)
-      return "<b>" + esc(above[0].name) + " has a current score higher than its target.</b> Check that you did not swap the two numbers in your profile.";
-    return "<b>" + esc(names(above)) + " have a current score higher than the target.</b> Check that you did not swap the two numbers in your profile.";
+  function toggle(qk, fid){
+    var q = st[qk];
+    if(q.done || q.out[fid] || !fOf(fid)) return;
+    if(q.sel[fid]) delete q.sel[fid]; else q.sel[fid] = 1;
+    save(st);
+    renderQ(qk, '.rows button.opt[data-f="' + fid + '"]');
+    header();
+    say(fOf(fid).name + (q.sel[fid] ? " picked." : " not picked."));
   }
-
-  function renderCheck(){
-    if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first.", "Go to your scores", 0); return; }
-    if(!st.checked){ gate("Answer the two questions on the chart first, then press <b>See the numbers</b>.", "Go to the questions", 1); return; }
-    var a = answerSets(), anim = !reduce;
-    el.board.className = "board rev";
-    var notes = [];
-    var above = FUNCS.filter(function(f){ return gap(f) < 0; });
-    if(above.length) notes.push(aboveNote(above));
-    var blocks = a.same
-      ? sameBlockHTML(a)
-      : blockHTML("Furthest behind", QA, a.far) +
-        blockHTML("Closest to target", QB, a.near);
-    var fb = '<div class="fbk' + (anim ? " in" : "") + '" tabindex="-1" id="fbk">' + blocks +
-      notes.map(function(n){ return '<div class="fnote">' + n + "</div>"; }).join("") +
-      '<div class="fend">' + esc(END_LINE) + "</div></div>";
-    el.board.innerHTML = chartHTML("numbers", anim) + fb;
-    el.hint.innerHTML = "<span>Gap is the target minus the current score.</span>";
-    /* A long set of picks can make the panel taller than the board. Then the
-       closing line moves into the hint bar, and if that is still not enough
-       the panel tightens. Never on a phone, where the page scrolls. */
-    if(!window.matchMedia("(max-width:599px)").matches){
-      var box = el.board.querySelector("#fbk");
-      var over = function(){ return box.getBoundingClientRect().bottom > el.board.getBoundingClientRect().bottom + 1; };
-      if(over()){
-        var end = box.querySelector(".fend"); if(end) end.remove();
-        el.hint.innerHTML = "<span><b>" + esc(END_LINE) + "</b></span>";
-        if(over()) box.classList.add("tight");
+  function check(qk){
+    var q = st[qk], a = answerSets(), right = a[qk];
+    var picked = FUNCS.filter(function(f){ return q.sel[f.id]; });
+    if(q.done || !picked.length) return;
+    if(a.same){ q.done = "read"; }
+    else {
+      var wrong = picked.filter(function(f){ return !inSet(right, f); });
+      if(!wrong.length) q.done = "right";
+      else {
+        q.lastOut = {};
+        wrong.forEach(function(f){ q.out[f.id] = 1; q.lastOut[f.id] = 1; delete q.sel[f.id]; });
+        q.kept = {}; Object.keys(q.sel).forEach(function(k){ q.kept[k] = 1; });
+        q.tries++;
+        if(q.tries >= 2) q.done = "shown";
       }
     }
+    save(st);
+    renderQ(qk);
+    header();
+    var fb = el.board.querySelector("#fb");
+    if(fb && !reduce){ fb.classList.remove("in"); void fb.offsetWidth; fb.classList.add("in"); }
+    if(fb) say(fb.textContent.replace(/^(Right|Not quite|Read|Here is the right answer|Here are the right answers)/, "$1. "));
+    var ph = phone(), opt = ph ? { preventScroll:true } : undefined;
+    if(q.done) el.next.focus(opt);
+    else { var f = el.board.querySelector(".rows button.opt:not(:disabled)"); if(f) f.focus(opt); }
+    if(fb && ph) fb.scrollIntoView({ block:"nearest", behavior: reduce ? "auto" : "smooth" });
   }
 
-  /* ---------------- slide 4: the clean chart, for the screenshot ---------------- */
+  /* ---------------- slide 4: the numbers, for the screenshot ---------------- */
   function renderFinal(){
     if(!st.built){ gate("Put in all twelve scores and press <b>Build</b> first.", "Go to your scores", 0); return; }
-    if(!st.checked){ gate("Answer the two questions on the chart first, then press <b>See the numbers</b>.", "Go to the questions", 1); return; }
-    el.board.className = "board fin";
-    el.board.innerHTML = '<div class="how"><span class="ht">' + esc(SHOT_LINE) + "</span></div>" + chartHTML("final", !reduce);
-    el.hint.innerHTML = "<span>" + esc(DONE_LINE) + "</span>";
+    if(!st.pb.done){ gate("Answer the two questions about your chart first.", "Go to the questions", st.pa.done ? 2 : 1); return; }
+    var anim = reduce ? "" : " in";
+    var h = '<div class="chart' + anim + '"><div class="ctitle">Cumberland Claims Services: current and target profile</div>'
+      + '<div class="cr ch"><span>Function</span><span class="ctr">Current</span><span class="ctr">Target</span><span class="ctr">Gap</span><span>Status</span></div>';
+    FUNCS.forEach(function(f){
+      h += '<div class="cr"><span class="fn">' + esc(f.name) + "</span>"
+        + '<span class="sq">' + st.cur[f.id] + "</span>"
+        + '<span class="sq">' + st.tgt[f.id] + "</span>"
+        + '<span class="gp">' + fmtGap(gap(f)) + "</span>" + cellHTML(f) + "</div>";
+    });
+    h += '<p class="capt">Scored 0 to 4 against the six functions of NIST CSF 2.0. Gap is the target minus the current score.</p></div>';
+    var above = FUNCS.filter(function(f){ return gap(f) < 0; });
+    var note = above.length
+      ? '<div class="fnote"><b>' + esc(names(above)) + (above.length === 1 ? " has a current score higher than its target." : " have a current score higher than the target.") + "</b> Check that you did not swap the two numbers in your profile.</div>"
+      : "";
+    el.board.innerHTML = '<div class="fin">' + h + '<div class="notes"><div class="shot">' + SHOT_LINE + "</div>" + note + "</div></div>";
+    el.hint.textContent = DONE_LINE;
   }
 
   /* ---------------- navigation ---------------- */
-  function toTop(){
-    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
-    try{ window.scrollTo(0, 0); }catch(e){}
+  function focusTop(){
+    var ph = phone();
+    try{ el.frame.focus(ph ? { preventScroll:true } : undefined); }catch(e){ el.frame.focus(); }
+    if(ph) try{ window.scrollTo(0, 0); }catch(e){}
   }
   function go(d){
     var n = i + d;
     if(n < 0 || n >= S.length) return;
-    if(d > 0 && el.next.disabled) return;
-    i = n; render(); toTop();
-    say("Slide " + (i+1) + " of " + S.length + ". " + S[i].h1 + ".");
+    if(d > 0 && (el.next.disabled || el.next.hidden)) return;
+    i = n; render(); focusTop();
+    say(el.prog.textContent + ". " + S[i].h1);
   }
   el.back.addEventListener("click", function(){ go(-1); });
   el.next.addEventListener("click", function(){ go(1); });
+
   /* Start again asks first. Nothing is cleared until "Yes, clear them". */
   function askClear(on){
-    if(!el.confirm) return;
     var was = !el.confirm.hidden;
     el.confirm.hidden = !on;
-    el.again.hidden = on || i !== S.length-1;
+    el.again.hidden = on || i !== S.length - 1;
     el.hint.hidden = on;
     if(on){ try{ el.confno.focus({preventScroll:true}); }catch(e){ el.confno.focus(); } say("Clear all my scores? Yes, clear them, or Keep them."); }
     else if(was && document.activeElement && el.confirm.contains(document.activeElement)) el.again.focus();
@@ -929,24 +821,16 @@
   el.again.addEventListener("click", function(){ askClear(true); });
   el.confno.addEventListener("click", function(){ askClear(false); el.again.focus(); say("Your scores are kept."); });
   el.confyes.addEventListener("click", function(){
-    st = fresh(); save(st); changedNote = false; i = 0; render(); toTop();
+    st = fresh(); save(st); changedNote = false; i = 0; render(); focusTop();
     say("Started again. All twelve scores are empty.");
   });
   el.confirm.addEventListener("keydown", function(e){
     if(e.key === "Escape"){ e.preventDefault(); askClear(false); el.again.focus(); }
   });
 
-  function ownsKeys(node){
-    if(!node) return false;
-    if(node.isContentEditable) return true;
-    var t = node.tagName;
-    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
-    var r = node.getAttribute && node.getAttribute("role");
-    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox" || r === "radiogroup";
-  }
-
   document.addEventListener("keydown", function(e){
-    if(ownsKeys(e.target)) return;
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
     if(e.metaKey || e.ctrlKey || e.altKey) return;
     if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
     if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
@@ -954,31 +838,32 @@
 
   var tx = null, ty = null;
   document.addEventListener("touchstart", function(e){
-    if(ownsKeys(e.target)){ tx = null; return; }
+    var t = e.target && e.target.tagName;
+    if(t === "INPUT" || t === "LABEL"){ tx = null; return; }
     tx = e.touches[0].clientX; ty = e.touches[0].clientY;
   }, {passive:true});
   document.addEventListener("touchend", function(e){
     if(tx === null) return;
-    var dx = e.changedTouches[0].clientX - tx;
-    var dy = e.changedTouches[0].clientY - ty;
+    var dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
     if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
     tx = null; ty = null;
   }, {passive:true});
 
-  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  /* scale the fixed canvas down to fit, never up */
   var stage = document.getElementById("stage");
   function fit(){
-    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
-    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
-    stage.style.transform = "scale(" + s + ")";
+    if(phone()) stage.style.transform = "";
+    else {
+      var sc = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+      stage.style.transform = "scale(" + sc + ")";
+    }
   }
   window.addEventListener("resize", fit);
 
   render();
   fit();
 
-  /* ---------------- the QA hook ----------------
-     measure-fit.mjs steps through the deck with this. Keep it on every deck. */
+  /* the QA hook */
   window.__ex = {
     goto:function(n){
       if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
@@ -994,16 +879,10 @@
       return filled(st);
     },
     build:function(){ build(); return st.built; },
-    pick:function(q, names){
-      names.forEach(function(nm){
-        var f = FUNCS.filter(function(x){ return x.name === nm; })[0];
-        if(f) togglePick(q === "a" ? "pa" : "pb", f.id);
-      });
-      return true;
-    },
-    check:function(){ check(); return st.checked; },
+    pick:function(qk, list){ list.forEach(function(nm){ var f = FUNCS.filter(function(x){ return x.name === nm; })[0]; if(f) toggle(qk, f.id); }); return true; },
+    check:function(qk){ check(qk); return st[qk].done; },
     reset:function(){ st = fresh(); save(st); changedNote = false; i = 0; render(); },
-    state:function(){ return JSON.parse(JSON.stringify({ i:i, st:st })); }
+    state:function(){ return JSON.parse(JSON.stringify({ i:i, st:st, sets:st.built ? answerSets() : null })); }
   };
 })();
 </script>
