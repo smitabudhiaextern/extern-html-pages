@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which Risk Is More Serious?</title>
+<!--
+  vCISO P5 Step 1, Module 2, interactive: Which risk is more serious?
+  Built from the Extern deck shell, matched to the house look of
+  09-assets/final/vciso-p3-m2-control-or-written-rule.html,
+  vciso-p3-m3-guess-the-date.html and vciso-p3-m4-one-stolen-password.html.
+  Governing authority: output/programs/vciso/VCISO-STYLE-GUIDE.md section 6.
+  Source: Doc from SME/P5 Sample Pack/Interactive content sets - P5.md, P5-2,
+  and its render note.
+
+  Spec rules kept here:
+  - Render lock (P5-2 render note): before the pick, slide 1 never shows
+    High, Low, Medium, a multiplication sign or a score. Only the plain
+    likelihood and impact words.
+  - Picking a card is the commit. There is no separate Submit button.
+  - The reveal never marks the pick right or wrong. No praise, no score.
+  - The "3 x 1 and 1 x 3" illustration is ours, not the SME's.
+  - Not in this deck, because the module prose carries it right after
+    the embed: the risk score definition, "starts the conversation and
+    never finishes it", the High, Medium and Low scale, the three-point
+    scale line, zero risk, and the checkpoint.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  /* ===============================================================
+     The palette. The Extern five, plus the vCISO per-slide tint ramp
+     (VCISO-STYLE-GUIDE.md 6b, listed in 09-assets/deck-palette.json).
+     Tint carries no meaning. Every tint of navy is an rgba() of
+     #001D69. No state is ever signalled by colour alone.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas always holds 960 in layout
+     and the transform does all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  /* The line above the heading on slide 2: what the student picked. */
+  .kick{flex:0 0 auto;font-size:16px;line-height:1.4;color:var(--body);margin-bottom:4px}
+  .kick b{color:var(--title);font-weight:600}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px}
+  .intro{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:14px;max-width:74ch}
+  .intro p{font-size:17px;line-height:1.5}
+  .intro p b{color:var(--title);font-weight:600}
+  p.lead{flex:0 0 auto;font-size:17px;line-height:1.45;color:var(--body);margin-top:-4px;max-width:82ch}
+  button.jump{font-family:inherit;font-size:15px;font-weight:600;color:var(--on-highlight);align-self:flex-start;
+    background:transparent;border:1.5px solid var(--on-highlight);border-radius:7px;padding:8px 15px;cursor:pointer}
+  button.jump:hover{background:var(--tint2)}
+  button.jump:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+
+  svg.ic{width:28px;height:28px;flex:0 0 auto;fill:none;stroke:var(--on-highlight);stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- slide 1: two risk cards, side by side ----
+     Both cards look the same until one is picked. */
+  .cards{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .rcard{min-height:0;display:flex;flex-direction:column;gap:10px;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-left-width:6px;border-radius:12px;
+    padding:16px 20px 16px;transition:opacity var(--t-fast) var(--ease-out)}
+  .rcard .rh{display:flex;align-items:center;gap:12px}
+  .rcard .ib{flex:0 0 auto;width:46px;height:46px;border-radius:50%;border:2px solid var(--on-highlight);
+    background:var(--highlight);display:flex;align-items:center;justify-content:center}
+  .rcard .rl{font-size:21px;line-height:1.25;font-weight:600;color:var(--title)}
+  .rcard .rb{font-size:16px;line-height:1.45;color:var(--body)}
+  .rcard .rt{align-self:flex-start;font-size:15px;line-height:1.3;font-weight:600;color:var(--on-highlight);
+    background:var(--highlight);border:1px solid var(--on-highlight);border-radius:20px;padding:5px 12px}
+  .rcard .sp{flex:1 1 auto}
+  .rcard.is-off{opacity:.5}
+
+  button.ans{font-family:inherit;cursor:pointer;text-align:left;
+    display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;
+    background:var(--bg);color:var(--title);border:2px solid var(--on-highlight);border-radius:10px;
+    transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
+  button.ans:hover:not(:disabled){background:var(--highlight)}
+  button.ans:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  button.ans:disabled{cursor:default}
+  button.ans .al{flex:1 1 auto;font-size:18px;font-weight:600;line-height:1.25}
+  button.ans .tg{flex:0 0 auto;font-size:13px;font-weight:600;white-space:nowrap}
+  /* The pick: filled navy, a dot and the words "Your pick". A dot, not a
+     tick: the pick is never marked right or wrong. */
+  button.ans.is-pick{background:var(--on-highlight);color:var(--bg)}
+  button.ans.is-pick:hover:not(:disabled){background:var(--on-highlight)}
+
+  /* ---- slide 2: the two ratings, side by side ---- */
+  .reveal{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .rows{flex:0 0 auto;display:flex;flex-direction:column;gap:10px}
+  .rw{display:grid;grid-template-columns:44px minmax(0,1fr) 250px 24px 270px;align-items:center;column-gap:14px;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-left-width:6px;border-radius:10px;padding:12px 16px}
+  .rw .ib{width:44px;height:44px;border-radius:50%;border:2px solid var(--on-highlight);
+    background:var(--highlight);display:flex;align-items:center;justify-content:center}
+  .rw .ib svg.ic{width:24px;height:24px}
+  .rw .rn{font-size:18px;line-height:1.25;font-weight:600;color:var(--title)}
+  .rate{background:var(--highlight);border-radius:8px;padding:6px 12px;display:flex;flex-direction:column;gap:1px}
+  .rate .rk{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-highlight)}
+  .rate .rv{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px}
+  .rate .rr{font-size:22px;line-height:1.2;font-weight:600;color:var(--title)}
+  .rate .rs{font-size:15px;line-height:1.3;color:var(--body)}
+  .rw .x{font-size:24px;font-weight:600;color:var(--on-highlight);text-align:center}
+
+  /* The blue lead bar: the line that explains the tie. */
+  .why{flex:0 0 auto;border-radius:0 10px 10px 0;border-left:4px solid var(--on-highlight);background:var(--highlight);
+    padding:12px 18px;display:flex;flex-direction:column;gap:8px}
+  .why .wr{font-size:17px;line-height:1.45;color:var(--body)}
+  .why .wh{font-size:20px;line-height:1.3;font-weight:600;color:var(--title)}
+  .reveal.in{animation:rin var(--t-reveal) var(--ease-over) both}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:12px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  .endline{align-self:center;font-size:14px;font-weight:600;color:var(--title)}
+  #hint{flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .segs i{width:14px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .intro p,p.lead{font-size:16px}
+    .kick{font-size:16px}
+    .cards{grid-template-columns:1fr;gap:14px}
+    .rcard{padding:14px 14px}
+    .rcard .rl{font-size:19px}
+    .rcard .rb{font-size:16px}
+    .rcard .sp{display:none}
+    button.ans .al{font-size:17px}
+    .rw{grid-template-columns:40px minmax(0,1fr);row-gap:10px;padding:12px 12px}
+    .rw .ib{width:40px;height:40px}
+    .rw .rn{font-size:17px}
+    .rw .rate{grid-column:1/-1}
+    .rw .x{grid-column:1/-1;font-size:20px;line-height:1}
+    .rate .rk{font-size:13px}
+    .rate .rs{font-size:16px}
+    .why{padding:14px 16px}
+    .why .wr{font-size:16px}
+    .why .wh{font-size:18px}
+    button.jump{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    .endline{flex:1 1 100%;font-size:15px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Which risk is more serious?">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 2</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <p class="kick" id="kick" hidden></p>
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <button class="nav ghost" id="again" type="button" hidden>Start again</button>
+      <span class="endline" id="endline" hidden>Go back to the module and keep reading.</span>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul{margin:0 0 12px 22px}
+    .nsf li{margin-bottom:6px}
+    .nsf strong{color:#1C1B1B}
+    .nsf .box{background:#DCE1FF;border-left:4px solid #001D69;padding:12px 16px;margin:16px 0;color:#1C1B1B}
+  </style>
+  <div class="nsf">
+    <h2>Which risk is more serious?</h2>
+    <p>You found both of these yourself. Pick the one that you think is more serious, and write it down before you read on.</p>
+    <h3>Version disclosure</h3>
+    <p>Your scope's website tells anyone who looks which software it runs on. You found this in Project 3, in the X-Powered-By line.<br><strong>Near-certain, but trivial on its own</strong></p>
+    <h3>Untested backups fail during a real recovery</h3>
+    <p>Backups run every night, but nobody has ever tested a restore. On the day Cumberland needs them, the records of 2.1 million people can't be brought back. You found this in Project 4.<br><strong>Unlikely, but it would end the company</strong></p>
+
+    <h3>They score exactly the same.</h3>
+    <ul>
+      <li><strong>Version disclosure:</strong> Likelihood High (near-certain) &times; Impact Low (trivial)</li>
+      <li><strong>Untested backups:</strong> Likelihood Low (unlikely) &times; Impact High (would end the company)</li>
+    </ul>
+    <div class="box">
+      <p>High times Low gives the same score as Low times High, the same way 3&nbsp;&times;&nbsp;1 and 1&nbsp;&times;&nbsp;3 both make 3.</p>
+      <p><strong>The number can't tell you which one matters more.</strong></p>
+    </div>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================ content ================
+     Labels, card text, tags and ratings: P5-2 in P5 Sample Pack/
+     Interactive content sets - P5.md, as agreed in the module spec.
+     Render lock: `tag` is the only rating language slide 1 shows. The
+     High and Low ratings live in `lik` and `imp`, and only slide 2
+     reads them. */
+  var RISKS = [
+    { id:"version", ico:"code", label:"Version disclosure", short:"Version disclosure",
+      body:"Your scope's website tells anyone who looks which software it runs on. You found this in Project 3, in the X-Powered-By line.",
+      tag:"Near-certain, but trivial on its own",
+      lik:{ r:"High", s:"(near-certain)" }, imp:{ r:"Low", s:"(trivial)" } },
+    { id:"backups", ico:"database", label:"Untested backups fail during a real recovery", short:"Untested backups",
+      body:"Backups run every night, but nobody has ever tested a restore. On the day Cumberland needs them, the records of 2.1 million people can't be brought back. You found this in Project 4.",
+      tag:"Unlikely, but it would end the company",
+      lik:{ r:"Low", s:"(unlikely)" }, imp:{ r:"High", s:"(would end the company)" } }
+  ];
+  var PICK_BTN = "This one is more serious";
+  var TIE_LINE = "High times Low gives the same score as Low times High, the same way 3\u00A0\u00D7\u00A01 and 1\u00A0\u00D7\u00A03 both make 3.";
+  var CLOSE_LINE = "The number can't tell you which one matters more.";
+
+  var S = [
+    { id:"pick",   kind:"pick",   label:"Your pick", h1:"Which risk is more serious?",
+      lead:"You found both of these yourself. Pick the one that you think is more serious." },
+    { id:"reveal", kind:"reveal", label:"The score", h1:"They score exactly the same." }
+  ];
+
+  /* Inline SVG icons, Phosphor style: one weight, outline, navy. */
+  var ICON = {
+    code:'<rect x="3" y="4.5" width="18" height="15" rx="1.5"/><path d="M3 8.5h18"/><path d="M9.8 12 7.6 14.1l2.2 2.1"/><path d="M14.2 12l2.2 2.1-2.2 2.1"/>',
+    database:'<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V6"/><path d="M4.5 12c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + ICON[k] + "</svg>"; }
+
+  /* ================ state ================
+     Wrapped: a blocked storage API degrades silently, and the deck works
+     from a clean state with nothing saved. */
+  var KEY = "vciso-p5-m2-two-risks-one-score-v1";
+  function riskOf(id){ for(var k=0;k<RISKS.length;k++) if(RISKS[k].id === id) return RISKS[k]; return null; }
+  function fresh(){ return { pick:null }; }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      if(!raw || typeof raw !== "object" || Array.isArray(raw)) return fresh();
+      return { pick: riskOf(raw.pick) ? raw.pick : null };
+    }catch(e){ return fresh(); }
+  }
+  function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var DOT = "●";
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [], ids = {};
+    S.forEach(function(s, n){
+      if(!s.id) problems.push("slide " + (n+1) + " has no id");
+      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+      ids[s.id] = 1;
+    });
+    /* The render lock: nothing slide 1 shows may carry a rating word,
+       a multiplication sign or a digit outside the SME's own card text. */
+    var lock = /\b(High|Low|Medium)\b|×/;
+    RISKS.forEach(function(r){
+      if(lock.test(r.label) || lock.test(r.tag) || lock.test(r.body)) problems.push('risk "' + r.id + '" breaks the render lock');
+      if(!r.lik || !r.imp) problems.push('risk "' + r.id + '" has no ratings');
+    });
+    if(lock.test(S[0].h1) || lock.test(S[0].lead) || lock.test(PICK_BTN)) problems.push("slide 1 text breaks the render lock");
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="intro"><p><b>This deck has authoring errors and will not behave correctly:</b></p>' +
+        '<ul style="font-size:13px;line-height:1.6;padding-left:18px">' +
+        problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), kick:document.getElementById("kick"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"), endline:document.getElementById("endline"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function toTop(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+
+  /* Resume: a saved pick opens on the reveal. */
+  var i = st.pick ? 1 : 0;
+
+  /* ================ chrome ================ */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    el.again.hidden = !st.pick;
+    /* The last slide has no Continue. A plain line says where to go next. */
+    var end = (i === S.length-1);
+    el.next.hidden = end;
+    el.next.textContent = "Continue";
+    el.next.disabled = end || !st.pick;
+    el.endline.hidden = !(end && st.pick);
+  }
+
+  function render(anim){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.h1.textContent = s.h1;
+    el.kick.hidden = true; el.kick.innerHTML = "";
+    el.hint.textContent = "";
+    if(s.kind === "pick") renderPick();
+    else if(s.kind === "reveal") renderReveal(anim);
+    else el.board.innerHTML = '<div class="intro"><p><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p></div>';
+    el.frame.setAttribute("aria-label", el.h1.textContent);
+    header();
+  }
+
+  /* ================ slide 1: two cards, one pick ================
+     Picking is the commit: both buttons lock once one is pressed. */
+  function cardHTML(r){
+    var mine = st.pick === r.id, done = !!st.pick;
+    return '<div class="rcard' + (done && !mine ? " is-off" : "") + '" role="group" aria-labelledby="rl-' + r.id + '">' +
+      '<div class="rh"><span class="ib">' + icon(r.ico) + '</span><p class="rl" id="rl-' + r.id + '">' + esc(r.label) + "</p></div>" +
+      '<p class="rb">' + esc(r.body) + "</p>" +
+      '<span class="rt">' + esc(r.tag) + "</span>" +
+      '<span class="sp" aria-hidden="true"></span>' +
+      '<button class="ans' + (mine ? " is-pick" : "") + '" type="button" data-risk="' + r.id + '"' +
+        ' aria-pressed="' + mine + '"' + (done ? " disabled" : "") + ">" +
+        '<span class="al">' + esc(PICK_BTN) + "</span>" +
+        (mine ? '<span class="tg" aria-hidden="true">' + DOT + " Your pick</span>" : "") +
+        (mine ? '<span class="sr"> Your pick.</span>' : "") +
+      "</button></div>";
+  }
+
+  function renderPick(){
+    el.board.innerHTML = '<p class="lead">' + esc(S[0].lead) + "</p>" +
+      '<div class="cards">' + RISKS.map(cardHTML).join("") + "</div>";
+    Array.prototype.forEach.call(el.board.querySelectorAll("button.ans"), function(b){
+      b.addEventListener("click", function(){ choose(b.dataset.risk); });
+    });
+    if(st.pick) el.hint.innerHTML = "<span><b>Your pick is in.</b> Press <b>Continue</b> to see how the two risks score.</span>";
+    else el.hint.innerHTML = "<span>Pick one card. Your pick is final, so read both first.</span>";
+  }
+
+  function choose(id){
+    if(st.pick || !riskOf(id)) return;
+    st.pick = id; save(st);
+    render(false);
+    try{ el.next.focus({preventScroll:true}); }catch(e){ el.next.focus(); }
+    say("Your pick: " + riskOf(id).label + ". Press Continue to see how the two risks score.");
+  }
+
+  /* ================ slide 2: the reveal ================
+     Names the pick, never marks it. */
+  function rateHTML(k, v){
+    return '<div class="rate"><span class="rk">' + k + '</span><span class="rv"><span class="rr">' + esc(v.r) +
+      '</span><span class="rs">' + esc(v.s) + "</span></span></div>";
+  }
+
+  function renderReveal(anim){
+    if(!st.pick){
+      el.h1.textContent = "Make your pick first.";
+      el.board.innerHTML = '<div class="intro"><p>Make your pick first. How the two risks score shows here once you do.</p>' +
+        '<button class="jump" type="button" id="topick">Go to the two risks</button></div>';
+      el.board.querySelector("#topick").addEventListener("click", function(){ i = 0; render(false); toTop(); });
+      return;
+    }
+    el.kick.hidden = false;
+    el.kick.innerHTML = "You picked: <b>" + esc(riskOf(st.pick).label) + "</b>.";
+    el.board.innerHTML =
+      '<div class="reveal' + (anim && !reduce ? " in" : "") + '" id="rv">' +
+        '<div class="rows" role="list" aria-label="How the two risks score">' +
+        RISKS.map(function(r){
+          return '<div class="rw" role="listitem"><span class="ib">' + icon(r.ico) + "</span>" +
+            '<span class="rn">' + esc(r.short) + "</span>" +
+            rateHTML("Likelihood", r.lik) +
+            '<span class="x" aria-label="times">×</span>' +
+            rateHTML("Impact", r.imp) + "</div>";
+        }).join("") + "</div>" +
+        '<div class="why"><p class="wr">' + esc(TIE_LINE) + '</p><p class="wh">' + esc(CLOSE_LINE) + "</p></div>" +
+      "</div>";
+  }
+
+  /* ================ start again ================ */
+  function resetAll(){ st = fresh(); save(st); i = 0; render(false); }
+  el.again.addEventListener("click", function(){
+    resetAll(); toTop();
+    say("Cleared. Back to the two risks. Pick the one you think is more serious.");
+  });
+
+  /* ================ navigation ================ */
+  function announce(){
+    if(S[i].kind === "reveal" && st.pick){
+      return "Slide 2 of 2. You picked: " + riskOf(st.pick).label + ". They score exactly the same. " +
+        RISKS.map(function(r){ return r.short + ": likelihood " + r.lik.r + " " + r.lik.s + ", times impact " + r.imp.r + " " + r.imp.s + "."; }).join(" ") +
+        " " + TIE_LINE + " " + CLOSE_LINE;
+    }
+    return "Slide " + (i+1) + " of " + S.length + ". " + el.h1.textContent;
+  }
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && !st.pick){
+      el.hint.innerHTML = "<span><b>Pick one card first.</b> Then you can go on.</span>";
+      return;
+    }
+    i = n; render(d > 0); toTop();
+    say(announce());
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+  });
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ================ scale the fixed canvas down to fit, never up ================ */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render(false);
+  fit();
+
+  /* ================ the QA hook ================
+     measure-fit.mjs steps through the deck with this. goto ignores the
+     pick-first lock, on purpose, so every slide can be measured. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(false); return true;
+    },
+    slides:S.length,
+    pick:function(id){ i = 0; render(false); choose(id); return st.pick === id; },
+    reset:function(){ resetAll(); },
+    state:function(){ return { i:i, pick:st.pick }; }
+  };
+})();
+</script>
+</body>
+</html>
