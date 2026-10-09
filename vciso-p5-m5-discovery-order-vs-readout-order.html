@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Put Your Ten Slides in Order</title>
+<!--
+  vCISO P5 Step 2, Module 5 (Re-Sequence the Deck), interactive: Put Your Ten Slides in Order.
+  Matched to the house look of 09-assets/final/vciso-p5-m1-whats-missing-from-the-deck.html,
+  vciso-p5-m2-two-risks-one-score.html and vciso-p5-m4-defend-your-ranking.html.
+  Source: P5 Sample Pack/Interactive content sets - P5.md, P5-5.
+  Slide titles 01 to 10: 09-assets/cumberland-deck-template/template_spec.py
+  (slides 05 and 10 have no title there, so their eyebrows are used, as in the P5 m1 build).
+
+  Spec rules kept here:
+  - Two slides: (1) the ten slides in build order, drag or Move earlier / Move later,
+    then Lock my order; (2) the locked order next to where each slide started,
+    how many moved, and which moved furthest.
+  - No right order and no marking. The reveal (order of discovery, a readout opens
+    with the conclusion, what moves and what stays) is in the module prose right
+    after the embed, so none of it is on screen here.
+  - The cover is not a card: the prose says it always stays first.
+  - No storage. A reload starts clean.
+
+  Verify before shipping, both gates, every time:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   this-deck.html
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs this-deck.html
+-->
+<style>
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;
+    --t-frame:300ms;
+    --t-reveal:560ms;
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-over:cubic-bezier(.2,.9,.25,1.06);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--t-frame) var(--ease-io);
+  }
+  /* The vCISO tint ramp, one per slide, in slide order. */
+  body.t1{background:#F2DAE0}
+  body.t2{background:#DAEAE2}
+
+  /* ---- the 960x540 canvas, scaled down only, never up ---- */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:8px;min-height:24px}
+  .prog{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+
+  h1{font-size:28px;line-height:1.2;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:10px}
+
+  /* ---- the board ---- */
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+  .lead{flex:0 0 auto;font-size:17px;line-height:1.45;max-width:80ch}
+  .lead b{color:var(--title);font-weight:600}
+
+  svg.ic{width:28px;height:28px;flex:0 0 auto;fill:none;stroke:var(--on-highlight);stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- the ten cards: two columns of five, read down then across ---- */
+  .deck{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,52px);
+    grid-auto-flow:column;column-gap:14px;row-gap:7px;list-style:none}
+  .deck.res{grid-template-rows:repeat(5,47px);row-gap:6px}
+  .cd{min-width:0;display:flex;align-items:center;gap:12px;padding:0 8px 0 10px;
+    background:var(--bg);border:1.5px solid var(--on-highlight);border-radius:9px;
+    user-select:none;-webkit-user-select:none;
+    transition:background var(--t-fast) var(--ease-out),box-shadow var(--t-fast) var(--ease-out)}
+  .cd.can{cursor:grab}
+  .cd.can:hover{background:var(--highlight)}
+  .cd.moving{background:var(--highlight);border-width:2px;border-style:dashed;cursor:grabbing}
+  .cd .pos{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--on-highlight);
+    background:var(--highlight);color:var(--on-highlight);font-size:14px;font-weight:700;
+    font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center}
+  .cd .tx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .cd .sn{font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--on-highlight);font-variant-numeric:tabular-nums}
+  .cd .st{font-size:15px;line-height:1.2;font-weight:600;color:var(--title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cd .grip{flex:0 0 auto;width:30px;height:36px;display:flex;align-items:center;justify-content:center;
+    touch-action:none;cursor:grab}
+  .cd .grip svg.ic{width:20px;height:20px}
+  .cd .mv{flex:0 0 auto;display:flex;gap:5px}
+  button.ar{font-family:inherit;width:34px;height:34px;border-radius:7px;cursor:pointer;
+    background:var(--bg);border:1.5px solid var(--on-highlight);display:flex;align-items:center;justify-content:center;
+    transition:background var(--t-fast) var(--ease-out),opacity var(--t-fast) var(--ease-out)}
+  button.ar svg.ic{width:18px;height:18px}
+  button.ar:hover:not(:disabled){background:var(--tint2)}
+  button.ar:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  button.ar:disabled{opacity:.3;cursor:default}
+  .cd.lk{background:var(--bg)}
+
+  /* ---- slide 2: where each slide started ---- */
+  .cd .tg{flex:0 0 auto;font-size:13px;font-weight:600;color:var(--body);white-space:nowrap;text-align:right}
+  .cd .tg b{color:var(--title);font-weight:700}
+  /* The slide(s) moved furthest: the "you did this" style, filled navy, plus words. */
+  .cd.far{background:var(--on-highlight);border-color:var(--on-highlight)}
+  .cd.far .st,.cd.far .sn,.cd.far .tg,.cd.far .tg b{color:var(--bg)}
+  .cd.far .pos{background:var(--bg);border-color:var(--bg)}
+  .deck.in{animation:rin var(--t-reveal) var(--ease-over) both}
+
+  .leadbar{flex:0 0 auto;background:var(--highlight);border-left:5px solid var(--on-highlight);border-radius:0 10px 10px 0;
+    padding:11px 18px;display:flex;align-items:center;gap:14px}
+  .leadbar svg.ic{width:26px;height:26px}
+  .leadbar p{font-size:17px;line-height:1.4;color:var(--title);font-weight:600}
+  @keyframes rin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* ---- the bar ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:12px}
+  button.nav{font-family:inherit;font-size:14px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:44px;overflow-y:auto;font-size:13px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+  #hint b{color:var(--title);font-weight:600}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px;align-content:flex-start}
+    .segs i{width:14px}
+    .prog{font-size:14px;white-space:normal}
+    h1{font-size:22px}
+    .lead{font-size:16px}
+    .deck,.deck.res{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row;row-gap:8px}
+    .cd{min-height:58px;padding:6px 6px 6px 10px;gap:10px}
+    .cd .st{white-space:normal;font-size:15px}
+    .cd .grip{width:34px;height:44px}
+    button.ar{width:40px;height:40px}
+    .deck.res .cd{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;row-gap:3px;padding:8px 10px}
+    .deck.res .cd .pos{grid-row:1/3;align-self:center}
+    .deck.res .cd .tg{grid-column:2;text-align:left;white-space:normal}
+    .leadbar{padding:12px 14px}
+    .leadbar p{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="Put your ten slides in order">
+
+    <div class="top">
+      <span class="prog" id="prog">1 of 2</span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <div class="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Lock my order</button>
+      <button class="nav ghost" id="again" type="button" hidden>Start again</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf p{margin-bottom:12px}
+    .nsf ol{margin:0 0 14px 22px}
+  </style>
+  <div class="nsf">
+    <h2>Is this the order you would present them in?</h2>
+    <p>Here are your ten slides, in the order you built them. The cover stays first, so it is not here.</p>
+    <ol>
+      <li>Slide 01, Engagement scope</li>
+      <li>Slide 02, What the internet sees</li>
+      <li>Slide 03, What the scan shows</li>
+      <li>Slide 04, Ranked technical priorities</li>
+      <li>Slide 05, The control gap</li>
+      <li>Slide 06, The profile heatmap</li>
+      <li>Slide 07, Claims versus evidence</li>
+      <li>Slide 08, Readiness for the evidence test</li>
+      <li>Slide 09, The consolidated risk picture</li>
+      <li>Slide 10, Where Cumberland stands</li>
+    </ol>
+    <p>Write down the order you would present them in, by slide number. Keep your order in mind, then go back to the task and read on.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- content ----------------
+     The ten slides of the deck template, in build order (template_spec.py).
+     Slides 05 and 10 have no title in the template, so their eyebrows are used,
+     as in the P5 m1 build. Nothing else is content. */
+  var SLIDES = [
+    { n:"01", t:"Engagement scope" },
+    { n:"02", t:"What the internet sees" },
+    { n:"03", t:"What the scan shows" },
+    { n:"04", t:"Ranked technical priorities" },
+    { n:"05", t:"The control gap" },
+    { n:"06", t:"The profile heatmap" },
+    { n:"07", t:"Claims versus evidence" },
+    { n:"08", t:"Readiness for the evidence test" },
+    { n:"09", t:"The consolidated risk picture" },
+    { n:"10", t:"Where Cumberland stands" }
+  ];
+
+  var S = [
+    { id:"order",  kind:"order",  label:"Your order",        h1:"Is this the order you would present them in?" },
+    { id:"result", kind:"result", label:"Where they started", h1:"Your order, next to where each slide started" }
+  ];
+
+  /* Inline SVG icons, Phosphor style: one weight, outline, navy. */
+  var ICON = {
+    up:'<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/>',
+    down:'<path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/>',
+    grip:'<circle cx="9" cy="6" r="1.1"/><circle cx="15" cy="6" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="18" r="1.1"/><circle cx="15" cy="18" r="1.1"/>',
+    back:'<path d="M4 12h12.5a3.5 3.5 0 0 1 0 7H13"/><path d="M8 8 4 12l4 4"/>'
+  };
+  function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + ICON[k] + "</svg>"; }
+
+  function ordinal(n){
+    var t = n % 100;
+    if(t >= 11 && t <= 13) return n + "th";
+    var u = n % 10;
+    return n + (u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th");
+  }
+  function buildOrder(){ return SLIDES.map(function(s, k){ return k; }); }
+
+  /* ---------------- state ----------------
+     order[pos] = index into SLIDES. No storage. `locked` is set when the
+     student presses Lock my order, so the guess stays as it was. */
+  function fresh(){ return { order:buildOrder(), locked:false }; }
+  var st = fresh();
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. */
+  (function validate(){
+    var problems = [], ids = {};
+    if(SLIDES.length !== 10) problems.push("the deck needs ten slides");
+    SLIDES.forEach(function(s){
+      if(!s.n || !s.t) problems.push("a slide is missing a field");
+      if(ids[s.n]) problems.push('duplicate slide "' + s.n + '"');
+      ids[s.n] = 1;
+    });
+    if(problems.length){
+      document.getElementById("board").innerHTML =
+        '<div class="lead"><p><b>This deck has authoring errors and will not behave correctly:</b></p>' +
+        '<ul style="font-size:13px;line-height:1.6;padding-left:18px">' +
+        problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    again:document.getElementById("again"),
+    hint:document.getElementById("hint"), live:document.getElementById("live")
+  };
+  var i = 0;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function say(m){ el.live.textContent = m; }
+  function topFocus(){
+    try{ el.frame.focus({preventScroll:true}); }catch(e){ el.frame.focus(); }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    el.prog.textContent = (i+1) + " of " + S.length + " · " + s.label;
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    el.back.disabled = (i === 0);
+    el.again.hidden = !st.locked;
+    var end = (i === S.length - 1);
+    el.next.hidden = end;
+    el.next.textContent = st.locked ? "See your order" : "Lock my order";
+  }
+
+  function render(anim){
+    var s = S[i];
+    document.body.className = "t" + (i+1);
+    el.hint.textContent = "";
+    el.h1.textContent = s.h1;
+    if(s.kind === "order") renderOrder();
+    else if(s.kind === "result") renderResult(anim);
+    else el.board.innerHTML = '<p class="lead"><b>Unhandled slide kind "' + esc(String(s.kind)) + '".</b></p>';
+    el.frame.setAttribute("aria-label", el.h1.textContent);
+    header();
+  }
+
+  /* ---------------- slide 1: drag into order ---------------- */
+  function cardHTML(k, pos){
+    var sl = SLIDES[k], name = esc(sl.t);
+    var h = '<li class="cd' + (st.locked ? " lk" : " can") + '" data-k="' + k + '">' +
+      '<span class="pos" aria-hidden="true">' + (pos+1) + "</span>" +
+      '<span class="tx"><span class="sn">Slide ' + sl.n + '</span><span class="st">' + name + "</span></span>";
+    if(!st.locked){
+      h += '<span class="mv">' +
+        '<button class="ar" type="button" data-d="-1" aria-label="Move ' + name + ' earlier">' + icon("up") + "</button>" +
+        '<button class="ar" type="button" data-d="1" aria-label="Move ' + name + ' later">' + icon("down") + "</button></span>" +
+        '<span class="grip" aria-hidden="true" title="Drag">' + icon("grip") + "</span>";
+    }
+    return h + "</li>";
+  }
+
+  function renderOrder(){
+    el.board.innerHTML =
+      (st.locked
+        ? '<p class="lead"><b>This is the order you locked.</b></p>'
+        : '<p class="lead">Here are your ten slides, in the order you built them, 1st to 10th. ' +
+          "<b>Drag them into the order you would present them in.</b></p>") +
+      '<ol class="deck" id="deck" aria-label="Your ten slides, in your order">' +
+        st.order.map(cardHTML).join("") + "</ol>";
+    var deck = document.getElementById("deck");
+    Array.prototype.forEach.call(deck.querySelectorAll("button.ar"), function(b){
+      b.addEventListener("click", function(){
+        var k = +b.closest(".cd").dataset.k;
+        nudge(k, +b.dataset.d, b.dataset.d);
+      });
+    });
+    if(!st.locked) wireDrag(deck);
+    syncCards();
+    orderHint();
+  }
+
+  function orderHint(){
+    if(st.locked) el.hint.innerHTML = "<b>Your order is locked.</b> To change it, press Start again.";
+    else el.hint.textContent = "Drag a slide, or use its arrows. When you are happy with your order, press Lock my order.";
+  }
+
+  /* Numbers and arrow states follow the order, without rebuilding the cards. */
+  function syncCards(){
+    var deck = document.getElementById("deck");
+    if(!deck) return;
+    st.order.forEach(function(k, pos){
+      var c = deck.querySelector('.cd[data-k="' + k + '"]');
+      if(!c) return;
+      deck.appendChild(c);
+      c.querySelector(".pos").textContent = pos + 1;
+      c.setAttribute("aria-label", "Slide " + SLIDES[k].n + ", " + SLIDES[k].t + ", " + ordinal(pos+1) + " of 10");
+      var a = c.querySelectorAll("button.ar");
+      if(a.length){ a[0].disabled = (pos === 0); a[1].disabled = (pos === st.order.length - 1); }
+    });
+  }
+
+  function moveTo(k, to){
+    var from = st.order.indexOf(k);
+    if(from < 0 || to < 0 || to >= st.order.length || to === from) return false;
+    st.order.splice(from, 1);
+    st.order.splice(to, 0, k);
+    syncCards();
+    return true;
+  }
+
+  function nudge(k, d, which){
+    if(st.locked) return;
+    var from = st.order.indexOf(k);
+    if(!moveTo(k, from + d)) return;
+    var b = document.querySelector('.cd[data-k="' + k + '"] button.ar[data-d="' + which + '"]');
+    if(b && !b.disabled) b.focus();
+    else { var o = document.querySelector('.cd[data-k="' + k + '"] button.ar:not(:disabled)'); if(o) o.focus(); }
+    say(SLIDES[k].t + " is now " + ordinal(st.order.indexOf(k) + 1) + " of 10.");
+  }
+
+  /* Pointer drag. Mouse: anywhere on a card. Touch and pen: the grip only,
+     so a phone can still scroll the page by swiping over the cards. */
+  var dragging = null, dragged = false;
+  function wireDrag(deck){
+    deck.addEventListener("pointerdown", function(e){
+      if(st.locked || e.button > 0) return;
+      if(e.target.closest("button")) return;
+      var c = e.target.closest(".cd");
+      if(!c) return;
+      if(e.pointerType !== "mouse" && !e.target.closest(".grip")) return;
+      e.preventDefault();
+      dragging = { k:+c.dataset.k, id:e.pointerId, card:c, start:st.order.indexOf(+c.dataset.k) };
+      dragged = false;
+      c.classList.add("moving");
+      try{ c.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    deck.addEventListener("pointermove", function(e){
+      if(!dragging || e.pointerId !== dragging.id) return;
+      e.preventDefault();
+      if(e.pointerType !== "mouse"){
+        if(e.clientY < 70) window.scrollBy(0, -12);
+        else if(e.clientY > window.innerHeight - 70) window.scrollBy(0, 12);
+      }
+      var under = document.elementFromPoint(e.clientX, e.clientY);
+      var t = under && under.closest ? under.closest(".cd") : null;
+      if(!t || t === dragging.card) return;
+      if(moveTo(dragging.k, st.order.indexOf(+t.dataset.k))) dragged = true;
+    });
+    function end(e){
+      if(!dragging || e.pointerId !== dragging.id) return;
+      var k = dragging.k, moved = st.order.indexOf(k) !== dragging.start;
+      dragging.card.classList.remove("moving");
+      try{ dragging.card.releasePointerCapture(e.pointerId); }catch(err){}
+      dragging = null;
+      if(moved) say(SLIDES[k].t + " is now " + ordinal(st.order.indexOf(k) + 1) + " of 10.");
+      setTimeout(function(){ dragged = false; }, 0);
+    }
+    deck.addEventListener("pointerup", end);
+    deck.addEventListener("pointercancel", end);
+  }
+
+  /* ---------------- slide 2: where each slide started ---------------- */
+  function shifts(){
+    return st.order.map(function(k, pos){ return { k:k, pos:pos, d:k - pos }; });
+  }
+  function places(n){ return n === 1 ? "1 place" : n + " places"; }
+  function andList(a){ return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length-1]; }
+
+  function renderResult(anim){
+    if(!st.locked){
+      el.h1.textContent = "Lock your order first.";
+      el.board.innerHTML = '<p class="lead">Put the slides in your order on the first screen, then press Lock my order.</p>' +
+        '<button class="nav ghost" type="button" id="toorder" style="align-self:flex-start">Go to your order</button>';
+      el.board.querySelector("#toorder").addEventListener("click", function(){ i = 0; render(); topFocus(); });
+      return;
+    }
+    var sh = shifts(), movedN = 0, max = 0;
+    sh.forEach(function(x){ var a = Math.abs(x.d); if(a > 0) movedN++; if(a > max) max = a; });
+    var far = sh.filter(function(x){ return max > 0 && Math.abs(x.d) === max; });
+
+    var sum;
+    if(movedN === 0){
+      sum = "<b>You kept all ten slides in the order you built them.</b>";
+    } else {
+      var names = far.map(function(x){ return "Slide " + SLIDES[x.k].n + ", " + esc(SLIDES[x.k].t); });
+      sum = "<b>You moved " + movedN + " of your 10 slides.</b> " +
+        (far.length === 1
+          ? names[0] + ", moved furthest: " + places(max) + "."
+          : "Slides " + andList(far.map(function(x){ return SLIDES[x.k].n; })) + " moved furthest: " + places(max) + " each.");
+    }
+
+    var rows = sh.map(function(x){
+      var sl = SLIDES[x.k], a = Math.abs(x.d), isFar = max > 0 && a === max;
+      var tag = x.d === 0 ? "Did not move"
+        : (x.d > 0 ? "&uarr; <b>" + places(a) + "</b> earlier" : "&darr; <b>" + places(a) + "</b> later");
+      return '<li class="cd' + (isFar ? " far" : "") + '">' +
+        '<span class="pos" aria-hidden="true">' + (x.pos+1) + "</span>" +
+        '<span class="tx"><span class="sn">Slide ' + sl.n + " · was " + ordinal(x.k+1) + (isFar ? " · moved furthest" : "") +
+          '</span><span class="st">' + esc(sl.t) + "</span></span>" +
+        '<span class="tg">' + tag + "</span>" +
+        '<span class="sr">, now ' + ordinal(x.pos+1) + "</span></li>";
+    }).join("");
+
+    el.board.innerHTML =
+      '<p class="lead">' + sum + "</p>" +
+      '<ol class="deck res' + (anim && !reduce ? " in" : "") + '" aria-label="Your order, with where each slide started">' + rows + "</ol>" +
+      '<div class="leadbar">' + icon("back") + "<p>Keep your order in mind, then go back to the task and read on.</p></div>";
+  }
+
+  /* ---------------- start again ---------------- */
+  function resetAll(){ st = fresh(); i = 0; render(); }
+  el.again.addEventListener("click", function(){ resetAll(); topFocus(); say("Cleared. Back to the start. Your ten slides are in the order you built them."); });
+
+  /* ---------------- navigation ---------------- */
+  function announce(){
+    if(S[i].kind === "result" && st.locked){
+      return "Slide 2 of 2. " + strip(el.board.querySelector(".lead").innerHTML);
+    }
+    return "Slide " + (i+1) + " of " + S.length + ". " + el.h1.textContent;
+  }
+  function strip(h){ return String(h).replace(/<[^>]+>/g, ""); }
+
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    if(d > 0 && i === 0) st.locked = true;
+    i = n; render(d > 0); topFocus();
+    say(announce());
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    return t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || t === "BUTTON";
+  }
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); return; }
+    if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); return; }
+  });
+
+  /* Swipe between slides, but never as part of a drag. */
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(e.target.closest && e.target.closest(".grip")){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null || dragging || dragged) { tx = null; return; }
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render(false);
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     goto fills a sample order when slide 2 needs one, so every slide can be
+     measured with real content on it. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      if(n >= 1 && !st.locked){ st.order = [9,0,6,8,1,2,3,4,5,7]; st.locked = true; }
+      i = n; render(false); return true;
+    },
+    slides:S.length,
+    setOrder:function(arr){
+      if(!Array.isArray(arr) || arr.length !== 10) return false;
+      var seen = {}; for(var k=0;k<10;k++){ if(seen[arr[k]] || arr[k] < 0 || arr[k] > 9) return false; seen[arr[k]] = 1; }
+      st.order = arr.slice(); render(false); return true;
+    },
+    reset:function(){ resetAll(); },
+    state:function(){ return { i:i, order:st.order.slice(), locked:st.locked }; }
+  };
+})();
+</script>
+</body>
+</html>
