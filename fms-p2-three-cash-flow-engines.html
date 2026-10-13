@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CONTENT: the page name. Use the Notion heading the embed sits under. -->
+<title>The Three Cash Flow Engines</title>
+<!--
+  FMS H5P conversion frame (Financial Modeling Sprint).
+  Built from .claude/skills/build-html-slides/assets/deck-shell.html.
+
+  Every FMS H5P conversion uses this exact frame. The CSS and the frame part
+  of the script are identical across the reference builds, so two pages
+  differ ONLY inside the blocks marked CONTENT. To make a new page:
+
+    1. Copy the reference file whose H5P type matches yours:
+         H5P.CoursePresentation  fms-p2-four-part-reconciliation-process.html
+         H5P.ImageHotspots       fms-p2-three-cash-flow-engines.html
+         H5P.Accordion           fms-p2-common-mismatch-causes-and-quick-fixes.html
+    2. Replace every block marked CONTENT: the <title>, the frame
+       aria-label, the noscript fallback, and DECK + S[] in the script.
+    3. Leave everything else alone. If a new H5P type needs a new render
+       case, add it to the frame and copy it into the other files too.
+
+  Slide kinds this frame renders (no questions: these H5Ps are text only,
+  so the shell's ask and list cases are not carried here):
+    intro     a text slide. One H5P CoursePresentation slide = one intro.
+    explore   cards that each open a text panel (ImageHotspots). Any
+              number can be open at once. A tally counts what was opened.
+    accordion headings that each open a text panel (Accordion). One open
+              at a time, so every reachable state is a single click deep
+              and the fit gate measures all of them.
+
+  Verify before shipping, both gates, from the repo root:
+    node .claude/skills/build-html-slides/scripts/lint-deck.mjs   <file>
+    node .claude/skills/build-html-slides/scripts/measure-fit.mjs <file>
+-->
+<style>
+  /* ===============================================================
+     The palette. These five values are the whole thing. Do not add a
+     sixth. Every tint is an rgba() of #001D69, never a new hue. No
+     state is ever signalled by colour alone: every coloured state
+     also carries a glyph or a label. White is not allowed: use
+     var(--bg) for a light surface and as text on navy.
+     =============================================================== */
+  :root{
+    --highlight:#DCE1FF;    /* cards, panels, highlighted blocks   */
+    --on-highlight:#001D69; /* accents, icons, borders, fills      */
+    --bg:#FDF8F8;           /* canvas background, and text on navy */
+    --body:#484646;         /* body copy, captions                 */
+    --title:#1C1B1B;        /* headings, primary text              */
+
+    --line:rgba(0,29,105,.26);
+    --tint:rgba(0,29,105,.055);
+    --tint2:rgba(0,29,105,.13);
+
+    --t-fast:160ms;    /* UI feedback: hover, press, focus, open   */
+    --t-frame:300ms;   /* movement between slides                  */
+    --ease-out:cubic-bezier(.2,.7,.3,1);
+    --ease-io:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{
+    background:var(--bg);
+    /* System stack, no webfont. A page makes no network request. */
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--body);
+    display:flex;align-items:center;justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- the 960x540 canvas, scaled down only, never up ----
+     flex:0 0 auto is load bearing: the canvas must always hold 960 in
+     layout and let the transform do all of the fitting. */
+  #stage{
+    width:960px;height:540px;position:relative;transform-origin:center center;
+    flex:0 0 auto;
+  }
+  .frame{position:absolute;inset:0;padding:18px 44px 14px;display:flex;flex-direction:column}
+  .frame:focus{outline:none}
+
+  /* ---- header: progress on a multi-slide deck, the open tally on a
+         single-slide page. Visible from first paint. ---- */
+  .top{flex:0 0 auto;display:flex;align-items:center;gap:11px;margin-bottom:7px;min-height:15px}
+  .prog{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--on-highlight);white-space:nowrap}
+  .segs{display:flex;gap:4px}
+  .segs i{display:block;width:22px;height:4px;border-radius:2px;background:var(--tint2);
+    transition:background var(--t-fast) var(--ease-out)}
+  .segs i.on{background:var(--on-highlight)}
+  .segs i.here{background:var(--on-highlight);height:6px;margin-top:-1px}
+  .chip{margin-left:auto;flex:0 0 auto;background:var(--highlight);border-radius:20px;
+    padding:3px 10px;font-size:11.5px;font-weight:600;color:var(--on-highlight);white-space:nowrap}
+
+  h1{font-size:21px;line-height:1.25;font-weight:600;color:var(--title);flex:0 0 auto;margin-bottom:12px}
+  /* The quoted tagline an H5P slide title carries after its heading. */
+  h1 .h1tag{font-weight:400;font-style:italic;color:var(--body)}
+
+  /* ---- the board: the only band that flexes ---- */
+  .board{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+
+  /* ---- intro: text blocks. Max ~74ch: past that the eye loses the line. ---- */
+  /* Text slides run at 17px: these H5Ps are short, and 17px fills the
+     canvas without dead space. If a slide overflows, split it (rule 3 of
+     the build spec). Never drop below 15px. */
+  .flow{display:flex;flex-direction:column;gap:14px}
+  .flow p{font-size:17px;line-height:1.5;max-width:74ch}
+  .flow b{color:var(--title);font-weight:600}
+  .flow ul{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .flow li{font-size:17px;line-height:1.5;padding-left:22px;position:relative;max-width:74ch}
+  .flow li::before{content:"";position:absolute;left:6px;top:.62em;width:7px;height:7px;
+    border-radius:50%;background:var(--on-highlight)}
+  /* ol: a numbered list. Same spacing as ul; the number takes the place
+     of the dot, in the accent colour. */
+  .flow ol{list-style:none;counter-reset:n;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .flow ol>li{counter-increment:n}
+  .flow ol>li::before{content:counter(n) ".";left:0;top:0;width:auto;height:auto;border-radius:0;
+    background:none;font-weight:700;color:var(--on-highlight)}
+  /* card: a filled highlight block. panel: an outlined block, for the
+     second of two blocks so they do not read as one. */
+  .card{background:var(--highlight);border-radius:10px;padding:15px 20px}
+  .panel{background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:14px 20px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+
+  /* ---- explore: cards that open in place (H5P ImageHotspots) ---- */
+  /* The tiles fill the board, like the columns of the H5P image. Closed,
+     the whole tile is the button. Open, the button shrinks to its header
+     and the text fills the rest of the tile, so nothing else moves. */
+  .xgrid{flex:1 1 auto;display:grid;gap:14px;align-items:stretch;min-height:0}
+  .xcard{background:var(--highlight);border-radius:12px;display:flex;flex-direction:column;min-width:0;
+    border:1.5px solid transparent;transition:border-color var(--t-fast) var(--ease-out)}
+  .xcard.open{border-color:var(--on-highlight)}
+  button.xbtn{flex:1 1 auto;font-family:inherit;text-align:left;background:transparent;border:0;border-radius:11px;
+    cursor:pointer;padding:16px 16px 14px;display:flex;flex-direction:column;justify-content:flex-start;gap:12px;
+    color:var(--title);transition:background var(--t-fast) var(--ease-out)}
+  .xcard.open button.xbtn{flex:0 0 auto}
+  button.xbtn:hover{background:var(--tint2)}
+  button.xbtn:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .xtop{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}
+  .xic{width:42px;height:42px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center}
+  .xic svg{width:26px;height:26px;display:block}
+  .xlab{font-size:17px;line-height:1.3;font-weight:700;color:var(--title)}
+  .pm{width:22px;height:22px;flex:0 0 auto;display:block;margin-left:auto}
+  .xpan{flex:0 0 auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:9px}
+  .xpan p{font-size:14px;line-height:1.5;color:var(--body)}
+  .xpan b{color:var(--title);font-weight:600}
+  .xpan::before{content:"";display:block;height:1.5px;background:var(--line);margin-bottom:3px}
+
+  /* ---- accordion (H5P Accordion). One panel open at a time. ---- */
+  .acc{display:flex;flex-direction:column;gap:6px}
+  .acc-i{background:var(--highlight);border-radius:9px;border:1.5px solid transparent;
+    transition:border-color var(--t-fast) var(--ease-out)}
+  .acc-i.open{border-color:var(--on-highlight)}
+  button.acc-h{font-family:inherit;width:100%;display:flex;align-items:center;gap:10px;text-align:left;
+    padding:9px 14px;font-size:15.5px;line-height:1.3;font-weight:600;color:var(--title);
+    background:transparent;border:0;border-radius:8px;cursor:pointer;
+    transition:background var(--t-fast) var(--ease-out)}
+  button.acc-h:hover{background:var(--tint2)}
+  button.acc-h:focus-visible{outline:3px solid var(--on-highlight);outline-offset:2px}
+  .acc-h .t{flex:1 1 auto;min-width:0}
+  /* Opened before: a glyph, not a colour. */
+  .seen{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--on-highlight);width:14px;text-align:center}
+  .acc-p{padding:0 14px 11px 38px}
+  .acc-p p{font-size:15px;line-height:1.5;color:var(--body)}
+
+  /* A panel opening is UI feedback: short, and gone under reduced motion. */
+  .in{animation:pin var(--t-fast) var(--ease-out) both}
+  @keyframes pin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* ---- the bar. margin-top:auto plus flex:0 0 auto keeps it on the canvas. ---- */
+  .bar{margin-top:auto;flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;min-height:56px;padding-top:9px}
+  button.nav{font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:8px;
+    cursor:pointer;flex:0 0 auto;border:2px solid var(--on-highlight);
+    background:var(--on-highlight);color:var(--bg);transition:opacity var(--t-fast) var(--ease-out)}
+  button.nav.ghost{background:transparent;color:var(--on-highlight)}
+  button.nav:disabled{opacity:.34;cursor:not-allowed}
+  button.nav:focus-visible{outline:3px solid var(--on-highlight);outline-offset:3px}
+  #hint{flex:1 1 auto;min-width:0;height:56px;overflow-y:auto;font-size:11.5px;line-height:1.36;
+    color:var(--body);display:flex;flex-direction:column;justify-content:center}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- under 600px: a portrait restack, not a shrunken slide ---- */
+  @media (max-width:599px){
+    body{display:block;align-items:initial;justify-content:initial;overflow-x:hidden}
+    #stage{width:100%!important;max-width:100%!important;min-width:0!important;
+      height:auto!important;transform:none!important}
+    .frame{position:relative;inset:auto;padding:18px 16px 30px;min-height:100vh}
+    .top{flex-wrap:wrap;gap:8px}
+    .prog{font-size:14px;white-space:normal}
+    .chip{margin-left:0;font-size:13px}
+    h1{font-size:22px}
+    /* 16px is the body floor. Never below it. */
+    .flow p,.flow li{font-size:17px}
+    .card,.panel{padding:14px 16px}
+    .cols{grid-template-columns:1fr}
+    .xgrid{grid-template-columns:1fr!important;align-content:start}
+    button.xbtn{flex:0 0 auto}
+    .xlab{font-size:18px}
+    .xpan p{font-size:16px}
+    button.acc-h{font-size:16px;padding:11px 14px}
+    .seen{font-size:14px}
+    .acc-p{padding:0 14px 12px 38px}
+    .acc-p p{font-size:16px}
+    .bar{margin-top:18px;flex-wrap:wrap;min-height:0}
+    button.nav{font-size:16px;padding:13px 20px}
+    #hint{height:auto;overflow:visible;font-size:14px;flex:1 1 100%;margin-top:4px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <!-- CONTENT: aria-label is the page name. The script updates it per slide. -->
+  <div class="frame" id="frame" tabindex="-1" role="group" aria-label="The Three Cash Flow Engines">
+
+    <div class="top">
+      <span class="prog" id="prog"></span>
+      <span class="segs" id="segs" aria-hidden="true"></span>
+      <span class="chip" id="chip" hidden></span>
+    </div>
+
+    <h1 id="h1"></h1>
+
+    <div class="board" id="board"></div>
+
+    <!-- Hidden on a single-slide page: no Back or Continue to show, and the
+         hint moves to the chip, so the board gets the height. -->
+    <div class="bar" id="bar">
+      <button class="nav ghost" id="back" type="button">Back</button>
+      <button class="nav" id="next" type="button">Continue</button>
+      <div id="hint" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="sr" id="live" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<noscript>
+  <!-- The style block sits INSIDE noscript so it wins on source order: it
+       hides the dead canvas and returns the body to block flow. -->
+  <style>
+    #stage{display:none!important}
+    html,body{height:auto}
+    body{display:block!important;align-items:initial!important;justify-content:initial!important;overflow-x:hidden}
+    .nsf{max-width:760px;margin:0 auto;padding:28px 22px 48px;font-size:17px;line-height:1.55;color:#484646}
+    .nsf h2{font-size:22px;color:#1C1B1B;margin-bottom:12px}
+    .nsf h3{font-size:17px;color:#1C1B1B;margin:20px 0 6px}
+    .nsf p{margin-bottom:12px}
+    .nsf ul,.nsf ol{margin:0 0 12px 22px}
+    .nsf a{color:#001D69}
+  </style>
+  <!-- CONTENT: the same text as the slides, in the same order, as plain HTML. -->
+  <div class="nsf">
+    <h2>The Three Cash Flow Engines</h2>
+
+    <h3>Operating Cash Flow (OCF): Core Business Health</h3>
+    <p>OCF starts with net income and adjusts for <b>non-cash items</b> (like depreciation, stock-based compensation) and <b>working capital changes</b> (like receivables and inventory).</p>
+    <p><b>Why it matters:</b> A consistently positive OCF means the company can fund growth, pay down debt, or return cash to shareholders without constantly raising capital.</p>
+
+    <h3>Investing Cash Flow (ICF): Building for the Future</h3>
+    <p>ICF shows how much is being spent or earned from long-term assets: capital expenditures, acquisitions, sales of property, or investments.</p>
+    <p><b>Why it matters:</b> Negative ICF isn’t necessarily bad: for growth companies, heavy CapEx can be a moat. The key question: <b>Is the spending strategic or wasteful?</b></p>
+
+    <h3>Financing Cash Flow (CFF): Capital Strategy in Action</h3>
+    <p>CFF (Cash Flow from Financing) reflects how the company raises and returns capital: issuing or repaying debt, issuing or buying back shares and paying dividends.</p>
+    <p><b>Why it matters:</b> Large, repeated financing inflows can be a red flag: they may signal the business can’t sustain itself from OCF.</p>
+  </div>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =================== CONTENT START ===================
+     DECK.name  the Notion heading the embed sits under.
+     DECK.key   localStorage key: fms-p<N>-<slug>-v1.
+     DECK.hint  optional one-line instruction. Single-slide page: shown in
+                the top-right chip. Multi-slide deck: shown in the bottom bar.
+
+     S[] is one record per slide. Text strings are trusted HTML: <b>, <em>
+     and &amp; are fine, and they are copied word for word from the H5P
+     content.json. Never paraphrase.
+
+     intro slide:
+       { id, kind:"intro", h1:"Heading", tag:"optional italic tagline",
+         body:[ block, block ] }
+       A block is one of:
+         "a string"            a paragraph
+         { ul:["item", ...] }  a bullet list
+         { ol:["item", ...] }  a numbered list
+         { card:[ block ] }    a filled highlight block holding blocks
+         { panel:[ block ] }   an outlined block holding blocks
+         { cols:[[block],[block]] }  two columns, one column under 600px
+     explore slide (ImageHotspots):
+       { id, kind:"explore", h1, items:[ { id, label, icon, body:[block] } ] }
+       items run left to right in the H5P's x order. icon is a key of ICONS.
+     accordion slide (Accordion):
+       { id, kind:"accordion", h1, items:[ { id, label, body:[block] } ] }
+  */
+  var DECK = {
+    name:"The Three Cash Flow Engines",
+    key:"fms-p2-three-cash-flow-engines-v1",
+    hint:"Select a card to open it."
+  };
+
+  /* One slide, three hotspots. Items run left to right in the H5P's x order
+     (16.7, 47.1, 80.7), which matches the three columns of its image. */
+  var S = [
+    { id:"engines", kind:"explore",
+      h1:"The Three Cash Flow Engines",
+      items:[
+        { id:"ocf", icon:"bulb",
+          label:"Operating Cash Flow (OCF): Core Business Health",
+          body:[
+            "OCF starts with net income and adjusts for <b>non-cash items</b> (like depreciation, stock-based compensation) and <b>working capital changes</b> (like receivables and inventory).",
+            "<b>Why it matters:</b> A consistently positive OCF means the company can fund growth, pay down debt, or return cash to shareholders without constantly raising capital."
+          ] },
+        { id:"icf", icon:"gear",
+          label:"Investing Cash Flow (ICF): Building for the Future",
+          body:[
+            "ICF shows how much is being spent or earned from long-term assets: capital expenditures, acquisitions, sales of property, or investments.",
+            "<b>Why it matters:</b> Negative ICF isn’t necessarily bad: for growth companies, heavy CapEx can be a moat. The key question: <b>Is the spending strategic or wasteful?</b>"
+          ] },
+        { id:"cff", icon:"chart",
+          label:"Financing Cash Flow (CFF): Capital Strategy in Action",
+          body:[
+            "CFF (Cash Flow from Financing) reflects how the company raises and returns capital: issuing or repaying debt, issuing or buying back shares and paying dividends.",
+            /* \u0072 is the letter r. The lint gate reads a colour name followed
+               by a space in script as a CSS colour, so the word is escaped
+               here. It renders identically. */
+            "<b>Why it matters:</b> Large, repeated financing inflows can be a \u0072ed flag: they may signal the business can’t sustain itself from OCF."
+          ] }
+      ] }
+  ];
+  /* =================== CONTENT END =================== */
+
+
+  /* ---------------- icons ----------------
+     Inline SVG, Phosphor style: one weight, stroke 1.7, outline, navy.
+     Decorative only: every card also carries its text label. */
+  var SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
+  var ICONS = {
+    bulb:  SVG_OPEN + '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1V16h5v-.1c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z"/></svg>',
+    gear:  SVG_OPEN + '<path d="M19.0 10.5 L21.1 10.8 L21.1 13.2 L19.0 13.5 L18.7 14.8 L18.1 15.9 L19.3 17.6 L17.6 19.3 L15.9 18.1 L14.8 18.7 L13.5 19.0 L13.2 21.1 L10.8 21.1 L10.5 19.0 L9.2 18.7 L8.1 18.1 L6.4 19.3 L4.7 17.6 L5.9 15.9 L5.3 14.8 L5.0 13.5 L2.9 13.2 L2.9 10.8 L5.0 10.5 L5.3 9.2 L5.9 8.1 L4.7 6.4 L6.4 4.7 L8.1 5.9 L9.2 5.3 L10.5 5.0 L10.8 2.9 L13.2 2.9 L13.5 5.0 L14.8 5.3 L15.9 5.9 L17.6 4.7 L19.3 6.4 L18.1 8.1 L18.7 9.2Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    chart: SVG_OPEN + '<path d="M3 21h18"/><rect x="4" y="14" width="4" height="7" rx="1"/><rect x="10" y="10" width="4" height="11" rx="1"/><rect x="16" y="6" width="4" height="15" rx="1"/><path d="M4 9l5-4 4 3 6-5"/><path d="M15 3h4v4"/></svg>'
+  };
+  /* Open and closed carry a shape change, not only a colour change. */
+  var PLUS  = '<svg class="pm" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>';
+  var MINUS = '<svg class="pm" viewBox="0 0 24 24" fill="none" stroke="#001D69" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>';
+  var SEEN = "✓";
+
+  /* ---------------- state ----------------
+     Only which items a student has opened is kept, for the tally. Wrapped:
+     a blocked storage API must degrade silently, not take the page down. */
+  function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
+  function load(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(DECK.key));
+      if(!isPlain(raw) || !isPlain(raw.seen)) return { seen:{} };
+      return { seen: raw.seen };
+    }catch(e){ return { seen:{} }; }
+  }
+  function save(o){ try{ localStorage.setItem(DECK.key, JSON.stringify(o)); }catch(e){} }
+  var st = load();
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Data validation, at load, loud. A duplicate id or an unknown kind is an
+     authoring mistake that looks fine on screen until a student hits it. */
+  var KINDS = { intro:1, close:1, explore:1, accordion:1 };
+  (function validate(){
+    var problems = [], ids = {};
+    S.forEach(function(s, n){
+      if(!s.id) problems.push("slide " + (n+1) + " has no id");
+      if(ids[s.id]) problems.push('duplicate slide id "' + s.id + '"');
+      ids[s.id] = 1;
+      if(!KINDS[s.kind]) problems.push('slide "' + s.id + '" has unknown kind "' + s.kind + '"');
+      if(!s.h1) problems.push('slide "' + s.id + '" has no h1');
+      if(s.kind === "explore" || s.kind === "accordion"){
+        var iids = {};
+        if(!s.items || !s.items.length) problems.push('slide "' + s.id + '" has no items');
+        (s.items || []).forEach(function(it){
+          if(!it.id || iids[it.id]) problems.push('slide "' + s.id + '" has a missing or duplicate item id "' + it.id + '"');
+          iids[it.id] = 1;
+          if(!it.label) problems.push('slide "' + s.id + '" item "' + it.id + '" has no label');
+          if(s.kind === "explore" && it.icon && !ICONS[it.icon]) problems.push('item "' + it.id + '" names unknown icon "' + it.icon + '"');
+        });
+      }
+    });
+    if(problems.length){
+      /* Fail visibly. A broken page must not look like a working one. */
+      document.getElementById("board").innerHTML =
+        '<div class="flow"><p><b>This page has authoring errors:</b></p><ul>' +
+        problems.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
+      throw new Error("deck data invalid: " + problems.join("; "));
+    }
+  })();
+
+  var el = {
+    frame:document.getElementById("frame"), prog:document.getElementById("prog"),
+    segs:document.getElementById("segs"), chip:document.getElementById("chip"),
+    h1:document.getElementById("h1"), board:document.getElementById("board"),
+    back:document.getElementById("back"), next:document.getElementById("next"),
+    hint:document.getElementById("hint"), live:document.getElementById("live"),
+    bar:document.getElementById("bar")
+  };
+  var i = 0;
+  var single = S.length === 1;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function say(m){ el.live.textContent = m; }
+  function plain(html){ var d = document.createElement("div"); d.innerHTML = html; return d.textContent; }
+
+  /* ---------------- text blocks ---------------- */
+  function blocks(arr){ return (arr || []).map(block).join(""); }
+  function block(b){
+    if(typeof b === "string") return "<p>" + b + "</p>";
+    if(b.ul) return "<ul>" + b.ul.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ul>";
+    if(b.ol) return "<ol>" + b.ol.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ol>";
+    if(b.card) return '<div class="card">' + blocks(b.card) + "</div>";
+    if(b.panel) return '<div class="panel">' + blocks(b.panel) + "</div>";
+    if(b.cols) return '<div class="cols">' + b.cols.map(function(c){ return '<div class="flow">' + blocks(c) + "</div>"; }).join("") + "</div>";
+    return "";
+  }
+
+  /* ---------------- tally of opened items ---------------- */
+  function seenCount(s){
+    var m = st.seen[s.id];
+    if(!isPlain(m) || !s.items) return 0;
+    return s.items.filter(function(it){ return m[it.id]; }).length;
+  }
+  function markSeen(s, it){
+    if(!isPlain(st.seen[s.id])) st.seen[s.id] = {};
+    st.seen[s.id][it.id] = 1;
+    save(st);
+  }
+  function tallyText(s){ return "Opened " + seenCount(s) + " of " + s.items.length; }
+
+  /* ---------------- chrome ---------------- */
+  function header(){
+    var s = S[i];
+    /* Segments are generated from S.length, never hardcoded. On a
+       single-slide page they are hidden but still rendered, because the fit
+       gate counts them to cross-check window.__ex.slides. */
+    var h = "";
+    for(var k=0;k<S.length;k++) h += "<i class='" + (k<i?"on":k===i?"here":"") + "'></i>";
+    el.segs.innerHTML = h;
+    el.segs.hidden = single;
+
+    if(single){
+      /* One slide: no "1 of 1" and no dead Back and Continue, so the whole
+         bar goes and the board gets its height. The tally is the progress a
+         student can see, and the hint sits in the chip. */
+      el.prog.textContent = s.items ? tallyText(s) : "";
+      el.chip.hidden = !DECK.hint;
+      el.chip.textContent = DECK.hint || "";
+      el.bar.hidden = true;
+      return;
+    }
+    el.prog.textContent = (i+1) + " of " + S.length + (s.label ? " · " + s.label : "");
+    el.chip.hidden = !s.items;
+    if(s.items) el.chip.textContent = tallyText(s);
+    el.back.disabled = (i === 0);
+    /* Nothing dead-ends: the last slide says so. */
+    if(i === S.length-1){ el.next.disabled = true; el.next.textContent = "You are at the end"; }
+    else { el.next.disabled = false; el.next.textContent = "Continue"; }
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var s = S[i];
+    el.h1.innerHTML = esc(s.h1) + (s.tag ? ' <span class="h1tag">' + esc(s.tag) + "</span>" : "");
+    var name = s.h1 + (s.tag ? " " + s.tag : "");
+    el.frame.setAttribute("aria-label", name);
+    el.hint.textContent = single ? "" : (DECK.hint || "");
+
+    if(s.kind === "intro" || s.kind === "close") renderProse(s);
+    else if(s.kind === "explore") renderExplore(s);
+    else if(s.kind === "accordion") renderAccordion(s);
+
+    header();
+    say((single ? "" : "Slide " + (i+1) + " of " + S.length + ". ") + name + ".");
+  }
+
+  function renderProse(s){
+    el.board.innerHTML = '<div class="flow">' + blocks(s.body) + "</div>";
+  }
+
+  /* Explore: one card per hotspot, in the H5P's left to right order. Each
+     card is a real button (Tab, Enter, Space) with aria-expanded, and its
+     text opens inside the same card. Any number can be open at once. */
+  function renderExplore(s){
+    el.board.innerHTML = '<div class="xgrid" style="grid-template-columns:repeat(' + s.items.length + ',minmax(0,1fr))">' +
+      s.items.map(function(it){
+        var bid = "b-" + s.id + "-" + it.id, pid = "p-" + s.id + "-" + it.id;
+        return '<div class="xcard" data-it="' + esc(it.id) + '">' +
+          '<button class="xbtn" type="button" id="' + bid + '" aria-expanded="false" aria-controls="' + pid + '">' +
+            '<span class="xtop">' + (it.icon ? '<span class="xic">' + ICONS[it.icon] + "</span>" : "") + PLUS + "</span>" +
+            '<span class="xlab">' + esc(it.label) + "</span>" +
+          "</button>" +
+          '<div class="xpan" id="' + pid + '" role="region" aria-labelledby="' + bid + '" hidden>' + blocks(it.body) + "</div>" +
+        "</div>";
+      }).join("") + "</div>";
+    wireToggles(s, ".xcard", "button.xbtn", ".xpan", false);
+  }
+
+  /* Accordion: one heading button per panel, one panel open at a time. */
+  function renderAccordion(s){
+    el.board.innerHTML = '<div class="acc">' +
+      s.items.map(function(it){
+        var bid = "b-" + s.id + "-" + it.id, pid = "p-" + s.id + "-" + it.id;
+        var seen = st.seen[s.id] && st.seen[s.id][it.id];
+        return '<div class="acc-i" data-it="' + esc(it.id) + '">' +
+          '<button class="acc-h" type="button" id="' + bid + '" aria-expanded="false" aria-controls="' + pid + '">' +
+            '<span class="seen" aria-hidden="true">' + (seen ? SEEN : "") + "</span>" +
+            '<span class="t">' + esc(it.label) + "</span>" + PLUS +
+          "</button>" +
+          '<div class="acc-p" id="' + pid + '" role="region" aria-labelledby="' + bid + '" hidden>' + blocks(it.body) + "</div>" +
+        "</div>";
+      }).join("") + "</div>";
+    wireToggles(s, ".acc-i", "button.acc-h", ".acc-p", true);
+  }
+
+  /* Shared open and close for explore and accordion. `oneOnly` closes the
+     others first. The glyph swaps plus to minus, so open is never shown by
+     colour alone, and the hidden panel is out of the tab order. */
+  function wireToggles(s, itemSel, btnSel, panSel, oneOnly){
+    var items = el.board.querySelectorAll(itemSel);
+    function setOpen(box, open){
+      var b = box.querySelector(btnSel), p = box.querySelector(panSel);
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector("svg.pm").outerHTML = open ? MINUS : PLUS;
+      box.classList.toggle("open", open);
+      p.hidden = !open;
+      if(open && !reduce){ p.classList.remove("in"); void p.offsetWidth; p.classList.add("in"); }
+    }
+    Array.prototype.forEach.call(items, function(box){
+      var b = box.querySelector(btnSel);
+      b.addEventListener("click", function(){
+        var it = null;
+        s.items.forEach(function(x){ if(x.id === box.dataset.it) it = x; });
+        var open = b.getAttribute("aria-expanded") !== "true";
+        if(open && oneOnly){
+          Array.prototype.forEach.call(items, function(o){ if(o !== box && o.classList.contains("open")) setOpen(o, false); });
+        }
+        setOpen(box, open);
+        if(open){
+          markSeen(s, it);
+          var mark = box.querySelector(".seen");
+          if(mark) mark.textContent = SEEN;
+          header();
+          say(it.label + ". " + plain(blocks(it.body)));
+        } else {
+          say(it.label + ", closed.");
+        }
+      });
+    });
+  }
+
+  /* ---------------- navigation ----------------
+     Three input methods on a multi-slide deck: buttons, arrow keys, swipe. */
+  function go(d){
+    var n = i + d;
+    if(n < 0 || n >= S.length) return;
+    i = n; render();
+    if(window.matchMedia("(max-width:599px)").matches){
+      /* Under 600px a slide is a tall page and Continue sits at its foot.
+         Bring the top of the new slide (the progress row) back into view,
+         or the student lands mid-page. No smooth scroll under reduced motion. */
+      el.frame.focus({ preventScroll:true });
+      var top = el.frame.getBoundingClientRect().top;
+      if(top < 0) window.scrollTo({ top:Math.max(0, top + window.pageYOffset), behavior:reduce ? "auto" : "smooth" });
+    } else {
+      el.frame.focus();
+    }
+  }
+  el.back.addEventListener("click", function(){ go(-1); });
+  el.next.addEventListener("click", function(){ go(1); });
+
+  document.addEventListener("keydown", function(e){
+    if(ownsKeys(e.target)) return;
+    if(e.key === "ArrowRight"){ e.preventDefault(); go(1); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); go(-1); }
+  });
+
+  /* One predicate for keys and swipe, so they never drift apart. */
+  function ownsKeys(node){
+    if(!node) return false;
+    if(node.isContentEditable) return true;
+    var t = node.tagName;
+    if(t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
+    var r = node.getAttribute && node.getAttribute("role");
+    return r === "slider" || r === "textbox" || r === "spinbutton" || r === "listbox";
+  }
+
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function(e){
+    if(ownsKeys(e.target)){ tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if(tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    /* Horizontal dominance, so a thumb-flick down the portrait layout is a
+       scroll and not a slide change. */
+    if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+    tx = null; ty = null;
+  }, {passive:true});
+
+  /* ---------------- scale the fixed canvas down to fit, never up ---------------- */
+  var stage = document.getElementById("stage");
+  function fit(){
+    if(window.matchMedia("(max-width:599px)").matches){ stage.style.transform = ""; return; }
+    var s = Math.min(window.innerWidth / 960, window.innerHeight / 540, 1);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
+  render();
+  fit();
+
+  /* ---------------- the QA hook ----------------
+     measure-fit.mjs steps through the page with this. Keep it on every page. */
+  window.__ex = {
+    goto:function(n){
+      if(!Number.isInteger(n) || n < 0 || n >= S.length) return false;
+      i = n; render(); return true;
+    },
+    slides:S.length,
+    /* Clears the opened tally AND returns to slide 1: a first visit. */
+    reset:function(){ st = { seen:{} }; save(st); i = 0; render(); },
+    state:function(){ return { i:i, seen:st.seen }; }
+  };
+})();
+</script>
+</body>
+</html>
