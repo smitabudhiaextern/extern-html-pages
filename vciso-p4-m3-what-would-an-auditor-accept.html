@@ -360,31 +360,36 @@
   var ITEMS = [
     { n:1, ic:"chat", ok:"only",
       t:"Nate saying “I review it every quarter”",
+      hint:"Nate is telling the truth. But can you hand what someone said to an auditor, with a date on it and a record of what was done? Try again.",
       def:"Every quarter means every three months.",
       why:["It is true, and it is still not evidence, the kind of proof an auditor can take. A person’s word is where you start, not what you hand over."] },
     { n:2, ic:"image", ok:"only", weak:true,
       t:"A screenshot of the firewall rules, no date on it",
+      hint:"Look for a date. Can you tell when this picture was taken? Try again.",
       def:"A screenshot is a picture of what was on a screen at one moment.",
       why:["It has no date, so you can’t tell when it was taken. It is weak, not nothing: a dated configuration export fixes it."] },
     { n:3, ic:"mail", ok:"only", weak:true,
       t:"The two 2024 emails (“had a look, all fine”)",
+      hint:"The emails have a date and a name on them. Do they show what was looked at? Try again.",
       def:"These are two emails sent in 2024, each saying the firewall had been looked at and was fine.",
       why:["They are dated and come from a named person, but they don’t show what was reviewed. And two emails aren’t a quarterly process, which means a review every three months. That makes them weak, not nothing: you can’t tell what was done, but that is a cheap fix."] },
     { n:4, ic:"file", ok:"accept",
       t:"A dated configuration export / change log from the firewall itself",
+      hint:"This comes from the firewall itself and it has a date. Think about what it shows: what changed, when, and which admin account made the change. Try again.",
       def:"A configuration export is a copy of every setting on the firewall, saved by the firewall itself. A change log is a list the firewall keeps of the changes made to it.",
       why:["It shows what changed, when, and by which admin account, the login used to make the change. That is the thing happening, on a date, done by someone."] },
     { n:5, ic:"book", ok:"only",
       t:"The policy line “firewall shall be reviewed quarterly”",
+      hint:"A policy says what should happen. Does it show that the review happened? Try again.",
       def:"A policy is a set of written rules a company sets for itself. “Shall” means must, and “quarterly” means every three months.",
       why:["It is a rule that the review should happen. It says nothing about whether it did."] },
     { n:6, ic:"calendar", ok:"only",
       t:"A calendar reminder titled “review firewall”",
+      hint:"A reminder is set up before the work is done. Does it show that anything was done? Try again.",
       def:"A calendar reminder is a note that pops up at a set time to remind someone to do something.",
       why:["It shows someone meant to do the review, not that anything was done."] }
   ];
   var NQ = ITEMS.length;
-  var SHOWN = "There are only two answers here, so the right one is now marked in green, “Right answer.”";
   var VERDICT = { accept:"An auditor would accept this.", only:"This only looks like proof." };
   var WEAK = "Weak, not nothing";
   var DEF1 = "Evidence is something you can hand over that shows the thing happened, on a date, done by someone.";
@@ -395,18 +400,29 @@
   S.push({ kind:"end" });
 
   /* ---------------- state ----------------
-     p[n]: the student's one pick for item n ("accept" or "only").
-     The pick is kept even when wrong, so the last screen can mark it. */
-  var KEY = "vciso-p4-m3-what-would-an-auditor-accept-v1";
+     a[n]: { out:[wrong picks, in order], done:"right" | "shown" | "" }.
+     done "right" with an empty out list means right on the first try.
+     A new key (-v2): the old -v1 key held one pick per item and no retries. */
+  var KEY = "vciso-p4-m3-what-would-an-auditor-accept-v2";
   function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
-  function fresh(){ return { p:{} }; }
+  function fresh(){ return { a:{} }; }
+  function blank(){ return { out:[], done:"" }; }
   function load(){
     try{
       var raw = JSON.parse(localStorage.getItem(KEY));
-      if(!isPlain(raw) || !isPlain(raw.p)) return fresh();
-      var p = {};
-      ITEMS.forEach(function(it){ var v = raw.p[it.n]; if(v === "accept" || v === "only") p[it.n] = v; });
-      return { p:p };
+      if(!isPlain(raw) || !isPlain(raw.a)) return fresh();
+      var a = {};
+      ITEMS.forEach(function(it){
+        var v = raw.a[it.n];
+        if(!isPlain(v) || !Array.isArray(v.out)) return;
+        var out = [];
+        v.out.forEach(function(k){ if(ANS[k] && k !== it.ok && out.indexOf(k) < 0) out.push(k); });
+        var done = (v.done === "right" || v.done === "shown") ? v.done : "";
+        if(done === "shown" && out.length < 2) done = "";
+        if(!done && !out.length) return;
+        a[it.n] = { out:out, done:done };
+      });
+      return { a:a };
     }catch(e){ return fresh(); }
   }
   function save(o){ try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
@@ -426,8 +442,9 @@
   function strip(s){ return String(s).replace(/<[^>]+>/g,""); }
   function say(m){ el.live.textContent = ""; setTimeout(function(){ el.live.textContent = m; }, 30); }
   function phone(){ return window.matchMedia("(max-width:599px)").matches; }
-  function picked(it){ return st.p[it.n] || null; }
-  function allDone(){ return ITEMS.every(function(it){ return !!picked(it); }); }
+  function A(it){ return st.a[it.n] || blank(); }
+  function picked(it){ return !!A(it).done; }
+  function allDone(){ return ITEMS.every(function(it){ return picked(it); }); }
   function firstOpen(){ for(var k=0;k<NQ;k++) if(!picked(ITEMS[k])) return k; return -1; }
 
   /* ---------------- chrome ---------------- */
@@ -452,7 +469,10 @@
 
     if(s.kind === "q"){
       if(i === NQ - 1) el.next.textContent = "See where all six belong";
-      if(!picked(ITEMS[s.q])){ el.next.disabled = true; el.hint.textContent = "Pick one answer to carry on."; }
+      if(!picked(ITEMS[s.q])){
+        el.next.disabled = true;
+        el.hint.textContent = A(ITEMS[s.q]).out.length ? "Pick again to carry on." : "Pick one answer to carry on.";
+      }
     } else {
       if(!allDone()){ el.prog.textContent = "Not finished yet"; el.next.hidden = true; el.hint.textContent = ""; return; }
       el.next.textContent = "Start over";
@@ -496,13 +516,16 @@
   }
   function weakTag(){ return '<span class="weak">' + icon("weak") + WEAK + "</span>"; }
 
-  /* One thing on the table, two answers. Nothing chosen on arrival. */
+  /* One thing on the table, two answers. Nothing chosen on arrival.
+     A wrong pick is marked "Not quite" with a hint and taken out; the student
+     tries again. After two wrong tries the right answer would be shown. */
   function renderQ(s){
-    var it = ITEMS[s.q], p = picked(it), good = p === it.ok;
+    var it = ITEMS[s.q], a = A(it), done = a.done;
+    var last = a.out.length ? a.out[a.out.length - 1] : null;
     var h = '<div class="strip">' + icon("shield") + "<p>" + PREMISE + "</p></div>";
-    if(!p){
-      h += '<p class="lead">Here is one thing Cumberland could offer the auditor. Pick the answer that you think the auditor would give.</p>';
-      if(s.q === 0) h += '<p class="sub">There are only two answers, so if your pick is not right, we show you the right one straight away.</p>';
+    if(!done && !last){
+      h += '<p class="lead">Here is one thing Cumberland could hand the auditor. Pick the answer that you think the auditor would give.</p>';
+      if(s.q === 0) h += '<p class="sub">If your pick is not right, you can try again.</p>';
     }
     h += '<div class="card"><span class="bi">' + icon(it.ic) + "</span>"
       + '<span class="cl">On the table: #' + it.n + "</span>"
@@ -510,23 +533,24 @@
       + (it.def ? '<span class="cs">' + esc(it.def) + "</span>" : "")
       + "</div>";
     h += '<div class="opts" role="group" aria-label="Your answer">' + ORDER.map(function(k){
-        if(!p) return optHTML(k, "", "", "");
-        if(k === it.ok) return optHTML(k, "ok", "check", good ? "Right" : "Right answer");
-        if(k === p) return optHTML(k, "no", "x", "Not quite");
-        return optHTML(k, "idle", "", "");
+        if(a.out.indexOf(k) >= 0) return optHTML(k, "no", "x", "Not quite");
+        if(done && k === it.ok) return optHTML(k, "ok", "check", done === "right" ? "Right" : "Right answer");
+        if(done) return optHTML(k, "idle", "", "");
+        return optHTML(k, "", "", "");
       }).join("") + "</div>";
-    if(p){
-      var lines = [];
-      if(!good) lines.push(esc(SHOWN));
-      lines.push("<b>" + esc(VERDICT[it.ok]) + "</b> " + esc(it.why[0]));
-      h += '<div class="fb ' + (good ? "ok" : "no") + '" id="fb" tabindex="-1">'
-        + '<span class="fh">' + icon(good ? "okc" : "noc") + (good ? "Right" : "Not quite")
-        + (it.weak ? " " + weakTag() : "") + "</span>"
-        + lines.map(function(t){ return '<p class="ft">' + t + "</p>"; }).join("") + "</div>";
+    if(done){
+      var head = done === "right" ? "Right" : "Here is the right answer";
+      h += '<div class="fb ok" id="fb" tabindex="-1">'
+        + '<span class="fh">' + icon("okc") + head + (it.weak ? " " + weakTag() : "") + "</span>"
+        + '<p class="ft"><b>' + esc(VERDICT[it.ok]) + "</b> " + esc(it.why[0]) + "</p></div>";
+    } else if(last){
+      h += '<div class="fb no" id="fb" tabindex="-1">'
+        + '<span class="fh">' + icon("noc") + "Not quite</span>"
+        + '<p class="ft">' + esc(it.hint) + "</p></div>";
     }
     el.board.innerHTML = h;
-    if(!p){
-      Array.prototype.forEach.call(el.board.querySelectorAll("button.opt"), function(b){
+    if(!done){
+      Array.prototype.forEach.call(el.board.querySelectorAll("button.opt:not(:disabled)"), function(b){
         b.addEventListener("click", function(){ choose(it, b.dataset.o); });
       });
     }
@@ -534,20 +558,29 @@
   }
 
   function choose(it, k){
-    if(picked(it) || !ANS[k]) return;
-    st.p[it.n] = k; save(st);
+    var a = A(it);
+    if(a.done || !ANS[k] || a.out.indexOf(k) >= 0) return;
+    if(k === it.ok) a.done = "right";
+    else { a.out.push(k); if(a.out.length >= 2) a.done = "shown"; }
+    st.a[it.n] = a; save(st);
     render();
     var fb = el.board.querySelector("#fb");
     if(fb && !reduce){ fb.classList.remove("in"); void fb.offsetWidth; fb.classList.add("in"); }
     if(fb) say(strip(fb.innerHTML.replace(/<\/p>/g, " ").replace(/<\/span>/g, ". ")));
     var ph = phone();
-    el.next.focus(ph ? { preventScroll:true } : undefined);
-    if(fb && ph) el.bar.scrollIntoView({ block:"end", behavior: reduce ? "auto" : "smooth" });
+    if(a.done){
+      el.next.focus(ph ? { preventScroll:true } : undefined);
+      if(fb && ph) el.bar.scrollIntoView({ block:"end", behavior: reduce ? "auto" : "smooth" });
+    } else {
+      var again = el.board.querySelector("button.opt:not(:disabled)");
+      if(again) again.focus(ph ? { preventScroll:true } : undefined);
+      if(fb && ph) fb.scrollIntoView({ block:"nearest", behavior: reduce ? "auto" : "smooth" });
+    }
   }
 
   /* The last screen: where all six belong, then the definition. */
-  function mark(good){
-    return '<span class="mk2 ' + (good ? "ok" : "sh") + '">' + icon(good ? "check" : "info") + (good ? "Right" : "Shown to you") + "</span>";
+  function mark(first){
+    return '<span class="mk2 ' + (first ? "ok" : "sh") + '">' + icon(first ? "check" : "info") + (first ? "Right first try" : "Right on second try") + "</span>";
   }
   function renderEnd(){
     var open = firstOpen();
@@ -558,11 +591,11 @@
     function list(k){
       return ITEMS.filter(function(it){ return it.ok === k; }).map(function(it){
         return '<li><span class="n">#' + it.n + '</span><span class="t">' + esc(it.t) + "</span>"
-          + '<span class="tags">' + mark(picked(it) === it.ok) + (it.weak ? weakTag() : "") + "</span></li>";
+          + '<span class="tags">' + mark(A(it).out.length === 0) + (it.weak ? weakTag() : "") + "</span></li>";
       }).join("");
     }
     el.board.innerHTML = '<p class="lead">Here is where each of the six belongs. ' + mark(true)
-      + " means you sorted it yourself. " + mark(false) + " means we showed you the answer. " + weakTag() + " means it is not proof yet, but it is a cheap fix.</p>"
+      + " means your first pick was right. " + mark(false) + " means you got it after one wrong pick. " + weakTag() + " means it is not proof yet, but it is a cheap fix.</p>"
       + '<div class="buckets"><div class="col">'
       +   '<div class="bucket"><div class="bh">' + icon("stamp") + esc(ANS.accept.name) + "</div><ul>" + list("accept") + "</ul></div>"
       +   '<div class="statement"><p>' + esc(DEF1) + "</p><p>" + esc(DEF2) + "</p></div>"
@@ -652,7 +685,7 @@
     },
     slides:S.length,
     reset:function(){ st = fresh(); save(st); i = 0; confirming = false; render(); },
-    state:function(){ return { i:i, p:JSON.parse(JSON.stringify(st.p)), confirming:confirming }; }
+    state:function(){ return { i:i, a:JSON.parse(JSON.stringify(st.a)), confirming:confirming }; }
   };
 })();
 </script>
