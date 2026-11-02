@@ -41,6 +41,10 @@
     the checklist arrives after the student has committed). The student's note is not
     graded: there is no single right wording, so it gets no tick or cross. The last slide
     reminds the student to copy their notes into the note on their laptop, as the module says.
+  - 2 Nov 2026 (owner): the single mark toggle is replaced by two choice buttons on every
+    section, "Something is missing" (opens the note box) and "Nothing is missing" (no box).
+    The student must pick one before Next works, and can change it until the checklist is
+    shown. "Marked" below means the student picked "Something is missing".
   - Plain-words lines (component, contained, unprotected, change testing, staged rollout,
     monitoring, workstation, script, Windows Update, compatibility) are definitions only.
     No new facts. Script and Windows Update reuse the P2 wording.
@@ -142,6 +146,8 @@
   button.tog[aria-pressed="true"] .g{background:var(--on-highlight)}
   button.tog[aria-pressed="true"] .oi{background:var(--bg)}
   button.tog:disabled{cursor:default;border-style:dashed}
+  .picks{display:flex;flex-direction:column;gap:8px}
+  .picks button.tog{padding:8px 12px}
   .mark .sw{grid-column:1 / -1;margin-top:-2px;font-size:13px;line-height:1.38;color:var(--body);display:flex;gap:8px;align-items:flex-start}
   .mark .sw svg.ic{width:17px;height:17px;flex:0 0 auto;color:var(--on-highlight)}
   .note{display:flex;flex-direction:column;gap:5px}
@@ -302,7 +308,7 @@
     <div class="bar" id="bar">
       <button class="nav ghost" id="back" type="button">Back</button>
       <button class="nav" id="next" type="button">Next</button>
-      <button class="nav ghost" id="cancel" type="button" hidden>Keep my marks</button>
+      <button class="nav ghost" id="cancel" type="button" hidden>Keep my choices</button>
       <div id="hint"></div>
     </div>
 
@@ -327,7 +333,7 @@
   </style>
   <div class="nsf">
     <h2>What Does the Report Leave Out?</h2>
-    <p>This page needs JavaScript to let you mark the report. You can still do it on paper. Read each section below, and write down every place that you think it leaves out something you know happened. Only then read the checklist underneath.</p>
+    <p>This page needs JavaScript to let you choose, for each section of the report, between Something is missing and Nothing is missing. You can still do it on paper. Read each section below. For each one, write down what you think it leaves out that you know happened, or write that nothing is missing. Only then read the checklist underneath.</p>
     <div class="box">
       <p><strong>CUMBERLAND CLAIMS SERVICES: IT INCIDENT NOTE</strong><br>Prepared by: N. Brody<br>Date: 17 February 2025<br>System(s): Staff workstations</p>
       <p><strong>What happened</strong><br>A Windows Update compatibility issue affected a number of staff workstations in February. A script was run on 3 February to correct an update problem. Some machines later showed antivirus warnings. The issue was resolved on 14 February and all machines are now protected.</p>
@@ -373,7 +379,8 @@
     info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.2M12 7.8v.2"/>',
     lock:'<rect x="5" y="10.5" width="14" height="10" rx="1.8"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>',
     dash:'<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/>',
-    clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'
+    clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    filecheck:'<path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5"/><path d="m8.8 14.6 2.2 2.2 4.4-4.6"/>'
   };
   function icon(k){ return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + IC[k] + "</svg>"; }
 
@@ -465,20 +472,21 @@
   var FIRST_REVEAL = SECS.length;
 
   /* ---------------- state ----------------
-     marks: section id -> true. notes: section id -> text. revealed: the
-     checklist has been shown, so the marks are locked in. */
-  var KEY = "vciso-p4-m9-leave-out-v1";
+     picks: section id -> "missing" (Something is missing) or "none" (Nothing
+     is missing). notes: section id -> text. revealed: the checklist has been
+     shown, so the choices are locked in. */
+  var KEY = "vciso-p4-m9-leave-out-v2";
   var MAXNOTE = 300;
   function isPlain(o){ return !!o && typeof o === "object" && !Array.isArray(o); }
   function secIds(){ return SECS.map(function(s){ return s.id; }); }
-  function fresh(){ return { marks:{}, notes:{}, revealed:false }; }
+  function fresh(){ return { picks:{}, notes:{}, revealed:false }; }
   function load(){
     try{
       var raw = JSON.parse(localStorage.getItem(KEY));
       if(!isPlain(raw)) return fresh();
       var o = fresh();
       secIds().forEach(function(k){
-        if(isPlain(raw.marks) && raw.marks[k] === true) o.marks[k] = true;
+        if(isPlain(raw.picks) && (raw.picks[k] === "missing" || raw.picks[k] === "none")) o.picks[k] = raw.picks[k];
         if(isPlain(raw.notes) && typeof raw.notes[k] === "string") o.notes[k] = raw.notes[k].slice(0, MAXNOTE);
       });
       o.revealed = raw.revealed === true;
@@ -506,7 +514,9 @@
   function phone(){ return window.matchMedia("(max-width:599px)").matches; }
   function sec(id){ var r = null; SECS.forEach(function(s){ if(s.id === id) r = s; }); return r; }
   function item(id){ var r = null; ITEMS.forEach(function(s){ if(s.id === id) r = s; }); return r; }
-  function nMarked(){ return secIds().filter(function(k){ return st.marks[k]; }).length; }
+  function isMarked(k){ return st.picks[k] === "missing"; }
+  function nMarked(){ return secIds().filter(isMarked).length; }
+  function nPicked(){ return secIds().filter(function(k){ return !!st.picks[k]; }).length; }
   function noteOf(id){ return (st.notes[id] || "").trim(); }
 
   /* ---------------- chrome ---------------- */
@@ -525,24 +535,26 @@
     el.cancel.hidden = true;
     el.next.disabled = false;
     el.next.textContent = "Next";
-    var m = nMarked();
-    var marks = "You have marked " + m + " of " + SECS.length + " sections.";
     if(s.kind === "mark"){
-      if(st.revealed){ el.next.textContent = "Next"; el.hint.textContent = "Your marks are locked in. You can still read them here."; }
-      else if(i === FIRST_REVEAL - 1){
-        el.next.textContent = "Show the checklist";
-        el.hint.innerHTML = esc(marks) + " <b>Once you show the checklist, your marks are locked in.</b>";
-      } else el.hint.textContent = marks + " You can leave a section unmarked.";
+      var picked = !!st.picks[s.sec];
+      if(st.revealed){ el.next.textContent = "Next"; el.hint.textContent = "Your choices are locked in. You can still read them here."; }
+      else {
+        if(i === FIRST_REVEAL - 1) el.next.textContent = "Show the checklist";
+        el.next.disabled = !picked;
+        if(!picked) el.hint.innerHTML = "<span><b>Pick Something is missing or Nothing is missing</b> to go on.</span>";
+        else if(i === FIRST_REVEAL - 1) el.hint.innerHTML = "You picked Something is missing for " + nMarked() + " of " + SECS.length + " sections. <b>Once you show the checklist, your choices are locked in.</b>";
+        else el.hint.textContent = "You can change your choice until you show the checklist.";
+      }
     } else if(s.kind === "overview"){
-      el.hint.textContent = "Right means you marked the section where that thing belongs. Not quite means you did not. Next, we go through the seven things one at a time.";
+      el.hint.textContent = "Right means you picked Something is missing for the section where that thing belongs. Not quite means you picked Nothing is missing. Next, we go through the seven things one at a time.";
     } else if(i === S.length - 1){
       if(confirming){
         el.next.textContent = "Yes, start over";
         el.cancel.hidden = false;
-        el.hint.innerHTML = "<b>Start over clears your marks and notes.</b> Are you sure?";
+        el.hint.innerHTML = "<b>Start over clears your choices and notes.</b> Are you sure?";
       } else {
         el.next.textContent = "Start over";
-        el.hint.innerHTML = "<b>That is the end.</b> Copy what you wrote for each section into the note on your laptop, then go back to the module. Start over clears your marks and notes.";
+        el.hint.innerHTML = "<b>That is the end.</b> Copy what you wrote for each section into the note on your laptop, then go back to the module. Start over clears your choices and notes.";
       }
     } else el.hint.textContent = "";
   }
@@ -562,20 +574,21 @@
 
   function setTitle(h, sub){ el.h1.textContent = h; el.sub.textContent = sub || ""; }
 
-  /* Marking slides: one section of the report, a mark and a note. */
+  /* Marking slides: one section of the report, two choice buttons and a note. */
+  var CH = [
+    { v:"missing", ic:"flag", name:"Something is missing" },
+    { v:"none", ic:"filecheck", name:"Nothing is missing" }
+  ];
   function renderMark(s){
     var x = sec(s.sec);
-    var on = !!st.marks[x.id];
+    var pick = st.picks[x.id] || "";
     var lock = st.revealed;
     setTitle("Does “" + x.name + "” leave anything out?", "");
     var ask = lock
-      ? (on ? "This is the section you read before the checklist. Your mark is shown below." : "This is the section you read before the checklist. You did not mark it.")
+      ? "This is the section you read before the checklist. Your choice is shown below."
       : s.n === 0
-      ? "Read this section of the report. Think back to Project 2, where you followed the outage day by day. If you think it leaves out something that you know happened, mark it and write down what is missing."
-      : "Read this section. If you think it leaves out something that you know happened, mark it and write down what is missing.";
-    var td = lock
-      ? (on ? "You marked this section." : "You did not mark this section.")
-      : (on ? "Marked. Tap again to unmark." : "Tap to mark this section.");
+      ? "Read this section of the report. Think back to Project 2, where you followed the outage day by day. Do you think it leaves out something that you know happened? Pick one."
+      : "Read this section. Do you think it leaves out something that you know happened? Pick one.";
     el.board.innerHTML =
         '<div class="mark">'
       +   '<div class="doc">'
@@ -586,50 +599,58 @@
       +       '<p class="sx">' + esc(x.text) + "</p></div>"
       +   "</div>"
       +   '<div class="mp">'
-      +     '<p class="ask">' + esc(ask) + "</p>"
-      +     '<button class="tog" id="tog" type="button" aria-pressed="' + (on ? "true" : "false") + '"' + (lock ? " disabled" : "") + ">"
-      +       '<span class="oi">' + icon("flag") + "</span>"
-      +       '<span class="tn">Something is missing here<span class="td">' + esc(td) + "</span></span>"
-      +       '<span class="g" aria-hidden="true">' + icon("check") + "</span>"
-      +     "</button>"
-      +     '<div class="note" id="note"' + (on ? "" : " hidden") + ">"
+      +     '<p class="ask" id="ask">' + esc(ask) + "</p>"
+      +     '<div class="picks" role="group" aria-labelledby="ask">'
+      +     CH.map(function(c){
+              var on = pick === c.v;
+              return '<button class="tog" type="button" data-v="' + c.v + '" aria-pressed="' + (on ? "true" : "false") + '"' + (lock ? " disabled" : "") + ">"
+                + '<span class="oi">' + icon(c.ic) + "</span>"
+                + '<span class="tn">' + esc(c.name) + "</span>"
+                + '<span class="g" aria-hidden="true">' + icon("check") + "</span>"
+                + "</button>";
+            }).join("")
+      +     "</div>"
+      +     '<div class="note" id="note"' + (pick === "missing" ? "" : " hidden") + ">"
       +       '<label for="ta">What does it leave out?</label>'
       +       '<textarea id="ta" maxlength="' + MAXNOTE + '" placeholder="Write it in your own words."' + (lock ? " readonly" : "") + ">" + esc(st.notes[x.id] || "") + "</textarea>"
       +     "</div>"
-      +     (lock ? '<p class="small">' + icon("lock") + "<span>Your marks are locked in, because you have seen the checklist. Start over at the end to mark the report again.</span></p>" : "")
+      +     (lock ? '<p class="small">' + icon("lock") + "<span>Your choices are locked in, because you have seen the checklist. Start over at the end to choose again.</span></p>" : "")
       +   "</div>"
       +   (x.words ? '<p class="sw">' + icon("info") + "<span>" + esc(x.words) + "</span></p>" : "")
       + "</div>";
     if(lock) return;
-    var tog = el.board.querySelector("#tog"), ta = el.board.querySelector("#ta"), note = el.board.querySelector("#note");
-    tog.addEventListener("click", function(){
-      document.documentElement.classList.add("fresh");
-      if(st.marks[x.id]) delete st.marks[x.id]; else st.marks[x.id] = true;
-      save();
-      var now = !!st.marks[x.id];
-      tog.setAttribute("aria-pressed", now ? "true" : "false");
-      tog.querySelector(".td").textContent = now ? "Marked. Tap again to unmark." : "Tap to mark this section.";
-      note.hidden = !now;
-      if(now && !reduce){ note.classList.remove("in"); void note.offsetWidth; note.classList.add("in"); }
-      header();
-      say(now ? "Marked: something is missing in " + x.name + ". Write what it leaves out, if you like." : "Unmarked " + x.name + ".");
-      if(now) ta.focus({ preventScroll:true });
+    var btns = el.board.querySelectorAll("button.tog"), ta = el.board.querySelector("#ta"), note = el.board.querySelector("#note");
+    Array.prototype.forEach.call(btns, function(b){
+      b.addEventListener("click", function(){
+        document.documentElement.classList.add("fresh");
+        var v = b.getAttribute("data-v");
+        var was = st.picks[x.id];
+        st.picks[x.id] = v;
+        save();
+        Array.prototype.forEach.call(btns, function(o){ o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+        var open = v === "missing";
+        note.hidden = !open;
+        if(open && was !== "missing" && !reduce){ note.classList.remove("in"); void note.offsetWidth; note.classList.add("in"); }
+        header();
+        say(open ? "Something is missing in " + x.name + ". Write what it leaves out, if you like." : "Nothing is missing in " + x.name + ". You can go on to the next section.");
+        if(open && was !== "missing") ta.focus({ preventScroll:true });
+      });
     });
     ta.addEventListener("input", function(){ st.notes[x.id] = ta.value.slice(0, MAXNOTE); save(); });
   }
 
   function status(secId){
-    var on = !!st.marks[secId];
+    var on = isMarked(secId);
     return on
-      ? '<span class="st ok">' + icon("check") + "Right <span>· you marked it</span></span>"
-      : '<span class="st no">' + icon("x") + "Not quite <span>· not marked</span></span>";
+      ? '<span class="st ok">' + icon("check") + "Right <span>· Something is missing</span></span>"
+      : '<span class="st no">' + icon("x") + "Not quite <span>· Nothing is missing</span></span>";
   }
 
   /* The checklist arrives: seven rows, each with the section that should hold
-     it and whether the student marked that section. */
+     it and the student's choice for that section. */
   function renderOverview(){
     setTitle("What a Complete Report Holds",
-      "A complete incident report holds these seven things. This report leaves out or gets wrong every one of them, so every one of its five sections had something missing. You marked " + nMarked() + " of " + SECS.length + ".");
+      "A complete incident report holds these seven things. This report leaves out or gets wrong every one of them, so every one of its five sections had something missing. You picked Something is missing for " + nMarked() + " of " + SECS.length + ".");
     el.board.innerHTML = '<div class="rows" role="list">' + ITEMS.map(function(it){
       var x = sec(it.sec);
       return '<div class="row" role="listitem"><span class="ri">' + icon(it.ic) + "</span>"
@@ -640,14 +661,14 @@
   }
 
   /* One checklist item: what the report says, what actually happened, and the
-     student's own mark on the section where it belongs. */
+     student's own choice for the section where it belongs. */
   function yoursHTML(it){
-    var x = sec(it.sec), on = !!st.marks[x.id], n = noteOf(x.id), body;
+    var x = sec(it.sec), on = isMarked(x.id), n = noteOf(x.id), body;
     var card = "“" + (it.actTitle || "What actually happened") + "”";
-    if(on && n) body = '<span><span class="yv">Right.</span> You marked <b>“' + esc(x.name) + "”</b>. Does your note say the same as " + esc(card) + " above?</span>"
+    if(on && n) body = '<span><span class="yv">Right.</span> You picked <b>Something is missing</b> for <b>“' + esc(x.name) + "”</b>. Does your note say the same as " + esc(card) + " above?</span>"
       + '<span class="yn">“' + esc(n) + "”</span>";
-    else if(on) body = '<span><span class="yv">Right.</span> You marked <b>“' + esc(x.name) + "”</b>. Look at " + esc(card) + " above to see what it leaves out.</span>";
-    else body = '<span><span class="yv">Not quite.</span> You did not mark <b>“' + esc(x.name) + "”</b>. Above is what it leaves out or gets wrong." + (it.miss ? " " + esc(it.miss) : "") + "</span>";
+    else if(on) body = '<span><span class="yv">Right.</span> You picked <b>Something is missing</b> for <b>“' + esc(x.name) + "”</b>. Look at " + esc(card) + " above to see what it leaves out.</span>";
+    else body = '<span><span class="yv">Not quite.</span> You picked <b>Nothing is missing</b> for <b>“' + esc(x.name) + "”</b>. Above is what it leaves out or gets wrong." + (it.miss ? " " + esc(it.miss) : "") + "</span>";
     var tight = it.kind === "timeline" || it.dense;
     return '<div class="yours ' + (on ? "ok" : "no") + (tight ? " tight" : "") + '">' + icon(on ? "check" : "x") + '<span class="yt">' + body + "</span></div>";
   }
@@ -693,6 +714,7 @@
   function go(d){
     var n = i + d;
     if(n < 0 || n >= S.length) return;
+    if(d > 0 && S[i].kind === "mark" && !st.revealed && !st.picks[S[i].sec]) return;
     if(n === FIRST_REVEAL && !st.revealed){ st.revealed = true; save(); }
     i = n; render(); if(phone()) window.scrollTo(0,0); el.frame.focus({preventScroll:true});
   }
@@ -700,17 +722,17 @@
     st = fresh(); save(); i = 0; render();
     if(phone()) window.scrollTo(0,0);
     el.frame.focus({preventScroll:true});
-    say("Started over. Your marks and notes are cleared. Section 1 of " + SECS.length + ".");
+    say("Started over. Your choices and notes are cleared. Section 1 of " + SECS.length + ".");
   }
   el.back.addEventListener("click", function(){ go(-1); });
   el.next.addEventListener("click", function(){
     if(i === S.length - 1){
       if(confirming){ startOver(); return; }
-      confirming = true; header(); el.next.focus(); say("Start over clears your marks and notes. Are you sure?"); return;
+      confirming = true; header(); el.next.focus(); say("Start over clears your choices and notes. Are you sure?"); return;
     }
     go(1);
   });
-  el.cancel.addEventListener("click", function(){ confirming = false; header(); el.next.focus(); say("Your marks are kept."); });
+  el.cancel.addEventListener("click", function(){ confirming = false; header(); el.next.focus(); say("Your choices are kept."); });
 
   document.addEventListener("keydown", function(e){
     if(ownsKeys(e.target)) return;
@@ -768,7 +790,7 @@
     },
     slides:S.length,
     reset:function(){ st = fresh(); save(); i = 0; render(); },
-    state:function(){ return { i:i, marks:JSON.parse(JSON.stringify(st.marks)), notes:JSON.parse(JSON.stringify(st.notes)), revealed:st.revealed }; }
+    state:function(){ return { i:i, picks:JSON.parse(JSON.stringify(st.picks)), notes:JSON.parse(JSON.stringify(st.notes)), revealed:st.revealed }; }
   };
 })();
 </script>
