@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P5 Task Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Text&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the card player from the Template A steps and Template B explorer mockups. Section rail on top with
+   "Slide X of N", one slide at a time on a tinted stage, Back and Next below. Every slide is one step of the task.
+   All slides share one height (the tallest slide, with its output showing), so nothing scrolls inside the card.
+   The deck tells the page its height, so the iframe fits it with no clipping. */
+:root{
+  --bg:#FFFFFF;
+  --stage:#FAFAFA;
+  --surface:#FFFFFF;
+  --text:#000000;
+  --text-2:#666666;
+  --purple:#3D1FBC;
+  --action:#2550D0;
+  --action-hover:#14369C;
+  --on-action:#FFFFFF;
+  --tint:#E5E0FA;
+  --tint-2:#D2CAF5;
+  --note-bg:#F3F0FD;
+  --note-line:#D2CAF5;
+  --line:#DDDDDD;
+  --line-soft:#EEEEEE;
+  --line-strong:#C9C6C5;
+  --icode-bg:#EFEBFC;
+  --icode-text:#2A1590;
+  --code-bg:#17142C;
+  --code-head:#1F1B3A;
+  --code-line:#2E2954;
+  --code-text:#ECE9FF;
+  --code-muted:#9590B5;
+  --code-str:#AFC0FF;
+  --code-btn:#2A2550;
+  --focus:#2550D0;
+  --end-bg:#EEF0FF;
+  --end-text:#4D5380;
+  --f-display:"DM Serif Text", Georgia, "Times New Roman", serif;
+  --f-body:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);overflow-x:hidden}
+body{color:var(--text);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.app{display:flex;flex-direction:column}
+
+/* Header: grouped rail and where-you-are line */
+.top{border-bottom:1px solid var(--line-soft);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr);row-gap:9px}
+.where{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--text)}
+.where .dot{color:var(--line-strong)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--line);transition:background-color .2s ease}
+.segs i.done{background:var(--purple)}
+.segs i.cur{background:var(--purple);height:6px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--purple)}
+.pg.is-cur .pg-label{color:var(--text);font-weight:600}
+.pg:hover .pg-label{color:var(--purple)}
+@media (min-width:640px){
+  .top{grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+  .where{order:2}
+}
+
+/* Stage and card */
+.stage{background:var(--stage);padding:12px 16px;display:flex}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line-soft);border-radius:16px;padding:clamp(16px, 3vw, 30px) clamp(16px, 3.4vw, 36px);display:flex;flex-direction:column}
+.inner{display:flex;flex-direction:column;gap:14px;width:100%;max-width:900px;margin:auto}
+.eyebrow{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--purple)}
+.title{margin:0;font-family:var(--f-display);font-weight:400;font-size:clamp(23px, 1.5vw + 15px, 31px);line-height:1.12;text-wrap:balance}
+.p{margin:0;font-size:clamp(15px, 0.4vw + 13px, 16.5px);line-height:1.6;text-wrap:pretty}
+.p b{font-weight:600}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:var(--icode-text);padding:0 .3em;border-radius:5px;overflow-wrap:anywhere}
+
+/* Link buttons (Template A steps style). Every link opens in a new tab. */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn-link{display:inline-flex;align-items:center;gap:9px;max-width:100%;text-decoration:none;color:var(--purple);font-weight:600;font-size:14px;line-height:1.35;background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:10px 14px;transition:background-color .15s ease,border-color .15s ease}
+.btn-link:hover{background:var(--note-bg);border-color:var(--purple)}
+.btn-link svg{width:16px;height:16px;flex:none}
+.btn-link .ext{width:12px;height:12px;opacity:.7}
+
+/* Colab-style cell with a Run button */
+.cell{border-radius:12px;overflow:hidden;background:var(--code-bg);color:var(--code-text);border:1px solid var(--code-line);min-width:0}
+.cell-head{display:flex;align-items:center;gap:10px;padding:7px 8px 7px 14px;background:var(--code-head);border-bottom:1px solid var(--code-line)}
+.cell-name{flex:1;min-width:0;font-size:12px;font-weight:500;color:var(--code-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.run{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--action);background:var(--action);color:var(--on-action);border-radius:999px;padding:5px 14px 5px 11px;font-size:13px;font-weight:600;cursor:pointer}
+.run:hover{background:var(--action-hover);border-color:var(--action-hover)}
+.run svg{width:12px;height:12px}
+.run.ran{background:var(--code-btn);border-color:var(--code-line);color:var(--code-str)}
+.cell pre{margin:0;padding:12px 14px;font-family:var(--f-mono);font-size:12.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.out{border-top:1px dashed var(--code-line);background:#100E20}
+.out-label{padding:8px 14px 0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--code-muted)}
+.out pre{color:#DCD7FF}
+/* Shared placeholder style, same as the Task pages */
+.ph{background:var(--note-bg);border:1px dashed var(--note-line);border-radius:5px;padding:0 4px;color:var(--text);white-space:normal}
+
+/* Notes and prompt box */
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--note-bg);border:1px solid var(--note-line);font-size:14.5px;line-height:1.5}
+.note svg{width:18px;height:18px;flex:none;margin-top:1px;color:var(--purple)}
+.prompt{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:10px;background:var(--note-bg);border:1px solid var(--note-line);font-size:15px;line-height:1.5}
+.prompt b{flex:none;color:var(--purple);font-size:13px}
+
+/* Choice tiles */
+.tiles{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:700px){ .tiles{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.tile{border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tile b{font-family:var(--f-display);font-weight:400;font-size:20px;line-height:1.15}
+.tile .loc{font-size:12px;font-weight:600;color:var(--purple)}
+.tile p{margin:0;font-size:14px;line-height:1.5}
+.tile p.set{color:var(--text-2)}
+
+/* Foot */
+.foot{border-top:1px solid var(--line-soft);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.btn-back{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:8px 14px 8px 11px;font-size:14px;font-weight:500;cursor:pointer}
+.btn-back:hover:not(:disabled){background:var(--stage);border-color:var(--text-2)}
+.btn-back:disabled{opacity:.4;cursor:default}
+.btn-back svg,.btn-next svg{width:15px;height:15px;flex:none}
+.upnext{flex:1;min-width:0;text-align:right;font-size:12.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:500;color:var(--text)}
+.btn-next{display:inline-flex;align-items:center;gap:8px;background:var(--action);color:var(--on-action);border:1px solid var(--action);border-radius:50px;padding:9px 18px 9px 22px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-next:hover:not(:disabled){background:var(--action-hover);border-color:var(--action-hover)}
+.btn-next:disabled{opacity:.45;cursor:default}
+.btn-next.end{background:var(--end-bg);border-color:var(--end-bg);color:var(--end-text);cursor:default;padding-inline:18px}
+@media (max-width:620px){ .upnext{visibility:hidden} }
+@media (max-width:480px){ .btn-next.end{white-space:normal;text-align:center;flex:1 1 auto;min-width:0;padding-inline:14px} .upnext{display:none} .foot{justify-content:space-between} }
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* Measuring box: renders each slide off screen to find the tallest one */
+.measure{position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Build and optimize a RAG pipeline: the steps</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Sections"></nav>
+    <div class="where"><b id="where-section">Set up</b><span class="dot" aria-hidden="true">·</span><span id="where-count">Slide 1 of 13</span></div>
+  </header>
+  <main class="stage"><section class="card" id="card" aria-live="polite"></section></main>
+  <footer class="foot">
+    <button type="button" class="btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var INFO = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.25" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v4.5M10 6.5v.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  var PLAY = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8v8.4a.6.6 0 0 0 .9.5l6.6-4.2a.6.6 0 0 0 0-1L3.9 1.3a.6.6 0 0 0-.9.5Z" fill="currentColor"/></svg>';
+  var EXT = '<svg class="ext" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4.5 2.5h5v5M9.5 2.5 3 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var IC_OPEN = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  var IC_DL = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var IC_NEW = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+  function link(href, icon, text) {
+    return '<a class="btn-link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + icon + '<span>' + text + '</span>' + EXT + '<span class="sr-only"> (opens in a new tab)</span></a>';
+  }
+  var NOTEBOOK = "https://colab.research.google.com/drive/1H-r5geDLtLdHOK4pskM43eFPmrk0RGce";
+  var SDF = "https://drive.google.com/file/d/1k_ZRrdSSJLxhMvBnuoaPVYTz05lLmYEN/view?usp=sharing";
+
+  var GROUPS = ["Set up", "Check", "Choose", "Ask", "Share"];
+
+  /* Every notebook output below is copied from the team's real run of the reference notebook (22 Oct 2026),
+     except the Prompt 2 slide, which is a marked placeholder. */
+  var SLIDES = [
+    { group: "Set up", eyebrow: "Set up", title: "Open the Notebook and Save Your Own Copy",
+      p: "Open the team's reference notebook and choose <b>File → Save a copy in Drive</b>. You'll build in your own copy.",
+      links: [link(NOTEBOOK, IC_OPEN, "Open the reference notebook")] },
+    { group: "Set up", eyebrow: "Set up", title: "Download the Sample SDF",
+      p: "Download the sample SDF. It's the same supplier certificate you used in Project 3.",
+      links: [link(SDF, IC_DL, "Download sample-sdf-document (Project 5).pdf")] },
+    { group: "Set up", eyebrow: "Set up", title: "Add Your Gemini Key to Secrets",
+      p: "In Colab, click the key icon on the left to open <b>Secrets</b>. Add your Gemini key with the name <code>GEMINI_API_KEY</code> and turn on <b>Notebook access</b>." },
+    { group: "Set up", eyebrow: "Set up", title: "Run Every Cell",
+      p: "Choose <b>Runtime → Run all</b>. When the file picker opens under STEP 3, upload the sample SDF.",
+      note: "On the next slides, you'll see what each part of the notebook should print when it works. Press <b>Run</b> on each slide, then <b>Next</b>, and check your own notebook against it." },
+
+    { group: "Check", eyebrow: "Check your notebook", cell: "STEP 0", title: "Install the Tools",
+      p: "This cell installs PyMuPDF (reads the PDF), LlamaIndex (runs the pipeline) and the embedding and reranking tools. It takes a few minutes the first time.",
+      code: "!pip install -q llama-index==0.14.25 llama-index-llms-google-genai==0.11.3 pymupdf\n!pip install -q llama-index-embeddings-huggingface==0.8.0\n!pip install -q nest_asyncio\n!pip install -q llama-index-retrievers-bm25==0.8.0\n!pip install -q sentence-transformers",
+      out: "68.9/68.9 MB 11.8 MB/s eta 0:00:00\n11.9/11.9 MB 47.7 MB/s eta 0:00:00\n1.7/1.7 MB 39.1 MB/s eta 0:00:00\n...",
+      note: "Red lines that say <code>ERROR: pip's dependency resolver</code> and name <code>google-adk</code>, <code>opentelemetry</code> or <code>jedi</code> are fine. Keep going." },
+    { group: "Check", eyebrow: "Check your notebook", cell: "STEP 1", title: "Connect Your Gemini Key",
+      p: "This cell reads your key from Colab Secrets, so the key never sits in your code. It also turns on <code>nest_asyncio</code>, which lets Gemini answer inside Colab.",
+      code: "import nest_asyncio\nnest_asyncio.apply()\n\nfrom google.colab import userdata\nos.environ[\"GOOGLE_API_KEY\"] = userdata.get('GEMINI_API_KEY')",
+      out: "FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.",
+      note: "That warning is fine. The first time, Colab may ask to let this notebook use your secret. Choose <b>Grant access</b>." },
+    { group: "Check", eyebrow: "Check your notebook", cell: "STEP 3", title: "Upload the Sample SDF",
+      p: "A file picker opens under the cell. Choose the sample SDF you downloaded. Run all waits here until you do.",
+      code: "pdf_path = upload_pdf()",
+      out: "Please select a PDF file to upload:\nSaving sample-sdf-document (Project 5).pdf to sample-sdf-document (Project 5).pdf\nPDF saved to sample_docs/sample-sdf-document (Project 5).pdf" },
+    { group: "Check", eyebrow: "Check your notebook", cell: "STEPS 5, 7 AND 9", title: "Read the PDF and Build the Index",
+      p: "PyMuPDF pulls out the text. Then LlamaIndex turns each piece into an embedding (a list of numbers that captures its meaning) and stores it in an index, a search table it can look things up in.",
+      code: "text = extract_text_from_pdf(pdf_path)      # STEP 5\npdf_docs = load_pdf_with_pymupdf(pdf_path)  # STEP 7\nindex = process_and_index_pdf(pdf_path)     # STEP 9",
+      out: "Number of pages: 3\nExtracted 617 words from the PDF.\n...\nExtracted 3 pages with content\nIndexed 3 document chunks",
+      note: "3 pages became 3 chunks, so this notebook uses one chunk per page. That's a chunking choice you can change." },
+
+    { group: "Choose", eyebrow: "Your three choices", title: "Make Your Three Choices",
+      p: "Make your three choices. Keep the notebook's settings or change one to experiment, and note why. These are the three choices you write about in your Google Doc.",
+      tiles: [
+        ["Embedding model", "STEP 8", "The tool that turns each piece of text into numbers that capture its meaning.", "This notebook uses <code>sentence-transformers/all-MiniLM-L6-v2</code>."],
+        ["Chunking strategy", "STEP 6", "How you cut the document into pieces the pipeline can search.", "This notebook uses one chunk per page."],
+        ["Retrieval method", "STEP 20", "How it finds the right pieces: keyword, vector (by meaning) or hybrid (both).", "This notebook uses hybrid: vector search (matches meaning) plus BM25 keyword search (matches exact words), then a reranker re-sorts the best pieces."]
+      ] },
+
+    { group: "Ask", eyebrow: "Ask the prompts", cell: "STEP 21", title: "Ask Prompt 1",
+      p: "Ask your pipeline both prompts in STEP 21, starting with Prompt 1. Now the whole pipeline runs: it finds the best chunks, then Gemini answers from them. Press <b>Run</b> to see the answer the team got.",
+      prompt: ["Prompt 1", "What test methods were used for quality control?"],
+      code: "rag_engine = build_rag_pipeline(index)\nresponse = rag_engine.query(\"What test methods were used for quality control?\")\nprint(response)",
+      out: "For the AKTA ready Low Flow Kit, the test methods used for quality control include the following:\n\n* **Autoclave - Pump tubing:** 121C > 15 min\n* **Gamma Irradiation - Inlets:** 25.0 - 40.0 kGy\n* **Flow Rate Test:** Per SOP-QC-042\n* **Pressure Integrity:** Max 0.5 bar, 5 min hold\n* **Visual Inspection:** No defects visible\n* **Package Integrity:** Sealed, no damage\n\nFor the ÄKTA ready Gradient Flow Section With Inlets, the quality control methods include:\n* **Autoclave (Pump tubing):** 121°C > 15 min\n* **Gamma Irradiation (Inlets):** 25.0 – 40.0 kGy",
+      note: "Gemini words its answer a little differently each run. Yours should name the same test methods." },
+    { group: "Ask", eyebrow: "Ask the prompts", cell: "STEP 21, AGAIN", title: "Ask Prompt 2",
+      p: "Change the question in STEP 21 to Prompt 2 and run the cell again. Then paste both answers into your Google Doc.",
+      prompt: ["Prompt 2", "What are the storage conditions specified in the certificate?"],
+      code: "response = rag_engine.query(\"What are the storage conditions specified in the certificate?\")\nprint(response)",
+      out: "[Real answer to be pasted after a test run]",
+      placeholder: true,
+      note: "Check your answer against the certificate itself. Page 1 gives the recommended storage temperature." },
+
+    { group: "Share", eyebrow: "Share your work", title: "Make Your Google Doc and Share It",
+      p: "Make a Google Doc with your three choices and both answers. Choose <b>Share</b>, then set it so <b>anyone with the link</b> can <b>view</b>.",
+      links: [link("https://docs.new", IC_NEW, "Start a new Google Doc")] },
+    { group: "Share", eyebrow: "Share your work", title: "Share Your Notebook",
+      p: "Share your notebook the same way: <b>Share</b>, then anyone with the link can <b>view</b>." }
+  ];
+  var END_LABEL = "Done. Now submit your links.";
+
+  var i = 0, ran = {}, lastH = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext");
+  var whereSection = $("where-section"), whereCount = $("where-count");
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg"; b.title = g.name;
+    b.setAttribute("aria-label", g.name + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + g.name + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Builds one slide. showOut forces the output on, for measuring. */
+  function slideHTML(n, showOut) {
+    var s = SLIDES[n], did = showOut || ran[n], h = '<div class="inner">';
+    h += '<p class="eyebrow">' + s.eyebrow + '</p><h2 class="title">' + s.title + '</h2><p class="p">' + s.p + '</p>';
+    if (s.prompt) h += '<div class="prompt"><b>' + s.prompt[0] + '</b><span>' + s.prompt[1] + '</span></div>';
+    if (s.links) h += '<div class="links">' + s.links.join("") + '</div>';
+    if (s.code) {
+      h += '<div class="cell"><div class="cell-head"><span class="cell-name">' + s.cell + '</span>' +
+           '<button type="button" class="run' + (did ? ' ran' : '') + '" data-run>' + PLAY + (did ? 'Ran' : 'Run') + '</button></div>' +
+           '<pre>' + esc(s.code) + '</pre>';
+      if (did) h += '<div class="out"><div class="out-label">' + (s.placeholder ? 'Output (placeholder)' : 'What it printed') + '</div><pre>' + (s.placeholder ? '<span class="ph">' + esc(s.out) + '</span>' : esc(s.out)) + '</pre></div>';
+      h += '</div>';
+    }
+    if (s.tiles) {
+      h += '<div class="tiles">' + s.tiles.map(function (t) { return '<div class="tile"><span class="loc">' + t[1] + '</span><b>' + t[0] + '</b><p>' + t[2] + '</p><p class="set">' + t[3] + '</p></div>'; }).join("") + '</div>';
+    }
+    if (s.note && (!s.code || did)) h += '<div class="note">' + INFO + '<span>' + s.note + '</span></div>';
+    return h + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i, false);
+    if (anim) card.firstChild.classList.add("anim");
+    var r = card.querySelector("[data-run]");
+    if (r) r.addEventListener("click", function () { ran[i] = true; render(false); var nr = card.querySelector("[data-run]"); if (nr) nr.focus(); });
+
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    whereSection.textContent = s.group;
+    whereCount.textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1, blocked = !!s.code && !ran[i];
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : (blocked ? "Press Run first" : "Next");
+    next.disabled = last ? false : blocked;
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].title + "</b>";
+    postHeight();
+  }
+
+  function go(n) { if (n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { if (i > 0) go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i < SLIDES.length - 1 && !(SLIDES[i].code && !ran[i])) go(i + 1);
+  });
+
+  /* Size every slide to the tallest one (with its output showing), then tell the page the deck's height */
+  function fit() {
+    var m = document.createElement("div");
+    m.className = "card measure";
+    m.style.width = card.getBoundingClientRect().width + "px";
+    document.body.appendChild(m);
+    var tallest = 0;
+    SLIDES.forEach(function (s, n) {
+      m.innerHTML = slideHTML(n, true);
+      tallest = Math.max(tallest, m.getBoundingClientRect().height);
+    });
+    document.body.removeChild(m);
+    card.style.minHeight = Math.ceil(tallest) + "px";
+    postHeight();
+  }
+  function postHeight() {
+    var h = Math.ceil(document.getElementById("app").getBoundingClientRect().height);
+    if (h !== lastH && window.parent && window.parent !== window) {
+      lastH = h;
+      window.parent.postMessage({ type: "extern-deck-height", height: h }, "*");
+    }
+  }
+  var t;
+  window.addEventListener("resize", function () { clearTimeout(t); t = setTimeout(fit, 120); });
+
+  render(false);
+  fit();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  window.addEventListener("load", fit);
+})();
+</script>
+</body>
+</html>
