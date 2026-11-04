@@ -185,6 +185,7 @@ article .acc>summary h2{margin:0;font-family:var(--f-body);font-size:18px;font-w
 .field input{display:block;width:100%;min-height:46px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:15px;color:var(--text);background:#FFFFFF}
 .field input:focus{outline:2px solid var(--focus);outline-offset:0;border-color:var(--focus)}
 .field .hint{margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--text-2)}
+.field .hint.err{color:var(--purple);font-weight:500}
 .confirm{display:flex;gap:12px;align-items:flex-start;margin:20px 0 0;font-size:14.5px;font-weight:500;line-height:1.45;cursor:pointer}
 .confirm input{flex:none;width:20px;height:20px;margin:0;accent-color:var(--purple)}
 .send{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line-soft)}
@@ -269,7 +270,7 @@ Please explain in simple words what the error means and which step of the notebo
 
 These are the task's steps I'm following:
 1. Open the team's reference notebook and save a copy in Drive.
-2. Download the sample SDF.
+2. Download the sample SDF (Supporting Documentation File).
 3. Add my Gemini key to Colab Secrets as GEMINI_API_KEY and turn on Notebook access.
 4. Choose Runtime → Run all and upload the sample SDF at STEP 3.
 5. Choose my embedding model, chunking strategy and retrieval method.
@@ -286,7 +287,7 @@ These are the task's steps I'm following:
       <section class="review" aria-labelledby="review">
         <h2 class="box-title" id="review">How Your Program Manager Reviews It</h2>
         <dl class="rubric">
-          <dt>Notebook</dt><dd>Runs from top to bottom with Run all, and the key comes from Colab Secrets, not a code cell</dd>
+          <dt>Notebook</dt><dd>If you share your notebook, it runs from top to bottom with Run all, and the key comes from Colab Secrets, not a code cell</dd>
           <dt>Choices</dt><dd>Names your embedding model, chunking strategy and retrieval method, with one reason for each</dd>
           <dt>Answers</dt><dd>Both answers are pasted from your pipeline and match what the certificate says</dd>
           <dt>Links</dt><dd>Your links open for anyone with the link</dd>
@@ -297,8 +298,9 @@ These are the task's steps I'm following:
         <h2 id="submit-h">Submit your work</h2>
         <div class="field">
           <label for="doc">Link to your Google Doc with your RAG results <span class="chip">Required</span></label>
-          <input id="doc" type="url" inputmode="url" placeholder="https://docs.google.com/document/d/..." required>
-          <p class="hint">Your three choices, plus the answers to Prompt 1 and Prompt 2.</p>
+          <input id="doc" type="url" inputmode="url" placeholder="https://docs.google.com/document/d/..." required aria-describedby="doc-hint doc-err">
+          <p class="hint" id="doc-hint">Your three choices, plus the answers to Prompt 1 and Prompt 2.</p>
+          <p class="hint err" id="doc-err" aria-live="polite" hidden>Paste the full link. It starts with https://</p>
         </div>
         <div class="field">
           <label for="nb">Link to your Colab notebook <span class="chip grey">Optional</span></label>
@@ -324,20 +326,41 @@ These are the task's steps I'm following:
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, done); else done();
     });
   });
-  /* Submit stays disabled until every Required field is filled and the box is ticked */
+  /* Submit stays disabled until every Required field holds a full https:// link and the box is ticked */
   var form = document.getElementById("submit-form"), box = document.getElementById("checked"), send = document.getElementById("send");
-  var req = form.querySelectorAll("input[required]");
-  function check() { var ok = box.checked; Array.prototype.forEach.call(req, function (f) { if (!f.value.trim()) ok = false; }); send.disabled = !ok; }
+  var req = form.querySelectorAll("input[required]"), docErr = document.getElementById("doc-err");
+  function check() {
+    var ok = box.checked;
+    Array.prototype.forEach.call(req, function (f) {
+      var v = f.value.trim(), good = /^https:\/\/\S/i.test(v);
+      if (!good) ok = false;
+      if (f.id === "doc") docErr.hidden = !v || good;
+    });
+    send.disabled = !ok;
+  }
   form.addEventListener("input", check); box.addEventListener("change", check);
   form.addEventListener("submit", function (e) {
     e.preventDefault(); if (send.disabled) return; send.textContent = "Submitted"; send.disabled = true;
   });
-  /* The steps deck reports its height (its tallest slide), so the iframe fits it with no clipping */
+  /* The steps deck reports the current slide's height, so the iframe fits it with no clipping and no empty space.
+     On Back and Next, the page keeps the deck's top in view. The deck's last button scrolls to Submit. */
   var deck = document.getElementById("steps-deck");
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function scrollToEl(el) {
+    var bar = document.querySelector(".topbar").getBoundingClientRect().height;
+    var y = el.getBoundingClientRect().top + window.pageYOffset - bar - 16;
+    window.scrollTo({ top: Math.max(0, y), behavior: calm ? "auto" : "smooth" });
+  }
   window.addEventListener("message", function (e) {
-    if (!deck || e.source !== deck.contentWindow || !e.data || e.data.type !== "extern-deck-height") return;
+    if (!deck || e.source !== deck.contentWindow || !e.data) return;
+    if (e.data.type === "extern-deck-submit") { scrollToEl(form); return; }
+    if (e.data.type !== "extern-deck-height") return;
     var h = Math.ceil(Number(e.data.height));
     if (h > 200 && h < 4000) deck.style.height = h + "px";
+    if (e.data.nav) {
+      var bar = document.querySelector(".topbar").getBoundingClientRect().height;
+      if (deck.getBoundingClientRect().top < bar) scrollToEl(deck);
+    }
   });
 })();
 </script>

@@ -10,8 +10,8 @@
 <style>
 /* Layout: the card player from the Template A steps and Template B explorer mockups. Section rail on top with
    "Slide X of N", one slide at a time on a tinted stage, Back and Next below. Every slide is one step of the task.
-   All slides share one height (the tallest slide, with its output showing), so nothing scrolls inside the card.
-   The deck tells the page its height, so the iframe fits it with no clipping. */
+   Each slide is its own height. The deck tells the page its current height on every Back, Next and Run,
+   so the iframe fits the slide with no clipping and no empty space. */
 :root{
   --bg:#FFFFFF;
   --stage:#FAFAFA;
@@ -132,13 +132,11 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
 .btn-next{display:inline-flex;align-items:center;gap:8px;background:var(--action);color:var(--on-action);border:1px solid var(--action);border-radius:50px;padding:9px 18px 9px 22px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
 .btn-next:hover:not(:disabled){background:var(--action-hover);border-color:var(--action-hover)}
 .btn-next:disabled{opacity:.45;cursor:default}
-.btn-next.end{background:var(--end-bg);border-color:var(--end-bg);color:var(--end-text);cursor:default;padding-inline:18px}
+.btn-next.end{background:var(--end-bg);border-color:var(--end-bg);color:var(--end-text);cursor:pointer;padding-inline:18px}
+.btn-next.end:hover{background:var(--end-bg);border-color:var(--end-bg)}
 @media (max-width:620px){ .upnext{visibility:hidden} }
 @media (max-width:480px){ .btn-next.end{white-space:normal;text-align:center;flex:1 1 auto;min-width:0;padding-inline:14px} .upnext{display:none} .foot{justify-content:space-between} }
 @media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
-
-/* Measuring box: renders each slide off screen to find the tallest one */
-.measure{position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none}
 </style>
 </head>
 <body>
@@ -146,7 +144,7 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
   <h1 class="sr-only">Build and optimize a RAG pipeline: the steps</h1>
   <header class="top">
     <nav class="rail" id="rail" aria-label="Sections"></nav>
-    <div class="where"><b id="where-section">Set up</b><span class="dot" aria-hidden="true">·</span><span id="where-count">Slide 1 of 13</span></div>
+    <div class="where"><b id="where-section">Set up</b><span class="dot" aria-hidden="true">·</span><span id="where-count">Slide 1 of 10</span></div>
   </header>
   <main class="stage"><section class="card" id="card" aria-live="polite"></section></main>
   <footer class="foot">
@@ -177,17 +175,13 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
   /* Every notebook output below is copied from the team's real run of the reference notebook (22 Oct 2026),
      except the Prompt 2 slide, which is a marked placeholder. */
   var SLIDES = [
-    { group: "Set up", eyebrow: "Set up", title: "Open the Notebook and Save Your Own Copy",
-      p: "Open the team's reference notebook and choose <b>File → Save a copy in Drive</b>. You'll build in your own copy.",
-      links: [link(NOTEBOOK, IC_OPEN, "Open the reference notebook")] },
-    { group: "Set up", eyebrow: "Set up", title: "Download the Sample SDF",
-      p: "Download the sample SDF. It's the same supplier certificate you used in Project 3.",
-      links: [link(SDF, IC_DL, "Download sample-sdf-document (Project 5).pdf")] },
-    { group: "Set up", eyebrow: "Set up", title: "Add Your Gemini Key to Secrets",
-      p: "In Colab, click the key icon on the left to open <b>Secrets</b>. Add your Gemini key with the name <code>GEMINI_API_KEY</code> and turn on <b>Notebook access</b>." },
-    { group: "Set up", eyebrow: "Set up", title: "Run Every Cell",
-      p: "Choose <b>Runtime → Run all</b>. When the file picker opens under STEP 3, upload the sample SDF.",
-      note: "On the next slides, you'll see what each part of the notebook should print when it works. Press <b>Run</b> on each slide, then <b>Next</b>, and check your own notebook against it." },
+    { group: "Set up", eyebrow: "Set up", title: "Open the Notebook and Download the SDF",
+      p: "Open the team's reference notebook and choose <b>File → Save a copy in Drive</b>. You'll build in your own copy. Then download the sample SDF (Supporting Documentation File). It's the same supplier certificate you used in Project 3.",
+      links: [link(NOTEBOOK, IC_OPEN, "Open the reference notebook"), link(SDF, IC_DL, "Download sample-sdf-document (Project 5).pdf")] },
+    { group: "Set up", eyebrow: "Set up", title: "Add Your Gemini Key and Run Every Cell",
+      p: "In Colab, click the key icon on the left to open <b>Secrets</b>. Add your Gemini key with the name <code>GEMINI_API_KEY</code> and turn on <b>Notebook access</b>. Then choose <b>Runtime → Run all</b>.",
+      note: ["The first time, Colab may ask to let this notebook use your secret. Choose <b>Grant access</b>.",
+             "On the next slides, you'll see what each part of the notebook should print when it works. Press <b>Run</b> on each slide, then <b>Next</b>, and check your own notebook against it."] },
 
     { group: "Check", eyebrow: "Check your notebook", cell: "STEP 0", title: "Install the Tools",
       p: "This cell installs PyMuPDF (reads the PDF), LlamaIndex (runs the pipeline) and the embedding and reranking tools. It takes a few minutes the first time.",
@@ -198,7 +192,7 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
       p: "This cell reads your key from Colab Secrets, so the key never sits in your code. It also turns on <code>nest_asyncio</code>, which lets Gemini answer inside Colab.",
       code: "import nest_asyncio\nnest_asyncio.apply()\n\nfrom google.colab import userdata\nos.environ[\"GOOGLE_API_KEY\"] = userdata.get('GEMINI_API_KEY')",
       out: "FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.",
-      note: "That warning is fine. The first time, Colab may ask to let this notebook use your secret. Choose <b>Grant access</b>." },
+      note: "That warning is fine." },
     { group: "Check", eyebrow: "Check your notebook", cell: "STEP 3", title: "Upload the Sample SDF",
       p: "A file picker opens under the cell. Choose the sample SDF you downloaded. Run all waits here until you do.",
       code: "pdf_path = upload_pdf()",
@@ -215,7 +209,8 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
         ["Embedding model", "STEP 8", "The tool that turns each piece of text into numbers that capture its meaning.", "This notebook uses <code>sentence-transformers/all-MiniLM-L6-v2</code>."],
         ["Chunking strategy", "STEP 6", "How you cut the document into pieces the pipeline can search.", "This notebook uses one chunk per page."],
         ["Retrieval method", "STEP 20", "How it finds the right pieces: keyword, vector (by meaning) or hybrid (both).", "This notebook uses hybrid: vector search (matches meaning) plus BM25 keyword search (matches exact words), then a reranker re-sorts the best pieces."]
-      ] },
+      ],
+      note: "If you change one, choose <b>Runtime → Run all</b> again and upload the SDF before you ask the prompts." },
 
     { group: "Ask", eyebrow: "Ask the prompts", cell: "STEP 21", title: "Ask Prompt 1",
       p: "Ask your pipeline both prompts in STEP 21, starting with Prompt 1. Now the whole pipeline runs: it finds the best chunks, then Gemini answers from them. Press <b>Run</b> to see the answer the team got.",
@@ -229,13 +224,12 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
       code: "response = rag_engine.query(\"What are the storage conditions specified in the certificate?\")\nprint(response)",
       out: "[Real answer to be pasted after a test run]",
       placeholder: true,
-      note: "Check your answer against the certificate itself. Page 1 gives the recommended storage temperature." },
+      note: ["Above the answer, your notebook also prints <code>Index contains 3 nodes, using top_k=2</code> and <code>Final Response:</code>.",
+             "Check your answer against the certificate itself. Page 1 gives the recommended storage temperature."] },
 
-    { group: "Share", eyebrow: "Share your work", title: "Make Your Google Doc and Share It",
-      p: "Make a Google Doc with your three choices and both answers. Choose <b>Share</b>, then set it so <b>anyone with the link</b> can <b>view</b>.",
-      links: [link("https://docs.new", IC_NEW, "Start a new Google Doc")] },
-    { group: "Share", eyebrow: "Share your work", title: "Share Your Notebook",
-      p: "Share your notebook the same way: <b>Share</b>, then anyone with the link can <b>view</b>." }
+    { group: "Share", eyebrow: "Share your work", title: "Share Your Google Doc and Your Notebook",
+      p: "Make a Google Doc with your three choices and both answers. Choose <b>Share</b>, then set it so <b>anyone with the link</b> can <b>view</b>. Then share your notebook the same way.",
+      links: [link("https://docs.new", IC_NEW, "Start a new Google Doc")] }
   ];
   var END_LABEL = "Done. Now submit your links.";
 
@@ -260,9 +254,9 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
     rail.appendChild(b);
   });
 
-  /* Builds one slide. showOut forces the output on, for measuring. */
-  function slideHTML(n, showOut) {
-    var s = SLIDES[n], did = showOut || ran[n], h = '<div class="inner">';
+  /* Builds one slide */
+  function slideHTML(n) {
+    var s = SLIDES[n], did = ran[n], h = '<div class="inner">';
     h += '<p class="eyebrow">' + s.eyebrow + '</p><h2 class="title">' + s.title + '</h2><p class="p">' + s.p + '</p>';
     if (s.prompt) h += '<div class="prompt"><b>' + s.prompt[0] + '</b><span>' + s.prompt[1] + '</span></div>';
     if (s.links) h += '<div class="links">' + s.links.join("") + '</div>';
@@ -276,13 +270,13 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
     if (s.tiles) {
       h += '<div class="tiles">' + s.tiles.map(function (t) { return '<div class="tile"><span class="loc">' + t[1] + '</span><b>' + t[0] + '</b><p>' + t[2] + '</p><p class="set">' + t[3] + '</p></div>'; }).join("") + '</div>';
     }
-    if (s.note && (!s.code || did)) h += '<div class="note">' + INFO + '<span>' + s.note + '</span></div>';
+    if (s.note && (!s.code || did)) [].concat(s.note).forEach(function (t) { h += '<div class="note">' + INFO + '<span>' + t + '</span></div>'; });
     return h + '</div>';
   }
 
-  function render(anim) {
+  function render(anim, nav) {
     var s = SLIDES[i];
-    card.innerHTML = slideHTML(i, false);
+    card.innerHTML = slideHTML(i);
     if (anim) card.firstChild.classList.add("anim");
     var r = card.querySelector("[data-run]");
     if (r) r.addEventListener("click", function () { ran[i] = true; render(false); var nr = card.querySelector("[data-run]"); if (nr) nr.focus(); });
@@ -307,37 +301,24 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
     nextLabel.textContent = last ? END_LABEL : (blocked ? "Press Run first" : "Next");
     next.disabled = last ? false : blocked;
     upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].title + "</b>";
-    postHeight();
+    postHeight(nav);
   }
 
-  function go(n) { if (n === i) return; i = n; render(true); }
+  function go(n) { if (n === i) return; i = n; render(true, true); }
   back.addEventListener("click", function () { if (i > 0) go(i - 1); });
   next.addEventListener("click", function () {
-    if (i < SLIDES.length - 1 && !(SLIDES[i].code && !ran[i])) go(i + 1);
+    if (i === SLIDES.length - 1) { tellParent({ type: "extern-deck-submit" }); return; }
+    if (!(SLIDES[i].code && !ran[i])) go(i + 1);
   });
 
-  /* Size every slide to the tallest one (with its output showing), then tell the page the deck's height */
-  function fit() {
-    var m = document.createElement("div");
-    m.className = "card measure";
-    m.style.width = card.getBoundingClientRect().width + "px";
-    document.body.appendChild(m);
-    var tallest = 0;
-    SLIDES.forEach(function (s, n) {
-      m.innerHTML = slideHTML(n, true);
-      tallest = Math.max(tallest, m.getBoundingClientRect().height);
-    });
-    document.body.removeChild(m);
-    card.style.minHeight = Math.ceil(tallest) + "px";
-    postHeight();
-  }
-  function postHeight() {
+  /* Tell the page the current slide's height, so the iframe fits it. On Back and Next (nav) it always posts,
+     so the page can keep the deck's top in view. */
+  function tellParent(msg) { if (window.parent && window.parent !== window) window.parent.postMessage(msg, "*"); }
+  function postHeight(nav) {
     var h = Math.ceil(document.getElementById("app").getBoundingClientRect().height);
-    if (h !== lastH && window.parent && window.parent !== window) {
-      lastH = h;
-      window.parent.postMessage({ type: "extern-deck-height", height: h }, "*");
-    }
+    if (nav || h !== lastH) { lastH = h; tellParent({ type: "extern-deck-height", height: h, nav: !!nav }); }
   }
+  function fit() { postHeight(false); }
   var t;
   window.addEventListener("resize", function () { clearTimeout(t); t = setTimeout(fit, 120); });
 
