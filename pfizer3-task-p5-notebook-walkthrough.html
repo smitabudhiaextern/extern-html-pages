@@ -87,7 +87,12 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
 .out{border-top:1px dashed var(--code-line);background:#100E20}
 .out-label{padding:8px 14px 0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--code-muted)}
 .out pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#DCD7FF}
-.out.placeholder pre{color:#FFD2AE}
+.out.placeholder pre{color:#DCD7FF}
+/* Shared placeholder style, same as the Task pages */
+.ph{background:var(--note-bg);border:1px dashed var(--note-line);border-radius:5px;padding:0 4px;color:var(--text);white-space:normal}
+.scroll-hint{display:flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:500;color:var(--purple)}
+.scroll-hint svg{width:14px;height:14px}
+.scroll-hint[hidden]{display:none}
 
 /* Notes */
 .note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--note-bg);border:1px solid var(--note-line);font-size:14.5px;line-height:1.5}
@@ -133,6 +138,8 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
 (function () {
   "use strict";
   var INFO = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.25" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v4.5M10 6.5v.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  var DOWN = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v9.5M4 8.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var REDUCE = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var PLAY = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8v8.4a.6.6 0 0 0 .9.5l6.6-4.2a.6.6 0 0 0 0-1L3.9 1.3a.6.6 0 0 0-.9.5Z" fill="currentColor"/></svg>';
 
   /* Every output below is copied from the team's real run of the reference notebook (22 Oct 2026),
@@ -168,12 +175,13 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
       p: "Now the whole pipeline runs: it finds the best chunks, then Gemini answers from them. Here is the answer the team got.",
       code: "rag_engine = build_rag_pipeline(index)\nresponse = rag_engine.query(\"What test methods were used for quality control?\")\nprint(response)",
       out: "For the AKTA ready Low Flow Kit, the test methods used for quality control include the following:\n\n* **Autoclave - Pump tubing:** 121C > 15 min\n* **Gamma Irradiation - Inlets:** 25.0 - 40.0 kGy\n* **Flow Rate Test:** Per SOP-QC-042\n* **Pressure Integrity:** Max 0.5 bar, 5 min hold\n* **Visual Inspection:** No defects visible\n* **Package Integrity:** Sealed, no damage\n\nFor the ÄKTA ready Gradient Flow Section With Inlets, the quality control methods include:\n* **Autoclave (Pump tubing):** 121°C > 15 min\n* **Gamma Irradiation (Inlets):** 25.0 – 40.0 kGy",
+      answer: true,
       note: "Gemini words its answer a little differently each run. Yours should name the same test methods." },
     { rail: "Prompt 2", kicker: "STEP 21, AGAIN", title: "Ask Prompt 2",
       p: "Change the question in STEP 21 to Prompt 2 and run the cell again. Then paste both answers into your Google Doc.",
       code: "response = rag_engine.query(\"What are the storage conditions specified in the certificate?\")\nprint(response)",
-      out: "[PLACEHOLDER: run Prompt 2 in the reference notebook and paste the real answer here. Not run yet.]",
-      placeholder: true,
+      out: "[Real answer to be pasted after a test run]",
+      placeholder: true, answer: true,
       note: "Check your answer against the certificate itself. Page 1 gives the recommended storage temperature." }
   ];
 
@@ -193,14 +201,15 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
     rail.appendChild(b);
   });
 
-  function render() {
+  function render(justRan) {
     var c = CARDS[i], h = '<div class="inner">';
     h += '<p class="kicker">' + c.kicker + '</p><h2 class="title">' + c.title + '</h2><p class="p">' + c.p + '</p>';
+    if (c.answer && ran[i]) h += '<p class="scroll-hint" id="scroll-hint" hidden>' + DOWN + 'Scroll down to see the answer</p>';
     if (c.code) {
       h += '<div class="cell"><div class="cell-head"><span class="cell-name">' + c.kicker + '</span>' +
            '<button type="button" class="run' + (ran[i] ? ' ran' : '') + '" id="run">' + PLAY + (ran[i] ? 'Ran' : 'Run') + '</button></div>' +
            '<pre>' + esc(c.code) + '</pre>';
-      if (ran[i]) h += '<div class="out' + (c.placeholder ? ' placeholder' : '') + '"><div class="out-label">' + (c.placeholder ? 'Output (placeholder)' : 'What it printed') + '</div><pre>' + esc(c.out) + '</pre></div>';
+      if (ran[i]) h += '<div class="out' + (c.placeholder ? ' placeholder' : '') + '"><div class="out-label">' + (c.placeholder ? 'Output (placeholder)' : 'What it printed') + '</div><pre>' + (c.placeholder ? '<span class="ph">' + esc(c.out) + '</span>' : esc(c.out)) + '</pre></div>';
       h += '</div>';
     }
     if (c.tiles) {
@@ -210,7 +219,19 @@ code{font-family:var(--f-mono);font-size:.86em;background:var(--icode-bg);color:
     card.innerHTML = h + '</div>';
     card.scrollTop = 0;
     var r = document.getElementById("run");
-    if (r) r.addEventListener("click", function () { ran[i] = true; render(); });
+    if (r) r.addEventListener("click", function () { ran[i] = true; render(true); });
+    var out = card.querySelector(".out");
+    if (out) {
+      var cr = card.getBoundingClientRect(), or = out.getBoundingClientRect();
+      var hidden = or.bottom > cr.bottom;
+      var hint = document.getElementById("scroll-hint");
+      if (hint && hidden) hint.hidden = false;
+      if (justRan && hidden) {
+        or = out.getBoundingClientRect();
+        var top = card.scrollTop + or.top - cr.top - 12;
+        if (card.scrollTo) card.scrollTo({ top: top, behavior: REDUCE ? "auto" : "smooth" }); else card.scrollTop = top;
+      }
+    }
 
     Array.prototype.forEach.call(rail.children, function (b, n) {
       b.className = "pg" + (n === i ? " is-cur" : (n < i || ran[n] ? " is-done" : ""));
