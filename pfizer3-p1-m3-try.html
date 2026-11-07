@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fact-Check an AI Answer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core, Light format. Colors, type, spacing and radius come only from design-system/tokens.json.
+   Card player copied from pfizer3-p1-m3-concepts.html: rail and "Card X of N" on top, one card at a time, Back and Next below.
+   Fixed design stage, 760 x STAGE_H px. The whole stage scales to fit the Notion embed frame, so nothing ever scrolls. */
+:root{
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --extern-black:#000000;
+  --extern-white:#ffffff;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:var(--extern-white);
+  --surface-card:var(--blue-50);
+  --surface-icon:var(--extern-white);
+  --ink:var(--extern-black);
+  --ink-muted:var(--gray-800);
+  --card-title:var(--extern-black);
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:var(--extern-black);
+  --on-action:var(--extern-white);
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* The fixed stage. JavaScript sets one uniform scale and centres it in the frame. */
+.app{position:absolute;left:0;top:0;width:760px;height:780px;display:flex;flex-direction:column;transform-origin:0 0;background:var(--surface)}
+
+/* Header: rail and where-you-are line */
+.top{flex:none;padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center;border-bottom:1px solid var(--line)}
+.where{min-width:160px;text-align:right;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.seg{flex:1 1 0;min-width:0;height:24px;display:flex;align-items:center;background:none;border:0;padding:0;margin:0;cursor:pointer;border-radius:4px}
+.seg i{display:block;width:100%;height:4px;border-radius:2px;background:var(--line)}
+.seg.done i{background:var(--blue-200)}
+.seg.cur i{background:var(--pfizer-blue);height:6px;border-radius:3px}
+
+/* Slide area and card. The card fills the space between the header and the buttons. */
+.stage{flex:1 1 auto;min-height:0;padding:14px 16px;display:flex;flex-direction:column}
+.card{flex:1 1 auto;min-height:0;background:var(--surface-card);border-radius:var(--radius-md);padding:22px 24px}
+.inner{display:flex;flex-direction:column;gap:14px}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding:2px 0;color:var(--card-title);text-wrap:balance}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:16px;line-height:1.55;color:var(--card-text)}
+.p b,.todo b,.reveal b{font-weight:600;color:var(--card-title)}
+.mono{font-family:var(--font-mono);font-size:.95em}
+
+/* Small tag, as on the concepts deck's panels */
+.tag{align-self:flex-start;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;padding:3px 8px;border-radius:var(--radius-xs);border:1px solid var(--ink);color:var(--ink)}
+.labelrow{display:flex;align-items:center;gap:10px}
+
+/* Link buttons */
+.filelink{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;font-size:15px;line-height:19px;font-weight:600;padding:10px 16px;border-radius:var(--radius-xs);background:var(--action);color:var(--on-action);text-decoration:none}
+.filelink svg{width:15px;height:15px;flex:none}
+
+/* Copyable question */
+.copybox{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface-icon);border-radius:var(--radius-sm);padding:12px 12px 12px 16px}
+.copybox code{font-family:var(--font-mono);font-size:16px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:8px 14px;font-size:15px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:15px;height:15px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action)}
+
+/* Guess line */
+.guess{background:var(--surface-icon);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:12px}
+.guess-q{margin:0;font-size:15.5px;line-height:1.45;font-weight:600;color:var(--ink)}
+
+/* Numbered how-to list */
+.todo{margin:0;padding-left:22px;font-size:15.5px;line-height:1.5;color:var(--card-text)}
+.todo li+li{margin-top:4px}
+
+/* Reveal: hidden until the student clicks Check Your Answer */
+.opt{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:transparent;border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:10px 16px;font-size:15px;line-height:1.2;font-weight:600;cursor:pointer}
+.opt[aria-expanded="true"]{background:var(--action);color:var(--on-action)}
+.reveal{margin:0;padding:12px 14px;border-left:3px solid var(--pfizer-blue);background:var(--gray-50);border-radius:0 var(--radius-xs) var(--radius-xs) 0;font-size:15px;line-height:1.5;color:var(--ink);display:flex;flex-direction:column;gap:10px}
+.reveal p{margin:0}
+.quote{background:var(--surface-icon);border-radius:var(--radius-sm);padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:15px;line-height:1.45;color:var(--card-text)}
+.quote p{margin:0}
+.quote .who{font-weight:600;color:var(--card-title);margin-bottom:2px}
+
+/* Done message, then Back and Next. Both sit at the bottom of the stage on every card. */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{padding:0;border:0}
+.foot{flex:none;padding:4px 16px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:19px;font-weight:600;padding:12px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-secondary:disabled{opacity:.35;cursor:default}
+.btn-primary{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Try It Yourself: Fact-Check an AI Answer</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where" id="where">Card 1 of 5</div>
+  </header>
+  <main class="stage" id="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CYTIVA = "https://drive.google.com/file/d/1oOR50D8F3Deask7aT2HbXQZhw0u1hvcg/view";
+  var GEMINI = "https://gemini.google.com/";
+  var QUESTION = "Is lot 17242818 still in date?";
+  var EXT = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9 3h4v4M13 3 7.5 8.5M11.5 9.5V13h-8.5V4.5H6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var COPY_IC = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5" stroke="currentColor" stroke-width="1.6"/></svg>';
+  function link(url, text) { return '<a class="filelink" href="' + url + '" target="_blank" rel="noopener">' + text + EXT + '<span class="sr-only"> (opens in a new tab)</span></a>'; }
+
+  /* Every line below is copied word for word from Steps 1 to 4 of the page's Try It Yourself section. */
+  var CARDS = [
+    { label: "STEP 1", tag: "Optional", short: "Open",
+      title: 'Open the File and <span class="hl">Gemini</span>',
+      body:
+        '<p class="p">Open the Cytiva file in Google Drive. Click the <b>Download</b> button (the arrow pointing down, at the top right) to save it to your computer.</p>' +
+        link(CYTIVA, "The Cytiva Supplier File") +
+        '<p class="p">Then open Gemini in a new tab and sign in with your Google account. You need to be signed in to upload a file.</p>' +
+        link(GEMINI, "Gemini") },
+
+    { label: "STEP 2", short: "Upload",
+      title: 'Upload the <span class="hl">File</span> to Gemini',
+      body:
+        '<p class="p">In Gemini, click the <b>+</b> (plus) button next to the chat box and choose <b>Upload files</b>. If Google shows a notice called "Creating content from images and files", read it and click <b>Agree</b>. Pick the Cytiva file you just downloaded. Wait until you see the file appear in the chat box before you type anything.</p>' },
+
+    { label: "STEP 3", short: "Ask",
+      title: 'Ask Your <span class="hl">Question</span>',
+      body:
+        '<p class="p">Type this question into the chat box, or copy it, and press Enter:</p>' +
+        '<div class="copybox"><code id="question">' + QUESTION + '</code>' +
+          '<button type="button" class="copy" data-copy>' + COPY_IC + '<span>Copy</span></button></div>' +
+        '<div class="guess"><p class="guess-q">Read Gemini\'s answer. Before you check it, make a guess: do you think Gemini got it right?</p></div>' },
+
+    { label: "STEP 4", short: "Check",
+      title: 'Check the <span class="hl">Answer</span> Against Page 2',
+      body:
+        '<p class="p">Now open the Cytiva file and be the fact-checker. Here\'s how to find the real answer:</p>' +
+        '<ol class="todo">' +
+          '<li>Go to <b>page 2</b>. It\'s Certificate 1, a Certificate of Quality for the ÄKTA ready Gradient Flow Section With Inlets.</li>' +
+          '<li>Find <b>Lot Number: 17242818</b> near the top. That tells you this is the right certificate.</li>' +
+          '<li>Find <b>Expiration Date</b> a few lines below it. Don\'t mix it up with the Date of Manufacture just above.</li>' +
+          '<li>Read the date the way you did in the Task: year, month, then day.</li>' +
+          '<li>Decide whether that date has passed. If it has, the lot is no longer in date.</li>' +
+        '</ol>' },
+
+    { label: "STEP 4 · CONTINUED", short: "Check Your Answer",
+      title: 'Check the <span class="hl">Answer</span> Against Page 2',
+      body:
+        '<button type="button" class="opt" data-reveal-btn aria-expanded="false" aria-controls="answer">Check Your Answer</button>' +
+        '<div class="reveal" id="answer" data-reveal hidden>' +
+          '<p>The Expiration Date on page 2 is <span class="mono">20230126</span>: 2023, 01, 26. That\'s <b>26 January 2023</b>. Don\'t mix it up with the Date of Manufacture, <span class="mono">20210126</span>, just above it. That date has passed, so lot 17242818 <b>has expired</b>.</p>' +
+          '<p>Here\'s the answer Gemini gave when our team tried it:</p>' +
+          '<div class="quote">' +
+            '<p class="who">Gemini (3.6 Flash), 6 November 2026</p>' +
+            '<p>According to the Certificate of Quality for lot number 17242818, the relevant dates are:</p>' +
+            '<p>Date of Manufacture: January 26, 2021 (20210126)</p>' +
+            '<p>Expiration Date: January 26, 2023 (20230126)</p>' +
+            '<p>Lot 17242818 is expired and is no longer in date.</p>' +
+          '</div>' +
+          '<p>Gemini words its answers a little differently each time, so yours may not match ours word for word.</p>' +
+        '</div>' +
+        '<p class="p">Now compare. Did Gemini give the same expiration date you found, and the same verdict? Or did it use the manufacture date, or page 3\'s lot 18356721?</p>' }
+  ];
+  var END_LABEL = "Done";
+
+  var i = 0, opened = false;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), where = $("where");
+  var donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+  var embedded = window.parent && window.parent !== window;
+
+  /* Fixed stage: 760 x STAGE_H px, scaled uniformly to fit the frame and centred. Nothing scrolls. */
+  var STAGE_W = 760, STAGE_H = 780;
+  app.style.height = STAGE_H + "px";
+  function fit() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var s = Math.min(w / STAGE_W, h / STAGE_H);
+    app.style.transform = "translate(" + ((w - STAGE_W * s) / 2) + "px," + ((h - STAGE_H * s) / 2) + "px) scale(" + s + ")";
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "seg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.short);
+    b.innerHTML = "<i></i>";
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function copyText(text, btn) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents($("question"));
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+    else fallback();
+  }
+
+  function render(anim) {
+    var c = CARDS[i];
+    var head = c.tag ? '<div class="labelrow"><p class="label">' + c.label + '</p><span class="tag">' + c.tag + '</span></div>' : '<p class="label">' + c.label + '</p>';
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '">' + head + '<h2 class="title">' + c.title + '</h2>' + c.body + '</div>';
+    var cp = card.querySelector("[data-copy]");
+    if (cp) cp.addEventListener("click", function () { copyText(QUESTION, cp); });
+    var rb = card.querySelector("[data-reveal-btn]");
+    if (rb) {
+      var rv = card.querySelector("[data-reveal]");
+      var show = function () { opened = true; rb.setAttribute("aria-expanded", "true"); rv.hidden = false; };
+      rb.addEventListener("click", show);
+      if (opened) show();
+    }
+    Array.prototype.forEach.call(rail.children, function (b, n) {
+      b.classList.toggle("cur", n === i);
+      b.classList.toggle("done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    where.innerHTML = "<b>" + c.short + "</b> · Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + CARDS[i + 1].short + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= CARDS.length) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i < CARDS.length - 1) { go(i + 1); return; }
+    /* The message shows in the deck. The postMessage is only for a page that listens for it. */
+    donemsg.textContent = DONE_MSG;
+    tellParent({ type: "extern-deck-done" });
+  });
+  document.addEventListener("keydown", function (e) {
+    var t = e.target && e.target.tagName;
+    if (e.altKey || e.ctrlKey || e.metaKey || t === "INPUT" || t === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  function tellParent(msg) { if (embedded) window.parent.postMessage(msg, "*"); }
+  window.addEventListener("resize", fit);
+  fit();
+  render(false);
+})();
+</script>
+</body>
+</html>
