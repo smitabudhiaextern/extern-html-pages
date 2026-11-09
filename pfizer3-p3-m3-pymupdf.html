@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P3 PyMuPDF Part</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Structure, rail, Back and Next, code blocks, Copy buttons and reveals: copied from the P3 m2 decks
+   (pfizer3-p3-m2-steps.html and pfizer3-p3-m2-build.html).
+   Look: Pfizer x Extern Core, Light format. Every colour, size, radius and font below comes from design-system/tokens.json.
+   Content: P3 module 3, Part 3: PyMuPDF. The SME's Loom video, the notebook's PyMuPDF cells (21, 22 and 24, plus one
+   pasted cell for page 2) and the task. Every output is the real output of that code on sample-sdf-document.pdf
+   (PyMuPDF 1.26.5), trimmed where it says so.
+   Fixed stage: the deck is laid out on one design stage that scales as a single piece to fit the frame, so nothing
+   ever scrolls and Back and Next sit in the same place on every slide. Wide frames use a 760 x 760 stage;
+   phone-width frames (under 560 px) use a 420 x 940 stage, so the text stays readable. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:760px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+.app.narrow{width:420px;height:940px}
+
+/* Header: rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 10px}
+.narrow .card{padding:18px 16px}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code,.note code{font-family:var(--font-mono);font-size:.92em;white-space:nowrap;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+/* The Loom video: 16:9 frame, with a plain link under it */
+.video{margin:0;display:flex;flex-direction:column;gap:6px}
+.video .frame{position:relative;width:100%;max-width:530px;aspect-ratio:16/9;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-card)}
+.video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.video .cap{font-size:13px;line-height:18px;color:var(--ink-muted)}
+.video .cap a{color:var(--pfizer-blue);font-weight:600}
+
+/* Note box and "Done looks like" box, built from the design system's tokens */
+.note{margin:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-card);border-radius:var(--radius-sm);padding:12px 16px;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.note p{margin:0}
+.note b{font-weight:600}
+.note code{background:var(--surface)}
+
+/* Hidden answer: the button, then the content once it is shown */
+.reveal{display:flex;flex-direction:column;gap:var(--space-3)}
+.reveal-box{display:flex;flex-direction:column;gap:var(--space-3);border-top:1px solid var(--line);padding-top:var(--space-3)}
+
+/* Buttons (design system Button, Light) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none;text-align:left}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.reveal > .btn{align-self:flex-start;padding:10px 16px}
+
+/* Run card: the code with a Copy button; output blocks have no Copy button */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:10px 14px;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Part 3: PyMuPDF</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Parts"></nav>
+    <div class="where"><b id="where-section">Video</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1 of 8</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<!-- Slide bodies. {{CODE:lang:label:text}} becomes a code block (lang "plain" is an output block, with no Copy button);
+     {{VIDEO}} the Loom video; {{REVEAL:key:button label}} ... {{/REVEAL}} hides its content behind a button. -->
+<template id="s1">
+  <p class="p">PyMuPDF is the most powerful library for extracting both text AND bounding box information. This is essential for understanding document layout. Watch the video to see it in action.</p>
+  {{VIDEO}}
+  <div class="note">
+    <p>The video says <code>fitz</code>, the name older code used to import PyMuPDF. Type <code>import pymupdf</code> instead.</p>
+    <p>The video uses a different sample PDF from ours, so its output won't match yours.</p>
+  </div>
+</template>
+
+<template id="s2">
+  <p class="p">Go to your copy of the notebook. Find the cell that starts with <code>import pymupdf</code>, or paste this into a new code cell, and press <b>Run</b>:</p>
+  {{CODE:python:Python:import pymupdf  # PyMuPDF
+
+# Load the PDF
+doc = pymupdf.open("sample-sdf-document.pdf")
+
+# Print metadata
+print("PDF Metadata:", doc.metadata)
+print(f"\nTotal pages: {len(doc)}")}}
+  <p class="p"><code>pymupdf.open()</code> opens the supplier file and keeps it as <code>doc</code>, short for document. <code>doc.metadata</code> is the file's <b>metadata</b>: facts about the file itself, such as its title and author. <code>len(doc)</code> counts the pages.</p>
+</template>
+
+<template id="s2b">
+  <p class="p">You'll see this under the cell:</p>
+  {{CODE:plain:Output:PDF Metadata: {'format': 'PDF 1.7', 'title': '', 'author': '', 'subject': '', 'keywords': '', 'creator': '', 'producer': '', 'creationDate': '', 'modDate': '', 'trapped': '', 'encryption': None}
+
+Total pages: 3}}
+  <p class="p">Every field after <code>format</code> is blank (<code>''</code> or <code>None</code>), because this file doesn't fill them in.</p>
+</template>
+
+<template id="s3">
+  <p class="p">Next, run the cell that starts with <code># Extract text from the first page</code>:</p>
+  {{CODE:python:Python:# Extract text from the first page
+page = doc[0]
+print(page.get_text())}}
+  <p class="p">Python counts from 0, so <code>doc[0]</code> is page 1. <code>page.get_text()</code> pulls out all the text on that page, and <code>print</code> shows it.</p>
+  <p class="p">You'll see the letter on page 1. Here's part of it:</p>
+  {{CODE:plain:Output (trimmed):...
+3 June, 2022
+...
+To Whom It May Concern,
+...}}
+  <p class="p">This output is trimmed. Your notebook prints the whole letter, about 30 lines. We kept two lines and put <code>...</code> where we left lines out.</p>
+</template>
+
+<template id="s4">
+  <p class="p">The notebook's cell only reads page 1. To read page 2, click that cell, then click <b>+ Code</b> at the top of the notebook. Colab adds an empty code cell under it. Paste this into the new cell and press <b>Run</b>:</p>
+  {{CODE:python:Python:page = doc[1]
+print(page.get_text())}}
+  <p class="p"><code>doc[1]</code> is page 2, because counting starts at 0. Now <code>page</code> holds page 2.</p>
+  <p class="p">You'll see the Certificate of Quality on page 2. Here are its first lines:</p>
+  {{CODE:plain:Output (trimmed):Certificate of Quality
+This product is manufactured in compliance with our ISO 9001 certified quality management system.
+...}}
+  <p class="p">This output is trimmed too. Your notebook prints about 30 lines. Keep them on screen, because you'll search them in the task at the end.</p>
+</template>
+
+<template id="s5">
+  <p class="p">Now run the cell that starts with <code>text_data = page.get_text("dict")</code>:</p>
+  {{CODE:python:Python:text_data = page.get_text("dict")  # Extract text as a structured dictionary
+
+for block in text_data.get("blocks", []):  # Loop through all blocks in the page
+
+    # Check if 'lines' exists in the block
+    if "lines" in block:
+        for line in block["lines"]:
+            for span in line.get("spans", []):  # Ensure spans exist
+                bbox = span["bbox"]
+                text = span["text"]
+                print(f"Text: {text}, Bounding Box: {bbox}")}}
+  <p class="p"><code>page</code> still holds page 2 from Step 3, so this cell reads page 2.</p>
+  <p class="p"><code>get_text("dict")</code> gives the page as a <b>dictionary</b>, a Python container where each part has a name. Inside, the text is sorted into blocks (chunks of text), lines, and spans (pieces of a line in the same font). The loop goes through every span and prints its text with its bounding box.</p>
+</template>
+
+<template id="s6">
+  <p class="p">Here are the first rows of what the cell prints:</p>
+  {{CODE:plain:Output (trimmed):Text: Certificate of Quality , Bounding Box: (36.001380920410156, 28.100793838500977, 278.0241394042969, 62.21213150024414)
+Text: This product is manufactured in compliance with our ISO 9001 certified quality management system., Bounding Box: (35.997703552246094, 639.3534545898438, 453.6865539550781, 651.5045166015625)
+...}}
+  <p class="p">This output is trimmed. Your notebook prints one row for every span on page 2, over 40 rows.</p>
+  <p class="p">Each box is 4 numbers: left, top, right and bottom. They're measured in points from the top-left corner of the page, and this page is 792 points tall. You only need the part before the dot.</p>
+  <p class="p">Look at the second row. Its top is 639, so it sits near the bottom of the page, even though it prints second. The text alone can't tell you that. The box can.</p>
+</template>
+
+<template id="s7">
+  <p class="p">Look through your page 2 output from Step 3. Find the line with <b>Expiration Date</b> on it, and the date next to it.</p>
+  {{REVEAL:ans:Show the Answer}}
+  <p class="p">Here's the line, exactly as PyMuPDF prints it:</p>
+  {{CODE:plain:Output:Expiration Date:  20230126}}
+  <p class="p">You already know how to read the date: year 2023, month 01, day 26. That's 26 January 2023.</p>
+  {{/REVEAL}}
+  <div class="note"><p><b>Done looks like:</b> you found the Expiration Date line in your own page 2 output, and it matches the answer.</p></div>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+  var LOOM_ID = "4aa1fbfce2d84f91a26266a432e67ea1";
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function unesc(t) { return t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"); }
+  function codeBlock(lang, label, text) {
+    var out = lang === "plain";
+    return '<figure class="run' + (out ? ' out' : '') + '" style="margin:0"><div class="code-head"><span class="code-lang">' + label + '</span>' +
+      (out ? '' : '<button type="button" class="copy" data-copy aria-label="Copy ' + label + ' code">' + IC_COPY + '<span>Copy</span></button>') + '</div>' +
+      '<pre tabindex="0"><code>' + esc(text) + '</code></pre></figure>';
+  }
+  function videoBlock() {
+    return '<figure class="video"><div class="frame"><iframe src="https://www.loom.com/embed/' + LOOM_ID + '" title="Introduction to PyMuPDF (Loom video, about 5 minutes)" allow="fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>' +
+      '<figcaption class="cap">Introduction to PyMuPDF, about 5 minutes. Video not playing? <a href="https://www.loom.com/share/' + LOOM_ID + '" target="_blank" rel="noopener noreferrer">Watch on Loom<span class="sr-only"> (opens in a new tab)</span></a></figcaption></figure>';
+  }
+
+  var shown = {};
+  /* Fill the {{...}} markers in a slide template */
+  function body(id) {
+    return document.getElementById(id).innerHTML
+      .replace(/\{\{REVEAL:(\w+):([^}]*)\}\}([\s\S]*?)\{\{\/REVEAL\}\}/g, function (m, key, label, inner) {
+        var open = !!shown[key];
+        return '<div class="reveal">' +
+          '<button type="button" class="btn btn-primary" data-reveal="' + key + '" aria-expanded="' + open + '" aria-controls="rv-' + key + '"' + (open ? ' hidden' : '') + '>' + label + '</button>' +
+          '<div class="reveal-box" id="rv-' + key + '"' + (open ? '' : ' hidden') + '>' + inner + '</div></div>';
+      })
+      .replace(/\{\{VIDEO\}\}/g, videoBlock)
+      .replace(/\{\{CODE:(\w+):([^:]*):([\s\S]*?)\}\}(?!\})/g, function (m, lang, label, text) { return codeBlock(lang, label, unesc(text)); });
+  }
+
+  var GROUPS = ["Video", "Step 1", "Step 2", "Step 3", "Step 4", "Task"];
+  var SLIDES = [
+    { group: "Video", label: "PART 3 &middot; PYMUPDF", title: 'Watch the PyMuPDF <span class="hl">Video</span>', plain: "Watch the PyMuPDF Video", tpl: "s1" },
+    { group: "Step 1", label: "STEP 1 &middot; PART 1 OF 2", title: 'Open the File and View Its <span class="hl">Metadata</span>', plain: "Step 1. Open the File and View Its Metadata", tpl: "s2" },
+    { group: "Step 1", label: "STEP 1 &middot; PART 2 OF 2", title: 'What the <span class="hl">Metadata</span> Shows', plain: "Step 1. What the Metadata Shows", tpl: "s2b" },
+    { group: "Step 2", label: "STEP 2", title: 'Read <span class="hl">Page 1</span>', plain: "Step 2. Read Page 1", tpl: "s3" },
+    { group: "Step 3", label: "STEP 3", title: 'Read <span class="hl">Page 2</span>', plain: "Step 3. Read Page 2", tpl: "s4" },
+    { group: "Step 4", label: "STEP 4 &middot; PART 1 OF 2", title: 'See Where Each Word <span class="hl">Sits</span>', plain: "Step 4. See Where Each Word Sits", tpl: "s5" },
+    { group: "Step 4", label: "STEP 4 &middot; PART 2 OF 2", title: 'Read the <span class="hl">Boxes</span>', plain: "Step 4. Read the Boxes", tpl: "s6" },
+    { group: "Task", label: "YOUR TASK", title: 'Find the Expiration <span class="hl">Date</span>', plain: "Your Task. Find the Expiration Date", tpl: "s7" }
+  ];
+  var END_LABEL = "Done";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG = "You're done with the PyMuPDF slides. Scroll down to the next part of this reading.";
+  var DONE_MSG_TAB = "You're done with the PyMuPDF slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  /* The fixed stage: pick the wide or narrow design size, then scale the whole deck to fit the frame and centre it. */
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var W = narrow ? 420 : 760, H = narrow ? 940 : 760;
+    var k = Math.min(window.innerWidth / W, window.innerHeight / H);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", g.name + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + g.name + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + body(s.tpl) + '</div>';
+  }
+
+  function wire() {
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+    Array.prototype.forEach.call(card.querySelectorAll("[data-reveal]"), function (b) {
+      b.addEventListener("click", function () {
+        var key = b.getAttribute("data-reveal"), box = $("rv-" + key);
+        shown[key] = true;
+        b.setAttribute("aria-expanded", "true"); b.hidden = true; box.hidden = false;
+        var first = box.querySelector("pre"); if (first) first.focus({ preventScroll: true });
+      });
+    });
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    wire();
+
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  /* Left and Right arrow keys move between slides */
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  window.addEventListener("resize", scaleStage);
+  scaleStage();
+  render(false);
+})();
+</script>
+</body>
+</html>

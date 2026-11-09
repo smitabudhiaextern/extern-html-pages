@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare the Three Libraries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Structure: copied from the approved P3 module 2 steps deck (pfizer3-p3-m2-steps.html).
+   Look: Pfizer x Extern Core, Light format. Every colour, size, radius and font below comes from design-system/tokens.json.
+   Content: P3 module 3, "Compare the Three Libraries": page 2 of the supplier file read by pypdf, pdfplumber and PyMuPDF,
+   the differences, what else each library can do, and the takeaway.
+   Every output below is real: run on sample-sdf-document.pdf with pypdf 6.x, pdfplumber 0.11.x and PyMuPDF 1.26.x,
+   then trimmed to the lines around the two dates (the cut is shown as "...").
+   Fixed stage: the whole deck is laid out on one 760 x STAGE_H design stage that scales as a single piece to fit
+   the embed frame, so nothing ever scrolls and Back and Next sit in the same place on every slide. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage: 760 x 860, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:860px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Header: rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:20px 22px;display:flex;flex-direction:column;overflow:hidden}
+.inner{display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+code.c{font-family:var(--font-mono);font-size:.92em;white-space:pre;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+/* Buttons (design system Button, Light) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Output cards: the real output, stacked one above the other. No Copy button on output. */
+.outs{display:flex;flex-direction:column;gap:8px}
+.run{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);overflow:hidden}
+.code-head{display:flex;align-items:baseline;gap:10px;padding:4px 12px;background:var(--surface-card);border-bottom:1px solid var(--blue-200)}
+.code-lang{font-size:13px;line-height:18px;font-weight:600;color:var(--ink)}
+.code-src{font-family:var(--font-mono);font-size:12.5px;line-height:18px;color:var(--ink-muted)}
+.run pre{margin:0;padding:6px 12px;font-family:var(--font-mono);font-size:13px;line-height:17px;color:var(--ink);white-space:pre;background:var(--surface-card)}
+.run pre code{font:inherit}
+.run pre .cut{color:var(--gray-600)}
+/* A grey bar in an output hides the supplier's details (copied from the pypdf deck) */
+.hide{background:var(--gray-200);color:transparent;border-radius:3px;user-select:none}
+
+/* Tables built from tokens: hairlines, pale-blue header row */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;font-size:14px;line-height:20px}
+.tbl th,.tbl td{padding:8px 10px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.tbl thead th{border-top:0;background:var(--surface-card);font-weight:600;color:var(--card-title)}
+.tbl tbody th{font-weight:600;color:var(--ink);width:31%}
+.tbl td{color:var(--card-text)}
+.tbl td+td,.tbl th+td,.tbl th+th{border-left:1px solid var(--line)}
+.tbl code.c{font-size:13px;padding:1px 4px}
+
+/* Three library cards in one row */
+.libs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.lib{background:var(--surface-card);border-radius:var(--radius-sm);padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px}
+.lib h3{margin:0;font-family:var(--font-serif);font-weight:400;font-size:22px;line-height:28px;color:var(--card-title)}
+.lib ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.lib li{font-size:14px;line-height:20px;color:var(--card-text)}
+.lib li b{display:block;font-weight:600;color:var(--card-title)}
+.lib code.c{background:var(--surface);font-size:12.5px;white-space:normal;overflow-wrap:anywhere}
+
+/* Takeaway box */
+.take{background:var(--surface-card);border-left:4px solid var(--pfizer-blue);border-radius:var(--radius-sm);padding:20px 22px;display:flex;flex-direction:column;gap:10px}
+.take p{margin:0;font-family:var(--font-serif);font-size:24px;line-height:33px;color:var(--card-title);text-wrap:pretty}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Compare the Three Libraries on Page 2</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Slides"></nav>
+    <div class="where"><b id="where-section">Outputs</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1 of 4</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<!-- Slide 1: the real outputs. Each block is copied exactly from the library's output for page 2,
+     trimmed to the lines around the two dates. Spaces are kept as printed.
+     Each grey bar is as long as the words it hides. -->
+<template id="s1">
+  <p class="p">Here's page 2 as each library printed it. Grey bars hide the supplier's details, but your notebook shows the real words. In the code, <code class="c">[1]</code> means page 2, because Python counts from 0.</p>
+  <div class="outs">
+    <figure class="run"><figcaption class="code-head"><span class="code-lang">pypdf<span class="sr-only"> Some words are hidden behind grey bars.</span></span><span class="code-src">reader.pages[1].extract_text()</span></figcaption>
+<pre tabindex="0" aria-label="pypdf output, trimmed"><code><span class="cut">...</span>
+Product: <span class="hide" aria-hidden="true">xxxxx</span> ready Gradient Flow Section With Inlets
+Lot Number: 17242818 Product Article Number:   29 1846 12 
+Date of Manufacture:  20210126 
+  Product Description:  High Flow Gradient C, Modified, <span class="hide" aria-hidden="true">xxxxxx</span> ready
+Expiration Date:  20230126 
+<span class="cut">...</span></code></pre></figure>
+    <figure class="run"><figcaption class="code-head"><span class="code-lang">pdfplumber<span class="sr-only"> Some words are hidden behind grey bars.</span></span><span class="code-src">pdf.pages[1].extract_text()</span></figcaption>
+<pre tabindex="0" aria-label="pdfplumber output, trimmed"><code><span class="cut">...</span>
+<span class="hide" aria-hidden="true">xxxxx</span> ready Gradient Flow Section With Inlets
+Product:
+Lot Number: 17242818 Product Article Number: 29 184612
+Date of Manufacture: 20210126
+Product Description: High Flow Gradient C, Modified, <span class="hide" aria-hidden="true">xxxxxx</span>ready
+Expiration Date: 20230126
+<span class="cut">...</span></code></pre></figure>
+    <figure class="run"><figcaption class="code-head"><span class="code-lang">PyMuPDF<span class="sr-only"> Some words are hidden behind grey bars.</span></span><span class="code-src">doc[1].get_text()</span></figcaption>
+<pre tabindex="0" aria-label="PyMuPDF output, trimmed"><code><span class="cut">...</span>
+Product: <span class="hide" aria-hidden="true">xxxxx</span> ready Gradient Flow Section With Inlets
+Lot Number: 17242818 
+Product Article Number:   29 1846 12 
+Date of Manufacture:  20210126 
+  Product Description:  High Flow Gradient C, Modified, <span class="hide" aria-hidden="true">xxxxxx</span> ready
+Expiration Date:  20230126 
+<span class="cut">...</span></code></pre></figure>
+  </div>
+</template>
+
+<!-- Slide 2: the differences, only what the real outputs show -->
+<template id="s2">
+  <p class="p">All three found the same two dates. Here's where their outputs differ.</p>
+  <table class="tbl">
+    <thead><tr><th scope="col">What to look at</th><th scope="col">pypdf</th><th scope="col">pdfplumber</th><th scope="col">PyMuPDF</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">The two dates</th><td><code class="c">20210126</code> and <code class="c">20230126</code></td><td>The same</td><td>The same</td></tr>
+      <tr><th scope="row">Spaces after "Date of Manufacture:"</th><td>Two</td><td>One</td><td>Two</td></tr>
+      <tr><th scope="row">The article number</th><td><code class="c">29 1846 12</code></td><td><code class="c">29 184612</code>, a space is lost</td><td><code class="c">29 1846 12</code></td></tr>
+      <tr><th scope="row">"Lot Number" and "Product Article Number"</th><td>On one line</td><td>On one line</td><td>On two lines</td></tr>
+      <tr><th scope="row">Where "Product:" sits</th><td>Before the product name</td><td>After the product name</td><td>Before the product name</td></tr>
+      <tr><th scope="row">The small print from the bottom of the page</th><td>Printed right after the title</td><td>Printed last</td><td>Printed right after the title</td></tr>
+    </tbody>
+  </table>
+  <p class="p">One lost space turned <code class="c">29 1846 12</code> into <code class="c">29 184612</code>, a different-looking number. That's why you check the output against the page.</p>
+</template>
+
+<!-- Slide 3: what else each library can do. Every method below was run on the supplier file. -->
+<template id="s3">
+  <p class="p">Reading text is only one skill. Here's what each library can read from a page, with the code that does it.</p>
+  <div class="libs">
+    <section class="lib"><h3>pypdf</h3><ul>
+      <li><b>The text</b><code class="c">extract_text()</code></li>
+    </ul></section>
+    <section class="lib"><h3>pdfplumber</h3><ul>
+      <li><b>The text</b><code class="c">extract_text()</code></li>
+      <li><b>Tables, as rows</b><code class="c">extract_tables()</code></li>
+      <li><b>Each word with its position</b><code class="c">extract_words()</code></li>
+    </ul></section>
+    <section class="lib"><h3>PyMuPDF</h3><ul>
+      <li><b>The text</b><code class="c">get_text()</code></li>
+      <li><b>Each word with its box</b><code class="c">get_text("words")</code></li>
+      <li><b>Each piece of text with its box and font size</b><code class="c">get_text("dict")</code></li>
+      <li><b>Tables, as rows</b><code class="c">find_tables()</code></li>
+    </ul></section>
+  </div>
+  <p class="p">A <b>box</b> (also called a bounding box) is the invisible rectangle around a word on the page. Its four numbers say where the word sits.</p>
+</template>
+
+<!-- Slide 4: the takeaway -->
+<template id="s4">
+  <div class="take" role="note" aria-label="Takeaway">
+    <p>All three read the text. pdfplumber and PyMuPDF can also read the page 3 table and tell you where each word sits. Later projects use PyMuPDF, so module 5 builds on it.</p>
+  </div>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var GROUPS = ["Outputs", "Differences", "Other Skills", "Takeaway"];
+  var SLIDES = [
+    { group: "Outputs", label: "COMPARE &middot; PAGE 2", title: 'Page 2, Read by All <span class="hl">Three</span>', plain: "Page 2, Read by All Three", tpl: "s1" },
+    { group: "Differences", label: "COMPARE &middot; PAGE 2", title: 'Same Dates, Different <span class="hl">Spacing</span>', plain: "Same Dates, Different Spacing", tpl: "s2" },
+    { group: "Other Skills", label: "BEYOND TEXT", title: 'What Else Each Library Can <span class="hl">Do</span>', plain: "What Else Each Library Can Do", tpl: "s3" },
+    { group: "Takeaway", label: "TAKEAWAY", title: 'Why Module 5 Uses <span class="hl">PyMuPDF</span>', plain: "Why Module 5 Uses PyMuPDF", tpl: "s4" }
+  ];
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  /* The fixed stage: lay out at 760 x 860, then scale the whole deck to fit the frame and centre it. */
+  var STAGE_W = 760, STAGE_H = 860;
+  function scaleStage() {
+    var k = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", g.name + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + g.name + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + document.getElementById(s.tpl).innerHTML + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  /* Left and Right arrow keys move between slides */
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  window.addEventListener("resize", scaleStage);
+  scaleStage();
+  render(false);
+})();
+</script>
+</body>
+</html>
