@@ -13,10 +13,14 @@
    Content: P3 module 10, the Task "Extract Key Dates from SDF Documents", What to Do. One slide per step, the SME's 3 steps in his order.
    Notebook: students work in their own saved copy of the module 5 notebook ("Reading a Supporting Documentation File with PyMuPDF (Pfizer 3.0 P3)").
    They run its Steps 1 and 2 again (install, upload, open as doc), then paste these cells into new code cells at the bottom.
-   Outputs: the real output of each cell, run with PyMuPDF 1.26.5 on sample-sdf-document.pdf (the supplier file), on 10 November 2026.
+   Outputs: the real output of each cell, run with PyMuPDF 1.26.5 on sample-sdf-document.pdf (the supplier file), on 10 November 2026,
+   and again with PyMuPDF 2.1 (what !pip install pymupdf gives in Colab on 10 November 2026, with pymupdf-layout 2.1): every
+   output is the same except the table slide. On 2.1, doc[2].find_tables() finds 2 tables (the test results table first,
+   then the product details box), and table.extract() runs words together ('TestMethod'), so the table slide reads each
+   cell's box with get_text("text", clip=...), as in module 9. See pymupdf21-output-diffs.md.
    Fixed stage: the deck is laid out on one design stage that scales as a single piece to fit the frame, so nothing
    ever scrolls and Back and Next sit in the same place on every slide. Wide frames use a 760 x 960 stage
-   (set the Notion embed height to 960 px); frames under 560 px wide use a 420 x 1180 stage, so the text stays readable. */
+   (set the Notion embed height to 960 px); frames under 560 px wide use a 420 x 1220 stage, so the text stays readable. */
 :root{
   color-scheme:light;
   --pfizer-blue:#0033a0;
@@ -55,7 +59,7 @@ button{font:inherit;color:inherit}
 
 /* The design stage, scaled and centred by the script at the end */
 .app{position:absolute;left:50%;top:50%;width:760px;height:960px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
-.app.narrow{width:420px;height:1180px}
+.app.narrow{width:420px;height:1220px}
 
 /* Header: step rail and "Slide X of N" */
 .top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
@@ -251,10 +255,13 @@ Expiration Date, 20260315, page 3}}
   {{CODE:python:tables = doc[2].find_tables()
 print(f"Tables found: {len(tables.tables)}")
 
-for row in tables.tables[0].extract():
-    print(row)}}
-  <p class="p"><code>doc[2]</code> is page 3, because Python counts pages from 0. <code>find_tables()</code> looks for tables on the page. <code>tables.tables[0]</code> is the first table it found, and <code>extract()</code> turns it into a list of rows. Each row is a list of its cells.</p>
-  {{OUT:Output:Tables found: 1
+for row in tables.tables[0].rows:
+    row_data = []
+    for cell_bbox in row.cells:
+        row_data.append(doc[2].get_text("text", clip=cell_bbox).strip())
+    print(row_data)}}
+  <p class="p"><code>doc[2]</code> is page 3, because Python counts pages from 0. <code>find_tables()</code> finds 2 tables there: the test results table first, then the box of product details. <code>tables.tables[0]</code> is the test results table, and the loop reads it as in the last reading: row by row, taking the text inside each cell's box.</p>
+  {{OUT:Output:Tables found: 2
 ['Description', 'Test Method', 'Result']
 ['Autoclave - Pump tubing', '121C > 15 min', 'Conforms']
 ['Gamma Irradiation - Inlets', '25.0 - 40.0 kGy', 'Conforms']
@@ -406,7 +413,7 @@ Found '20230126' at: (125, 153, 165, 165)}}
   var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
 
   /* The fixed stage: pick the wide or narrow design size, then scale the whole deck to fit the frame and centre it. */
-  var WIDE_W = 760, WIDE_H = 960, NARROW_W = 420, NARROW_H = 1180;
+  var WIDE_W = 760, WIDE_H = 960, NARROW_W = 420, NARROW_H = 1220;
   function scaleStage() {
     var narrow = window.innerWidth < 560;
     app.classList.toggle("narrow", narrow);

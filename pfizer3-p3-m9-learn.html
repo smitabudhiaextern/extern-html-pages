@@ -16,15 +16,19 @@
    are 4 clickable tiles, each lighting the real table, its box, its rows and columns, or its cells.
    3 Go Cell by Cell: his function (cell-number lines replaced by table.rows and row.cells, see step2-coverage-m9.md note A)
    and a button that reads the 21 real cells one by one and builds each row. 4 Check Every Row: his debug print, the real
-   7 rows, each clickable to light its row on the page. 5 When find_tables() Fails You: page 1's product table (lines across,
-   none down the sides) finds 0 tables; a switch shows its real get_text("blocks") boxes instead.
+   rows (trimmed to the 7 rows of the test results table), each clickable to light its row on the page. 5 When find_tables()
+   Fails You: page 2's small Description and Limits table (no lines at all) finds 0 tables; a switch shows its real
+   get_text("blocks") boxes instead.
    Text: the SME's (Chaitanya's) module 9 page, verbatim, except the facts listed in step2-coverage-m9.md.
    Fixed stage: laid out once on a 760 x 1240 design stage (set the Notion embed height to 1156 px at the 708 px wide
    Notion column), then scaled as one piece to fit the embed frame and centred.
    Nothing scrolls, and Back and Next never move.
-   Every output, box and count is the real output of the code, run on sample-sdf-document.pdf with PyMuPDF 1.26.5.
-   Pictures: pfizer3-p3-m9-page3-table.png (page 3 clipped to x 40 to 540, y 333 to 507) and pfizer3-p3-m9-page1-table.png
-   (page 1 clipped to x 66 to 546, y 350 to 424), both rendered with PyMuPDF from the supplier file at 3x. */
+   Every output, box and count is the real output of the code, run on sample-sdf-document.pdf with PyMuPDF 2.1 (what
+   !pip install pymupdf gives in Colab on 10 November 2026, with pymupdf-layout 2.1). On 2.1, find_tables() also uses the
+   layout model: page 1 gives 1 table, page 2 gives 0, page 3 gives 2 (the test results table, then the product details
+   box), and the function prints 16 rows. See pymupdf21-output-diffs.md.
+   Pictures: pfizer3-p3-m9-page3-table.png (page 3 clipped to x 40 to 540, y 333 to 507) and pfizer3-p3-m9-page2-table.png
+   (page 2 clipped to x 35 to 535, y 338 to 420), both rendered with PyMuPDF from the supplier file at 3x. */
 :root{
   color-scheme:light;
   --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
@@ -172,6 +176,8 @@ button{font:inherit;color:inherit}
 .orows{display:flex;flex-direction:column;padding:6px 8px;background:var(--surface-card)}
 .orow{display:block;width:100%;text-align:left;background:none;border:0;border-radius:4px;padding:1px 6px;font-family:var(--font-mono);font-size:12.5px;line-height:1.5;color:var(--ink);cursor:pointer;white-space:pre}
 .orow:hover{background:var(--surface)}
+.orow.ocut{cursor:default;color:var(--ink-muted)}
+.orow.ocut:hover{background:none}
 .orow[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
 .checks{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .checks li{font-size:16px;line-height:1.5;color:var(--ink-muted)}
@@ -231,7 +237,7 @@ button{font:inherit;color:inherit}
     return e;
   }
 
-  /* Page 3 of sample-sdf-document.pdf (PyMuPDF 1.26.5). The picture is the page clipped to P3CLIP (x, y, width, height
+  /* Page 3 of sample-sdf-document.pdf (PyMuPDF 2.1; the same boxes as 1.26.5). The picture is the page clipped to P3CLIP (x, y, width, height
      in PDF points), so the SVG uses it as its viewBox. TABLE_BOX is the real table.bbox; ROWS holds each real row's
      cell boxes from table.rows[n].cells, and DATA the real text in each cell, from get_text("text", clip=cell).strip(). */
   var P3CLIP = [40, 333, 500, 174];
@@ -373,7 +379,7 @@ button{font:inherit;color:inherit}
 
   /* Card 4: click a printed row to light it on the page */
   function initRows(root) {
-    var svg = root.querySelector("#rows-fig svg"), rows = root.querySelectorAll(".orow");
+    var svg = root.querySelector("#rows-fig svg"), rows = root.querySelectorAll("button.orow");
     function pick(r) {
       Array.prototype.forEach.call(rows, function (b, n) { b.setAttribute("aria-pressed", n === r ? "true" : "false"); });
       clear(svg); add(svg, "rect", cls(rowBox(r), "band"));
@@ -390,17 +396,20 @@ button{font:inherit;color:inherit}
     pick(3);
   }
   function rowsOut() {
-    return '<figure class="run out"><div class="code-head"><span class="code-lang">Output</span><span class="code-lang" style="font-weight:500">Click a row</span></div>' +
-      '<div class="orows" role="group" aria-label="The 7 printed rows">' +
+    return '<figure class="run out"><div class="code-head"><span class="code-lang">Output (trimmed)</span><span class="code-lang" style="font-weight:500">Click a row</span></div>' +
+      '<div class="orows" role="group" aria-label="The 7 printed rows of the test results table">' +
+      '<span class="orow ocut" aria-hidden="true">...</span>' +
       DATA.map(function (d) { return '<button type="button" class="orow">' + esc("[" + d.map(q).join(", ") + "]") + '</button>'; }).join("") +
+      '<span class="orow ocut" aria-hidden="true">...</span>' +
       '</div></figure>';
   }
 
-  /* Card 5: page 1 clipped to P1CLIP. RULES are its real drawn lines (from page.get_drawings()): they run across
-     only. BLOCKS are its real get_text("blocks") rows 8 to 10. */
-  var P1CLIP = [66, 350, 480, 74];
-  var RULES = [357.18, 378.06, 398.94, 419.94];
-  var BLOCKS = [[76.56, 362.28, 509.01, 374.3, 8], [76.56, 383.57, 456.67, 395.14, 9], [76.56, 404.58, 456.67, 416.15, 10]];
+  /* Card 5: page 2 clipped to P2CLIP. Its small Description and Limits table has no drawn lines at all
+     (page.get_drawings() has none there), and find_tables() finds 0 tables on page 2 (PyMuPDF 2.1 and 1.26.5).
+     TBOX is the dashed box drawn where a border would be. BLOCKS are its real get_text("blocks") blocks 11 to 13. */
+  var P2CLIP = [35, 338, 500, 82];
+  var TBOX = [148, 338.8, 424, 419.4];
+  var BLOCKS = [[154.44, 341.37, 383.83, 356.01, 11], [154.44, 362.16, 415.05, 386.54, 12], [154.44, 392.51, 416.34, 416.9, 13]];
   function initFail(root) {
     var fig = root.querySelector("#fail-fig"), svg = fig.querySelector("svg"), btns = root.querySelectorAll(".sw button");
     function show(v) {
@@ -409,12 +418,11 @@ button{font:inherit;color:inherit}
       root.querySelector("#pane-bl").hidden = v !== "bl";
       clear(svg);
       if (v === "ft") {
-        RULES.forEach(function (y) { add(svg, "line", cls({ x1: 76.56, y1: y, x2: 535.68, y2: y }, "rule")); });
-        [76.56, 535.68].forEach(function (x) { add(svg, "line", cls({ x1: x, y1: 352, x2: x, y2: 423 }, "gd")); });
+        add(svg, "rect", cls({ x: TBOX[0], y: TBOX[1], width: TBOX[2] - TBOX[0], height: TBOX[3] - TBOX[1] }, "gd"));
       } else {
         BLOCKS.forEach(function (b) {
           add(svg, "rect", cls({ x: b[0] - 1.5, y: b[1] - 1.5, width: b[2] - b[0] + 3, height: b[3] - b[1] + 3 }, "band"));
-          add(svg, "text", cls({ x: 540, y: b[3] - 2, "text-anchor": "end", "font-size": 7.5 }, "tag"), "block " + b[4]);
+          add(svg, "text", cls({ x: 530, y: b[3] - 2, "text-anchor": "end", "font-size": 7.5 }, "tag"), "block " + b[4]);
         });
       }
     }
@@ -502,7 +510,7 @@ button{font:inherit;color:inherit}
         '<p class="p">This method does exactly what it says. It scans the page for table-shaped structures and, if it finds any, gives you:</p>' +
         '<p class="hint">Click each one to see it on page 3.</p>' +
         '<div class="tiles" role="group" aria-label="What find_tables() gives you">' +
-          '<button type="button" class="tile" data-k="list"><span class="t">A list of detected tables</span><span class="v">1 table on page 3</span></button>' +
+          '<button type="button" class="tile" data-k="list"><span class="t">A list of detected tables</span><span class="v">2 tables on page 3</span></button>' +
           '<button type="button" class="tile" data-k="bbox"><span class="t">Bounding boxes for each one</span><span class="v">(50.0, 343.0, 530.0, 497.0)</span></button>' +
           '<button type="button" class="tile" data-k="counts"><span class="t">Row and column counts</span><span class="v">7 rows, 3 columns</span></button>' +
           '<button type="button" class="tile" data-k="cells"><span class="t">Bounding boxes for each <b>individual</b> cell</span><span class="v">21 cell boxes</span></button>' +
@@ -511,8 +519,9 @@ button{font:inherit;color:inherit}
         '<p class="p">Here\'s a peek under the hood. The table is on page 3, and Python counts pages from 0, so page 3 is <code>doc[2]</code>:</p>' +
         '<div class="cols" style="grid-template-columns:minmax(0,1fr) 200px">' +
           code("python", "Python", ['page = doc[2]', 'tables = page.find_tables()', 'print(f"Tables found: {len(tables.tables)}")']) +
-          code("plain", "Output", ["Tables found: 1"]) +
+          code("plain", "Output", ["Tables found: 2"]) +
         '</div>' +
+        '<p class="p">Two tables: the test results table, and the box of product details at the top of page 3 (Product, Lot Number and so on). That box has no lines, but the PyMuPDF that Colab installs also uses a <b>layout model</b> (a small AI that spots tables from how the text lines up), so it counts the box as a table too. The tiles above show the test results table.</p>' +
         '<p class="p">If you\'re lucky, PyMuPDF gives you an entire table ready to explore.</p>' +
         '<p class="p">Nice. But just knowing how many tables exist isn\'t enough. We want the content, cell by cell.</p>',
       init: initTiles },
@@ -531,7 +540,7 @@ button{font:inherit;color:inherit}
           '<p class="p"><code>table.rows</code> holds the table\'s rows from top to bottom, and <code>row.cells</code> holds the box of each cell in that row, from left to right. <code>clip=cell_bbox</code> tells <code>get_text</code> to read only the text inside that box, and <code>.strip()</code> removes the line break at the end.</p>' +
         '</div>' +
         '<div class="pane" id="pane-walk" hidden>' +
-          '<p class="p">Here\'s what the two loops do on page 3. Click the button to read the cells one by one, the way the function does.</p>' +
+          '<p class="p">Here\'s what the two loops do on the test results table on page 3. Click the button to read the cells one by one, the way the function does.</p>' +
           p3Fig("walk-fig", P3ALT) +
           '<div class="walk-side"><button type="button" class="btn btn-next btn-sm" id="walk-btn">Read the cells</button>' +
           '<pre class="state" id="walk-state" aria-live="polite"></pre></div>' +
@@ -555,12 +564,12 @@ button{font:inherit;color:inherit}
           '<button type="button" class="plain" data-view="out">What it prints</button>' +
           '<button type="button" class="plain" data-view="watch">What to watch for</button></div>' +
           '<p class="hint">Click each button to see both.</p></div>' +
-        '<div class="pane" id="pane-out">' + rowsOut() + p3Fig("rows-fig", P3ALT) + '</div>' +
+        '<div class="pane" id="pane-out"><p class="p">Your notebook prints 16 rows: 3 from page 1\'s product table, then the 7 rows of the test results table shown here, then 6 from the box of product details at the top of page 3.</p>' + rowsOut() + p3Fig("rows-fig", P3ALT) + '</div>' +
         '<div class="pane" id="pane-watch" hidden>' +
           '<p class="p">Watch for:</p>' +
           '<ul class="checks">' +
-            '<li>Empty strings where there should be values<span class="ok">In your 7 rows: none</span></li>' +
-            '<li>Rows with uneven column counts<span class="ok">In your 7 rows: 3 cells in every row</span></li>' +
+            '<li>Empty strings where there should be values<span class="ok">In all 16 rows: none</span></li>' +
+            '<li>Rows with uneven column counts<span class="ok">In the test results table: 3 cells in every row</span></li>' +
             '<li>Cells that don\'t match expectations<span class="ok">Click a row under "What it prints" to compare it with the page</span></li>' +
           '</ul>' +
           '<div class="tip"><span class="tip-icon">' + BULB + '</span><p><b>Tip:</b> Sometimes the bounding boxes are just slightly off. Consider adding padding (a little extra space around the box) to the clip box if the text is getting cut off.</p></div>' +
@@ -570,28 +579,28 @@ button{font:inherit;color:inherit}
     { label: "When It Fails", eyebrow: "When find_tables() fails you",
       html: '<h2 class="title">When find_tables() Finds <span class="hl">Nothing</span></h2>' +
         '<p class="why">Not every table has lines, so know what to do when find_tables() comes back empty.</p>' +
-        '<p class="p">Sometimes PyMuPDF just… doesn\'t detect the table. Page 1 of the supplier file has a small product table. Here\'s the same code on page 1:</p>' +
+        '<p class="p">Sometimes PyMuPDF just… doesn\'t detect the table. Page 2 of the supplier file has a small table, with the headings Description and Limits. Here\'s the same code on page 2:</p>' +
         '<div class="cols" style="grid-template-columns:minmax(0,1fr) 200px">' +
-          code("python", "Python", ['page = doc[0]', 'tables = page.find_tables()', 'print(f"Tables found: {len(tables.tables)}")']) +
+          code("python", "Python", ['page = doc[1]', 'tables = page.find_tables()', 'print(f"Tables found: {len(tables.tables)}")']) +
           code("plain", "Output", ["Tables found: 0"]) +
         '</div>' +
-        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a view of page 1\'s table">' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a view of page 2\'s table">' +
           '<button type="button" data-view="ft">find_tables()</button>' +
           '<button type="button" data-view="bl">get_text("blocks")</button></div>' +
           '<p class="hint">Click each button to see both.</p></div>' +
-        '<figure class="pic" id="fail-fig"><img src="pfizer3-p3-m9-page1-table.png" width="1440" height="222" alt="The product table on page 1 of the supplier file: Description, Part Number and Operating Temperature, with 2 rows for High Flow Kit F and High Flow Gradient C. Lines run across the table, but none run down its sides.">' +
-          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + P1CLIP.join(" ") + '"></svg></figure>' +
+        '<figure class="pic" id="fail-fig"><img src="pfizer3-p3-m9-page2-table.png" width="1500" height="246" alt="The small table on page 2 of the supplier file: the headings Description and Limits, then Autoclave, Pump tubing, 121°C > 15 min, and Gamma Irradiation, Inlets, 25.0 to 40.0 kGy. It has no lines at all.">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + P2CLIP.join(" ") + '"></svg></figure>' +
         '<div class="pane" id="pane-ft">' +
-          '<p class="p">The green lines are the only lines on this table. They run across, but none run down the sides (the dashed lines show where side borders would be), so <code>find_tables()</code> doesn\'t see a grid.</p>' +
+          '<p class="p">This table has no lines at all (the dashed box shows where a border would be), so <code>find_tables()</code> doesn\'t see a grid. The layout model from card 2 doesn\'t spot it either.</p>' +
           '<p class="p">Why?</p>' +
           '<ul class="bul"><li>No visible borders</li><li>Weird spacing</li><li>Layout relies on alignment, not lines</li></ul>' +
         '</div>' +
         '<div class="pane" id="pane-bl" hidden>' +
-          '<p class="p">On this page, each row of the table comes out of <code>get_text("blocks")</code> as one block. Your notebook\'s blocks cell already prints them:</p>' +
+          '<p class="p">On this page, each row of the table comes out of <code>get_text("blocks")</code> as one block. Run your notebook\'s blocks cell on page 2 (<code>page = doc[1]</code>), and these are the table\'s blocks:</p>' +
           code("plain", "Output (trimmed)", [
-            "Block: (76.55787658691406, 362.2751159667969, 509.00689697265625, 374.2976989746094, 'Description\\nPart Number\\nOperating Temperature\\n', 8, 0)",
-            "Block: (76.55787658691406, 383.5732421875, 456.6687316894531, 395.1431884765625, 'High Flow Kit F, Modified, ÄKTA ready\\n29477427\\n+2 C to +40 C\\n', 9, 0)",
-            "Block: (76.55787658691406, 404.5765380859375, 456.6687316894531, 416.146484375, 'High Flow Gradient C, Modified, ÄKTA ready\\n29184612\\n+2 C to +40 C\\n', 10, 0)"]) +
+            "Block: (154.4409942626953, 341.3739013671875, 383.8323669433594, 356.0138854980469, 'Description \\nLimits \\n', 11, 0)",
+            "Block: (154.4370574951172, 362.1578674316406, 415.0481872558594, 386.54302978515625, 'Autoclave\\nPump tubing\\n121°C > 15 min \\n', 12, 0)",
+            "Block: (154.4370574951172, 392.5135803222656, 416.3428955078125, 416.90484619140625, 'Gamma Irradiation \\nInlets \\n25.0 – 40.0 kGy \\n', 13, 0)"]) +
         '</div>' +
         '<p class="p">In those cases, you have options:</p>' +
         '<ul class="bul">' +

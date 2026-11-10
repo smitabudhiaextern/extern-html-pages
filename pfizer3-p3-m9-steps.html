@@ -16,8 +16,10 @@
    with PyMuPDF"). Its Steps 1 and 2 install PyMuPDF, upload the supplier file and open it as doc; these cells go at its bottom.
    Code: the SME's module 9 page (Chaitanya), with doc[2] for page 3 and his function's cell-number lines replaced by table.rows
    and row.cells (his lines scramble the columns; see step2-coverage-m9.md, note A). fitz.open became pymupdf.open.
-   Outputs: the real output of each cell, run with PyMuPDF 1.26.5 on sample-sdf-document.pdf (the supplier file),
-   after the notebook's Steps 1 and 2 with fitz changed to pymupdf, on 10 November 2026.
+   Outputs: the real output of each cell, run with PyMuPDF 2.1 (what the notebook's !pip install pymupdf gives in Colab
+   on 10 November 2026, with pymupdf-layout 2.1) on sample-sdf-document.pdf (the supplier file), after the notebook's
+   Steps 1 and 2. On 2.1, find_tables() also uses the layout model: page 1 gives 1 table, page 2 gives 0, page 3 gives 2
+   (the test results table, then the product details box). See pymupdf21-output-diffs.md.
    Fixed stage: the deck is laid out on one design stage that scales as a single piece to fit the frame, so nothing
    ever scrolls and Back and Next sit in the same place on every slide. Wide frames use a 760 x 1040 stage
    (set the Notion embed height to 970 px); frames under 560 px wide use a 420 x 1360 stage, so the text stays readable. */
@@ -174,8 +176,8 @@ button{font:inherit;color:inherit}
 tables = page.find_tables()
 print(f"Tables found: {len(tables.tables)}")}}
   <p class="p">The table is on page 3. Python counts pages from 0, so page 3 is <code>doc[2]</code>. <code>find_tables()</code> scans that page for table-shaped structures, and <code>len(tables.tables)</code> counts the ones it found.</p>
-  {{OUT:Output:Tables found: 1}}
-  <p class="p">One table: the test results table on page 3.</p>
+  {{OUT:Output:Tables found: 2}}
+  <p class="p">Two tables. One is the test results table. The other is the box of product details at the top of page 3, from <code>Product:</code> down to <code>Expiration Date:</code>. That box has no lines, but the PyMuPDF that Colab installs also uses a <b>layout model</b> (a small AI that spots tables from how the text lines up), so it counts the box as a table too.</p>
 </template>
 <template id="s3">
   <p class="p">Now add the function that reads the table cell by cell. Add a new code cell, paste this in, and press <b>Run</b>:</p>
@@ -224,17 +226,26 @@ print(f"Tables found: {len(tables.tables)}")}}
 for table in results:
     for row in table['data']:
         print(row)}}
-  {{OUT:Output:['Description', 'Test Method', 'Result']
+  {{OUT:Output:['Description', 'Part Number', 'Operating Temperature']
+['High Flow Kit F, Modified, ÄKTA ready', '29477427', '+2 C to +40 C']
+['High Flow Gradient C, Modified, ÄKTA ready', '29184612', '+2 C to +40 C']
+['Description', 'Test Method', 'Result']
 ['Autoclave - Pump tubing', '121C > 15 min', 'Conforms']
 ['Gamma Irradiation - Inlets', '25.0 - 40.0 kGy', 'Conforms']
 ['Flow Rate Test', 'Per SOP-QC-042', 'Pass']
 ['Pressure Integrity', 'Max 0.5 bar, 5 min hold', 'Pass']
 ['Visual Inspection', 'No defects visible', 'Pass']
-['Package Integrity', 'Sealed, no damage', 'Pass']}}
-  <p class="p">7 rows: the header row, then one row for each of the 6 tests. Each row is a list with 3 cells, in the same order as the columns on the page.</p>
+['Package Integrity', 'Sealed, no damage', 'Pass']
+['Product:', 'AKTA ready Low Flow Kit']
+['Lot Number:', '18356721']
+['Product Article Number:', '28 9301 82']
+['Date of Manufacture:', '20240315']
+['Product Description:', 'Low Flow Kit, AKTA ready']
+['Expiration Date:', '20260315']}}
+  <p class="p">16 rows from 3 tables, because the function reads every page. The first 3 are page 1's product table. The next 7 are the test results table: the header row, then one row for each of the 6 tests, each a list with 3 cells in the same order as the columns on the page. The last 6 are the product details box from Step 2, with 2 cells each: a label and its value.</p>
 </template>
 <template id="s5">
-  <p class="p">Just because the function runs doesn't mean the data makes sense. Look at your 7 rows and watch for:</p>
+  <p class="p">Just because the function runs doesn't mean the data makes sense. Look at the 7 rows of the test results table, from <code>['Description', 'Test Method', 'Result']</code> to the Package Integrity row, and watch for:</p>
   <ul class="list">
     <li><b>Empty strings where there should be values.</b> An empty cell prints as <code>''</code>. None of your cells should.</li>
     <li><b>Rows with uneven column counts.</b> Every row should have 3 cells.</li>
@@ -243,12 +254,12 @@ for table in results:
   <p class="p">If all three look right, every result sits in the row of its own test.</p>
 </template>
 <template id="s6">
-  <p class="p">This step is optional. Page 1 of the supplier file has a small product table too. Run the same code on page 1 to see what <code>find_tables()</code> does with it. Add a new code cell, paste this in, and press <b>Run</b>:</p>
-  {{CODE:python:page = doc[0]
+  <p class="p">This step is optional. Page 2 of the supplier file has a small table too, with the headings Description and Limits. Run the same code on page 2 to see what <code>find_tables()</code> does with it. Add a new code cell, paste this in, and press <b>Run</b>:</p>
+  {{CODE:python:page = doc[1]
 tables = page.find_tables()
 print(f"Tables found: {len(tables.tables)}")}}
   {{OUT:Output:Tables found: 0}}
-  <p class="p">Page 1's table has lines across it, but none down its sides, so <code>find_tables()</code> doesn't see a grid. Card 5 of the Learn cards shows what to do when that happens.</p>
+  <p class="p">Page 2's table has no lines at all, and the layout model doesn't spot it either, so <code>find_tables()</code> finds nothing. Card 5 of the Learn cards shows what to do when that happens.</p>
 </template>
 
 <script>
@@ -291,7 +302,7 @@ print(f"Tables found: {len(tables.tables)}")}}
     { group: "Step 3", label: "STEP 3", title: 'Add the Cell-by-Cell <span class="hl">Function</span>', plain: "Step 3. Add the Cell-by-Cell Function", tpl: "s3" },
     { group: "Step 4", label: "STEP 4 &middot; PART 1 OF 2", title: 'Print Every <span class="hl">Row</span>', plain: "Step 4. Print Every Row", tpl: "s4" },
     { group: "Step 4", label: "STEP 4 &middot; PART 2 OF 2", title: 'Check Every <span class="hl">Row</span>', plain: "Step 4. Check Every Row (Part 2 of 2)", tpl: "s5" },
-    { group: "Step 5", label: "STEP 5 (OPTIONAL)", title: 'See find_tables() Miss Page 1\'s <span class="hl">Table</span>', plain: "Step 5 (Optional). See find_tables() Miss Page 1's Table", tpl: "s6" }
+    { group: "Step 5", label: "STEP 5 (OPTIONAL)", title: 'See find_tables() Miss Page 2\'s <span class="hl">Table</span>', plain: "Step 5 (Optional). See find_tables() Miss Page 2's Table", tpl: "s6" }
   ];
   var END_LABEL = "Done";
   var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
