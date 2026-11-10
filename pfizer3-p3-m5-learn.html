@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyMuPDF Words and Boxes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player copied from pfizer3-p3-m2-learn.html:
+   a rail with "Card X of N" on top, one card at a time, Back and Next below.
+   Code blocks and Copy buttons copied from the P3 module 2 and 3 decks (code has a Copy button, output has none).
+   P3 module 5 Learn cards: "Learn How to Extract Text and Bounding Boxes with PyMuPDF" (7 cards).
+   Fixed stage: laid out once on a 760 x 880 design stage (set the Notion embed height to 880 px), then scaled as one piece
+   to fit the embed frame and centred. Nothing scrolls, and Back and Next never move.
+   Every output is the real output of the code on the card, run on sample-sdf-document.pdf with PyMuPDF 1.26.5,
+   in the card order (so page and words carry over from card to card). Outputs marked "trimmed" keep only some lines.
+   The page 3 picture is the real page rendered with PyMuPDF at 300 dpi; its boxes are the real get_text("words") boxes. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600); --icon:var(--extern-black); --connector:var(--extern-black);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-1:4px; --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px; --space-6:40px; --space-7:56px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:880px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* The design stage. JavaScript sets the scale and position; until it runs, the stage sits at full size. */
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:22px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:16px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:16px;line-height:1.6;color:var(--ink-muted);text-wrap:pretty;max-width:68ch}
+.p b{font-weight:600;color:var(--ink)}
+.p code,.tbl code,.tile h3 code,.tile p code,.fact code,.bul code,.ana code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+.tile h3 code,.tile p code,.fact code,.ana code{background:var(--surface-icon)}
+
+/* Tiles on surface-card */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
+.tile{background:var(--surface-card);border-radius:var(--radius-md);padding:16px 18px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.tile h3{margin:0;font-size:17px;line-height:1.3;font-weight:600;color:var(--card-title)}
+.tile p{margin:0;font-size:15px;line-height:1.5;color:var(--card-text)}
+.tile .num{display:block;font-size:13px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.tile b{font-weight:600;color:var(--card-title)}
+.tile .run{margin-top:auto}
+
+.fact{border:1.5px solid var(--ink);border-radius:var(--radius-md);padding:14px 20px}
+.fact .num{display:block;margin-bottom:4px;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.fact p{margin:0;font-size:16px;line-height:1.55;color:var(--ink-muted)}
+.fact b{font-weight:600;color:var(--ink)}
+
+/* Worked analysis, on surface-card */
+.ana{background:var(--surface-card);border-radius:var(--radius-md);padding:18px 22px;display:flex;flex-direction:column;gap:12px}
+.ana h3{margin:0;font-size:17px;line-height:1.3;font-weight:600;color:var(--card-title)}
+.ana ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.ana li,.ana p{margin:0;font-size:16px;line-height:1.55;color:var(--card-text)}
+.ana b{font-weight:600;color:var(--card-title)}
+.ana .concl{border-top:1px solid var(--blue-200);padding-top:12px}
+
+/* Bullets */
+.bul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.bul li{font-size:16px;line-height:1.55;color:var(--ink-muted)}
+.bul b{font-weight:600;color:var(--ink)}
+
+/* Picture with boxes */
+.shot{margin:0;display:flex;flex-direction:column;gap:6px}
+.shot .frame{background:var(--surface-icon);border:1px solid var(--line);border-radius:var(--radius-xs);overflow:hidden;line-height:0}
+.shot img,.shot svg{display:block;width:100%;height:auto}
+.cap{margin:0;font-size:13px;line-height:1.4;color:var(--gray-600)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;line-height:1.3;color:var(--gray-600)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:16px;height:10px;border-radius:2px}
+.legend .k{border:2px solid var(--pfizer-blue)}
+
+/* Two columns */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-3);align-items:start}
+.cols > div{display:flex;flex-direction:column;gap:10px;min-width:0}
+
+/* Table */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.tbl table{width:100%;border-collapse:collapse;font-size:15px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:8px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.w{font-family:var(--font-mono);font-size:14px;color:var(--ink);white-space:nowrap}
+.tbl td.n{font-family:var(--font-mono);font-size:14px;color:var(--ink);white-space:nowrap}
+.fmt{margin:0;font-family:var(--font-mono);font-size:14px;line-height:1.5;color:var(--ink);background:var(--gray-50);border-radius:var(--radius-xs);padding:8px 12px}
+
+/* Code block with a Copy button; output blocks have no Copy button */
+.run{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:5px 8px 5px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:9px 14px;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit;white-space:inherit;background:none;padding:0;border-radius:0}
+.run.out{border-color:var(--blue-200)}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);white-space:pre-wrap;overflow-wrap:anywhere}
+/* Each output line is its own block: a long row that wraps is indented under its first line, so rows stay easy to tell apart */
+.run.out pre .ln{display:block;padding-left:2ch;text-indent:-2ch}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:4px 10px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to get every word and its box with PyMuPDF: seven cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 7</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var CROP3 = "data:image/png;base64,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";
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  /* lang "plain" is an output block, with no Copy button */
+  function code(lang, label, lines) {
+    var out = lang === "plain";
+    return '<figure class="run' + (out ? ' out' : '') + '"><div class="code-head"><span class="code-lang">' + label + '</span>' +
+      (out ? '' : '<button type="button" class="copy" data-copy aria-label="Copy ' + label + ' code">' + IC_COPY + '<span>Copy</span></button>') + '</div>' +
+      '<pre tabindex="0"><code>' + (out ? lines.map(function (l) { return '<span class="ln">' + (l ? esc(l) : ' ') + '</span>'; }).join("") : esc(lines.join("\n"))) + '</code></pre></figure>';
+  }
+
+  /* Real output of page.get_text("words") on page 3 for Date, of, Manufacture: and 20240315:
+     [left, top, right, bottom, word], in points from the page's top-left corner. */
+  var P3 = [[50.0, 203.25, 71.12, 216.99, "Date"], [73.9, 203.25, 82.24, 216.99, "of"], [85.02, 203.25, 143.38, 216.99, "Manufacture:"], [200.0, 203.25, 244.48, 216.99, "20240315"]];
+  var CX = 44, CY = 197, CW = 208, CH = 26; /* the crop, in points */
+  function cropFigure() {
+    var rects = P3.map(function (w) {
+      return '<rect x="' + (w[0] - 0.8) + '" y="' + (w[1] - 0.6) + '" width="' + (w[2] - w[0] + 1.6) + '" height="' + (w[3] - w[1] + 1.2) +
+        '" fill="none" stroke="var(--pfizer-blue)" stroke-width="2" vector-effect="non-scaling-stroke" rx="0.6"/>';
+    }).join("");
+    return '<svg viewBox="' + CX + ' ' + CY + ' ' + CW + ' ' + CH + '" role="img" aria-label="Part of page 3: Date of Manufacture: and, further right on the same line, 20240315, with a dark blue box around each of the 4 words. All 4 boxes have the same top.">' +
+      '<image href="' + CROP3 + '" x="' + CX + '" y="' + CY + '" width="' + CW + '" height="' + CH + '"/>' + rects + '</svg>';
+  }
+
+  var CARDS = [
+    { label: "Two Ways", eyebrow: "Two ways to read a page",
+      html: '<h2 class="title">Two Ways to <span class="hl">Read</span> a Page</h2>' +
+        '<p class="p">You already know what a bounding box is. Now you\'ll get one for every word in the supplier file. It\'s a text PDF, so PyMuPDF can read its words straight out. Start the way you know: open the file, count its pages (it prints <b>3</b>), and pick page 2.</p>' +
+        code("python", "Python", [
+          'import pymupdf',
+          'doc = pymupdf.open("sample-sdf-document.pdf")',
+          'print(len(doc))',
+          'page = doc[1]  # page 2, because counting starts at 0'
+        ]) +
+        '<p class="p">PyMuPDF can then read the page in two ways:</p>' +
+        '<div class="tiles">' +
+          '<div class="tile"><span class="num">PLAIN TEXT</span><h3><code>page.get_text("text")</code></h3>' +
+            '<p>Extracts all the text as a single <b>string</b> (one long piece of text), but without positions. It\'s the same as <code>page.get_text()</code> from module 3.</p>' +
+            code("plain", "Output (trimmed)", ['...', 'Date of Manufacture:  20210126 ', '...', 'Expiration Date:  20230126 ', '...']) + '</div>' +
+          '<div class="tile"><span class="num">WORDS WITH BOXES</span><h3><code>page.get_text("words")</code></h3>' +
+            '<p>Extracts each word along with its exact position on the page: its bounding box. Here\'s one word:</p>' +
+            code("plain", "Output (one row)", ["(53.64154052734375, 153.71876525878906, 96.03092956542969, 165.86985778808594, 'Expiration', 8, 1, 0)"]) + '</div>' +
+        '</div>' },
+
+    { label: "Page 2", eyebrow: "Every word on page 2",
+      html: '<h2 class="title">Every Word on Page 2, with Its <span class="hl">Box</span></h2>' +
+        '<p class="p">This code asks page 2 for its words and keeps them in a list called <code>words</code>. Then it prints how many words there are, and the first 5:</p>' +
+        code("python", "Python", [
+          '# Extract words along with bounding box information',
+          'words = page.get_text("words")',
+          'print(len(words))',
+          '# Print first 5 extracted words with bounding boxes',
+          'for word in words[:5]:',
+          '    print(word)'
+        ]) +
+        code("plain", "Output", [
+          '201',
+          "(36.001380920410156, 28.100793838500977, 153.9091796875, 62.21213150024414, 'Certificate', 0, 0, 0)",
+          "(160.4238739013672, 28.100793838500977, 183.490966796875, 62.21213150024414, 'of', 0, 0, 1)",
+          "(190.06161499023438, 28.100793838500977, 271.7610778808594, 62.21213150024414, 'Quality', 0, 0, 2)",
+          "(35.997703552246094, 639.3534545898438, 52.71044158935547, 651.5045166015625, 'This', 1, 0, 0)",
+          "(54.921539306640625, 639.3534545898438, 87.8490219116211, 651.5045166015625, 'product', 1, 0, 1)"
+        ]) +
+        '<p class="p">Page 2 has <b>201 words</b>, so the list has 201 rows, one per word. <code>words[:5]</code> means the first 5 rows. The first 3 are the page\'s title, Certificate of Quality. Step 3 in this reading\'s notebook runs the same code on page 1, <code>doc[0]</code>, so its first 5 words are different.</p>' },
+
+    { label: "8 Values", eyebrow: "What is in a row",
+      html: '<h2 class="title">What the 8 Values in a Row <span class="hl">Mean</span></h2>' +
+        '<p class="p">Further down the same list, at row 104 (counting from 0), is the word Expiration. <code>print(words[104])</code> prints its row:</p>' +
+        code("plain", "Output", ["(53.64154052734375, 153.71876525878906, 96.03092956542969, 165.86985778808594, 'Expiration', 8, 1, 0)"]) +
+        '<p class="p">Each word extracted from the PDF is stored in a <b>tuple</b>, which is a fixed collection of values grouped together. Here, the tuple holds details about the word\'s position and structure in the document. The table rounds the box numbers to one decimal place.</p>' +
+        '<p class="fmt">(x0, y0, x1, y1, word, block_no, line_no, word_no)</p>' +
+        '<div class="tbl" role="region" aria-label="What each value in the Expiration row means"><table>' +
+          '<thead><tr><th scope="col">Field</th><th scope="col">Value</th><th scope="col">Meaning</th></tr></thead>' +
+          '<tbody>' +
+            '<tr><td class="w">x0, y0</td><td class="n">53.6, 153.7</td><td><b>Top-left corner</b> of the word: its left and top edges</td></tr>' +
+            '<tr><td class="w">x1, y1</td><td class="n">96.0, 165.9</td><td><b>Bottom-right corner</b> of the word: its right and bottom edges</td></tr>' +
+            '<tr><td class="w">word</td><td class="n">\'Expiration\'</td><td>The extracted text</td></tr>' +
+            '<tr><td class="w">block_no</td><td class="n">8</td><td>The <b>text block</b> (a chunk of text, like a paragraph) where this word is found</td></tr>' +
+            '<tr><td class="w">line_no</td><td class="n">1</td><td>The <b>line number</b> within the block</td></tr>' +
+            '<tr><td class="w">word_no</td><td class="n">0</td><td>The <b>word\'s position</b> in the line</td></tr>' +
+          '</tbody></table></div>' },
+
+    { label: "Worked Example", eyebrow: "Worked example",
+      html: '<h2 class="title">Reading the <span class="hl">Expiration</span> Row</h2>' +
+        '<p class="p">Let\'s analyze the position of "Expiration" from the table on the last card.</p>' +
+        '<div class="ana">' +
+          '<h3>1. Bounding Box (Coordinates)</h3>' +
+          '<ul><li><b>Top-left corner:</b> <code>(53.6, 153.7)</code></li><li><b>Bottom-right corner:</b> <code>(96.0, 165.9)</code></li>' +
+          '<li>This means "Expiration" appears at these coordinates on the page: about 54 points in from the left edge, and about 154 points down from the top.</li></ul>' +
+          '<h3>2. Text Information</h3>' +
+          '<ul><li><b>Word:</b> "Expiration" (the actual extracted text)</li>' +
+          '<li><b>Block Number, <code>block_no</code>: 8.</b> This means "Expiration" is in text block 8. Counting starts at 0, so that\'s the <b>ninth</b> text block on the page.</li>' +
+          '<li><b>Line Number, <code>line_no</code>: 1.</b> It is on the <b>second</b> line within that block.</li>' +
+          '<li><b>Word Number, <code>word_no</code>: 0.</b> It is the <b>first</b> word in that line.</li></ul>' +
+          '<p class="concl"><b>Conclusion:</b> "Expiration" is the first word of the second line of the ninth block, appearing at the given coordinates on the PDF page.</p>' +
+        '</div>' },
+
+    { label: "Two Words", eyebrow: "Why the label splits",
+      html: '<h2 class="title">Why "Expiration Date:" Comes Back as <span class="hl">Two</span> Words</h2>' +
+        '<p class="p">Now print the row for Expiration and the 2 rows after it:</p>' +
+        code("python", "Python", ['for word in words[104:107]:', '    print(word)']) +
+        code("plain", "Output", [
+          "(53.64154052734375, 153.71876525878906, 96.03092956542969, 165.86985778808594, 'Expiration', 8, 1, 0)",
+          "(98.36155700683594, 153.71876525878906, 120.82115936279297, 165.86985778808594, 'Date:', 8, 1, 1)",
+          "(125.39865112304688, 153.71876525878906, 165.79605102539062, 165.86985778808594, '20230126', 8, 1, 2)"
+        ]) +
+        '<p class="p">PyMuPDF splits a line into words wherever there\'s a space. So the label "Expiration Date:" comes back as two rows, <b>Expiration</b> and <b>Date:</b>, and the colon stays stuck to "Date:". Dates with spaces split too: the date at the top of the letter on page 1 comes back as 3 words, "3", "June," and "2022".</p>' +
+        '<p class="p">All three rows are in block 8, line 1, with word numbers 0, 1 and 2: one word after another on the same line. The date, 20230126, is the very next word after the label.</p>' +
+        '<div class="fact"><span class="num">WATCH OUT</span><p>If you search the list for "Expiration Date:", you\'ll find nothing, because no single row holds both words. Look for "Expiration" and "Date:" one after the other instead.</p></div>' },
+
+    { label: "Page 3", eyebrow: "Page 3",
+      html: '<h2 class="title">On Page 3, the Same <span class="hl">Top</span> Means the Same Line</h2>' +
+        '<p class="p">On page 3, "Date of Manufacture:" and its date, 20240315, sit on the same line, in two columns. Here they are, with PyMuPDF\'s box around each word:</p>' +
+        '<figure class="shot"><div class="frame">' + cropFigure() + '</div>' +
+          '<div class="legend"><span><i class="k"></i>The box PyMuPDF gives each word</span></div></figure>' +
+        '<div class="cols" style="grid-template-columns:220px minmax(0,1fr)">' +
+          '<div><p class="p">But plain text, <code>page.get_text("text")</code>, puts the date on the next line:</p>' +
+            code("plain", "Output (trimmed)", ['...', 'Date of Manufacture:', '20240315', '...']) + '</div>' +
+          '<div><p class="p">The boxes tell the truth. This prints each word with its top:</p>' +
+            code("python", "Python", ['page = doc[2]  # page 3', 'words = page.get_text("words")', 'for word in words[52:56]:', '    print(word[4], "top:", word[1])']) +
+            code("plain", "Output", ['Date top: 203.25', 'of top: 203.25', 'Manufacture: top: 203.25', '20240315 top: 203.25']) + '</div>' +
+        '</div>' +
+        '<p class="p"><code>word[4]</code> is the word and <code>word[1]</code> is its top, because counting starts at 0. All 4 words have the same top, <b>203.25</b>, so on the page they sit on the same line, and the date belongs to its label.</p>' },
+
+    { label: "Every Page", eyebrow: "All 3 pages",
+      html: '<h2 class="title">Read <span class="hl">Every</span> Page with a Loop</h2>' +
+        '<p class="p">Most PDFs have multiple pages, so we need to extract the words from all of them, not just one. Instead of going page by page by hand, we automate the process using a <b>loop</b>, code that repeats once for each page:</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,1fr) 200px">' +
+          code("python", "Python", [
+            '# Loop through all pages and extract the words',
+            'for page_num in range(len(doc)):',
+            '    page = doc[page_num]',
+            '    words = page.get_text("words")',
+            '    print(f"--- Page {page_num + 1} ---")',
+            '    print(len(words), "words")'
+          ]) +
+          code("plain", "Output", ['--- Page 1 ---', '203 words', '--- Page 2 ---', '201 words', '--- Page 3 ---', '213 words']) +
+        '</div>' +
+        '<p class="p"><b>What\'s happening here?</b></p>' +
+        '<ul class="bul">' +
+          '<li><code>len(doc)</code>: Finds how many pages are in the PDF (3). <code>range</code> turns that into the numbers 0, 1 and 2, one per page.</li>' +
+          '<li><code>page = doc[page_num]</code>: Gets each page one by one.</li>' +
+          '<li><code>get_text("words")</code>: Extracts every word on the page, with its box. Step 4 in this reading\'s notebook uses <code>get_text("text")</code> instead, so it prints each page\'s text.</li>' +
+          '<li><code>page_num + 1</code>: <code>page_num</code> counts from 0, so adding 1 prints the page numbers you see on paper, 1, 2 and 3. That way you can see which words belong to which page.</li>' +
+        '</ul>' +
+        '<p class="p"><b>Why this matters:</b> with a multi-page PDF, this lets you extract the words from the entire document instead of doing it by hand.</p>' }
+  ];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of the page.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+    Array.prototype.forEach.call(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  window.addEventListener("resize", fit);
+  fit();
+  render(false);
+})();
+</script>
+</body>
+</html>
