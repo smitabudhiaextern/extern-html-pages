@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regex on the Supplier File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player, code blocks, Copy buttons, tables and the two-button
+   switch copied from pfizer3-p3-m5-learn.html (the gold-standard Learn deck).
+   P3 module 7 Learn cards: "Learn How to Use Regex for Text Extraction with Python" (5 cards, built 10 November 2026).
+   1 See What Regex Finds: Ctrl+F vs the pattern \d{8} on page 2. 2 Turn Text into Clean Data: parsing on page 2's lines,
+   then the setup (import re, the text of all 3 pages). 3 Find Exact Words and Patterns: his exact match, email, phone and
+   date code, run on the supplier file. 4 Grab the Pieces of a Date: his notebook's Step 5 letter date, groups, and his
+   symbols table. 5 Match Across Line Breaks: page 3, re.DOTALL, greedy vs non-greedy, his Key Takeaway.
+   Text: the SME's (Chaitanya's) module 7 page, verbatim where it fits the supplier file. His West Pharmaceutical,
+   DOC ID and John Smith examples are rebuilt on the supplier file; the facts fixed are listed in step2-coverage-m7.md.
+   Every output is real: run on sample-sdf-document.pdf with PyMuPDF 1.26.5 and Python 3.12, 10 November 2026.
+   Every box drawn on a picture is the real search_for() or get_text("words") box of that text.
+   Pictures (rendered with PyMuPDF from the supplier file): pfizer3-p3-m7-p2-fields.png (page 2, x 44 to 437, y 103 to 171),
+   pfizer3-p3-m7-p1-top.png (page 1, x 400 to 590, y 80 to 140), pfizer3-p3-m7-p1-sign.png (page 1, x 28 to 250, y 690 to 742),
+   pfizer3-p3-m7-page1/2/3.png (whole pages), pfizer3-p3-m7-p1-date.png (page 1, x 28 to 150, y 140 to 168),
+   pfizer3-p3-m7-p3-dates.png (page 3, x 44 to 322, y 163 to 257).
+   Fixed stage: laid out once on a 760 x 1170 design stage (set the Notion embed height to 1090 px at the 708 px wide
+   Notion column), then scaled as one piece to fit the embed frame and centred. Nothing scrolls, and Back and Next never move. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600); --icon:var(--extern-black);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-1:4px; --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px; --space-6:40px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:1170px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:11px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-5px 0 0;font-size:17px;line-height:1.45;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:15.5px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.p i b{font-weight:600;color:var(--ink)}
+.p code,.tbl code,.bul code,.note code,.res code,.concl code{font-family:var(--font-mono);font-size:.9em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+.hint{margin:0;font-size:14px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.sub{margin:4px 0 0;font-size:16px;line-height:1.3;font-weight:700;color:var(--ink)}
+
+.bul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.bul li{font-size:15.5px;line-height:1.5;color:var(--ink-muted)}
+.bul b{font-weight:600;color:var(--ink)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-3);align-items:start}
+.cols > *{min-width:0}
+.stack{display:flex;flex-direction:column;gap:10px;min-width:0}
+
+/* Table */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:5px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text);transition:background-color .25s ease}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.m{font-family:var(--font-mono);font-size:13px;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl tr.on td{background:var(--surface-card)}
+.tbl tr.on td:first-child{box-shadow:inset 4px 0 0 var(--highlight)}
+.tbl.sm table{font-size:13.5px}
+.tbl.sm td{padding:4px 10px}
+.tbl.sm th{padding:5px 10px}
+
+/* Code block with a Copy button; output blocks have no Copy button */
+.run{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:28px;padding:3px 8px 3px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:6px 14px;font-family:var(--font-mono);font-size:13px;line-height:1.45;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit;white-space:inherit;background:none;padding:0;border-radius:0}
+.run.out{border-color:var(--blue-200)}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.42}
+.run.out pre .ln{display:block;padding-left:2ch;text-indent:-2ch}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:3px 10px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+
+/* Switch (two or three buttons) */
+.sw-bar{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:8px 14px;cursor:pointer;font-size:14px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button.mono{font-family:var(--font-mono)}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.pane{display:flex;flex-direction:column;gap:10px}
+
+/* Pictures with boxes drawn over them (an SVG in PDF points, viewBox = the picture's crop) */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0}
+.pic img{display:block;width:100%;height:auto}
+.pic svg{position:absolute;inset:0;width:100%;height:100%}
+.pic rect{fill:none;stroke-width:2px;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.14}
+.pic rect.b{stroke:var(--pfizer-blue);fill:var(--pfizer-blue);fill-opacity:.10}
+.pic rect.pop{animation:pop .35s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.cap{margin:0;font-size:13px;line-height:1.4;color:var(--ink-muted)}
+.key{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin:0 5px 0 0}
+.key.g{background:rgba(7,166,87,.25);border:2px solid var(--highlight)}
+.key.b{background:rgba(0,51,160,.12);border:2px solid var(--pfizer-blue)}
+.res{margin:0;background:var(--surface-card);border-radius:var(--radius-sm);padding:9px 14px;font-size:15px;line-height:1.5;color:var(--card-text)}
+.res b{font-weight:600;color:var(--card-title)}
+
+/* Card 2: parse button and table */
+.parse-go{display:flex;align-items:center;gap:var(--space-3)}
+.btn-sm{padding:9px 14px;font-size:14px}
+.btn-sm:disabled{opacity:.5;cursor:default}
+.tbl tr.fill td{opacity:0}
+.tbl tr.fill.in td{opacity:1;transition:opacity .3s ease}
+.run.out pre mark{background:none;color:inherit;border-radius:3px;transition:background-color .3s ease,box-shadow .3s ease}
+.run.out pre mark.on{background:rgba(7,166,87,.18);box-shadow:0 0 0 1.5px var(--highlight)}
+
+/* Card 3: three page pictures */
+.pages{display:grid;grid-template-columns:repeat(3,104px);gap:10px}
+.pages figure{margin:0;display:flex;flex-direction:column;gap:4px;align-items:center}
+.pages .pic{width:100%}
+.pages figcaption{font-size:11.5px;line-height:1.3;font-weight:600;color:var(--ink);white-space:nowrap}
+
+/* Card 4: clickable groups */
+.grp-row{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;font-family:var(--font-mono)}
+.part{display:inline-flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;cursor:pointer}
+.part .v{display:block;border:1.5px solid var(--ink);border-radius:var(--radius-xs);padding:4px 8px;font-family:var(--font-mono);font-size:14px;line-height:1.3;background:var(--surface);white-space:nowrap}
+.part .f{display:block;font-family:var(--font-text);font-size:12px;line-height:1.2;font-weight:600;color:var(--ink-muted)}
+.part[aria-pressed="true"] .v{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.part[aria-pressed="true"] .f{color:var(--ink)}
+.lit{font-family:var(--font-mono);font-size:14px;line-height:1.3;padding:0 0 22px;color:var(--gray-600)}
+
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:8px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:14px;line-height:1.45;color:var(--ink-muted)}
+.note p + p{margin-top:3px}
+.note b{font-weight:600;color:var(--ink)}
+.note ul{margin:3px 0 0;padding-left:18px}
+.note li{font-size:14px;line-height:1.45;color:var(--ink-muted)}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px;font-size:15px;line-height:1.5;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl p{margin:0}
+.concl p + p{margin-top:4px}
+.concl ul{margin:2px 0 0;padding-left:18px}
+
+/* Card 5: the page and its extracted text side by side */
+.txtbox{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:8px 12px;font-family:var(--font-mono);font-size:13px;line-height:1.55;color:var(--ink);white-space:pre}
+.txtbox .nl{color:var(--pfizer-blue);font-weight:600}
+.txtbox .hit{background:rgba(7,166,87,.18);box-shadow:0 0 0 1.5px var(--highlight);border-radius:3px}
+.side-h{margin:0 0 4px;font-size:12.5px;line-height:1.3;font-weight:600;color:var(--ink)}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+@media (prefers-reduced-motion:reduce){ .pic rect.pop{animation:none} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to find text with regex: five cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+  var NS = "http://www.w3.org/2000/svg";
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  /* lang "plain" is an output block, with no Copy button */
+  function code(lang, label, lines) {
+    var out = lang === "plain";
+    return '<figure class="run' + (out ? ' out' : '') + '"><div class="code-head"><span class="code-lang">' + label + '</span>' +
+      (out ? '' : '<button type="button" class="copy" data-copy aria-label="Copy ' + label + ' code">' + IC_COPY + '<span>Copy</span></button>') + '</div>' +
+      '<pre tabindex="0"><code>' + (out ? lines.map(function (l) { return '<span class="ln">' + (l ? esc(l) : ' ') + '</span>'; }).join("") : esc(lines.join("\n"))) + '</code></pre></figure>';
+  }
+  /* A picture of part of a page, with an empty SVG over it in PDF points (crop = x, y, width, height) */
+  function pic(id, src, w, h, crop, alt, style) {
+    return '<figure class="pic" id="' + id + '"' + (style ? ' style="' + style + '"' : '') + '><img src="' + src + '" width="' + w + '" height="' + h + '" alt="' + alt + '">' +
+      '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + crop.join(" ") + '"></svg></figure>';
+  }
+  function draw(svg, boxes, cls, pop) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    boxes.forEach(function (b, n) {
+      var r = document.createElementNS(NS, "rect");
+      var pad = 1.2;
+      r.setAttribute("x", b[0] - pad); r.setAttribute("y", b[1] - pad);
+      r.setAttribute("width", b[2] - b[0] + 2 * pad); r.setAttribute("height", b[3] - b[1] + 2 * pad);
+      r.setAttribute("rx", 1.5);
+      r.setAttribute("class", (b[4] || cls) + (pop ? " pop" : ""));
+      if (pop) r.style.animationDelay = (n * 0.12) + "s";
+      svg.appendChild(r);
+    });
+  }
+  function switchInit(root, onPick) {
+    var btns = root.querySelectorAll(".sw button");
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener("click", function () {
+        var v = b.getAttribute("data-view");
+        Array.prototype.forEach.call(btns, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        Array.prototype.forEach.call(root.querySelectorAll(".pane[data-pane]"), function (p) { p.hidden = p.getAttribute("data-pane") !== v; });
+        if (onPick) onPick(v);
+      });
+    });
+  }
+
+  /* Real boxes, [x0, y0, x1, y1], from page.search_for() and page.get_text("words") on sample-sdf-document.pdf */
+  var P2_CROP = [44, 103, 393, 68];
+  var B_LOT2 = [108.1, 110.5, 148.4, 122.7], B_DOM2 = [148.0, 132.1, 188.3, 144.3], B_EXP2 = [125.4, 153.7, 165.8, 165.9];
+  var B_ART2 = [366.0, 110.5, 412.5, 122.7];
+  var P1TOP_CROP = [400, 80, 190, 60], B_CYTIVA = [547.4, 87.6, 576.0, 98.4];
+  var P1SIGN_CROP = [28, 690, 222, 52], B_EMAIL = [36.0, 724.4, 153.6, 735.9];
+  var PAGE_CROP = [0, 0, 612, 792];
+  /* The 11 matches of \d{8} on all 3 pages; "g" = a certificate date, "b" = another 8-digit number */
+  var D8 = [
+    [[92.7, 266.1, 138.5, 277.7, "b"], [297.0, 383.6, 342.8, 395.1, "b"], [297.0, 404.6, 342.8, 416.1, "b"]],
+    [[459.6, 767.5, 492.1, 777.4, "b"], [108.1, 110.5, 148.4, 122.7, "b"], [148.0, 132.1, 188.3, 144.3, "g"], [125.4, 153.7, 165.8, 165.9, "g"]],
+    [[200.0, 167.2, 244.5, 181.0, "b"], [200.0, 203.2, 244.5, 217.0, "g"], [200.0, 239.2, 244.5, 253.0, "g"], [50.0, 721.4, 85.6, 732.4, "b"]]
+  ];
+  var DATE_CROP = [28, 140, 122, 28];
+  var B_DAY = [36.0, 149.22, 41.73, 160.79], B_MONTH = [44.06, 149.22, 66.76, 160.79], B_YEAR = [71.33, 149.22, 94.17, 160.79];
+  var B_DATE = [36.0, 149.22, 94.17, 160.79];
+
+  /* Card 1: Ctrl+F vs the pattern */
+  function initSee(root) {
+    var svg = root.querySelector("#see-pic svg"), res = root.querySelector("#see-res");
+    var RES = {
+      find: 'Ctrl+F found <b>1 match</b>: the exact number you typed, <code>20230126</code>. It can\'t find a date you don\'t already know.',
+      pattern: '<code>\\d{8}</code> means "any 8 digits in a row". It found <b>3 matches</b> in this part of page 2: <code>17242818</code>, <code>20210126</code> and <code>20230126</code>. You didn\'t have to know any of them first.'
+    };
+    function show(v) {
+      draw(svg, v === "find" ? [B_EXP2] : [B_LOT2, B_DOM2, B_EXP2], "g", true);
+      res.innerHTML = RES[v];
+    }
+    switchInit(root, show);
+    show("find");
+  }
+
+  /* Card 2: parse the lines into a table, one row at a time */
+  function initParse(root) {
+    var btn = root.querySelector("#parse-btn"), rows = root.querySelectorAll("tr.fill"), marks = root.querySelectorAll("#parse-src mark"), timer = null;
+    btn.addEventListener("click", function () {
+      clearTimeout(timer);
+      Array.prototype.forEach.call(rows, function (r) { r.classList.remove("in"); });
+      Array.prototype.forEach.call(marks, function (m) { m.classList.remove("on"); });
+      btn.disabled = true;
+      var n = 0;
+      (function step() {
+        if (!btn.isConnected) return;
+        if (n === rows.length) { btn.disabled = false; btn.textContent = "Parse it again"; return; }
+        rows[n].classList.add("in");
+        marks[n].classList.add("on");
+        n++;
+        timer = setTimeout(step, 650);
+      })();
+    });
+  }
+
+  /* Card 3: the three kinds of search, each with its picture */
+  function initFind(root) {
+    draw(root.querySelector("#ex-pic svg"), [B_CYTIVA], "g");
+    draw(root.querySelector("#em-pic svg"), [B_EMAIL], "g");
+    draw(root.querySelector("#ph-pic svg"), [B_LOT2, B_ART2, B_DOM2, B_EXP2], "b");
+    [1, 2, 3].forEach(function (n) { draw(root.querySelector("#pg" + n + " svg"), D8[n - 1], "b"); });
+    switchInit(root);
+  }
+
+  /* Card 4: click a group to light it on the page and in the table */
+  function initGroups(root) {
+    switchInit(root);
+    var svgA = root.querySelector("#ld-pic svg");
+    draw(svgA, [B_DATE], "g");
+    var svg = root.querySelector("#gr-pic svg"), parts = root.querySelectorAll(".part"), rows = root.querySelectorAll("tr[data-part]");
+    var BOX = { day: [B_DAY], month: [B_MONTH], year: [B_YEAR] };
+    function pick(p) {
+      Array.prototype.forEach.call(parts, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-part") === p ? "true" : "false"); });
+      Array.prototype.forEach.call(rows, function (r) { r.classList.toggle("on", r.getAttribute("data-part") === p); });
+      draw(svg, BOX[p], "g", true);
+    }
+    Array.prototype.forEach.call(parts, function (b) { b.addEventListener("click", function () { pick(b.getAttribute("data-part")); }); });
+    pick("day");
+  }
+
+  /* Card 5: the date's box on page 3 */
+  function initLines(root) {
+    switchInit(root);
+    draw(root.querySelector("#p3-pic svg"), [[50.0, 203.2, 143.4, 217.0, "b"], [200.0, 203.2, 244.5, 217.0, "g"]]);
+  }
+
+  var CARDS = [
+    { label: "What Regex Is", eyebrow: "What is Regex?",
+      html: '<h2 class="title">See What <span class="hl">Regex</span> Finds</h2>' +
+        '<p class="why">Ctrl+F finds a date you already know. A pattern finds dates you haven\'t seen yet.</p>' +
+        '<p class="p">You have the text of every page of the supplier file. But now you\'ve hit a common question: <i>"I have the text... but how do I pull out just the expiration date?"</i> That\'s where <b>Regex</b> steps in.</p>' +
+        '<p class="p"><b>Regex</b> (<i>short for Regular Expressions</i>) helps you <b>search through messy, unstructured text</b> to find exactly what you\'re looking for, even if the formatting is inconsistent or the layout is chaotic.</p>' +
+        '<p class="p">Imagine Regex as a smarter version of <b>Ctrl+F</b>. But instead of typing exact words, you define <b>patterns</b>, and Regex finds everything that fits those rules.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose how to search">' +
+          '<button type="button" data-view="find" aria-pressed="true">Ctrl+F: 20230126</button>' +
+          '<button type="button" class="mono" data-view="pattern" aria-pressed="false">Pattern: \\d{8}</button></div>' +
+          '<p class="hint">Click each button to search page 2 of the supplier file.</p></div>' +
+        pic("see-pic", "pfizer3-p3-m7-p2-fields.png", 1572, 272, P2_CROP, "Part of page 2 of the supplier file: Lot Number 17242818, Product Article Number 29-1846-12, Date of Manufacture 20210126, Product Description High Flow Gradient C, and Expiration Date 20230126.") +
+        '<p class="res" id="see-res" aria-live="polite"></p>' +
+        '<p class="p">For example:</p>' +
+        '<ul class="bul">' +
+          '<li>Want to find all <b>dates</b> in a document? Regex can do that.</li>' +
+          '<li>Need every document ID that starts with "DOC-" and ends in four numbers? Regex is perfect for that.</li>' +
+          '<li>Even if the text is broken across lines or full of random spacing, Regex can still spot it.</li>' +
+        '</ul>' +
+        '<p class="p"><b><i>But What Is This Really Doing?</i></b> It\'s helping you <b>parse</b> the text.</p>',
+      init: initSee },
+
+    { label: "Parsing", eyebrow: "What is parsing?",
+      html: '<h2 class="title">Turn Text into Clean <span class="hl">Data</span></h2>' +
+        '<p class="why">Parsing turns the supplier file\'s text into fields you can check, like its expiration date.</p>' +
+        '<p class="p"><b>Parsing</b> means turning messy, unstructured text into clean, structured data. Let\'s say you start with these lines from page 2 of the supplier file:</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)">' +
+          '<figure class="run out" id="parse-src"><div class="code-head"><span class="code-lang">Page 2 text (trimmed)</span></div><pre tabindex="0"><code>' +
+            '<span class="ln">Issued by <mark>Cytiva</mark> Westborough Quality Assurance</span><span class="ln">...</span>' +
+            '<span class="ln">29190939 Rev <mark>AD</mark></span><span class="ln">...</span>' +
+            '<span class="ln">Date of Manufacture:  <mark>20210126</mark></span><span class="ln">...</span>' +
+            '<span class="ln">Expiration Date:  <mark>20230126</mark></span></code></pre></figure>' +
+          '<div class="stack"><div class="parse-go"><button type="button" class="btn btn-next btn-sm" id="parse-btn">Parse it</button><p class="hint" style="font-weight:500;color:var(--ink-muted)">After parsing, you get this:</p></div>' +
+            '<div class="tbl"><table><thead><tr><th scope="col">Field</th><th scope="col">Value</th></tr></thead><tbody>' +
+              '<tr class="fill"><td>Vendor</td><td class="m">Cytiva</td></tr>' +
+              '<tr class="fill"><td>Revision</td><td class="m">AD</td></tr>' +
+              '<tr class="fill"><td>Date of Manufacture</td><td class="m">20210126</td></tr>' +
+              '<tr class="fill"><td>Expiration Date</td><td class="m">20230126</td></tr>' +
+            '</tbody></table></div></div>' +
+        '</div>' +
+        '<p class="p"><b>That\'s parsing.</b> You\'re transforming text into a format you (and your AI models) can actually use, like filling in the blanks of a structured form.</p>' +
+        '<p class="p">When you\'re working with pharmaceutical SDFs, the layout might be inconsistent, and the information won\'t always be in the same place. But with <b>Regex + parsing</b>, you can still extract the key fields you need. A scanned document needs one step first: <b>OCR</b> (a tool that turns a picture of words into text), which you\'ll learn in Project 4.</p>' +
+        '<p class="p">That\'s what the next steps in this reading are all about: <b>going from "lots of words" to "just the right data."</b></p>' +
+        '<p class="sub">Step 1: Setting Up Your Environment</p>' +
+        '<ul class="bul">' +
+          '<li><b>No Installation Needed:</b> Python comes with a built-in module called <code>re</code>, so there\'s nothing extra to install.</li>' +
+          '<li><b>Import the Regex Module:</b> simply import <code>re</code> at the top of your notebook.</li>' +
+          '<li><b>Prepare Sample Text:</b> let\'s define a string we\'ll use throughout this reading: the text of all 3 pages of the supplier file. <code>doc</code> is the supplier file, opened in your notebook\'s Step 2, and <code>+=</code> adds each page\'s text to the end of <code>text</code>.</li>' +
+        '</ul>' +
+        code("python", "Python", [
+          'import re',
+          '',
+          '# Put the text of all 3 pages into one string',
+          'text = ""',
+          'for page_num in range(len(doc)):',
+          '    text += doc[page_num].get_text("text")'
+        ]),
+      init: initParse },
+
+    { label: "Find Fields", eyebrow: "Step 2: Single-line data",
+      html: '<h2 class="title">Find Exact Words and <span class="hl">Patterns</span></h2>' +
+        '<p class="why">An exact word finds one thing. A pattern finds every field of one kind, like every date.</p>' +
+        '<p class="p">Now that you\'ve got text from a pharmaceutical SDF, the next step is to pull out specific information, like names, dates, or phone numbers, using <b>Regex</b>. In this section, we\'ll focus on finding data that\'s neatly placed on <b>a single line</b>. This is the easiest way to get started with Regex and builds the foundation for more complex use cases.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a kind of search">' +
+          '<button type="button" data-view="exact" aria-pressed="true">1. Exact Matches</button>' +
+          '<button type="button" data-view="fields" aria-pressed="false">2. Emails and Phones</button>' +
+          '<button type="button" data-view="dates" aria-pressed="false">3. Dates</button></div>' +
+          '<p class="hint">Click each button.</p></div>' +
+
+        '<div class="pane" data-pane="exact">' +
+          '<p class="p">The simplest use of Regex is to search for exact words or phrases in your text using <code>re.search()</code> or <code>re.findall()</code>. <code>re.search()</code> gives back the first match. <code>re.findall()</code> gives back every match, as a list.</p>' +
+          '<div class="cols">' +
+            code("python", "Python", [
+              '# Search for a vendor name',
+              'match = re.search(r"Cytiva", text)',
+              'if match:',
+              '    print("Found:", match.group())'
+            ]) +
+            '<div class="stack">' + code("plain", "Output", ['Found: Cytiva']) +
+              '<p class="p"><b>Use Case:</b> Great for quick keyword spotting or rule-based classification.</p></div>' +
+          '</div>' +
+          '<p class="p">The <code>r</code> before the quotes tells Python to keep every backslash in the pattern as it is. <code>re.search()</code> stopped at the first "Cytiva", at the top of page 1:</p>' +
+          pic("ex-pic", "pfizer3-p3-m7-p1-top.png", 760, 240, P1TOP_CROP, "The top right corner of page 1: Cytiva, 100 Results Way, Marlborough, MA 01752, with a green box around Cytiva.", "width:62%") +
+        '</div>' +
+
+        '<div class="pane" data-pane="fields" hidden>' +
+          '<p class="p">Regex really shines when text follows a pattern. You can use <b>character classes</b> (a set of characters in square brackets, such as <code>[\\w\\.-]</code>, where any one of them can match) to match things like email addresses, dates, and phone numbers, even if the formatting varies a little.</p>' +
+          code("python", "Python", [
+            '#Extract email',
+            'emails = re.findall(r"[\\w\\.-]+@[\\w\\.-]+\\.\\w+", text)',
+            'print("Emails:", emails)',
+            '',
+            '# Extract phone numbers',
+            'phones = re.findall(r"\\+?\\d[\\d\\s().-]{9,}", text)',
+            'print("Phones:", phones)'
+          ]) +
+          code("plain", "Output", [
+            "Emails: ['michaeltoner@cytiva.com']",
+            "Phones: ['17242818 \\n', '29 1846 12 \\n', '20210126 \\n  ', '20230126 \\n', '28 9301 82\\n', '25.0 - 40.0 ']"
+          ]) +
+          '<p class="p">The email is the one at the end of the letter on page 1. But the supplier file has no phone number. Each "phone" above is a lot number, an article number, a date or a test limit that happens to fit the pattern. (<code>\\n</code> is a line break.) A pattern finds what text looks like, not what it means.</p>' +
+          '<div class="cols" style="grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)">' +
+            '<div class="stack">' + pic("em-pic", "pfizer3-p3-m7-p1-sign.png", 888, 208, P1SIGN_CROP, "The end of the letter on page 1: Mike Toner, Product Manager, michaeltoner@cytiva.com, with a green box around the email.") +
+              '<p class="cap"><span class="key g"></span>The email, page 1</p></div>' +
+            '<div class="stack">' + pic("ph-pic", "pfizer3-p3-m7-p2-fields.png", 1572, 272, P2_CROP, "Part of page 2 with blue boxes around 17242818, 29-1846-12, 20210126 and 20230126, the numbers the phone pattern matched.") +
+              '<p class="cap"><span class="key b"></span>4 of the 6 "phones", page 2</p></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="pane" data-pane="dates" hidden>' +
+          code("python", "Python", [
+            '# Extract dates (multiple formats)',
+            'dates_iso = re.findall(r"\\d{4}-\\d{2}-\\d{2}", text)  # YYYY-MM-DD',
+            'dates_dmy = re.findall(r"\\d{2}-[A-Za-z]{3}-\\d{4}", text)  # DD-Mon-YYYY',
+            'dates_dmy2 = re.findall(r"\\d{2}\\s+[A-Z]{3}\\s+\\d{4}", text)  # DD MMM YYYY',
+            'print("Dates (ISO):", dates_iso)',
+            'print("Dates (DD-Mon-YYYY):", dates_dmy)',
+            'print("Dates (DD MMM YYYY):", dates_dmy2)'
+          ]) +
+          '<div class="cols" style="align-items:center">' +
+            code("plain", "Output", ['Dates (ISO): []', 'Dates (DD-Mon-YYYY): []', 'Dates (DD MMM YYYY): []']) +
+            '<p class="p">None of these 3 formats is in the supplier file. Its certificates write a date as 8 digits: year, month, day.</p>' +
+          '</div>' +
+          code("python", "Python", [
+            '# Extract dates in YYYYMMDD format (no separators)',
+            '# Common in pharmaceutical documents like expiration dates',
+            'dates_yyyymmdd = re.findall(r"\\d{8}", text)',
+            'print("Dates (YYYYMMDD):", dates_yyyymmdd)'
+          ]) +
+          code("plain", "Output", ["Dates (YYYYMMDD): ['28960345', '29477427', '29184612', '29190939', '17242818', '20210126', '20230126', '18356721', '20240315', '20260315', '28930182']"]) +
+          '<div class="cols" style="grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--space-5)">' +
+          '<div class="pages">' +
+            '<figure id="pg1">' + pic("pg1p", "pfizer3-p3-m7-page1.png", 612, 792, PAGE_CROP, "Page 1 with blue boxes around 28960345, 29477427 and 29184612.").replace('<figure class="pic" id="pg1p">', '<div class="pic">').replace('</svg></figure>', '</svg></div>') + '<figcaption>Page 1: 3 matches</figcaption></figure>' +
+            '<figure id="pg2">' + pic("pg2p", "pfizer3-p3-m7-page2.png", 612, 792, PAGE_CROP, "Page 2 with green boxes around the dates 20210126 and 20230126, and blue boxes around 17242818 and 29190939.").replace('<figure class="pic" id="pg2p">', '<div class="pic">').replace('</svg></figure>', '</svg></div>') + '<figcaption>Page 2: 4 matches</figcaption></figure>' +
+            '<figure id="pg3">' + pic("pg3p", "pfizer3-p3-m7-page3.png", 612, 792, PAGE_CROP, "Page 3 with green boxes around the dates 20240315 and 20260315, and blue boxes around 18356721 and 28930182.").replace('<figure class="pic" id="pg3p">', '<div class="pic">').replace('</svg></figure>', '</svg></div>') + '<figcaption>Page 3: 4 matches</figcaption></figure>' +
+          '</div>' +
+            '<div class="stack"><p class="p"><span class="key g"></span>11 numbers fit, but only 4 are certificate dates.</p>' +
+              '<p class="p"><span class="key b"></span>The other 7 are lot numbers, part numbers and document numbers, which have 8 digits too.</p>' +
+              '<p class="p"><b>Why is this useful?</b> It automates the extraction of key compliance dates from documents, and works well with certificates, quality reports, and vendor documentation.</p></div>' +
+          '</div>' +
+        '</div>',
+      init: initFind },
+
+    { label: "Groups", eyebrow: "Capturing groups",
+      html: '<h2 class="title">Grab the <span class="hl">Pieces</span> of a Date</h2>' +
+        '<p class="why">Groups pull the day, the month and the year out of one date.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a part">' +
+          '<button type="button" data-view="letter" aria-pressed="true">1. The Letter\'s Date</button>' +
+          '<button type="button" data-view="groups" aria-pressed="false">2. Split It into Groups</button>' +
+          '<button type="button" data-view="symbols" aria-pressed="false">3. Common Symbols</button></div></div>' +
+
+        '<div class="pane" data-pane="letter">' +
+          '<p class="p">The certificates write dates as 8 digits, but the letter on page 1 writes its date another way: <b>3 June, 2022</b>. Your notebook\'s <b>Step 5</b> finds it with this pattern:</p>' +
+          code("python", "Python", [
+            'import re',
+            '',
+            '# Extract raw text from the first page',
+            'text = doc[0].get_text("text")',
+            '',
+            '# Use regex to find a date like "3 June, 2022" in the text',
+            'date_match = re.search(r"\\d{1,2}\\s+[A-Z][a-z]+,\\s+\\d{4}", text)',
+            '',
+            'if date_match:',
+            '    letter_date = date_match.group()',
+            '    print(f"Letter Date: {letter_date}")',
+            'else:',
+            '    print("Date not found.")'
+          ]) +
+          '<div class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center">' +
+            code("plain", "Output", ['Letter Date: 3 June, 2022']) +
+            pic("ld-pic", "pfizer3-p3-m7-p1-date.png", 732, 168, DATE_CROP, "The date line of the letter on page 1, 3 June, 2022, with a green box around it.") +
+          '</div>' +
+          '<p class="p"><code>text</code> now holds page 1 only, so <code>re.search()</code> finds the letter\'s date. Click <b>2. Split It into Groups</b> to see what each part of the pattern means.</p>' +
+        '</div>' +
+
+        '<div class="pane" data-pane="groups" hidden>' +
+          '<p class="p"><b>Capturing groups</b> are a feature in Regex that let you <b>extract specific parts</b> of a match. Here\'s a simple way to think about it: <i>you don\'t just want to find a pattern, you want to grab pieces of it.</i></p>' +
+          '<p class="p">Capturing groups are created using <b>parentheses <code>()</code></b> in your Regex pattern. Whatever is inside the parentheses gets "captured" and saved, so you can use it later in your code.</p>' +
+          code("python", "Python", [
+            '# Extract the letter date\'s parts using groups',
+            'match = re.search(r"(\\d{1,2})\\s+([A-Z][a-z]+),\\s+(\\d{4})", text)',
+            '',
+            'if match:',
+            '    day = match.group(1)    # \'3\'',
+            '    month = match.group(2)  # \'June\'',
+            '    year = match.group(3)   # \'2022\'',
+            '    print(f"Day: {day}, Month: {month}, Year: {year}")'
+          ]) +
+          code("plain", "Output", ['Day: 3, Month: June, Year: 2022']) +
+          '<div class="cols" style="grid-template-columns:minmax(0,1fr) 260px;align-items:center">' +
+            '<div class="stack"><p class="hint">Click a group to see what it captures.</p>' +
+              '<div class="grp-row" role="group" aria-label="The three groups">' +
+                '<button type="button" class="part" data-part="day"><span class="v">(\\d{1,2})</span><span class="f">group 1</span></button>' +
+                '<span class="lit">\\s+</span>' +
+                '<button type="button" class="part" data-part="month"><span class="v">([A-Z][a-z]+)</span><span class="f">group 2</span></button>' +
+                '<span class="lit">,\\s+</span>' +
+                '<button type="button" class="part" data-part="year"><span class="v">(\\d{4})</span><span class="f">group 3</span></button>' +
+              '</div></div>' +
+            pic("gr-pic", "pfizer3-p3-m7-p1-date.png", 732, 168, DATE_CROP, "The date line of the letter on page 1, 3 June, 2022, with a green box around the part the chosen group captures.") +
+          '</div>' +
+          '<p class="p"><b>Breakdown of the Pattern:</b></p>' +
+          '<div class="tbl sm"><table><thead><tr><th scope="col">Part</th><th scope="col">Pattern</th><th scope="col">Meaning</th></tr></thead><tbody>' +
+            '<tr data-part="day"><td class="m">(\\d{1,2})</td><td>1 or 2 digits, in a group</td><td>The day</td></tr>' +
+            '<tr><td class="m">\\s+</td><td>One or more spaces</td><td>Gap</td></tr>' +
+            '<tr data-part="month"><td class="m">([A-Z][a-z]+)</td><td>A capital letter, then small letters, in a group</td><td>The month</td></tr>' +
+            '<tr><td class="m">,\\s+</td><td>Comma and spaces</td><td>Delimiter</td></tr>' +
+            '<tr data-part="year"><td class="m">(\\d{4})</td><td>4 digits, in a group</td><td>The year</td></tr>' +
+          '</tbody></table></div>' +
+          '<div class="concl"><p>Let\'s analyze <code>"3 June, 2022"</code>: the first group, <b>3</b>, captures the day. The second group, <b>June</b>, captures the month. The third group, <b>2022</b>, captures the year. Together, you can separate and organize dates into structured fields.</p>' +
+            '<p><b>Conclusion:</b> Capturing groups are powerful when you need to split or label parts of complex data formats.</p></div>' +
+        '</div>' +
+
+        '<div class="pane" data-pane="symbols" hidden>' +
+          '<p class="p"><b>Common Regex Symbols.</b> Here\'s a quick reference to help you understand the building blocks of regex:</p>' +
+          '<div class="tbl sm"><table><thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Example</th></tr></thead><tbody>' +
+            '<tr><td class="m">.</td><td>Any character (except newline)</td><td><code>a.b</code> matches <code>acb</code>, <code>a*b</code></td></tr>' +
+            '<tr><td class="m">\\d</td><td>Any digit (0 to 9)</td><td><code>\\d</code> matches <code>2</code>, <code>\\d+</code> matches <code>2022</code></td></tr>' +
+            '<tr><td class="m">\\w</td><td>Word character (letter, digit, _)</td><td><code>\\w</code> matches <code>C</code>, <code>\\w+</code> matches <code>Cytiva</code></td></tr>' +
+            '<tr><td class="m">\\s</td><td>Whitespace (space, tab, newline)</td><td><code>\\s</code> matches one space, <code>\\s+</code> matches several</td></tr>' +
+            '<tr><td class="m">+</td><td>One or more</td><td><code>\\d</code> matches <code>1</code>, <code>\\d+</code> matches <code>123</code></td></tr>' +
+            '<tr><td class="m">*</td><td>Zero or more</td><td><code>a*</code> matches <code>""</code> (nothing), <code>aaa</code></td></tr>' +
+            '<tr><td class="m">?</td><td>Zero or one (optional)</td><td><code>colou?r</code> matches <code>color</code>, <code>colour</code></td></tr>' +
+            '<tr><td class="m">{n}</td><td>Exactly n</td><td><code>\\d{4}</code> matches <code>2022</code></td></tr>' +
+            '<tr><td class="m">[abc]</td><td>Character set (a or b or c)</td><td><code>[aeiou]</code> matches any vowel</td></tr>' +
+            '<tr><td class="m">^</td><td>Start of the text (start of every line with <code>re.MULTILINE</code>)</td><td><code>^Cytiva</code> matches page 3\'s first word</td></tr>' +
+            '<tr><td class="m">$</td><td>End of the text (end of every line with <code>re.MULTILINE</code>)</td><td><code>USA$</code> matches page 3\'s last word</td></tr>' +
+            '<tr><td class="m">( ... )</td><td>Capturing group</td><td><code>(\\d+)</code> extracts digits</td></tr>' +
+          '</tbody></table></div>' +
+        '</div>',
+      init: initGroups },
+
+    { label: "Line Breaks", eyebrow: "Step 3: Multiple lines",
+      html: '<h2 class="title">Match Across Line <span class="hl">Breaks</span></h2>' +
+        '<p class="why">On page 3, a label and its date land on two lines of the extracted text.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a part">' +
+          '<button type="button" data-view="problem" aria-pressed="true">1. The Problem</button>' +
+          '<button type="button" data-view="solution" aria-pressed="false">2. The Solution</button>' +
+          '<button type="button" data-view="greedy" aria-pressed="false">3. Greedy vs. Non-Greedy</button></div></div>' +
+        '<div class="pane" data-pane="problem">' +
+        '<p class="p">In real life, the information you want to find in text doesn\'t always stay on one line. Things like names, addresses, or descriptions often spread across multiple lines, especially in emails, PDFs, or forms. A line break is a character too, written <code>\\n</code>, and a plain space in a pattern won\'t match it. In this step, you\'ll learn how to make Regex handle text that goes over several lines by using special <b>flags</b> (extra settings you give <code>re.search()</code>).</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)">' +
+          '<div><p class="side-h">On page 3, the date sits on the same line as its label:</p>' +
+            pic("p3-pic", "pfizer3-p3-m7-p3-dates.png", 1112, 376, [44, 163, 278, 94], "Part of page 3: Lot Number 18356721, Product Article Number 28 9301 82, Date of Manufacture 20240315, Product Description Low Flow Kit, AKTA ready, Expiration Date 20260315. The label Date of Manufacture and the date 20240315 are boxed.") + '</div>' +
+          '<div><p class="side-h">In <code style="font-family:var(--font-mono)">doc[2].get_text("text")</code>, it doesn\'t:</p>' +
+            '<pre class="txtbox" aria-label="The extracted text of page 3, with each line break shown as backslash n">...\nProduct Article Number:<span class="nl">\\n</span>\n28 9301 82<span class="nl">\\n</span>\n<span class="hit">Date of Manufacture:</span><span class="nl">\\n</span>\n<span class="hit">20240315</span><span class="nl">\\n</span>\nProduct Description:<span class="nl">\\n</span>\n...</pre></div>' +
+        '</div>' +
+        '<p class="p">For example, if you try a basic pattern on page 3\'s text, it won\'t work, because there\'s a line break between <code>Date of Manufacture:</code> and <code>20240315</code>, so the output is <code>None</code>:</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,2.3fr) minmax(0,.7fr);align-items:center">' +
+          code("python", "Python", [
+            '# Extract raw text from page 3',
+            'text = doc[2].get_text("text")',
+            '',
+            'print(re.search(r"Date of Manufacture: 20240315", text))'
+          ]) +
+          code("plain", "Output", ['None']) +
+        '</div>' +
+        '</div>' +
+        '<div class="pane" data-pane="solution" hidden>' +
+        '<p class="p"><b>Solution: Match Across Line Breaks.</b> To match multiline text, use <code>.*</code> and the <code>re.DOTALL</code> flag:</p>' +
+        code("python", "Python", [
+          'match = re.search(r"Date of Manufacture:\\s*(.*)\\nProduct Description:",',
+          '                  text, re.DOTALL)',
+          '',
+          'if match:',
+          '    print("Date of Manufacture:", match.group(1))'
+        ]) +
+        code("plain", "Output", ['Date of Manufacture: 20240315']) +
+          '<div class="tbl sm"><table><thead><tr><th scope="col">Pattern</th><th scope="col">Meaning</th></tr></thead><tbody>' +
+            '<tr><td class="m">\\s*</td><td>Match any whitespace (including line breaks)</td></tr>' +
+            '<tr><td class="m">(.*)</td><td>Capture everything after <code>Date of Manufacture:</code> (the date itself)</td></tr>' +
+            '<tr><td class="m">re.DOTALL</td><td>Allows <code>.</code> to match newlines (<code>\\n</code>) too. On page 3 it changes nothing: <code>\\s*</code> already crosses the line break, so you get 20240315 with or without it.</td></tr>' +
+          '</tbody></table></div>' +
+        '</div>' +
+        '<div class="pane" data-pane="greedy" hidden>' +
+          '<p class="p">By default, Regex is <b>greedy</b>. That means when you use <code>.*</code>, it tries to match <b>everything</b> until the <b>last</b> possible character that fits the pattern. To make it <b>non-greedy</b>, just add a <code>?</code>: use <code>.*?</code> instead of <code>.*</code>. This prevents overmatching, and it\'s safer if there are multiple sections like "Date of Manufacture:" and "Product Description:" later in the text. On page 3 there\'s only one of each, so both give 20240315.</p>' +
+          '<p class="p">Use non-greedy matching when you\'re working with nested or repeating tags (like HTML or XML), when you want to avoid overmatching, or when you only need the <b>first</b> valid match, not the whole stretch. It\'s a small change with a <b>big impact on accuracy</b>.</p>' +
+          code("python", "Python", [
+            'match = re.search(r"Date of Manufacture:\\s*(.*?)\\nProduct Description:",',
+            '                  text, re.DOTALL)',
+            'print("Date of Manufacture:", match.group(1))'
+          ]) +
+          code("plain", "Output", ['Date of Manufacture: 20240315']) +
+          '<p class="concl"><b>Key Takeaway:</b> Regex is a powerful tool for making sense of messy or unstructured text. Once you understand how to build and test patterns, you can extract almost anything you need, even from complex, multiline documents.</p>' +
+        '</div>',
+      init: initLines }
+  ];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of the page.";
+
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    if (c.init) c.init(card);
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+    Array.prototype.forEach.call(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .grp-row")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N&view=NAME opens a card and a switch view directly */
+  var m = location.hash.match(/card=(\d)(?:&view=(\w+))?/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", fit);
+  fit();
+  render(false);
+  if (m && m[2]) { var vb = card.querySelector('.sw button[data-view="' + m[2] + '"]'); if (vb) vb.click(); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fields, Anchors and Boxes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player, code blocks, Copy buttons, the two-button switch
+   and the picture overlays are copied from pfizer3-p3-m5-learn.html (the model Learn deck).
+   P3 module 8 Learn cards: "Learn How to Extract Fields with Regex, Anchor Phrases & Bounding Boxes" (5 cards, 10 November 2026).
+   1 Look at the Raw Text First: page 3 "On the page" vs "In the raw text" (the label and the date land on two lines).
+   2 Find the Date, Then Find Where It Sits: his notebook's Step 5 (from the last reading) and Step 6, with the letter date's 3 word boxes.
+   3 Let the Label Be Your Anchor: page 3, the 3 eight-digit numbers without and with the anchor, then his anchor code on page 3.
+   4 Can You See It?: his Step 4 text, with a button that draws the box around "2022".
+   5 Draw the Box with OpenCV: his corrected OpenCV cell (from his notebook), its output and the real picture it makes.
+   Text: the SME's (Chaitanya's) module 8 page, verbatim where possible (about 80% of the words), on the supplier file.
+   Fixed stage: laid out once on a 760 x 1160 design stage (set the Notion embed height to 1080 px at the 708 px wide
+   Notion column), then scaled as one piece to fit the embed frame and centred. Nothing scrolls, and Back and Next never move.
+   Every output and every box is the real output of the code, run on sample-sdf-document.pdf with PyMuPDF 1.26.5 and
+   OpenCV 4.14 on 10 November 2026. Outputs marked "trimmed" keep only some lines.
+   Pictures (all rendered with PyMuPDF from the supplier file): pfizer3-p3-m8-p3-labels.png (page 3 clipped to x 40 to 330,
+   y 164 to 258), pfizer3-p3-m8-p1-date.png (page 1, x 28 to 208, y 138 to 172), pfizer3-p3-m8-p1-top.png (page 1,
+   x 24 to 588, y 80 to 250), pfizer3-p3-m8-opencv-out.png (the real OpenCV output picture, top 200 points). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-1:4px; --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px; --space-6:40px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:1160px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:10px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:17px;line-height:1.45;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:15.5px;line-height:1.52;color:var(--ink-muted);text-wrap:pretty}
+.p b{font-weight:600;color:var(--ink)}
+.p code,.bul code,.note code,.cap code,.sw code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+.hint{margin:0;font-size:14px;line-height:1.4;font-weight:600;color:var(--step-label)}
+blockquote.q{margin:0;border-left:3px solid var(--pfizer-blue);padding:2px 0 2px 14px;font-size:16px;line-height:1.5;font-weight:600;color:var(--ink)}
+
+/* Bullets */
+.bul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.bul li{font-size:15.5px;line-height:1.5;color:var(--ink-muted)}
+.bul b{font-weight:600;color:var(--ink)}
+
+/* Code block with a Copy button; output blocks have no Copy button */
+.run{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:4px 8px 4px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:7px 14px;font-family:var(--font-mono);font-size:13px;line-height:1.45;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit;white-space:inherit;background:none;padding:0;border-radius:0}
+.run.small pre{font-size:11.6px;line-height:1.34;padding:6px 12px;white-space:pre-wrap}
+.run.out{border-color:var(--blue-200)}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.42}
+.run.out pre .ln{display:block;padding-left:2ch;text-indent:-2ch}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:3px 10px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+
+/* Two-button switch (copied from the model deck) */
+.sw-bar{display:flex;align-items:center;gap:var(--space-4)}
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:8px 14px;cursor:pointer;font-size:14px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.pane{display:flex;flex-direction:column;gap:11px}
+
+/* Pictures with an SVG layer in PDF points */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0}
+.pic img{display:block;width:100%;height:auto;transition:opacity .2s ease}
+.pic svg{position:absolute;inset:0;width:100%;height:100%}
+.pic .bx{fill:none;stroke:var(--highlight);stroke-width:2px;vector-effect:non-scaling-stroke}
+.pic .bx.fill{fill:var(--highlight);fill-opacity:.16}
+.pic .bx.dim{stroke:var(--blue-200);stroke-width:1.5px}
+.pic .gd{stroke:var(--pfizer-blue);stroke-width:1.5px;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+.pic .dot{fill:var(--pfizer-blue);stroke:var(--surface);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.pic .tag{font-family:var(--font-text);font-weight:700;fill:var(--pfizer-blue)}
+.pic .tag.g{fill:var(--highlight)}
+.pic .cover{fill:var(--surface-card);stroke:var(--blue-200);stroke-width:1px;vector-effect:non-scaling-stroke}
+.pic.as-text img{opacity:.1}
+.pic .txt{position:absolute;top:6px;bottom:0;left:12px;margin:0;padding:6px 12px;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--radius-xs) var(--radius-xs) 0 0;font-family:var(--font-mono);font-size:12.5px;line-height:17px;color:var(--ink);white-space:pre}
+.pic .txt .on{background:var(--surface-card);box-shadow:inset 3px 0 0 var(--highlight);display:inline-block;padding:0 6px 0 4px;margin-left:-4px}
+.cap{margin:0;font-size:14.5px;line-height:1.45;font-weight:600;color:var(--ink);min-height:21px}
+.cap.res{font-family:var(--font-mono);font-weight:500;font-size:13px;color:var(--ink)}
+
+/* Callout box (from the model deck's note) */
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:9px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:14.5px;line-height:1.48;color:var(--ink-muted)}
+.note p + p,.note p + ul,.note ul + p{margin-top:4px}
+.note ul{margin:0;padding-left:20px}
+.note li{font-size:14.5px;line-height:1.48;color:var(--ink-muted)}
+.note b{font-weight:600;color:var(--ink)}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:11px 18px;font-size:15.5px;line-height:1.52;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+
+/* Button bar over a picture */
+.btn-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.btn-sm{padding:9px 14px;font-size:14px}
+.btn-sec{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-sec[aria-pressed="true"]{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){
+  .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+  .pic .draw{stroke-dasharray:120;stroke-dashoffset:120;animation:draw .9s ease forwards} @keyframes draw{to{stroke-dashoffset:0}}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to find a date, tie it to its label and see its box: five cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+  var NS = "http://www.w3.org/2000/svg";
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  /* lang "plain" is an output block, with no Copy button. extra "small" makes the code smaller (long cells). */
+  function code(lang, label, lines, extra) {
+    var out = lang === "plain";
+    return '<figure class="run' + (out ? ' out' : '') + (extra ? ' ' + extra : '') + '"><div class="code-head"><span class="code-lang">' + label + '</span>' +
+      (out ? '' : '<button type="button" class="copy" data-copy aria-label="Copy ' + label + ' code">' + IC_COPY + '<span>Copy</span></button>') + '</div>' +
+      '<pre tabindex="0"><code>' + (out ? lines.map(function (l) { return '<span class="ln">' + (l ? esc(l) : ' ') + '</span>'; }).join("") : esc(lines.join("\n"))) + '</code></pre></figure>';
+  }
+  function svgEl(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  function rect(svg, b, cls, pad) {
+    pad = pad || 0;
+    svg.appendChild(svgEl("rect", { "class": cls, x: b[0] - pad, y: b[1] - pad, width: b[2] - b[0] + 2 * pad, height: b[3] - b[1] + 2 * pad, rx: 1 }));
+  }
+  /* A two-button (or more) switch: buttons carry data-view, panes carry data-pane */
+  function wireSwitch(root, onPick) {
+    var btns = root.querySelectorAll(".sw button");
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener("click", function () {
+        var v = b.getAttribute("data-view");
+        Array.prototype.forEach.call(btns, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        Array.prototype.forEach.call(root.querySelectorAll("[data-pane]"), function (p) { p.hidden = p.getAttribute("data-pane") !== v; });
+        if (onPick) onPick(v);
+      });
+    });
+  }
+
+  /* Real page.get_text("words") boxes, page 3 (index 2), PyMuPDF 1.26.5: [x0, y0, x1, y1] in PDF points */
+  var P3 = {
+    lot: [200.0, 167.25, 244.48, 180.99],
+    mfg: [200.0, 203.25, 244.48, 216.99],
+    exp: [200.0, 239.25, 244.48, 252.99],
+    expLabel: [50.0, 239.25, 94.46, 252.99],
+    dateWord: [97.24, 239.25, 121.14, 252.99]
+  };
+  var P3_CROP = [40, 164, 290, 94];
+  /* The real page.get_text("text") lines for this part of page 3 */
+  var P3_TEXT = ["Lot Number:", "18356721", "Product Article Number:", "28 9301 82", "Date of Manufacture:", "20240315",
+    "Product Description:", "Low Flow Kit, AKTA ready", "Expiration Date:", "20260315"];
+
+  /* Card 1: the page vs the raw text */
+  function initRaw(root) {
+    var fig = root.querySelector("#raw-fig"), svg = fig.querySelector("svg");
+    svg.setAttribute("viewBox", P3_CROP.join(" "));
+    var pre = document.createElement("pre"); pre.className = "txt"; pre.setAttribute("aria-hidden", "true");
+    pre.innerHTML = P3_TEXT.map(function (l, n) { return n >= 8 ? '<span class="on">' + esc(l) + '</span>' : esc(l); }).join("\n");
+    function show(v) {
+      clear(svg);
+      var asText = v === "text";
+      fig.classList.toggle("as-text", asText);
+      if (asText) { if (!pre.parentNode) fig.appendChild(pre); root.querySelector("#raw-cap").textContent = "In the raw text, the date sits on its own line, under its label."; return; }
+      if (pre.parentNode) fig.removeChild(pre);
+      rect(svg, [P3.expLabel[0], P3.expLabel[1], P3.dateWord[2], P3.dateWord[3]], "bx fill", 1.2);
+      rect(svg, P3.exp, "bx fill", 1.2);
+      svg.appendChild(svgEl("line", { "class": "gd", x1: P3.dateWord[2] + 4, y1: 246.1, x2: P3.exp[0] - 4, y2: 246.1 }));
+      root.querySelector("#raw-cap").textContent = "On the page, the label and the date sit on one line.";
+    }
+    wireSwitch(root, show);
+    show("page");
+  }
+
+  /* Card 2: the letter date's 3 words on page 1, from the real get_text("words") rows */
+  var D_CROP = [28, 138, 180, 34];
+  var DATE_WORDS = [[36.0, 149.22, 41.73, 160.79, "3"], [44.06, 149.22, 68.95, 160.79, "June,"], [71.33, 149.22, 94.17, 160.79, "2022"]];
+  function initFind(root) {
+    wireSwitch(root);
+    var svg = root.querySelector("#date-svg"), cap = root.querySelector("#date-cap");
+    svg.setAttribute("viewBox", D_CROP.join(" "));
+    var bWhole = root.querySelector("#s-whole"), bYear = root.querySelector("#s-year");
+    function words() { DATE_WORDS.forEach(function (w) { rect(svg, w, "bx dim", 0.6); }); }
+    function pick(which) {
+      clear(svg); words();
+      bWhole.setAttribute("aria-pressed", which === "whole" ? "true" : "false");
+      bYear.setAttribute("aria-pressed", which === "year" ? "true" : "false");
+      if (which === "whole") {
+        cap.className = "cap";
+        cap.textContent = "Nothing prints. The page holds 3 separate words, and none of them is “3 June, 2022”.";
+      } else {
+        var w = DATE_WORDS[2];
+        rect(svg, w, "bx fill", 0.6);
+        svg.appendChild(svgEl("circle", { "class": "dot", cx: w[0], cy: w[1], r: 1.4 }));
+        svg.appendChild(svgEl("circle", { "class": "dot", cx: w[2], cy: w[3], r: 1.4 }));
+        cap.className = "cap res";
+        cap.textContent = "Found '2022' at: (71.32679748535156, 149.2158203125, 94.16860961914062, 160.7857666015625)";
+      }
+    }
+    var cs = root.querySelector("#corner-svg"), w = DATE_WORDS[2];
+    cs.setAttribute("viewBox", D_CROP.join(" "));
+    rect(cs, w, "bx fill", 0.6);
+    cs.appendChild(svgEl("circle", { "class": "dot", cx: w[0], cy: w[1], r: 1.4 }));
+    cs.appendChild(svgEl("circle", { "class": "dot", cx: w[2], cy: w[3], r: 1.4 }));
+    cs.appendChild(svgEl("text", { "class": "tag", x: w[0] - 2, y: w[1] - 2.5, "font-size": 4.2, "text-anchor": "end" }, "(71.33, 149.22)"));
+    cs.appendChild(svgEl("text", { "class": "tag", x: w[2] + 2.5, y: w[3] + 1.5, "font-size": 4.2 }, "(94.17, 160.79)"));
+    bWhole.addEventListener("click", function () { pick("whole"); });
+    bYear.addEventListener("click", function () { pick("year"); });
+    words();
+  }
+
+  /* Card 4: draw the box around "2022" at the integer coordinates OpenCV used: (71, 149, 94, 160) */
+  var T_CROP = [24, 80, 564, 170];
+  function initSee(root) {
+    var svg = root.querySelector("#see-svg"), btn = root.querySelector("#draw-btn"), cap = root.querySelector("#see-cap");
+    svg.setAttribute("viewBox", T_CROP.join(" "));
+    btn.addEventListener("click", function () {
+      var on = btn.getAttribute("aria-pressed") !== "true";
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "Clear the box" : "Draw the box";
+      clear(svg);
+      if (on) {
+        svg.appendChild(svgEl("rect", { "class": "bx draw", x: 71, y: 149, width: 23, height: 11, pathLength: 120 }));
+        cap.textContent = "The box lands on the year, right where the date is printed.";
+      } else cap.textContent = "";
+    });
+  }
+
+  var CARDS = [
+    { label: "Raw Text", eyebrow: "Step 1 · Review the raw text",
+      html: `<h2 class="title">Look at the <span class="hl">Raw</span> Text First</h2>
+        <p class="why">On page 3, the expiration date lands on a different line from its label, so look before you write code.</p>
+        <p class="p">Before you write a single line of extraction logic (the code that pulls the values out), <b>look at what you're working with</b>.</p>
+        <p class="p">Let's say you've pulled text from a PDF and it shows up like this. It's part of page 3, as your notebook's Step 4 printed it:</p>
+        ${code("plain", "Output (trimmed)", ["--- Page 3 ---", "...", "Expiration Date:", "20260315", "..."])}
+        <div class="sw-bar"><div class="sw" role="group" aria-label="Choose how to see page 3">
+          <button type="button" data-view="page" aria-pressed="true">On the page</button>
+          <button type="button" data-view="text" aria-pressed="false">In the raw text</button></div>
+          <p class="hint">Click each button to see both ways.</p></div>
+        <figure class="pic" id="raw-fig"><img src="pfizer3-p3-m8-p3-labels.png" width="1160" height="376" alt="Part of page 3 of the supplier file: Lot Number 18356721, Product Article Number 28 9301 82, Date of Manufacture 20240315, Product Description Low Flow Kit, AKTA ready, and Expiration Date 20260315, each label with its value on the same line.">
+          <svg aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+        <p class="cap" id="raw-cap"></p>
+        <p class="p">Looks innocent enough. But there's a catch: the label and the date are broken across lines. If your code is trying to grab "Expiration Date:" and pull what's after it on the same line, it gets nothing and misses 20260315 completely.</p>
+        <p class="p">This is super common, especially with PDFs that were converted from scanned documents or designed with non-standard formatting. Tools like <b>PyMuPDF</b> (or any extraction library, really) try their best, but they don't always "read" a layout the way you or I would. They just see blocks of text and coordinates.</p>
+        <p class="p">That's why your <b>first move in any PDF project</b> should be to print out or log (save to read later) the raw text. Scroll through it. Look for weird breaks, missing data, or jumbled fields. This quick review helps you avoid writing code based on the <i>wrong assumptions</i>.</p>
+        <p class="p">Once you've eyeballed the problem, you're ready to fix it, step by step.</p>`,
+      init: initRaw },
+
+    { label: "Find, Then Locate", eyebrow: "Steps 2 and 3 · Find it, then locate it",
+      html: `<h2 class="title">Find the Date, Then Find <span class="hl">Where</span> It Sits</h2>
+        <p class="why">Regex tells you what the date is. Its box tells you where it sits on the page.</p>
+        <div class="sw-bar"><div class="sw" role="group" aria-label="Choose a step">
+          <button type="button" data-view="find" aria-pressed="true">1. Find it with regex</button>
+          <button type="button" data-view="locate" aria-pressed="false">2. Locate its box</button>
+          <button type="button" data-view="coords" aria-pressed="false">3. Read the box</button></div>
+          <p class="hint">Click each button.</p></div>
+        <div class="pane" data-pane="find">
+          <p class="p">Now that you've looked at the raw text and spotted the chaos, you're probably wondering: <i>How do I actually grab the stuff I want, like phone numbers or dates, without relying on clean layouts?</i></p>
+          <p class="p">Enter <b>regex</b>. You met it in the last reading, where a pattern found the date at the top of the letter on page 1. Your notebook's Step 5 does the same. <code>doc</code> is the supplier file, opened in the notebook's Step 2.</p>
+          ${code("python", "Python", [
+            'import re',
+            '',
+            '# Extract raw text from the first page',
+            'text = doc[0].get_text("text")',
+            '',
+            '# Use regex to find a date like "3 June, 2022" in the text',
+            'date_match = re.search(r"\\d{1,2}\\s+[A-Z][a-z]+,\\s+\\d{4}", text)',
+            '',
+            'if date_match:',
+            '    letter_date = date_match.group()',
+            '    print(f"Letter Date: {letter_date}")',
+            'else:',
+            '    print("Date not found.")'
+          ])}
+          ${code("plain", "Output", ["Letter Date: 3 June, 2022"])}
+          <p class="concl">Regex is one of those tools that takes 10 minutes to learn and a lifetime to master, but for now, even a tiny bit can go a long way.</p>
+        </div>
+        <div class="pane" data-pane="locate" hidden>
+          <p class="p">Regex helps you <b>find information</b>, like a phone number or a date, but sometimes you also need to know <b>where</b> it appeared on the PDF page. So far, you've used regex to find values like dates. But <b>where</b> is that date on the page? This matters because layout equals meaning.</p>
+          <p class="p">Let's build on the date example. We've already found the date, now we want to find its location on the page:</p>
+          ${code("python", "Python", [
+            '# Extract words with their bounding boxes',
+            'words = doc[0].get_text("words")',
+            '',
+            '# Define the field we are looking for',
+            '# The date is split into three words ("3", "June,", "2022"), so we search for its last word, the year',
+            'target_word = letter_date.split()[-1]',
+            '',
+            '# Search for the target word and retrieve its bounding box',
+            'for word in words:',
+            '    x0, y0, x1, y1, text, block, line, word_no = word  # Unpack correctly',
+            '    if target_word.lower() in text.lower():  # Case-insensitive match',
+            '        print(f"Found \'{target_word}\' at: ({x0}, {y0}, {x1}, {y1})")'
+          ], "small")}
+          ${code("plain", "Output", ["Found '2022' at: (71.32679748535156, 149.2158203125, 94.16860961914062, 160.7857666015625)"])}
+          <p class="p">This finds the <b>location</b> of the date by comparing it to all the individual words on the page. If it finds a match, it prints its coordinates. The date is split into three words, so the code searches for its last word, the year.</p>
+          <div class="btn-row"><p class="hint" style="flex:1 1 auto">Which search do you think finds the box? Try both.</p>
+            <button type="button" class="btn btn-sm btn-sec" id="s-whole" aria-pressed="false">Search "3 June, 2022"</button>
+            <button type="button" class="btn btn-sm btn-sec" id="s-year" aria-pressed="false">Search "2022"</button></div>
+          <figure class="pic"><img src="pfizer3-p3-m8-p1-date.png" width="1080" height="204" alt="The date at the top of the letter on page 1, 3 June, 2022, with a thin box around each of its 3 words.">
+            <svg id="date-svg" aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+          <p class="cap" id="date-cap"></p>
+        </div>
+        <div class="pane" data-pane="coords" hidden>
+          <figure class="pic"><img src="pfizer3-p3-m8-p1-date.png" width="1080" height="204" alt="The date at the top of the letter on page 1, 3 June, 2022, with a box around the year 2022 and a dot on its top-left and bottom-right corners.">
+            <svg id="corner-svg" aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+          <div class="note"><span class="num">WHAT ABOUT THOSE COORDINATES?</span>
+            <p>You already know the answer to that. They mean that the year "2022" was found in the document, and its <b>bounding box coordinates</b> are:</p>
+            <ul><li><b>(71.33, 149.22)</b>: the <b>top-left corner</b> of "2022" (it <b>starts</b> at this position).</li>
+              <li><b>(94.17, 160.79)</b>: the <b>bottom-right corner</b> of "2022" (it <b>ends</b> at this position).</li></ul>
+            <p>These coordinates tell us exactly where the year appears on the page. This is useful when we need to <b>highlight, extract, or process specific fields</b> in structured documents like vendor letters, certificates, and specifications.</p></div>
+          <p class="p">These coordinates, <code>(x0, y0)</code> and <code>(x1, y1)</code>, represent a bounding box: the exact spot the word takes up on the PDF.</p>
+          <p class="p">Now you're not just finding text, you're finding <b>where</b> it lives. And that unlocks some very powerful tricks.</p>
+        </div>`,
+      init: initFind },
+
+    { label: "Anchor", eyebrow: "Step 3 · Anchor phrases",
+      html: `<h2 class="title">Let the Label Be Your <span class="hl">Anchor</span></h2>
+        <p class="why">Page 3 has three 8-digit numbers in one column. Only the label next to each one tells you which is the expiration date.</p>
+        <div class="sw-bar"><div class="sw" role="group" aria-label="Choose a part">
+          <button type="button" data-view="why" aria-pressed="true">1. Why the label matters</button>
+          <button type="button" data-view="check" aria-pressed="false">2. Check it with coordinates</button></div>
+          <p class="hint">Click each button.</p></div>
+        <div class="pane" data-pane="why">
+          <p class="p">Think about another question: you have a number on a page, but it might as well be something different. Maybe what you think is a date is actually a lot number. What do you do then? That's where <b>anchor phrases</b> come in.</p>
+          <div class="btn-row"><p class="hint" style="flex:1 1 auto">Click to compare.</p>
+            <div class="sw" role="group" aria-label="Without or with the anchor">
+              <button type="button" data-view="without" aria-pressed="true" data-keep>Without the anchor</button>
+              <button type="button" data-view="with" aria-pressed="false" data-keep>With the anchor</button></div></div>
+          <figure class="pic"><img src="pfizer3-p3-m8-p3-labels.png" width="1160" height="376" alt="Part of page 3 of the supplier file, with the lot number 18356721, the date of manufacture 20240315 and the expiration date 20260315 in one column on the right.">
+            <svg id="anc-svg" aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+          <p class="cap" id="anc-cap"></p>
+          <div class="note"><span class="num">WHAT'S AN ANCHOR PHRASE?</span>
+            <p>An anchor phrase is a <b>word or phrase near the value you're looking for</b>. For example:</p>
+            <ul><li>If the date <code>"20260315"</code> appears in a PDF, you don't always know what it means, <b>unless</b> you spot that it's right next to <code>"Expiration Date:"</code> or <code>"Date of Manufacture:"</code>.</li>
+              <li>"Expiration Date" is your <b>anchor</b>: you use its position to locate or validate (check) the value next to it.</li></ul></div>
+          <p class="p">Think of a table: "Expiration Date:" next to "20260315" means something. But just "20260315" floating alone? You can't tell what it refers to unless you <b>know where it sits.</b> That's why we use <b>bounding boxes</b>.</p>
+        </div>
+        <div class="pane" data-pane="check" hidden>
+          <p class="p">Let's say your regex finds the number. Now you want to locate a nearby phrase like "Expiration Date:" and double-check that they're aligned. Here's how you grab word coordinates using PyMuPDF, on page 3 (<code>doc[2]</code>, because Python counts pages from 0):</p>
+          ${code("python", "Python", [
+            'words = doc[2].get_text("words")  # Get all words with their positions',
+            '',
+            'for word in words:',
+            '    x0, y0, x1, y1, w_text, *_ = word',
+            '    if "20260315" in w_text:',
+            '        print(f"Found date at: ({x0}, {y0}, {x1}, {y1})")',
+            '',
+            '    if "Expiration" in w_text:',
+            '        print(f"Found anchor phrase at: ({x0}, {y0}, {x1}, {y1})")'
+          ])}
+          ${code("plain", "Output", ["Found anchor phrase at: (50.0, 239.25, 94.45999908447266, 252.99000549316406)", "Found date at: (200.0, 239.25, 244.47998046875, 252.99000549316406)"])}
+          <figure class="pic"><img src="pfizer3-p3-m8-p3-exprow.png" width="1160" height="88" alt="The Expiration Date line on page 3, with a box around the word Expiration and a box around 20260315, and a dashed line along their shared top.">
+            <svg id="row-svg" aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+          <p class="p"><code>get_text("words")</code> gives one word at a time, so the code looks for <code>"Expiration"</code>, the first word of the label. A two-word phrase like <code>"Expiration Date:"</code> never matches a single word.</p>
+          <p class="p">Once you have both locations, you can:</p>
+          <ul class="bul"><li>Check if they're <b>on the same line</b>. Here both tops are 239.25, so they are.</li>
+            <li>See if one is <b>to the right or below</b> the other</li>
+            <li>Or use distance to define <b>what counts as "nearby"</b></li></ul>
+          <p class="concl">Anchor phrases + coordinates = <b>smart extraction</b>. Instead of just grabbing raw values, you're building logic that mimics how a human reads forms.</p>
+        </div>`,
+      init: function (root) {
+        /* Outer switch (parts) and inner switch (without/with) */
+        var outer = root.querySelectorAll(".sw-bar .sw button");
+        Array.prototype.forEach.call(outer, function (b) {
+          b.addEventListener("click", function () {
+            var v = b.getAttribute("data-view");
+            Array.prototype.forEach.call(outer, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+            Array.prototype.forEach.call(root.querySelectorAll("[data-pane]"), function (p) { p.hidden = p.getAttribute("data-pane") !== v; });
+          });
+        });
+        var inner = root.querySelectorAll("[data-keep]");
+        initAnchorOnly(root, inner);
+        /* The Expiration row under the code: the two boxes the code printed, and their shared top, 239.25 */
+        var rs = root.querySelector("#row-svg");
+        rs.setAttribute("viewBox", "40 235 290 22");
+        rect(rs, P3.expLabel, "bx fill", 0.8);
+        rect(rs, P3.exp, "bx fill", 0.8);
+        rs.appendChild(svgEl("line", { "class": "gd", x1: 42, y1: P3.exp[1] - 0.8, x2: 328, y2: P3.exp[1] - 0.8 }));
+        rs.appendChild(svgEl("text", { "class": "tag", x: 250, y: 249.5, "font-size": 7 }, "top: 239.25"));
+        rs.appendChild(svgEl("text", { "class": "tag", x: 127, y: 249.5, "font-size": 7 }, "top: 239.25"));
+      } },
+
+    { label: "Can You See It?", eyebrow: "Step 4 · Visual verification",
+      html: `<h2 class="title">Can You <span class="hl">See</span> It?</h2>
+        <p class="why">A box drawn on the page shows you at a glance whether your code found the right thing.</p>
+        <p class="p">Now that you're using coordinates to locate fields, let's take it one step further: <b>Can you <i>see</i> it?</b></p>
+        <p class="p">Visual confirmation is one of the most powerful debugging tools (ways to find what's wrong in your code) you have. It answers a simple question:</p>
+        <blockquote class="q">Did your code find the right thing in the right place?</blockquote>
+        <p class="p">Let's say you extracted the year <code>2022</code>, and you know its bounding box is at certain coordinates. But what if that box is off? Or worse, it's in the completely wrong part of the page? That's where visual verification comes in.</p>
+        <div class="btn-row"><p class="hint" style="flex:1 1 auto">Click the button to draw the box at (71, 149, 94, 160).</p>
+          <button type="button" class="btn btn-next btn-sm" id="draw-btn" aria-pressed="false">Draw the box</button></div>
+        <figure class="pic"><img src="pfizer3-p3-m8-p1-top.png" width="1410" height="425" alt="The top of page 1 of the supplier file: the date 3 June, 2022, the subject line about ÄKTA ready flow kit storage, and the Cytiva address on the right.">
+          <svg id="see-svg" aria-hidden="true" preserveAspectRatio="none"></svg></figure>
+        <p class="cap" id="see-cap"></p>
+        <p class="p"><i><b>Why does this matter?</b></i> You've already used regex to find the text and PyMuPDF to locate it. Now you're seeing that exact location <b>drawn</b> on the page. If the bounding box appears too far off, you know something's wrong, with the pattern, the spacing, or the layout.</p>
+        <p class="p">This isn't just about aesthetics (how it looks), it's about <b>trust</b>. When you visualize, you confirm:</p>
+        <ul class="bul"><li>Did I extract the right field?</li><li>Is it where I think it is?</li><li>Does it match the anchor?</li></ul>
+        <p class="p">And just like that, you've moved beyond basic extraction. Now you're <b>locating, verifying, and visualizing</b>, setting the stage for smarter layout-aware automation (code that understands where things sit on a page).</p>`,
+      init: initSee },
+
+    { label: "Draw with OpenCV", eyebrow: "Step 4 · Draw the box",
+      html: `<h2 class="title">Draw the Box with <span class="hl">OpenCV</span></h2>
+        <p class="why">This is the code that draws the box, so you can check your result by eye.</p>
+        <div class="sw-bar"><div class="sw" role="group" aria-label="Choose a view">
+          <button type="button" data-view="code" aria-pressed="true">The code</button>
+          <button type="button" data-view="result" aria-pressed="false">What it shows</button></div>
+          <p class="hint">Click each button.</p></div>
+        <div class="pane" data-pane="code">
+          <p class="p">Here's how to <b>draw a bounding box</b> around the field you detected using PyMuPDF and OpenCV. It's in your notebook, right under Step 6:</p>
+          ${code("python", "Python", [
+            'import cv2',
+            'import numpy as np',
+            'from PIL import Image',
+            '',
+            '# Convert PDF page to an image',
+            'pix = doc[0].get_pixmap()',
+            'img = np.array(Image.frombytes("RGB", [pix.width, pix.height], pix.samples))',
+            '',
+            '# Convert image to OpenCV BGR format',
+            'img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)',
+            '',
+            '# Get the actual image height',
+            'img_height = img.shape[0]  # OpenCV uses (height, width, channels)',
+            '',
+            '# Extract words and their bounding boxes',
+            'words = doc[0].get_text("words")',
+            '',
+            '# Define the field we are looking for',
+            'target_word = "2022"  # The year in the letter date on page 1',
+            '',
+            '# Flag to check if the word was found',
+            'word_found = False',
+            '',
+            '# Search for the target word and retrieve its bounding box',
+            'for word in words:',
+            '    x0, y0, x1, y1, text, block, line, word_no = word  # Unpack correctly',
+            '',
+            '    if target_word in text:  # Case-sensitive match (modify if needed)',
+            '        # PyMuPDF and OpenCV both measure y from the top of the page, so no conversion is needed.',
+            '        # Convert coordinates to integers',
+            '        x0, y0, x1, y1 = map(int, [x0, y0, x1, y1])',
+            '',
+            '        # Draw a rectangle around the detected word',
+            '        cv2.rectangle(img, (x0, y0), (x1, y1), (0, 255, 0), 2)',
+            '',
+            '        print(f"Found \'{target_word}\' at: ({x0}, {y0}, {x1}, {y1})")',
+            '        word_found = True',
+            '',
+            '# Ensure an image is displayed even if no word is found',
+            'if not word_found:',
+            '    print(f"\'{target_word}\' not found in document.")',
+            '',
+            '# Convert back to RGB for displaying in PIL',
+            'img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)',
+            '',
+            '# Display the image using PIL (works in Jupyter/Colab)',
+            'display(Image.fromarray(img_rgb))'
+          ], "small")}
+        </div>
+        <div class="pane" data-pane="result" hidden>
+          <p class="p">The code uses three more libraries. <b>OpenCV</b> (<code>cv2</code>) works with images, <b>NumPy</b> (<code>np</code>) holds the picture as a grid of numbers, and <b>PIL</b> turns that grid back into a picture you can see. Colab already has all three, so there's nothing to install.</p>
+          <div class="note"><span class="num">FROM THE CODE'S COMMENTS</span>
+            <p>PyMuPDF and OpenCV both measure y from the top of the page, so no conversion is needed.</p></div>
+          ${code("plain", "Output", ["Found '2022' at: (71, 149, 94, 160)"])}
+          <p class="p">Under that line, Colab shows page 1 with the green box. Here's the top of the picture the code made:</p>
+          <figure class="pic"><img src="pfizer3-p3-m8-opencv-out.png" width="612" height="200" alt="The top of page 1 as the code drew it, with a bright green box around the year 2022 in the date 3 June, 2022."></figure>
+        </div>`,
+      init: function (root) { wireSwitch(root); } }
+  ];
+
+  /* Card 3's picture switch (separate from the part switch) */
+  function initAnchorOnly(root, btns) {
+    var svg = root.querySelector("#anc-svg"), cap = root.querySelector("#anc-cap");
+    svg.setAttribute("viewBox", P3_CROP.join(" "));
+    function show(v) {
+      clear(svg);
+      Array.prototype.forEach.call(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      if (v === "without") {
+        svg.appendChild(svgEl("rect", { "class": "cover", x: 44, y: 165, width: 140, height: 92, rx: 3 }));
+        svg.appendChild(svgEl("text", { "class": "tag", x: 114, y: 213, "font-size": 8, "text-anchor": "middle" }, "Labels hidden"));
+        [P3.lot, P3.mfg, P3.exp].forEach(function (b) {
+          rect(svg, b, "bx fill", 1.2);
+          svg.appendChild(svgEl("text", { "class": "tag", x: b[2] + 5, y: b[3] - 2.5, "font-size": 11 }, "?"));
+        });
+        cap.textContent = "With the labels hidden, you see three 8-digit numbers. Which one do you think is the expiration date?";
+      } else {
+        rect(svg, [P3.expLabel[0], P3.expLabel[1], P3.dateWord[2], P3.dateWord[3]], "bx fill", 1.2);
+        rect(svg, P3.exp, "bx fill", 1.2);
+        svg.appendChild(svgEl("line", { "class": "gd", x1: P3.dateWord[2] + 3, y1: 246.1, x2: P3.exp[0] - 3, y2: 246.1 }));
+        cap.textContent = "The label beside it says Expiration Date, so 20260315 is the expiration date.";
+      }
+    }
+    Array.prototype.forEach.call(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-view")); }); });
+    show("without");
+  }
+
+  var END_LABEL = "Done";
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of the page.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    if (c.init) c.init(card);
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+    Array.prototype.forEach.call(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .btn-row")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=3 opens a card directly */
+  var m = location.hash.match(/card=(\d)/);
+  if (m) i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1));
+  window.addEventListener("resize", fit);
+  fit();
+  render(false);
+})();
+</script>
+</body>
+</html>

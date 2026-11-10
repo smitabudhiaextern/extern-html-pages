@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyMuPDF Tables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player, code blocks and Copy buttons copied from
+   pfizer3-p3-m5-learn.html (the model Learn deck): a rail with "Card X of N" on top, one card at a time, Back and Next below.
+   P3 module 9 Learn cards: "Learn How to Extract Structured Tables Using PyMuPDF" (5 cards, built 10 November 2026).
+   1 See a Table the Way Python Does: a three-button switch shows page 3's real table as your eyes see it, as the loose lines
+   of get_text("text"), and as find_tables() sees it (21 real cell boxes). 2 Find the Table with find_tables(): his 4 bullets
+   are 4 clickable tiles, each lighting the real table, its box, its rows and columns, or its cells.
+   3 Go Cell by Cell: his function (cell-number lines replaced by table.rows and row.cells, see step2-coverage-m9.md note A)
+   and a button that reads the 21 real cells one by one and builds each row. 4 Check Every Row: his debug print, the real
+   7 rows, each clickable to light its row on the page. 5 When find_tables() Fails You: page 1's product table (lines across,
+   none down the sides) finds 0 tables; a switch shows its real get_text("blocks") boxes instead.
+   Text: the SME's (Chaitanya's) module 9 page, verbatim, except the facts listed in step2-coverage-m9.md.
+   Fixed stage: laid out once on a 760 x 1240 design stage (set the Notion embed height to 1156 px at the 708 px wide
+   Notion column), then scaled as one piece to fit the embed frame and centred.
+   Nothing scrolls, and Back and Next never move.
+   Every output, box and count is the real output of the code, run on sample-sdf-document.pdf with PyMuPDF 1.26.5.
+   Pictures: pfizer3-p3-m9-page3-table.png (page 3 clipped to x 40 to 540, y 333 to 507) and pfizer3-p3-m9-page1-table.png
+   (page 1 clipped to x 66 to 546, y 350 to 424), both rendered with PyMuPDF from the supplier file at 3x. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600); --icon:var(--extern-black); --connector:var(--extern-black);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-1:4px; --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px; --space-6:40px; --space-7:56px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:1240px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+/* The design stage. JavaScript sets the scale and position; until it runs, the stage sits at full size. */
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:20px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:17px;line-height:1.45;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:16px;line-height:1.55;color:var(--ink-muted);text-wrap:pretty}
+.p b{font-weight:600;color:var(--ink)}
+.p code,.tbl code,.bul code,.note code,.sw code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+.hint{margin:0;font-size:14px;line-height:1.4;font-weight:600;color:var(--step-label)}
+
+/* Bullets */
+.bul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.bul li{font-size:16px;line-height:1.55;color:var(--ink-muted)}
+.bul b{font-weight:600;color:var(--ink)}
+.bul li > .cols{margin-top:8px}
+
+/* Two columns */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-3);align-items:start}
+.cols > *{min-width:0}
+
+/* Table */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14.5px;line-height:1.45}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text);transition:background-color .2s ease}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.w,.tbl td.n{font-family:var(--font-mono);font-size:13.5px;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl tr.grp td{background:var(--surface-card);font-size:13px;line-height:16px;font-weight:600;color:var(--step-label);padding:6px 12px}
+.tbl tr.on td{background:var(--surface-card)}
+.tbl tr.on td:first-child{box-shadow:inset 4px 0 0 var(--highlight)}
+.fmt{margin:0;font-family:var(--font-mono);font-size:14px;line-height:1.5;color:var(--ink);background:var(--gray-50);border-radius:var(--radius-xs);padding:7px 12px}
+
+/* Code block with a Copy button; output blocks have no Copy button */
+.run{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:4px 8px 4px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:7px 14px;font-family:var(--font-mono);font-size:13px;line-height:1.45;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit;white-space:inherit;background:none;padding:0;border-radius:0}
+.run.out{border-color:var(--blue-200)}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.42}
+/* Each output line is its own block: a long row that wraps is indented under its first line, so rows stay easy to tell apart */
+.run.out pre .ln{display:block;padding-left:2ch;text-indent:-2ch}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:3px 10px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+
+/* Pictures: a page clip with an SVG drawn over it in PDF points (the viewBox is the clip) */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0}
+.pic img{display:block;width:100%;height:auto;transition:opacity .2s ease}
+.pic svg{position:absolute;inset:0;width:100%;height:100%}
+.pic .cell{fill:none;stroke:var(--highlight);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.pic .cell.on{fill:var(--highlight);fill-opacity:.18;stroke-width:2.5px}
+.pic .cell.done{fill:var(--highlight);fill-opacity:.07}
+.pic .tbox{fill:none;stroke:var(--highlight);stroke-width:3px;vector-effect:non-scaling-stroke}
+.pic .band{fill:var(--highlight);fill-opacity:.16;stroke:var(--highlight);stroke-width:2px;vector-effect:non-scaling-stroke}
+.pic .rule{stroke:var(--highlight);stroke-width:3px;vector-effect:non-scaling-stroke}
+.pic .gd{stroke:var(--pfizer-blue);stroke-width:1.5px;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;fill:none}
+.pic .dot{fill:var(--pfizer-blue);stroke:var(--surface);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.pic .tag{font-family:var(--font-text);font-weight:600;fill:var(--pfizer-blue)}
+.pic .tag.g{fill:var(--highlight)}
+.pic.as-text img{opacity:.1}
+.pic .txt{position:absolute;top:8px;bottom:8px;left:12px;margin:0;padding:6px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);font-family:var(--font-mono);font-size:12px;line-height:14.6px;color:var(--ink);white-space:pre}
+.pic .txt-note{position:absolute;top:8px;left:250px;right:12px;margin:0;font-family:var(--font-text);font-size:14px;line-height:1.45;color:var(--ink);font-weight:600;white-space:normal}
+
+/* Switches (copied from the module 5 deck) */
+.sw-bar{display:flex;align-items:center;gap:var(--space-4)}
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:8px 14px;cursor:pointer;font-family:var(--font-mono);font-size:14px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button.plain{font-family:var(--font-text)}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.pane{display:flex;flex-direction:column;gap:10px}
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:8px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:14px;line-height:1.45;color:var(--ink-muted)}
+.note p + p{margin-top:3px}
+.note b{font-weight:600;color:var(--ink)}
+.note a{color:var(--pfizer-blue);font-weight:600}
+.tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px}
+.tip-icon{flex:none;width:30px;height:30px;border-radius:8px;background:var(--surface-icon);display:grid;place-items:center;color:var(--pfizer-blue)}
+.tip-icon svg{width:18px;height:18px}
+.tip p{margin:0;font-size:15px;line-height:1.5;color:var(--card-text)}
+.tip b{font-weight:600;color:var(--card-title)}
+
+/* Card 2: the four tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tile{display:flex;flex-direction:column;gap:5px;text-align:left;background:var(--surface);border:1.5px solid var(--ink);border-radius:var(--radius-xs);padding:8px 10px;cursor:pointer}
+.tile .t{font-size:14px;line-height:1.3;font-weight:600;color:inherit}
+.tile .v{font-family:var(--font-mono);font-size:12px;line-height:1.35;color:var(--ink-muted)}
+.tile[aria-pressed="true"]{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.tile[aria-pressed="true"] .v{color:var(--on-action)}
+
+/* Card 3: the cell-by-cell run */
+.run.tight pre{font-size:12px;line-height:1.4;padding:6px 14px}
+.walk-side{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-3);align-items:start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 12px}
+.walk-side .p{font-size:14px;line-height:1.45}
+.state{margin:0;font-family:var(--font-mono);font-size:12.5px;line-height:1.45;color:var(--ink);background:var(--surface);border:1px solid var(--blue-200);border-radius:var(--radius-xs);padding:6px 10px;min-height:66px;white-space:pre-wrap;overflow-wrap:anywhere}
+.state b{font-family:var(--font-text);font-weight:600;color:var(--step-label)}
+
+/* Card 4: output rows you can click */
+.orow-wrap{display:flex;flex-direction:column;gap:6px}
+.orows{display:flex;flex-direction:column;padding:6px 8px;background:var(--surface-card)}
+.orow{display:block;width:100%;text-align:left;background:none;border:0;border-radius:4px;padding:1px 6px;font-family:var(--font-mono);font-size:12.5px;line-height:1.5;color:var(--ink);cursor:pointer;white-space:pre}
+.orow:hover{background:var(--surface)}
+.orow[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.checks{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.checks li{font-size:16px;line-height:1.5;color:var(--ink-muted)}
+.checks .ok{display:inline-block;margin-left:6px;font-size:13px;font-weight:600;color:var(--step-label)}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:12px 18px;font-size:16px;line-height:1.55;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl code,.tip code,.checks code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.btn-sm{padding:9px 14px;font-size:14px}
+.btn-sm:disabled{opacity:.5;cursor:default}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to read a table with PyMuPDF: five cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+  var NS = "http://www.w3.org/2000/svg";
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  /* lang "plain" is an output block, with no Copy button */
+  function code(lang, label, lines) {
+    var out = lang === "plain";
+    return '<figure class="run' + (out ? ' out' : '') + '"><div class="code-head"><span class="code-lang">' + label + '</span>' +
+      (out ? '' : '<button type="button" class="copy" data-copy aria-label="Copy ' + label + ' code">' + IC_COPY + '<span>Copy</span></button>') + '</div>' +
+      '<pre tabindex="0"><code>' + (out ? lines.map(function (l) { return '<span class="ln">' + (l ? esc(l) : ' ') + '</span>'; }).join("") : esc(lines.join("\n"))) + '</code></pre></figure>';
+  }
+  function svgEl(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  /* Page 3 of sample-sdf-document.pdf (PyMuPDF 1.26.5). The picture is the page clipped to P3CLIP (x, y, width, height
+     in PDF points), so the SVG uses it as its viewBox. TABLE_BOX is the real table.bbox; ROWS holds each real row's
+     cell boxes from table.rows[n].cells, and DATA the real text in each cell, from get_text("text", clip=cell).strip(). */
+  var P3CLIP = [40, 333, 500, 174];
+  var TABLE_BOX = [50.0, 343.0, 530.0, 497.0];
+  var COLS = [[50, 250], [250, 430], [430, 530]];
+  var TOPS = [343, 365, 387, 409, 431, 453, 475, 497];
+  var DATA = [
+    ["Description", "Test Method", "Result"],
+    ["Autoclave - Pump tubing", "121C > 15 min", "Conforms"],
+    ["Gamma Irradiation - Inlets", "25.0 - 40.0 kGy", "Conforms"],
+    ["Flow Rate Test", "Per SOP-QC-042", "Pass"],
+    ["Pressure Integrity", "Max 0.5 bar, 5 min hold", "Pass"],
+    ["Visual Inspection", "No defects visible", "Pass"],
+    ["Package Integrity", "Sealed, no damage", "Pass"]
+  ];
+  function cellBox(r, c) { return { x: COLS[c][0], y: TOPS[r], width: COLS[c][1] - COLS[c][0], height: TOPS[r + 1] - TOPS[r] }; }
+  function rowBox(r) { return { x: TABLE_BOX[0], y: TOPS[r], width: TABLE_BOX[2] - TABLE_BOX[0], height: TOPS[r + 1] - TOPS[r] }; }
+  function cls(o, c) { o["class"] = c; return o; }
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  function add(svg, tag, a, t) { var e = svgEl(tag, a, t); svg.appendChild(e); return e; }
+  function p3Fig(id, alt) {
+    return '<figure class="pic" id="' + id + '"><img src="pfizer3-p3-m9-page3-table.png" width="1500" height="522" alt="' + alt + '">' +
+      '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + P3CLIP.join(" ") + '"></svg></figure>';
+  }
+  var P3ALT = "The test results table on page 3 of the supplier file: a header row, Description, Test Method and Result, then 6 tests from Autoclave - Pump tubing to Package Integrity, each with its method and its result, Conforms or Pass.";
+  function allCells(svg) {
+    for (var r = 0; r < 7; r++) for (var c = 0; c < 3; c++) add(svg, "rect", cls(cellBox(r, c), "cell"));
+  }
+
+  /* Card 1: three ways to see the table. The text view lays the real get_text("text") lines for the table over the
+     faded picture: every cell comes out on its own line, 21 lines in all. */
+  var LOOSE = ["Description", "Test Method", "Result", "Autoclave - Pump tubing", "121C > 15 min", "Conforms",
+    "Gamma Irradiation - Inlets", "25.0 - 40.0 kGy", "Conforms", "Flow Rate Test", "Per SOP-QC-042", "Pass", "..."];
+  function initSee(root) {
+    var fig = root.querySelector("#see-fig"), svg = fig.querySelector("svg");
+    var pre = document.createElement("pre"); pre.className = "txt"; pre.setAttribute("aria-hidden", "true");
+    pre.textContent = LOOSE.join("\n");
+    var note = document.createElement("p"); note.className = "txt-note"; note.setAttribute("aria-hidden", "true");
+    note.textContent = "No rows and no columns: 21 separate lines, one under the other.";
+    var btns = root.querySelectorAll(".sw button");
+    function show(v) {
+      Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-view") === v ? "true" : "false"); });
+      ["eyes", "text", "find"].forEach(function (k) { root.querySelector("#pane-" + k).hidden = k !== v; });
+      clear(svg);
+      fig.classList.toggle("as-text", v === "text");
+      if (pre.parentNode) fig.removeChild(pre);
+      if (note.parentNode) fig.removeChild(note);
+      if (v === "text") { fig.appendChild(pre); fig.appendChild(note); }
+      if (v === "find") {
+        allCells(svg);
+        add(svg, "rect", cls({ x: TABLE_BOX[0], y: TABLE_BOX[1], width: TABLE_BOX[2] - TABLE_BOX[0], height: TABLE_BOX[3] - TABLE_BOX[1] }, "tbox"));
+      }
+    }
+    Array.prototype.forEach.call(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-view")); }); });
+    show("eyes");
+  }
+
+  /* Card 2: the 4 things find_tables() gives you, each drawn from the real table */
+  function initTiles(root) {
+    var svg = root.querySelector("#tiles-fig svg"), tiles = root.querySelectorAll(".tile");
+    function draw(k) {
+      clear(svg);
+      var T = TABLE_BOX;
+      if (k === "list") {
+        add(svg, "rect", cls({ x: T[0], y: T[1], width: T[2] - T[0], height: T[3] - T[1] }, "band"));
+      } else if (k === "bbox") {
+        add(svg, "rect", cls({ x: T[0], y: T[1], width: T[2] - T[0], height: T[3] - T[1] }, "tbox"));
+        add(svg, "circle", cls({ cx: T[0], cy: T[1], r: 3 }, "dot"));
+        add(svg, "circle", cls({ cx: T[2], cy: T[3], r: 3 }, "dot"));
+        add(svg, "text", cls({ x: T[0] + 4, y: T[1] - 2.5, "font-size": 7 }, "tag"), "(50.0, 343.0)");
+        add(svg, "text", cls({ x: T[2] - 4, y: T[3] + 7.5, "text-anchor": "end", "font-size": 7 }, "tag"), "(530.0, 497.0)");
+      } else if (k === "counts") {
+        for (var r = 0; r < 7; r++) {
+          add(svg, "rect", cls(rowBox(r), r % 2 ? "cell" : "band"));
+          add(svg, "text", cls({ x: 46, y: TOPS[r] + 14, "text-anchor": "end", "font-size": 8 }, "tag"), String(r + 1));
+        }
+        COLS.forEach(function (c, n) { add(svg, "text", cls({ x: (c[0] + c[1]) / 2, y: 340.5, "text-anchor": "middle", "font-size": 7 }, "tag"), "column " + (n + 1)); });
+      } else if (k === "cells") {
+        allCells(svg);
+        add(svg, "rect", cls(cellBox(0, 0), "cell on"));
+        add(svg, "text", cls({ x: 52, y: 340.5, "font-size": 7 }, "tag"), "(50.0, 343.0, 250.0, 365.0)");
+      }
+    }
+    function pick(k) {
+      Array.prototype.forEach.call(tiles, function (t) { t.setAttribute("aria-pressed", t.getAttribute("data-k") === k ? "true" : "false"); });
+      draw(k);
+    }
+    Array.prototype.forEach.call(tiles, function (t) { t.addEventListener("click", function () { pick(t.getAttribute("data-k")); }); });
+    pick("list");
+  }
+
+  /* Card 3: read the 21 real cells one by one, the way the function's two loops do */
+  function q(s) { return "'" + s + "'"; }
+  function initWalk(root) {
+    var svg = root.querySelector("#walk-fig svg"), btn = root.querySelector("#walk-btn"), state = root.querySelector("#walk-state");
+    var timer = null, btns = root.querySelectorAll(".sw button");
+    function show(v) {
+      Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-view") === v ? "true" : "false"); });
+      root.querySelector("#pane-code").hidden = v !== "code";
+      root.querySelector("#pane-walk").hidden = v !== "walk";
+    }
+    Array.prototype.forEach.call(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-view")); }); });
+    show("code");
+    function paint(r, c) {
+      clear(svg);
+      for (var rr = 0; rr < 7; rr++) for (var cc = 0; cc < 3; cc++) {
+        var before = rr < r || (rr === r && cc < c);
+        add(svg, "rect", cls(cellBox(rr, cc), rr === r && cc === c ? "cell on" : (before ? "cell done" : "cell")));
+      }
+    }
+    function say(r, c) {
+      var cur = DATA[r].slice(0, c + 1).map(q).join(", ");
+      state.innerHTML = '<b>Row ' + (r + 1) + ' of 7, cell ' + (c + 1) + ' of 3</b>\n' + esc("row_data = [" + cur + "]") + '\n<b>table_data:</b> ' + r + (r === 1 ? ' row' : ' rows') + ' saved';
+    }
+    function reset() {
+      clear(svg); allCells(svg);
+      state.innerHTML = '<b>Click the button to start.</b>\nrow_data = []\n<b>table_data:</b> 0 rows saved';
+    }
+    btn.addEventListener("click", function () {
+      clearTimeout(timer); btn.disabled = true;
+      var n = 0;
+      (function step() {
+        if (!svg.isConnected) return;
+        if (n === 21) {
+          clear(svg);
+          for (var r = 0; r < 7; r++) for (var c = 0; c < 3; c++) add(svg, "rect", cls(cellBox(r, c), "cell done"));
+          state.innerHTML = '<b>Done</b>\n' + esc("table_data holds 7 rows, 3 cells each. The last one is [" + DATA[6].map(q).join(", ") + "]");
+          btn.disabled = false; btn.textContent = "Run it again";
+          return;
+        }
+        var r = Math.floor(n / 3), c = n % 3;
+        paint(r, c); say(r, c);
+        n++;
+        timer = setTimeout(step, 420);
+      })();
+    });
+    reset();
+  }
+
+  /* Card 4: click a printed row to light it on the page */
+  function initRows(root) {
+    var svg = root.querySelector("#rows-fig svg"), rows = root.querySelectorAll(".orow");
+    function pick(r) {
+      Array.prototype.forEach.call(rows, function (b, n) { b.setAttribute("aria-pressed", n === r ? "true" : "false"); });
+      clear(svg); add(svg, "rect", cls(rowBox(r), "band"));
+    }
+    Array.prototype.forEach.call(rows, function (b, n) { b.addEventListener("click", function () { pick(n); }); });
+    var btns = root.querySelectorAll(".sw button");
+    function show(v) {
+      Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-view") === v ? "true" : "false"); });
+      root.querySelector("#pane-out").hidden = v !== "out";
+      root.querySelector("#pane-watch").hidden = v !== "watch";
+    }
+    Array.prototype.forEach.call(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-view")); }); });
+    show("out");
+    pick(3);
+  }
+  function rowsOut() {
+    return '<figure class="run out"><div class="code-head"><span class="code-lang">Output</span><span class="code-lang" style="font-weight:500">Click a row</span></div>' +
+      '<div class="orows" role="group" aria-label="The 7 printed rows">' +
+      DATA.map(function (d) { return '<button type="button" class="orow">' + esc("[" + d.map(q).join(", ") + "]") + '</button>'; }).join("") +
+      '</div></figure>';
+  }
+
+  /* Card 5: page 1 clipped to P1CLIP. RULES are its real drawn lines (from page.get_drawings()): they run across
+     only. BLOCKS are its real get_text("blocks") rows 8 to 10. */
+  var P1CLIP = [66, 350, 480, 74];
+  var RULES = [357.18, 378.06, 398.94, 419.94];
+  var BLOCKS = [[76.56, 362.28, 509.01, 374.3, 8], [76.56, 383.57, 456.67, 395.14, 9], [76.56, 404.58, 456.67, 416.15, 10]];
+  function initFail(root) {
+    var fig = root.querySelector("#fail-fig"), svg = fig.querySelector("svg"), btns = root.querySelectorAll(".sw button");
+    function show(v) {
+      Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-view") === v ? "true" : "false"); });
+      root.querySelector("#pane-ft").hidden = v !== "ft";
+      root.querySelector("#pane-bl").hidden = v !== "bl";
+      clear(svg);
+      if (v === "ft") {
+        RULES.forEach(function (y) { add(svg, "line", cls({ x1: 76.56, y1: y, x2: 535.68, y2: y }, "rule")); });
+        [76.56, 535.68].forEach(function (x) { add(svg, "line", cls({ x1: x, y1: 352, x2: x, y2: 423 }, "gd")); });
+      } else {
+        BLOCKS.forEach(function (b) {
+          add(svg, "rect", cls({ x: b[0] - 1.5, y: b[1] - 1.5, width: b[2] - b[0] + 3, height: b[3] - b[1] + 3 }, "band"));
+          add(svg, "text", cls({ x: 540, y: b[3] - 2, "text-anchor": "end", "font-size": 7.5 }, "tag"), "block " + b[4]);
+        });
+      }
+    }
+    Array.prototype.forEach.call(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-view")); }); });
+    show("ft");
+  }
+  var BULB = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var MEDIUM = "https://medium.com/@pymupdf/solving-common-issues-with-table-detection-and-extraction-4df5de2b8d88";
+
+  var FUNC = [
+    'def extract_tables_with_bbox(pdf_path):',
+    '    doc = pymupdf.open(pdf_path)',
+    '    results = []',
+    '    for page_num in range(len(doc)):',
+    '        page = doc[page_num]',
+    '        tables = page.find_tables()',
+    '        for i, table in enumerate(tables.tables):',
+    '            # Get table bounding box',
+    '            table_bbox = table.bbox  # (x0, y0, x1, y1)',
+    '            # Extract table content with cell bounding boxes',
+    '            table_data = []',
+    '            cell_bboxes = []',
+    '            for row in table.rows:',
+    '                row_data = []',
+    '                row_bboxes = []',
+    '                for cell_bbox in row.cells:',
+    '                    # Get cell bounding box (if cell exists)',
+    '                    if cell_bbox is not None:',
+    '                        # Get text from this cell by cropping the page to cell area',
+    '                        cell_text = page.get_text("text", clip=cell_bbox).strip()',
+    '                        row_data.append(cell_text)',
+    '                        row_bboxes.append(cell_bbox)',
+    '                    else:',
+    '                        row_data.append("")',
+    '                        row_bboxes.append(None)',
+    '                table_data.append(row_data)',
+    '                cell_bboxes.append(row_bboxes)',
+    '            results.append({',
+    "                'page': page_num,",
+    "                'table_index': i,",
+    "                'bbox': table_bbox,",
+    "                'data': table_data,",
+    "                'cell_bboxes': cell_bboxes",
+    '            })',
+    '    doc.close()',
+    '    return results'
+  ];
+
+  var CARDS = [
+    { label: "Why Tables Are Tricky", eyebrow: "You got the box. Now crack the table.",
+      html: '<h2 class="title">See a Table the Way <span class="hl">Python</span> Does</h2>' +
+        '<p class="why">Each result is only useful if it stays in the row of its own test.</p>' +
+        '<p class="p">Now you\'re staring at something that <i>looks</i> like a table. Neat rows, crisp columns… It <i>should</i> be simple.</p>' +
+        '<p class="p">But here\'s the catch: PDFs and tables don\'t really speak the same language. What looks beautifully structured to a human can fall apart in code. Rows split in weird places, columns collapse, and some cell values vanish completely.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose how to see the table">' +
+          '<button type="button" class="plain" data-view="eyes">Your eyes</button>' +
+          '<button type="button" data-view="text">get_text("text")</button>' +
+          '<button type="button" data-view="find">find_tables()</button></div>' +
+          '<p class="hint">Click each button to see all three.</p></div>' +
+        p3Fig("see-fig", P3ALT) +
+        '<div class="pane" id="pane-eyes">' +
+          '<p class="p">This is the table on page 3 of the supplier file, the way you see it. Your eyes follow the lines, so each row reads as one test: its description, its test method and its result.</p>' +
+        '</div>' +
+        '<div class="pane" id="pane-text" hidden>' +
+          '<p class="p">Why does that happen?</p>' +
+          '<p class="p">Because most PDFs weren\'t built for machines. They were built for printing. So when PyMuPDF scans a table, it often just sees a bunch of scattered text blocks with no connection between them. That\'s why table extraction can feel so chaotic.</p>' +
+          '<p class="p">To illustrate, take a look at this example output from page 3 of the supplier file:</p>' +
+          '<div class="cols">' + code("plain", "Output (one row of the table)", ["Flow Rate Test", "Per SOP-QC-042", "Pass"]) +
+          '<p class="p">What do you see above? To you, that\'s a single row: the test, how it was checked and its result. But to the <b>parser</b> (the code that reads the file)? Three separate lines of text, one under the other.</p></div>' +
+          '<p class="p">Multiply that confusion across dozens of rows, and things get messy fast. But don\'t worry, we\'ve got the tools to decode this.</p>' +
+        '</div>' +
+        '<div class="pane" id="pane-find" hidden>' +
+          '<p class="p">So, how do you turn that chaos into clean, structured data?</p>' +
+          '<p class="p">This is where bounding boxes meet strategy. You\'ll go <b>cell by cell</b> (a <b>cell</b> is one box in the grid), using <b>table metadata</b> (facts about the table, such as how many rows it has) and <b>spatial logic</b> (rules about where things sit on the page) to rebuild the grid and extract exactly what you need, whether it\'s <b>test names, test methods or results</b>.</p>' +
+          '<p class="p">The green boxes are the 21 cells PyMuPDF finds in this table: 7 rows of 3. Let\'s break it down.</p>' +
+        '</div>',
+      init: initSee },
+
+    { label: "Find the Table", eyebrow: "Step 1: Detect tables with find_tables()",
+      html: '<h2 class="title">Find the Table with <span class="hl">find_tables()</span></h2>' +
+        '<p class="why">Before your code can read a table, it has to find where the table is.</p>' +
+        '<div class="note"><span class="num">BEFORE YOU START: READ THIS</span>' +
+          '<p>Before we get into the code, take a few minutes to review this <a href="' + MEDIUM + '" target="_blank" rel="noopener noreferrer">guide from PyMuPDF</a> (it opens in a new tab). It walks through common issues and good practices. Bookmark it: it\'ll come in handy when your tables aren\'t behaving.</p></div>' +
+        '<p class="p">Meet your new best friend: <code>page.find_tables()</code></p>' +
+        '<p class="p">This method does exactly what it says. It scans the page for table-shaped structures and, if it finds any, gives you:</p>' +
+        '<p class="hint">Click each one to see it on page 3.</p>' +
+        '<div class="tiles" role="group" aria-label="What find_tables() gives you">' +
+          '<button type="button" class="tile" data-k="list"><span class="t">A list of detected tables</span><span class="v">1 table on page 3</span></button>' +
+          '<button type="button" class="tile" data-k="bbox"><span class="t">Bounding boxes for each one</span><span class="v">(50.0, 343.0, 530.0, 497.0)</span></button>' +
+          '<button type="button" class="tile" data-k="counts"><span class="t">Row and column counts</span><span class="v">7 rows, 3 columns</span></button>' +
+          '<button type="button" class="tile" data-k="cells"><span class="t">Bounding boxes for each <b>individual</b> cell</span><span class="v">21 cell boxes</span></button>' +
+        '</div>' +
+        p3Fig("tiles-fig", P3ALT) +
+        '<p class="p">Here\'s a peek under the hood. The table is on page 3, and Python counts pages from 0, so page 3 is <code>doc[2]</code>:</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,1fr) 200px">' +
+          code("python", "Python", ['page = doc[2]', 'tables = page.find_tables()', 'print(f"Tables found: {len(tables.tables)}")']) +
+          code("plain", "Output", ["Tables found: 1"]) +
+        '</div>' +
+        '<p class="p">If you\'re lucky, PyMuPDF gives you an entire table ready to explore.</p>' +
+        '<p class="p">Nice. But just knowing how many tables exist isn\'t enough. We want the content, cell by cell.</p>',
+      init: initTiles },
+
+    { label: "Cell by Cell", eyebrow: "Step 2: Go cell by cell, and extract what matters",
+      html: '<h2 class="title">Go Cell by <span class="hl">Cell</span></h2>' +
+        '<p class="why">Reading one cell at a time keeps every result in the row of its own test.</p>' +
+        '<p class="p">Let\'s write a function that grabs each table, digs into its cells, and captures the text inside, based on each cell\'s bounding box.</p>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose the code or a run of it">' +
+          '<button type="button" class="plain" data-view="code">The code</button>' +
+          '<button type="button" class="plain" data-view="walk">Watch it read the cells</button></div>' +
+          '<p class="hint">Click each button to see both.</p></div>' +
+        '<div class="pane" id="pane-code">' +
+          '<p class="p">Here\'s the full code for a clean, cell-level extraction:</p>' +
+          code("python", "Python", FUNC).replace('class="run"', 'class="run tight"') +
+          '<p class="p"><code>table.rows</code> holds the table\'s rows from top to bottom, and <code>row.cells</code> holds the box of each cell in that row, from left to right. <code>clip=cell_bbox</code> tells <code>get_text</code> to read only the text inside that box, and <code>.strip()</code> removes the line break at the end.</p>' +
+        '</div>' +
+        '<div class="pane" id="pane-walk" hidden>' +
+          '<p class="p">Here\'s what the two loops do on page 3. Click the button to read the cells one by one, the way the function does.</p>' +
+          p3Fig("walk-fig", P3ALT) +
+          '<div class="walk-side"><button type="button" class="btn btn-next btn-sm" id="walk-btn">Read the cells</button>' +
+          '<pre class="state" id="walk-state" aria-live="polite"></pre></div>' +
+          '<p class="p"><b>What this does:</b></p>' +
+          '<ul class="bul">' +
+            '<li>Walks through every page and table</li>' +
+            '<li>Grabs the text from each cell area using <code>get_text("text", clip=cell_bbox)</code></li>' +
+            '<li>Stores the content and layout so you can reconstruct or analyze the table later</li>' +
+          '</ul>' +
+        '</div>',
+      init: initWalk },
+
+    { label: "Check Every Row", eyebrow: "Step 3: Debug like a pro",
+      html: '<h2 class="title">Check Every <span class="hl">Row</span></h2>' +
+        '<p class="why">A cell in the wrong row would tie a result to the wrong test.</p>' +
+        '<p class="p">You\'ve got your loop running. You\'re extracting cells. The table structure is coming together. But before you celebrate, pause.</p>' +
+        '<p class="p">Just because your code didn\'t crash doesn\'t mean it did what you expected. Sometimes your output <i>looks</i> like a table, but it\'s secretly full of holes, misaligned rows, or missing text. This is where debugging becomes your best friend.</p>' +
+        '<p class="p">Once you start extracting tables, make a habit of printing your results. Just because the function runs doesn\'t mean the data makes sense.</p>' +
+        code("python", "Python", ['results = extract_tables_with_bbox("sample-sdf-document.pdf")', '', 'for table in results:', "    for row in table['data']:", '        print(row)']) +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose the output or the checks">' +
+          '<button type="button" class="plain" data-view="out">What it prints</button>' +
+          '<button type="button" class="plain" data-view="watch">What to watch for</button></div>' +
+          '<p class="hint">Click each button to see both.</p></div>' +
+        '<div class="pane" id="pane-out">' + rowsOut() + p3Fig("rows-fig", P3ALT) + '</div>' +
+        '<div class="pane" id="pane-watch" hidden>' +
+          '<p class="p">Watch for:</p>' +
+          '<ul class="checks">' +
+            '<li>Empty strings where there should be values<span class="ok">In your 7 rows: none</span></li>' +
+            '<li>Rows with uneven column counts<span class="ok">In your 7 rows: 3 cells in every row</span></li>' +
+            '<li>Cells that don\'t match expectations<span class="ok">Click a row under "What it prints" to compare it with the page</span></li>' +
+          '</ul>' +
+          '<div class="tip"><span class="tip-icon">' + BULB + '</span><p><b>Tip:</b> Sometimes the bounding boxes are just slightly off. Consider adding padding (a little extra space around the box) to the clip box if the text is getting cut off.</p></div>' +
+        '</div>',
+      init: initRows },
+
+    { label: "When It Fails", eyebrow: "When find_tables() fails you",
+      html: '<h2 class="title">When find_tables() Finds <span class="hl">Nothing</span></h2>' +
+        '<p class="why">Not every table has lines, so know what to do when find_tables() comes back empty.</p>' +
+        '<p class="p">Sometimes PyMuPDF just… doesn\'t detect the table. Page 1 of the supplier file has a small product table. Here\'s the same code on page 1:</p>' +
+        '<div class="cols" style="grid-template-columns:minmax(0,1fr) 200px">' +
+          code("python", "Python", ['page = doc[0]', 'tables = page.find_tables()', 'print(f"Tables found: {len(tables.tables)}")']) +
+          code("plain", "Output", ["Tables found: 0"]) +
+        '</div>' +
+        '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose a view of page 1\'s table">' +
+          '<button type="button" data-view="ft">find_tables()</button>' +
+          '<button type="button" data-view="bl">get_text("blocks")</button></div>' +
+          '<p class="hint">Click each button to see both.</p></div>' +
+        '<figure class="pic" id="fail-fig"><img src="pfizer3-p3-m9-page1-table.png" width="1440" height="222" alt="The product table on page 1 of the supplier file: Description, Part Number and Operating Temperature, with 2 rows for High Flow Kit F and High Flow Gradient C. Lines run across the table, but none run down its sides.">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + P1CLIP.join(" ") + '"></svg></figure>' +
+        '<div class="pane" id="pane-ft">' +
+          '<p class="p">The green lines are the only lines on this table. They run across, but none run down the sides (the dashed lines show where side borders would be), so <code>find_tables()</code> doesn\'t see a grid.</p>' +
+          '<p class="p">Why?</p>' +
+          '<ul class="bul"><li>No visible borders</li><li>Weird spacing</li><li>Layout relies on alignment, not lines</li></ul>' +
+        '</div>' +
+        '<div class="pane" id="pane-bl" hidden>' +
+          '<p class="p">On this page, each row of the table comes out of <code>get_text("blocks")</code> as one block. Your notebook\'s blocks cell already prints them:</p>' +
+          code("plain", "Output (trimmed)", [
+            "Block: (76.55787658691406, 362.2751159667969, 509.00689697265625, 374.2976989746094, 'Description\\nPart Number\\nOperating Temperature\\n', 8, 0)",
+            "Block: (76.55787658691406, 383.5732421875, 456.6687316894531, 395.1431884765625, 'High Flow Kit F, Modified, ÄKTA ready\\n29477427\\n+2 C to +40 C\\n', 9, 0)",
+            "Block: (76.55787658691406, 404.5765380859375, 456.6687316894531, 416.146484375, 'High Flow Gradient C, Modified, ÄKTA ready\\n29184612\\n+2 C to +40 C\\n', 10, 0)"]) +
+        '</div>' +
+        '<p class="p">In those cases, you have options:</p>' +
+        '<ul class="bul">' +
+          '<li>Use <code>page.get_text("blocks")</code> and group text into rows/columns manually.</li>' +
+          '<li>Train a model to identify table regions (for advanced users).</li>' +
+          '<li>Or… try another tool altogether (like Tabula or Camelot).</li>' +
+        '</ul>' +
+        '<p class="p">For now, stick with <code>find_tables()</code>, but keep these in your back pocket.</p>' +
+        '<p class="p">And just like that, you\'re now equipped to extract structured table data using PyMuPDF. Whether it\'s test results or compliance values, you now have the power to convert those into usable rows and columns.</p>' +
+        '<p class="concl"><b>Key Takeaway:</b> Table extraction from PDFs is messy, but with <code>find_tables()</code>, bounding boxes, and smart debugging, you can turn even chaotic layouts into clean, structured data.</p>',
+      init: initFail }
+  ];
+
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of the page.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    if (c.init) c.init(card);
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+    Array.prototype.forEach.call(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .tiles, .orows")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  window.addEventListener("resize", fit);
+  fit();
+  render(false);
+})();
+</script>
+</body>
+</html>

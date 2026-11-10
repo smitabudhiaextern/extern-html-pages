@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick Recall: Regex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. The banner copies the "Target Banner" goal image
+   (06-content/project-01/images/goal-versions-source.html, #v-2): pale-blue surface-card banner, black line icon
+   in a white square badge, small blue label, serif text. Buttons copy the guess buttons in pfizer3-p1-m3-concepts.html.
+   Copied from pfizer3-p3-m5-recall.html; only the question, the options and the answer changed.
+   P3 module 8 recall banner: one question about the last reading (module 7, regex), whose Try finds the date at the top
+   of the letter on page 1 with the letter-date pattern. Real values from the supplier file: the letter date is
+   "3 June, 2022" (page 1); 20230126 is page 2's expiration date and 17242818 is page 2's lot number. One pick shows the answer.
+   The design system has no red, so a wrong pick is marked with ink and a cross icon, and the right answer with green-600
+   (used only for the button border and icon on a white button, never as text and never on blue-50).
+   Fixed stage: 760 x 250 (set the Notion embed height to 250 px). Frames under 560 px wide use a 420 x 290 stage.
+   The stage scales as one piece to fit the frame and is centred. Nothing scrolls, in any state. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --icon:var(--extern-black);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --stage-w:760px; --stage-h:250px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* The design stage. JavaScript sets the scale and position. */
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;overflow:hidden;background:var(--surface);padding:4px}
+.banner{height:100%;display:flex;align-items:flex-start;gap:var(--space-4);background:var(--surface-card);border-radius:var(--radius-md);padding:20px 24px}
+.badge{flex:none;width:56px;height:56px;border-radius:var(--radius-sm);background:var(--surface-icon);display:grid;place-items:center;color:var(--icon)}
+.badge svg{width:36px;height:36px;display:block}
+.body{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.label{margin:0;font-size:14px;line-height:18px;font-weight:600;color:var(--step-label)}
+.q{margin:6px 0 0;font-family:var(--font-serif);font-weight:400;font-size:21px;line-height:28px;color:var(--card-title);text-wrap:balance}
+
+.opts{display:flex;gap:10px;margin-top:14px}
+.opt{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--surface-icon);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:9px 18px;font-size:15px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.opt .mk{display:none;width:16px;height:16px;flex:none}
+.opt:not([aria-disabled="true"]):hover{background:var(--action);color:var(--on-action)}
+.opts.is-done .opt{cursor:default}
+.opts.is-done .opt.is-other{border-color:var(--line);color:var(--gray-600)}
+.opt.is-right{border:2px solid var(--green-600);padding:8.5px 17.5px}
+.opt.is-right .mk-right{display:block;color:var(--green-600)}
+.opt.is-wrong{border:2px solid var(--ink);padding:8.5px 17.5px}
+.opt.is-wrong .mk-wrong{display:block;color:var(--ink)}
+
+.ans{margin:12px 0 0;font-size:15px;line-height:21px;color:var(--card-text);text-wrap:pretty}
+.ans b{font-weight:600;color:var(--card-title)}
+
+/* Narrow frames: a 420 x 290 stage, badge beside the label only */
+.narrow{--stage-w:420px; --stage-h:290px}
+.narrow .banner{padding:14px 16px;gap:12px}
+.narrow .badge{width:40px;height:40px;border-radius:10px}
+.narrow .badge svg{width:26px;height:26px}
+.narrow .label{line-height:40px;padding-left:52px}
+.narrow .body{margin-left:-52px}
+.narrow .q{margin-top:4px;font-size:18px;line-height:24px}
+.narrow .opts{margin-top:10px;gap:8px}
+.narrow .opt{flex:1 1 0;padding:9px 6px}
+.narrow .opt.is-right,.narrow .opt.is-wrong{padding:8.5px 5.5px}
+.narrow .ans{margin-top:10px;font-size:14px;line-height:19px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Quick recall question from the last reading">
+  <div class="banner">
+    <span class="badge" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 24a15 15 0 1 0 4.4-10.6"/><path d="M12 7v7h7"/><path d="M24 16v9l6 4"/></svg></span>
+    <div class="body">
+      <p class="label">Quick Recall from the Last Reading</p>
+      <p class="q" id="q">In the last reading, your regex pattern found the date at the top of the letter on page 1. Which one was it?</p>
+      <div class="opts" id="opts" role="group" aria-labelledby="q">
+        <button type="button" class="opt" data-opt="exp">20230126</button>
+        <button type="button" class="opt" data-opt="letter">3 June, 2022</button>
+        <button type="button" class="opt" data-opt="lot">17242818</button>
+      </div>
+      <p class="ans" id="ans" aria-live="polite"></p>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var RIGHT = "letter";
+  var WHY = " Regex told you what the date is. This reading shows where it sits on the page, and how the label next to a date tells you what it means.";
+  var ANSWER = {
+    right: "<b>Correct: 3 June, 2022.</b>" + WHY,
+    wrong: "<b>Not quite. The answer is 3 June, 2022.</b>" + WHY
+  };
+  var ICON_RIGHT = '<svg class="mk mk-right" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var ICON_WRONG = '<svg class="mk mk-wrong" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  var app = document.getElementById("app"), opts = document.getElementById("opts"), ans = document.getElementById("ans");
+  var buttons = Array.prototype.slice.call(opts.querySelectorAll(".opt"));
+  var picked = null;
+
+  buttons.forEach(function (b) {
+    b.insertAdjacentHTML("afterbegin", ICON_RIGHT + ICON_WRONG);
+    b.addEventListener("click", function () { pick(b.getAttribute("data-opt")); });
+  });
+
+  /* One pick shows the answer; the buttons then stay as they are */
+  function pick(k) {
+    if (picked) return;
+    picked = k;
+    opts.classList.add("is-done");
+    buttons.forEach(function (b) {
+      var o = b.getAttribute("data-opt"), note = "";
+      b.setAttribute("aria-disabled", "true");
+      if (o === RIGHT) { b.classList.add("is-right"); note = o === k ? " (your pick, correct)" : " (correct answer)"; }
+      else if (o === k) { b.classList.add("is-wrong"); note = " (your pick, not correct)"; }
+      else b.classList.add("is-other");
+      if (o === k) b.setAttribute("aria-pressed", "true");
+      if (note) b.insertAdjacentHTML("beforeend", '<span class="sr-only">' + note + '</span>');
+    });
+    ans.innerHTML = k === RIGHT ? ANSWER.right : ANSWER.wrong;
+  }
+
+  /* The fixed stage: pick the wide or narrow design size, then scale the whole banner to fit the frame and centre it */
+  function fit() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    document.documentElement.classList.toggle("narrow", vw < 560);
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+})();
+</script>
+</body>
+</html>

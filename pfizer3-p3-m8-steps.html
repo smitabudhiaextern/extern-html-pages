@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P3 Fields and Boxes Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Structure, rail, Back and Next, code blocks and Copy buttons: copied from the P3 m2 steps deck (pfizer3-p3-m2-steps.html).
+   Wrapped outputs and the narrow stage: copied from the P3 m3 pypdf deck (pfizer3-p3-m3-pypdf.html).
+   Look: Pfizer x Extern Core, Light format. Every colour, size, radius and font below comes from design-system/tokens.json.
+   Copied from pfizer3-p3-m5-steps.html: structure, rail, Back and Next, code blocks, Copy buttons and CSS unchanged; slides new.
+   Content: P3 module 8, "Try It Yourself", Follow the Steps Below: find the letter date's box, check page 3's Expiration Date
+   label against its date, and draw the box with OpenCV. The last slide is the SME's Quick Recap (his words, facts fixed).
+   Notebook: students keep working in their saved copy of "Reading a Supporting Documentation File with PyMuPDF" (the module 5
+   notebook, also used in module 7). They run its Step 5, its Step 6 and the OpenCV cell under it, and paste one new cell.
+   Outputs: the real output of each cell, run with PyMuPDF 1.26.5 and OpenCV 4.14 on sample-sdf-document.pdf (the supplier file),
+   after the notebook's Steps 1 to 4, on 10 November 2026. The picture is the real OpenCV output, cropped to the top of page 1.
+   Fixed stage: the deck is laid out on one design stage that scales as a single piece to fit the frame, so nothing
+   ever scrolls and Back and Next sit in the same place on every slide. Wide frames use a 760 x 860 stage
+   (set the Notion embed height to 860 px); frames under 560 px wide use a 420 x 1100 stage, so the text stays readable. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:860px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+.app.narrow{width:420px;height:1100px}
+
+/* Header: step rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 10px}
+.narrow .card{padding:18px 16px}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.p code.nw{white-space:nowrap}
+.list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:5px;font-size:15px;line-height:22px;color:var(--ink)}
+.list b{font-weight:600}
+.list code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;white-space:nowrap}
+.list li::marker{color:var(--step-label)}
+.shot{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.shot img{display:block;width:100%;height:auto}
+
+/* Buttons (design system Button, Light) */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Run card: the code with a Copy button; output blocks have no Copy button */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin:0}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run.out pre{font-size:12px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Find a Date, Check Its Label and Draw Its Box: The Steps</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Steps"></nav>
+    <div class="where"><b id="where-section">Step 1</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1 of 6</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<!-- Slide bodies. {{CODE:python:...}} is code with a Copy button. {{OUT:label:...}} is a real output, with no Copy button. -->
+<template id="s1">
+  <p class="p">Keep working in your copy of "Reading a Supporting Documentation File with PyMuPDF", the notebook you used in the last reading. It's in your Google Drive, with "Copy of" at the start of its name.</p>
+  <p class="p">Can't find your copy? Open the notebook here, then click <b>File → Save a copy in Drive</b> and work in that copy.</p>
+  <div class="links">{{OPEN:NOTEBOOK:Reading a Supporting Documentation File with PyMuPDF (Colab notebook)}}</div>
+  <p class="p">If Colab disconnected, or you opened a fresh copy, go to the top of your notebook and run the cells under <b>Step 1: Setup Environment</b> and <b>Step 2: Inspecting the PDF</b> again:</p>
+  <ul class="list">
+    <li>the install cell, <code>!pip install pymupdf</code></li>
+    <li>the upload cell: click <b>Choose Files</b> and pick <code>sample-sdf-document.pdf</code></li>
+    <li>the check cell, which prints <code>['sample-sdf-document.pdf']</code></li>
+    <li><code>import pymupdf</code>, then the cell that opens the file and prints <code>Total Pages: 3</code></li>
+  </ul>
+  <div class="links">{{OPEN:FILE:The Supplier File (sample-sdf-document.pdf)}}</div>
+</template>
+
+<template id="s1b">
+  <p class="p">Now find the cell under <b>Step 5: Extracting Key Information from a PDF</b>. To find it fast, click a blank spot outside the cells, press <b>Ctrl+F</b> (<b>Cmd+F</b> on a Mac) and type <code>Step 5</code> in your browser's search box.</p>
+  <p class="p">It's the regex from the last reading. Press <b>Run</b> on it. You'll see:</p>
+  {{OUT:Output:Letter Date: 3 June, 2022}}
+  <p class="p">The cell keeps the date in <code>letter_date</code>. The next cell needs it, so run this one first.</p>
+</template>
+
+<template id="s2">
+  <p class="p">Run the cell under <b>Step 6: Extracting Bounding Boxes for Specific Fields</b>, right below Step 5. It holds this code:</p>
+  {{CODE:python:# Extract words with their bounding boxes
+words = doc[0].get_text("words")
+
+# Define the field we are looking for
+# The date is split into three words ("3", "June,", "2022"), so we search for its last word, the year
+target_word = letter_date.split()[-1]
+
+# Search for the target word and retrieve its bounding box
+for word in words:
+    x0, y0, x1, y1, text, block, line, word_no = word  # Unpack correctly
+    if target_word.lower() in text.lower():  # Case-insensitive match
+        print(f"Found '{target_word}' at: ({x0}, {y0}, {x1}, {y1})")}}
+  {{OUT:Output:Found '2022' at: (71.32679748535156, 149.2158203125, 94.16860961914062, 160.7857666015625)}}
+  <p class="p">That's where the year sits on page 1: its top-left corner, then its bottom-right corner.</p>
+</template>
+
+<template id="s3">
+  <p class="p">Now tie a date to its label on page 3. Scroll to the bottom of your notebook, click the last cell, then click <b>+ Code</b> to add a new code cell. Paste this in and press <b>Run</b>:</p>
+  {{CODE:python:words = doc[2].get_text("words")  # Get all words with their positions
+
+for word in words:
+    x0, y0, x1, y1, w_text, *_ = word
+    if "20260315" in w_text:
+        print(f"Found date at: ({x0}, {y0}, {x1}, {y1})")
+
+    if "Expiration" in w_text:
+        print(f"Found anchor phrase at: ({x0}, {y0}, {x1}, {y1})")}}
+  {{OUT:Output:Found anchor phrase at: (50.0, 239.25, 94.45999908447266, 252.99000549316406)
+Found date at: (200.0, 239.25, 244.47998046875, 252.99000549316406)}}
+  <p class="p">Both lines have the same top, <code class="nw">239.25</code>, so the label and the date sit on the same line. That's how you know <code>20260315</code> is page 3's expiration date.</p>
+</template>
+
+<template id="s4">
+  <p class="p">Last, draw the box so you can see it. Go back up to the Step 6 cell. Under it is the cell that starts with <code>import cv2</code>. Press <b>Run</b> on it. It's the code from the last Learn card.</p>
+  {{OUT:Output:Found '2022' at: (71, 149, 94, 160)}}
+  <p class="p">Under that line, Colab shows page 1 with a green box around the year. Here's the top of the picture:</p>
+  <figure class="shot"><img src="pfizer3-p3-m8-opencv-out.png" width="612" height="200" alt="The top of page 1 as the code drew it: the Cytiva logo and address, and a bright green box around the year 2022 in the date 3 June, 2022."></figure>
+  <p class="p">If the box sits on "2022", your code found the right thing in the right place.</p>
+</template>
+
+<template id="s5">
+  <ul class="list">
+    <li><b>Start with a Visual Scan:</b> Always inspect the raw text first. Spot weird line breaks, awkward formatting, or missing data <i>before</i> writing any extraction logic.</li>
+    <li><b>Use Regex for Precision:</b> Regex helps you find patterns (like phone numbers or dates) even when the layout is messy. It's your first defense against chaotic data.</li>
+    <li><b>Locate Values with Coordinates:</b> Use bounding boxes to figure out exactly <i>where</i> a piece of text appears on the page. Layout gives context. Without it, meaning gets lost.</li>
+    <li><b>Anchor Phrases = Smart Extraction:</b> Look for keywords near the data (like "Expiration Date:") to confirm or guide what you're extracting. Anchors + coordinates = human-like logic.</li>
+    <li><b>Visualize to Debug:</b> Draw bounding boxes using OpenCV to confirm that your script is highlighting the right data in the right spot. Trust, verify and fix what doesn't align.</li>
+  </ul>
+</template>
+
+
+<script>
+(function () {
+  "use strict";
+  var IC_OPEN = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  var IC_COPY = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg>';
+  var LINKS = {
+    NOTEBOOK: "https://colab.research.google.com/drive/1dZQRFFu6pizjQinuHpTHrq8r7-Zb9Ckd",
+    FILE: "https://drive.google.com/file/d/1oOR50D8F3Deask7aT2HbXQZhw0u1hvcg/view"
+  };
+
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function unesc(t) { return t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"); }
+  function openBtn(url, label) { return '<a class="btn btn-secondary" href="' + url + '" target="_blank" rel="noopener noreferrer">' + IC_OPEN + '<span>' + label + '</span><span class="sr-only"> (opens in a new tab)</span></a>'; }
+  function codeBlock(text) {
+    return '<figure class="run"><div class="code-head"><span class="code-lang">Python</span>' +
+      '<button type="button" class="copy" data-copy aria-label="Copy Python code">' + IC_COPY + '<span>Copy</span></button></div>' +
+      '<pre tabindex="0"><code>' + esc(text) + '</code></pre></figure>';
+  }
+  /* Output block: no Copy button. */
+  function outBlock(label, text) {
+    return '<figure class="run out"><div class="code-head"><span class="code-lang">' + label + '</span></div>' +
+      '<pre tabindex="0"><code>' + esc(text) + '</code></pre></figure>';
+  }
+  /* Fill the {{...}} markers in a slide template with buttons and code blocks */
+  function body(id) {
+    return document.getElementById(id).innerHTML
+      .replace(/\{\{OPEN:(\w+):([^}]*)\}\}/g, function (m, k, label) { return openBtn(LINKS[k], label); })
+      .replace(/\{\{CODE:python:([\s\S]*?)\}\}(?!\})/g, function (m, text) { return codeBlock(unesc(text)); })
+      .replace(/\{\{OUT:([^:]*):([\s\S]*?)\}\}(?!\})/g, function (m, label, text) { return outBlock(label, unesc(text)); });
+  }
+
+  var GROUPS = ["Step 1", "Step 2", "Step 3", "Step 4", "Recap"];
+  var SLIDES = [
+    { group: "Step 1", label: "STEP 1 &middot; PART 1 OF 2", title: 'Open Your <span class="hl">Notebook</span>', plain: "Step 1. Open Your Notebook", tpl: "s1" },
+    { group: "Step 1", label: "STEP 1 &middot; PART 2 OF 2", title: 'Run the Notebook\'s Step <span class="hl">5</span>', plain: "Step 1. Run the Notebook's Step 5 (Part 2 of 2)", tpl: "s1b" },
+    { group: "Step 2", label: "STEP 2", title: 'Find Where the Date <span class="hl">Sits</span>', plain: "Step 2. Find Where the Date Sits", tpl: "s2" },
+    { group: "Step 3", label: "STEP 3", title: 'Check the Date Against Its <span class="hl">Label</span>', plain: "Step 3. Check the Date Against Its Label", tpl: "s3" },
+    { group: "Step 4", label: "STEP 4", title: 'Draw the Box and <span class="hl">See</span> It', plain: "Step 4. Draw the Box and See It", tpl: "s4" },
+    { group: "Recap", label: "QUICK RECAP", title: 'What You Just <span class="hl">Mastered</span>', plain: "Quick Recap: What You Just Mastered", tpl: "s5" }
+  ];
+
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  /* The fixed stage: pick the wide or narrow design size, then scale the whole deck to fit the frame and centre it. */
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var W = narrow ? 420 : 760, H = narrow ? 1100 : 860;
+    var k = Math.min(window.innerWidth / W, window.innerHeight / H);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", g.name + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + g.name + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span");
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = "Copy"; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + body(s.tpl) + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(pre.textContent, b, pre); });
+    });
+
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  /* Left and Right arrow keys move between slides */
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  window.addEventListener("resize", scaleStage);
+  scaleStage();
+  render(false);
+})();
+</script>
+</body>
+</html>
