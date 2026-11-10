@@ -227,6 +227,63 @@ textarea.code-edit[readonly] { cursor: default; }
 .reveal-in { animation: reveal-in 450ms ease-out both; }
 @keyframes reveal-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
+/* ---- Pfizer x Extern: Tab 1 as slides (Smita, 10 Nov 2026; M1-S1-SLIDES.md) ----
+   One slide at a time. The slide's own Back / Slide N of M / Next bar sits at the bottom of the
+   step panel on every slide (the panel and the Tab 1 section become flex columns that fill the
+   panel), so Next never moves while the student clicks through. */
+.panel:has(> section:not([hidden]) > .slides) { display: flex; flex-direction: column; }
+.panel > section:not([hidden]):has(> .slides) { flex: 1 0 auto; display: flex; flex-direction: column; }
+.slides { flex: 1 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.slides-track { flex: 1 0 auto; }
+.slide-body { gap: 14px; }
+.slide-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; background: var(--surface-card); border-radius: var(--radius-sm);
+}
+.slide-btn { min-height: 40px; padding: 0 18px; font-size: 14px; }
+.slide-btn.btn-ghost { background: var(--surface); }
+.slide-progress { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.slide-dots { display: flex; gap: 6px; }
+.slide-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--blue-200); }
+.slide-dot.on { background: var(--pfizer-blue); }
+.slide-count { font-size: 13px; line-height: 16px; font-weight: 600; color: var(--step-label); white-space: nowrap; }
+.slide-fig { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.slide-fig .caption { text-align: center; font-size: 14px; line-height: 21px; }
+.slide-img { display: block; max-width: 100%; max-height: 300px; width: auto; height: auto; border-radius: var(--radius-md); }
+/* Two pictures on one slide, or a picture with a practice box: smaller, so the slide fits. */
+.slide-body:has(.slide-fig ~ .slide-fig, .slide-row, .practice) > .slide-fig .slide-img { max-height: 210px; }
+/* size "large" (QA, 10 Nov 2026): a slide picture that must be read closely (a diagram, a GIF with
+   words in it) fills the panel width, up to the height the slide has room for. */
+.slide-fig.large .slide-img { max-height: var(--slide-img-large-h, 470px); }
+/* An {image} paragraph item beside the text that follows it. */
+.slide-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; align-items: center; }
+.slide-row .slide-img { max-height: 220px; }
+.slide-row-text { gap: 10px; }
+.slide-img-missing {
+  width: 100%; max-width: 520px; min-height: 150px; padding: 16px 20px;
+  border: 2px dashed var(--blue-200); border-radius: var(--radius-md); background: var(--surface-card);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  text-align: center; font-size: 14px; line-height: 21px; color: var(--ink-muted);
+}
+.slide-img-missing .small-label { color: var(--step-label); }
+.practice {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; row-gap: 8px;
+  grid-template-areas: "label label" "prompt prompt" "main side"; align-items: start;
+}
+.practice-label { grid-area: label; }
+.practice-prompt { grid-area: prompt; font-size: 15px; line-height: 22px; color: var(--ink); font-weight: 500; }
+.practice-main { grid-area: main; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.practice-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.practice-main .btn-link { align-self: flex-start; }
+.practice-side pre.out { max-height: 150px; }
+.practice-side .answer { max-height: 150px; }
+.practice-wait {
+  border: 1.5px dashed var(--line); border-radius: var(--radius-xs); padding: 12px 14px;
+  font-size: 14px; line-height: 21px; color: var(--ink-muted);
+}
+.practice-side:has(.out-wrap:not([hidden])) .practice-wait { display: none; }
+.slide-after { color: var(--ink); }
+
 /* ---- buttons: black primary, outlined secondary, radius-xs (Light format) ---- */
 .btn {
   min-height: 44px; min-width: 44px; padding: 0 20px; border-radius: var(--radius-xs);
@@ -905,14 +962,52 @@ function isLoadFailure(run) {
   return Boolean(run && run.error && (run.error.type === "LoadError" || run.error.type === "InternalError"));
 }
 
-return { TIMEOUT_HINT, ERROR_LESSONS, deepEqual, article, friendlyError, errorLine, judge, revealAllowed, isLoadFailure };
+// Pfizer x Extern (Smita, 10 Nov 2026; M1-S1-SLIDES.md): the check behind a slide's practice box
+// (`what.slides[i].practice`). Each check has ONE test plus an optional `hint`:
+//   {expr, expect}            a Python expression evaluated after the code, as in Try it
+//   {stdout_equals: "..."}    the whole output (trailing spaces and blank lines ignored)
+//   {stdout_not_equals: "..."}
+//   {stdout_contains: "..."} / {stdout_not_contains: "..."}
+//   {stdout_matches: "regex"} a regular expression searched in the output
+// The code must also run without an error. Checks run in order; the first that fails gives its
+// `hint` (or the practice's `hint_default`). An error gives the first matching `error_hints`
+// entry, else `hint_default`; `detail` is Python's own line.
+const PRACTICE_TESTS = ["expr", "stdout_equals", "stdout_not_equals", "stdout_contains", "stdout_not_contains", "stdout_matches"];
+
+function practiceExprs(practice) {
+  return (practice.checks || []).filter((c) => c && c.expr !== undefined).map((c) => c.expr);
+}
+
+function judgePractice(practice, run, values, code = "") {
+  if (run.timedOut) return { ok: false, hint: TIMEOUT_HINT };
+  if (run.error) {
+    const plain = friendlyError(practice.error_hints, run.error, code);
+    return { ok: false, hint: plain || practice.hint_default, detail: errorLine(run.error) };
+  }
+  const out = String(run.stdout).trimEnd();
+  let k = 0;
+  for (const c of practice.checks || []) {
+    let pass;
+    if (c.expr !== undefined) pass = deepEqual(values[k++], c.expect);
+    else if (c.stdout_equals !== undefined) pass = out === String(c.stdout_equals).trimEnd();
+    else if (c.stdout_not_equals !== undefined) pass = out !== String(c.stdout_not_equals).trimEnd();
+    else if (c.stdout_contains !== undefined) pass = out.includes(String(c.stdout_contains));
+    else if (c.stdout_not_contains !== undefined) pass = !out.includes(String(c.stdout_not_contains));
+    else if (c.stdout_matches !== undefined) pass = new RegExp(c.stdout_matches).test(out);
+    else pass = true;
+    if (!pass) return { ok: false, hint: c.hint || practice.hint_default };
+  }
+  return { ok: true, hint: "" };
+}
+
+return { TIMEOUT_HINT, ERROR_LESSONS, deepEqual, article, friendlyError, errorLine, judge, revealAllowed, isLoadFailure, PRACTICE_TESTS, practiceExprs, judgePractice };
 })();
 
 // ---- lesson-loader.js ----
 const __m_lesson_loader = (() => {
 // Loads and validates a lesson JSON file. Pure enough to run in Node (tests)
 // and in the browser (pass nothing: it reads location and uses fetch).
-
+const { PRACTICE_TESTS } = __m_check;
 class LessonError extends Error {
   constructor(message) {
     super(message);
@@ -1005,9 +1100,91 @@ function validateErrorHints(parent, key, path, c) {
   });
 }
 
+// Pfizer x Extern (Smita, 10 Nov 2026; M1-S1-SLIDES.md): optional `what.slides`, Tab 1 as slides.
+// Each slide: {heading, paragraphs, image?, code?, practice?, after?}. `paragraphs` items are text
+// (inline markdown), or {code} for a black code box, or {image} for a picture, shown in order.
+// An image is {src, alt, caption?, size?}: src is a path relative to project-02 ("images/x.gif"; the
+// build inlines it), an https:// address, a data: URL (built page), or "" for a placeholder box.
+// `practice` = {prompt, code, checks, hint_default, answer, error_hints?, done_msg?, wrong?}.
+const IMG_SRC_RE = /^(images\/(?!.*\.\.)[\w.\/-]+\.(gif|png|jpe?g|webp|svg)|https:\/\/\S+|data:image\/[\w.+-]+;base64,[A-Za-z0-9+\/=]+)$/i;
+
+function validateImage(img, path, c) {
+  if (!isObj(img)) return c.bad(path, "must be {src, alt}");
+  if (!isStr(img.src)) c.bad(`${path}.src`, "must be text (empty shows a placeholder)");
+  else if (img.src !== "" && !IMG_SRC_RE.test(img.src)) {
+    c.bad(`${path}.src`, 'must be a path like "images/name.gif", an https:// address, or empty');
+  }
+  c.text(img, "alt", `${path}.`);
+  if (img.caption !== undefined) c.text(img, "caption", `${path}.`);
+  // Pfizer x Extern (QA, 10 Nov 2026): size "large" shows the picture as big as the slide allows.
+  if (img.size !== undefined && img.size !== "large") c.bad(`${path}.size`, 'must be "large" or left out');
+}
+
+function validatePractice(pr, path, c) {
+  if (!isObj(pr)) return c.bad(path, "must be {prompt, code, checks, hint_default, answer}");
+  const p = `${path}.`;
+  ["prompt", "code", "hint_default", "answer"].forEach((k) => c.text(pr, k, p));
+  if (pr.done_msg !== undefined) c.text(pr, "done_msg", p);
+  c.list(pr, "checks", p).forEach((chk, i) => {
+    const cp = `${p}checks[${i}]`;
+    if (!isObj(chk)) return c.bad(cp, "must be an object");
+    const tests = PRACTICE_TESTS.filter((k) => chk[k] !== undefined);
+    if (tests.length !== 1) return c.bad(cp, `needs exactly one of ${PRACTICE_TESTS.join(", ")} (found ${tests.length})`);
+    const t = tests[0];
+    if (!isStr(chk[t]) || (t !== "stdout_equals" && t !== "stdout_not_equals" && chk[t] === "")) c.bad(`${cp}.${t}`, "must be text");
+    if (t === "expr" && !("expect" in chk)) c.bad(`${cp}.expect`);
+    if (t === "stdout_matches" && isStr(chk[t])) {
+      try {
+        new RegExp(chk[t]);
+      } catch {
+        c.bad(`${cp}.stdout_matches`, "is not a valid regular expression");
+      }
+    }
+    if (chk.hint !== undefined) c.text(chk, "hint", `${cp}.`);
+  });
+  validateErrorHints(pr, "error_hints", p, c);
+  // Optional, for verify_lesson.py: code that must be judged wrong, with a word its hint contains.
+  if (pr.wrong !== undefined) {
+    c.list(pr, "wrong", p).forEach((w, i) => {
+      c.str(w, "code", `${p}wrong[${i}].`);
+      c.text(w, "hint_contains", `${p}wrong[${i}].`);
+    });
+  }
+}
+
+function validateSlides(what, c) {
+  // Slides replace everything else in Tab 1: anything left beside them would never show.
+  ["heading", "paragraphs", "points", "code", "play"].forEach((k) => {
+    if (what[k] !== undefined) c.bad(`what.${k}`, "is not shown when what.slides is used; move it into a slide");
+  });
+  c.list(what, "slides", "what.", { min: 1 }).forEach((s, i) => {
+    const sp = `what.slides[${i}]`;
+    if (!isObj(s)) return c.bad(sp, "must be an object");
+    c.text(s, "heading", `${sp}.`);
+    (s.paragraphs === undefined ? [] : c.list(s, "paragraphs", `${sp}.`)).forEach((item, j) => {
+      const ip = `${sp}.paragraphs[${j}]`;
+      if (isStr(item)) {
+        if (!nonEmpty(item)) c.bad(ip);
+      } else if (isObj(item) && item.code !== undefined && Object.keys(item).length === 1) {
+        if (!nonEmpty(item.code)) c.bad(`${ip}.code`);
+      } else if (isObj(item) && item.image !== undefined && Object.keys(item).length === 1) {
+        validateImage(item.image, `${ip}.image`, c);
+      } else c.bad(ip, "must be text, {code} or {image}");
+    });
+    if (s.image !== undefined) validateImage(s.image, `${sp}.image`, c);
+    if (s.code !== undefined) c.text(s, "code", `${sp}.`);
+    if (s.practice !== undefined) validatePractice(s.practice, `${sp}.practice`, c);
+    if (s.after !== undefined) {
+      c.text(s, "after", `${sp}.`);
+      if (s.practice === undefined) c.bad(`${sp}.after`, "needs a practice: it shows after the practice is right");
+    }
+  });
+}
+
 function validateConcept(l, c) {
   const what = c.obj(l, "what", "");
-  if (what) {
+  if (what && what.slides !== undefined) validateSlides(what, c);
+  else if (what) {
     // Pfizer x Extern (M1-S1-REWORK.md): optional `what.play` = {prompt, code, after}, an editable
     // code box at the top of Tab 1. With it, heading, paragraphs, points and code become optional
     // (they show after the first Run), but any that are present must still be well formed.
@@ -1611,6 +1788,7 @@ function mountShell(l, { labels, builders, kicker }) {
   const tabsEl = document.getElementById("tabs");
   const back = document.getElementById("back");
   const next = document.getElementById("next");
+  const nav = back.closest(".nav");
   const stepCount = document.getElementById("step-count");
   let step = 0;
 
@@ -1652,8 +1830,11 @@ function mountShell(l, { labels, builders, kicker }) {
     const hadFocus = document.activeElement;
     back.disabled = step === 0;
     next.disabled = step === tabs.length - 1;
-    // A button that just disabled itself would drop keyboard focus: hand it to the active tab.
-    if (focusTab || ((hadFocus === back || hadFocus === next) && hadFocus.disabled)) tabs[step].focus();
+    // Pfizer x Extern (QA, 10 Nov 2026): a tab with its own Back / Next (Tab 1 as slides) hides the
+    // page's Back / Next, so only one Back / Next shows and Next can't skip the slides.
+    nav.hidden = !!panels[step].querySelector(".slide-nav");
+    // A button that just disabled or hid itself would drop keyboard focus: hand it to the active tab.
+    if (focusTab || ((hadFocus === back || hadFocus === next) && (hadFocus.disabled || nav.hidden))) tabs[step].focus();
   }
   back.addEventListener("click", () => go(step - 1));
   next.addEventListener("click", () => go(step + 1));
@@ -1704,7 +1885,7 @@ const __m_concept = (() => {
 // All lesson text goes in via textContent (never innerHTML); `inline()` turns
 // `code` and **bold** in lesson text into real elements.
 const { evalChecks } = __m_runner;
-const { judge, revealAllowed, isLoadFailure, friendlyError } = __m_check;
+const { judge, revealAllowed, isLoadFailure, friendlyError, judgePractice, practiceExprs } = __m_check;
 const { h, inline, loadFailureNode, startFailed, safeRun, runErrorText, revealInPanel, focusRevealed, feedbackSlot, learnPanel, boot } = __m_shell;
 const TAB_LABELS = ["What is it?", "Example", "Demo", "Try it", "Learn more"];
 
@@ -1745,11 +1926,13 @@ function showOutput(outEl, r) {
   else outEl.append(r.stdout.trimEnd() || "(no output)");
 }
 
-// codeRunner({id, label, onRun, onReset}) -> {box, buttons, status, setCode(code, editable), reset()}
-// `onRun(r, code)` is called after each run whose output is shown, with the code that ran;
+// codeRunner({id, label, onRun, onReset, exprs}) -> {box, buttons, status, setCode(code, editable), reset()}
+// `onRun(r, code, values)` is called after each run whose output is shown, with the code that ran
+// (Pfizer x Extern: with `exprs`, a list of Python expressions, each run also evaluates them after
+// the code, as Try it does, and `values` holds their results);
 // `onReset()` after Reset. setCode() starts a new "generation": a run still in flight for the old
 // code is dropped instead of landing under the new code.
-function codeRunner({ id, label, onRun, onReset }) {
+function codeRunner({ id, label, onRun, onReset, exprs = null }) {
   let original = "";
   let gen = 0;
   let busy = false;
@@ -1781,14 +1964,17 @@ function codeRunner({ id, label, onRun, onReset }) {
     const text = runBtn.lastChild;
     text.textContent = "Running…";
     const code = box.value;
-    const r = await safeRun(code);
+    let r;
+    let values = [];
+    if (exprs) ({ run: r, values } = await safeEval(code, exprs));
+    else r = await safeRun(code);
     text.textContent = "Run";
     runBtn.disabled = false;
     busy = false;
     if (mine !== gen) return; // the student switched demos while this ran
     showOutput(outEl, r);
     outWrap.hidden = false;
-    if (onRun) onRun(r, code);
+    if (onRun) onRun(r, code, values);
     revealInPanel(outWrap);
   }
   function reset() {
@@ -1832,8 +2018,157 @@ function whatBody(w) {
   ].flat();
 }
 
+// ---------- Tab 1 as slides (Pfizer x Extern, Smita, 10 Nov 2026; M1-S1-SLIDES.md) ----------
+// `what.slides`: one slide at a time, with its own Back / Next and "Slide N of M" inside the tab.
+// The last slide's Next opens the Example tab. A slide shows its heading, its image, its
+// paragraphs (text, {code} or {image} items, in order), its static code, then its practice box.
+
+// A picture, or a clear placeholder box with its alt text when the file isn't there (the build
+// leaves src empty for a missing file; a picture that fails to load shows the same box).
+function slideImage(img) {
+  const missing = () =>
+    h("div", { class: "slide-img-missing", role: "img", "aria-label": img.alt }, h("span", { class: "small-label" }, "Image coming soon"), h("span", {}, img.alt));
+  // size "large" (Pfizer x Extern QA, 10 Nov 2026): the picture fills the panel width, as tall as fits.
+  const fig = h("figure", { class: "slide-fig" + (img.size === "large" ? " large" : "") });
+  if (!img.src) fig.append(missing());
+  else {
+    const el = h("img", { class: "slide-img", src: img.src, alt: img.alt, width: img.width, height: img.height, decoding: "async" });
+    el.addEventListener("error", () => el.replaceWith(missing()));
+    fig.append(el);
+  }
+  if (img.caption) fig.append(h("figcaption", { class: "caption" }, inline(img.caption)));
+  return fig;
+}
+
+// The practice box: the SME's black code box with Run and Reset. Each Run also checks the code
+// (check.js judgePractice) and shows "Correct!" or a plain hint under the output. "Show suggested
+// answer" appears after the first wrong try and stays. `after` shows once the code is right.
+function practiceBox(pr, i, afterEl) {
+  const slot = feedbackSlot();
+  slot.el.classList.add("practice-feedback");
+  const revealBtn = h("button", { type: "button", class: "btn btn-link practice-reveal", hidden: true }, "Show suggested answer");
+  const answer = h(
+    "div",
+    { class: "answer-box practice-answer", hidden: true },
+    h("span", { class: "small-label" }, "Suggested answer"),
+    h("pre", { class: "answer" }, pr.answer)
+  );
+  const runner = codeRunner({
+    id: `slide-${i + 1}-code`,
+    label: "Practice code you can change",
+    exprs: practiceExprs(pr),
+    onRun: (r, code, values) => {
+      if (isLoadFailure(r)) return slot.clear(); // the output already says Python couldn't load
+      const v = judgePractice(pr, r, values, code);
+      if (v.ok) {
+        slot.show(true, "Correct!", pr.done_msg ? h("span", { class: "fb-msg" }, inline(pr.done_msg)) : null);
+        if (afterEl && afterEl.hidden) {
+          afterEl.hidden = false;
+          afterEl.classList.add("reveal-in");
+        }
+      } else {
+        revealBtn.hidden = !answer.hidden; // after the first wrong try, until the answer shows
+        slot.show(false, "Not quite yet", h("span", { class: "fb-msg" }, inline(v.hint)));
+      }
+    },
+    onReset: () => slot.clear(),
+  });
+  runner.setCode(pr.code);
+  revealBtn.addEventListener("click", () => {
+    answer.hidden = false;
+    revealBtn.hidden = true;
+    focusRevealed(answer);
+  });
+  // Two columns so the tallest state still fits the stage: the code box, Run / Reset and the
+  // suggested answer on the left, what Python showed and the check on the right.
+  return h(
+    "div",
+    { class: "practice", "data-slide": String(i + 1) },
+    h("span", { class: "small-label practice-label" }, "Your turn"),
+    h("p", { class: "practice-prompt" }, lines(pr.prompt)),
+    h("div", { class: "practice-main" }, runner.box, runner.buttons, revealBtn, answer),
+    h("div", { class: "practice-side" }, h("p", { class: "practice-wait" }, "Press Run to see what Python shows."), runner.status, slot.el)
+  );
+}
+
+// A slide's `paragraphs`, in order. An {image} item sits beside the text paragraphs right after it
+// (picture left, text right), so a picture and its line share one row instead of stacking.
+function slideItems(items) {
+  const out = [];
+  for (let k = 0; k < items.length; k++) {
+    const item = items[k];
+    if (typeof item === "string") out.push(h("p", { class: "lead" }, lines(item)));
+    else if (item.code !== undefined) out.push(h("pre", {}, item.code));
+    else {
+      const text = [];
+      while (typeof items[k + 1] === "string") text.push(h("p", { class: "lead" }, lines(items[++k])));
+      const fig = slideImage(item.image);
+      out.push(text.length ? h("div", { class: "slide-row" }, fig, h("div", { class: "stack slide-row-text" }, text)) : fig);
+    }
+  }
+  return out;
+}
+
+function slideBody(s, i) {
+  const after = s.after ? h("p", { class: "lead slide-after", hidden: true }, inline(s.after)) : null;
+  return h(
+    "div",
+    { class: "stack slide-body" },
+    h("h2", {}, s.heading),
+    s.image ? slideImage(s.image) : null,
+    slideItems(s.paragraphs || []),
+    s.code ? h("pre", {}, s.code) : null,
+    s.practice ? practiceBox(s.practice, i, after) : null,
+    after
+  );
+}
+
+function slidesPanel(l) {
+  const slides = l.what.slides;
+  const n = slides.length;
+  let cur = 0;
+  const els = slides.map((s, i) =>
+    h("section", { class: "slide", id: `slide-${i + 1}`, "aria-label": `Slide ${i + 1} of ${n}: ${s.heading}`, hidden: i !== 0 }, slideBody(s, i))
+  );
+  const count = h("span", { class: "slide-count", "aria-live": "polite" });
+  const back = h("button", { type: "button", class: "btn btn-ghost slide-btn slide-back" }, "Back");
+  const next = h("button", { type: "button", class: "btn btn-dark slide-btn slide-next" });
+  // One dot per slide beside "Slide N of M", so the bar reads as the slides' own, not the page's.
+  const dots = slides.map(() => h("span", { class: "slide-dot", "aria-hidden": "true" }));
+  // The Example tab's own label, so the last slide says where Next goes.
+  const nextTab = TAB_LABELS[1];
+
+  function show(i, from) {
+    cur = Math.max(0, Math.min(n - 1, i));
+    els.forEach((el, j) => (el.hidden = j !== cur));
+    count.textContent = `Slide ${cur + 1} of ${n}`;
+    dots.forEach((d, j) => d.classList.toggle("on", j <= cur));
+    back.disabled = cur === 0;
+    next.textContent = cur === n - 1 ? `Next: ${nextTab}` : "Next";
+    // Back just disabled itself on slide 1: keep keyboard focus on Next.
+    if (from === back && back.disabled) next.focus();
+    document.getElementById("panels")?.scrollTo?.(0, 0);
+  }
+  back.addEventListener("click", () => show(cur - 1, back));
+  next.addEventListener("click", () => {
+    if (cur < n - 1) return show(cur + 1, next);
+    // The last slide leads into the Example tab (the focus goes with it: this button is now hidden).
+    const tab = document.getElementById("tab-1");
+    tab.click();
+    tab.focus();
+  });
+  show(0);
+  return h(
+    "div",
+    { class: "slides" },
+    h("div", { class: "slides-track" }, els),
+    h("div", { class: "slide-nav", role: "group", "aria-label": "Slides" }, back, h("div", { class: "slide-progress" }, h("div", { class: "slide-dots" }, dots), count), next)
+  );
+}
+
 function whatPanel(l) {
   const w = l.what;
+  if (w.slides) return slidesPanel(l);
   if (!w.play) return h("div", { class: "stack" }, whatBody(w));
 
   // Play first: the prompt, the code box, Run and Reset, the output. Everything else in `what`
@@ -2027,9 +2362,11 @@ function tryPanel(l) {
     } else {
       // Pfizer x Extern: a matched `error_hints` entry gives plain words first and Python's own
       // message after them in small text.
+      // A hint that starts "Part N next" means the earlier parts are right (QA, 10 Nov 2026): it
+      // shows under a neutral "Next step" heading instead of "Not quite yet".
       showFeedback(
         false,
-        "Not quite yet",
+        /^Part \d+ next\b/.test(verdict.hint) ? "Next step" : "Not quite yet",
         h("span", { class: "fb-msg" }, verdict.hint),
         verdict.detail ? h("span", { class: "fb-detail" }, "Python's message: ", h("code", {}, verdict.detail)) : null
       );
@@ -2137,6 +2474,8 @@ function refit() {
 // Re-fit when the tab changes, when output or feedback appears, and when fonts arrive.
 new MutationObserver(refit).observe(panels, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
 window.addEventListener("resize", refit);
+// Pfizer x Extern: a slide picture changes the height when it finishes loading (load does not bubble).
+panels.addEventListener("load", refit, true);
 document.addEventListener("lesson-ready", refit);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
 fitStage();
