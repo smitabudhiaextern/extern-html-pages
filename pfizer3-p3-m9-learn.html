@@ -15,8 +15,8 @@
    of get_text("text"), and as find_tables() sees it (21 real cell boxes). 2 Find the Table with find_tables(): his 4 bullets
    are 4 clickable tiles, each lighting the real table, its box, its rows and columns, or its cells.
    3 Go Cell by Cell: his function (cell-number lines replaced by table.rows and row.cells, see step2-coverage-m9.md note A)
-   and a button that reads the 21 real cells one by one and builds each row. 4 Check Every Row: his debug print, the real
-   rows (trimmed to the 7 rows of the test results table), each clickable to light its row on the page. 5 When find_tables()
+   and a button that reads the 21 real cells one by one and builds each row. 4 Check Every Row: his debug print, with one
+   added if line that keeps only the first table on page 3, and its real 7 rows, each clickable to light its row on the page. 5 When find_tables()
    Fails You: page 2's small Description and Limits table (no lines at all) finds 0 tables; a switch shows its real
    get_text("blocks") boxes instead.
    Text: the SME's (Chaitanya's) module 9 page, verbatim, except the facts listed in step2-coverage-m9.md.
@@ -26,7 +26,8 @@
    Every output, box and count is the real output of the code, run on sample-sdf-document.pdf with PyMuPDF 2.1 (what
    !pip install pymupdf gives in Colab on 10 November 2026, with pymupdf-layout 2.1). On 2.1, find_tables() also uses the
    layout model: page 1 gives 1 table, page 2 gives 0, page 3 gives 2 (the test results table, then the product details
-   box), and the function prints 16 rows. See pymupdf21-output-diffs.md.
+   box). The function reads all 3 tables; card 4's print loop keeps only page 3's first table, the test results table
+   (Smita, 11 November 2026), so it prints the same 7 rows on 2.1 and 1.26.5. See pymupdf21-output-diffs.md.
    Pictures: pfizer3-p3-m9-page3-table.png (page 3 clipped to x 40 to 540, y 333 to 507) and pfizer3-p3-m9-page2-table.png
    (page 2 clipped to x 35 to 535, y 338 to 420), both rendered with PyMuPDF from the supplier file at 3x. */
 :root{
@@ -176,8 +177,6 @@ button{font:inherit;color:inherit}
 .orows{display:flex;flex-direction:column;padding:6px 8px;background:var(--surface-card)}
 .orow{display:block;width:100%;text-align:left;background:none;border:0;border-radius:4px;padding:1px 6px;font-family:var(--font-mono);font-size:12.5px;line-height:1.5;color:var(--ink);cursor:pointer;white-space:pre}
 .orow:hover{background:var(--surface)}
-.orow.ocut{cursor:default;color:var(--ink-muted)}
-.orow.ocut:hover{background:none}
 .orow[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
 .checks{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .checks li{font-size:16px;line-height:1.5;color:var(--ink-muted)}
@@ -396,11 +395,9 @@ button{font:inherit;color:inherit}
     pick(3);
   }
   function rowsOut() {
-    return '<figure class="run out"><div class="code-head"><span class="code-lang">Output (trimmed)</span><span class="code-lang" style="font-weight:500">Click a row</span></div>' +
+    return '<figure class="run out"><div class="code-head"><span class="code-lang">Output</span><span class="code-lang" style="font-weight:500">Click a row</span></div>' +
       '<div class="orows" role="group" aria-label="The 7 printed rows of the test results table">' +
-      '<span class="orow ocut" aria-hidden="true">...</span>' +
       DATA.map(function (d) { return '<button type="button" class="orow">' + esc("[" + d.map(q).join(", ") + "]") + '</button>'; }).join("") +
-      '<span class="orow ocut" aria-hidden="true">...</span>' +
       '</div></figure>';
   }
 
@@ -559,17 +556,17 @@ button{font:inherit;color:inherit}
         '<p class="p">You\'ve got your loop running. You\'re extracting cells. The table structure is coming together. But before you celebrate, pause.</p>' +
         '<p class="p">Just because your code didn\'t crash doesn\'t mean it did what you expected. Sometimes your output <i>looks</i> like a table, but it\'s secretly full of holes, misaligned rows, or missing text. This is where debugging becomes your best friend.</p>' +
         '<p class="p">Once you start extracting tables, make a habit of printing your results. Just because the function runs doesn\'t mean the data makes sense.</p>' +
-        code("python", "Python", ['results = extract_tables_with_bbox("sample-sdf-document.pdf")', '', 'for table in results:', "    for row in table['data']:", '        print(row)']) +
+        code("python", "Python", ['results = extract_tables_with_bbox("sample-sdf-document.pdf")', '', 'for table in results:', "    if table['page'] == 2 and table['table_index'] == 0:", "        for row in table['data']:", '            print(row)']) +
         '<div class="sw-bar"><div class="sw" role="group" aria-label="Choose the output or the checks">' +
           '<button type="button" class="plain" data-view="out">What it prints</button>' +
           '<button type="button" class="plain" data-view="watch">What to watch for</button></div>' +
           '<p class="hint">Click each button to see both.</p></div>' +
-        '<div class="pane" id="pane-out"><p class="p">Your notebook prints 16 rows: 3 from page 1\'s product table, then the 7 rows of the test results table shown here, then 6 from the box of product details at the top of page 3.</p>' + rowsOut() + p3Fig("rows-fig", P3ALT) + '</div>' +
+        '<div class="pane" id="pane-out"><p class="p">The <code>if</code> line keeps only the first table on page 3 (page <code>2</code> to Python, which counts from 0): the test results table. So your notebook prints its 7 rows.</p>' + rowsOut() + p3Fig("rows-fig", P3ALT) + '</div>' +
         '<div class="pane" id="pane-watch" hidden>' +
           '<p class="p">Watch for:</p>' +
           '<ul class="checks">' +
-            '<li>Empty strings where there should be values<span class="ok">In all 16 rows: none</span></li>' +
-            '<li>Rows with uneven column counts<span class="ok">In the test results table: 3 cells in every row</span></li>' +
+            '<li>Empty strings where there should be values<span class="ok">In your 7 rows: none</span></li>' +
+            '<li>Rows with uneven column counts<span class="ok">In your 7 rows: 3 cells in every row</span></li>' +
             '<li>Cells that don\'t match expectations<span class="ok">Click a row under "What it prints" to compare it with the page</span></li>' +
           '</ul>' +
           '<div class="tip"><span class="tip-icon">' + BULB + '</span><p><b>Tip:</b> Sometimes the bounding boxes are just slightly off. Consider adding padding (a little extra space around the box) to the clip box if the text is getting cut off.</p></div>' +

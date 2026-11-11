@@ -20,6 +20,10 @@
    on 10 November 2026, with pymupdf-layout 2.1) on sample-sdf-document.pdf (the supplier file), after the notebook's
    Steps 1 and 2. On 2.1, find_tables() also uses the layout model: page 1 gives 1 table, page 2 gives 0, page 3 gives 2
    (the test results table, then the product details box). See pymupdf21-output-diffs.md.
+   Step 4's print loop has one added line, if table['page'] == 2 and table['table_index'] == 0:, so it prints only the
+   first table found on page 3, the test results table (Smita, 11 November 2026: print only that table). The function
+   itself is unchanged, so it still works on foo.pdf in Optional Reading. It prints the same 7 rows on PyMuPDF 2.1 and 1.26.5.
+   "What this code does" lists under each code box (Smita, 11 November 2026): every fact in them was checked by a run.
    Fixed stage: the deck is laid out on one design stage that scales as a single piece to fit the frame, so nothing
    ever scrolls and Back and Next sit in the same place on every slide. Wide frames use a 760 x 1040 stage
    (set the Notion embed height to 970 px); frames under 560 px wide use a 420 x 1360 stage, so the text stays readable. */
@@ -140,7 +144,7 @@ button{font:inherit;color:inherit}
   <h1 class="sr-only">Read the Test Results Table, Row by Row: The Steps</h1>
   <header class="top">
     <nav class="rail" id="rail" aria-label="Steps"></nav>
-    <div class="where"><b id="where-section">Step 1</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1 of 7</span></div>
+    <div class="where"><b id="where-section">Step 1</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1 of 8</span></div>
   </header>
   <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
   <p class="donemsg" id="donemsg" role="status"></p>
@@ -175,7 +179,12 @@ button{font:inherit;color:inherit}
   {{CODE:python:page = doc[2]
 tables = page.find_tables()
 print(f"Tables found: {len(tables.tables)}")}}
-  <p class="p">The table is on page 3. Python counts pages from 0, so page 3 is <code>doc[2]</code>. <code>find_tables()</code> scans that page for table-shaped structures, and <code>len(tables.tables)</code> counts the ones it found.</p>
+  <p class="p"><b>What this code does:</b></p>
+  <ul class="list">
+    <li><code>page = doc[2]</code> picks page 3, because that's where the table is. Python counts pages from 0, so page 3 is <code>doc[2]</code>.</li>
+    <li><code>page.find_tables()</code> scans that page for table-shaped structures. What it finds is saved in <code>tables</code>.</li>
+    <li><code>tables.tables</code> is the list of tables it found, and <code>len()</code> counts the items in a list. So <code>len(tables.tables)</code> counts the tables on the page.</li>
+  </ul>
   {{OUT:Output:Tables found: 2}}
   <p class="p">Two tables. One is the test results table. The other is the box of product details at the top of page 3, from <code>Product:</code> down to <code>Expiration Date:</code>. That box has no lines, but the PyMuPDF that Colab installs also uses a <b>layout model</b> (a small AI that spots tables from how the text lines up), so it counts the box as a table too.</p>
 </template>
@@ -219,33 +228,40 @@ print(f"Tables found: {len(tables.tables)}")}}
     return results}}
   <p class="p">This cell prints nothing. It only teaches Python the function, so you can use it in the next step.</p>
 </template>
+<template id="s3b">
+  <p class="p">Here's what the function you just added does, before you use it in Step 4.</p>
+  <p class="p"><b>What this code does:</b></p>
+  <ul class="list">
+    <li>Walks through every page and table. <code>range(len(doc))</code> gives the page numbers 0, 1 and 2, and <code>enumerate</code> numbers the tables on each page from 0, so each table is saved with its page and its number.</li>
+    <li><code>table.rows</code> gives the rows from top to bottom, and <code>row.cells</code> gives each cell's box from left to right, so every result stays in the row of its own test.</li>
+    <li>Grabs the text from each cell area using <code>get_text("text", clip=cell_bbox)</code>, and stores the content and layout so you can reconstruct or analyze the table later.</li>
+  </ul>
+</template>
 <template id="s4">
-  <p class="p">Run the function on the supplier file, then print every row it found. Add a new code cell, paste this in, and press <b>Run</b>:</p>
+  <p class="p">Run the function on the supplier file, then print the rows of the test results table. Add a new code cell, paste this in, and press <b>Run</b>:</p>
   {{CODE:python:results = extract_tables_with_bbox("sample-sdf-document.pdf")
 
 for table in results:
-    for row in table['data']:
-        print(row)}}
-  {{OUT:Output:['Description', 'Part Number', 'Operating Temperature']
-['High Flow Kit F, Modified, ÄKTA ready', '29477427', '+2 C to +40 C']
-['High Flow Gradient C, Modified, ÄKTA ready', '29184612', '+2 C to +40 C']
-['Description', 'Test Method', 'Result']
+    if table['page'] == 2 and table['table_index'] == 0:
+        for row in table['data']:
+            print(row)}}
+  <p class="p"><b>What this code does:</b></p>
+  <ul class="list">
+    <li><code>results</code> holds one <b>dictionary</b> (a set of labels, each with a value) for every table the function found in the file. That's 3 tables: 1 on page 1 and 2 on page 3.</li>
+    <li>The <code>if</code> line keeps only the table we want. <code>table['page'] == 2</code> means page 3 (Python counts from 0), and <code>table['table_index'] == 0</code> means the first table found there: the test results table. <code>==</code> checks if two values are equal, and <code>and</code> means both must be true.</li>
+    <li><code>table['data']</code> holds that table's rows, and <code>print(row)</code> prints them one by one. Make a habit of printing your results: it's how you check them on the next slide.</li>
+  </ul>
+  {{OUT:Output:['Description', 'Test Method', 'Result']
 ['Autoclave - Pump tubing', '121C > 15 min', 'Conforms']
 ['Gamma Irradiation - Inlets', '25.0 - 40.0 kGy', 'Conforms']
 ['Flow Rate Test', 'Per SOP-QC-042', 'Pass']
 ['Pressure Integrity', 'Max 0.5 bar, 5 min hold', 'Pass']
 ['Visual Inspection', 'No defects visible', 'Pass']
-['Package Integrity', 'Sealed, no damage', 'Pass']
-['Product:', 'AKTA ready Low Flow Kit']
-['Lot Number:', '18356721']
-['Product Article Number:', '28 9301 82']
-['Date of Manufacture:', '20240315']
-['Product Description:', 'Low Flow Kit, AKTA ready']
-['Expiration Date:', '20260315']}}
-  <p class="p">16 rows from 3 tables, because the function reads every page. The first 3 are page 1's product table. The next 7 are the test results table: the header row, then one row for each of the 6 tests, each a list with 3 cells in the same order as the columns on the page. The last 6 are the product details box from Step 2, with 2 cells each: a label and its value.</p>
+['Package Integrity', 'Sealed, no damage', 'Pass']}}
+  <p class="p">7 rows: the header row, then one row for each of the 6 tests. Each row is a list with 3 cells, in the same order as the columns on the page.</p>
 </template>
 <template id="s5">
-  <p class="p">Just because the function runs doesn't mean the data makes sense. Look at the 7 rows of the test results table, from <code>['Description', 'Test Method', 'Result']</code> to the Package Integrity row, and watch for:</p>
+  <p class="p">Just because the function runs doesn't mean the data makes sense. Look at your 7 rows and watch for:</p>
   <ul class="list">
     <li><b>Empty strings where there should be values.</b> An empty cell prints as <code>''</code>. None of your cells should.</li>
     <li><b>Rows with uneven column counts.</b> Every row should have 3 cells.</li>
@@ -258,6 +274,11 @@ for table in results:
   {{CODE:python:page = doc[1]
 tables = page.find_tables()
 print(f"Tables found: {len(tables.tables)}")}}
+  <p class="p"><b>What this code does:</b></p>
+  <ul class="list">
+    <li><code>page = doc[1]</code> picks page 2, because Python counts pages from 0.</li>
+    <li>The other two lines are the same as in Step 2: they look for tables on that page and count them.</li>
+  </ul>
   {{OUT:Output:Tables found: 0}}
   <p class="p">Page 2's table has no lines at all, and the layout model doesn't spot it either, so <code>find_tables()</code> finds nothing. Card 5 of the Learn cards shows what to do when that happens.</p>
 </template>
@@ -299,7 +320,8 @@ print(f"Tables found: {len(tables.tables)}")}}
     { group: "Step 1", label: "STEP 1 &middot; PART 1 OF 2", title: 'Open Your Copy of the <span class="hl">Notebook</span>', plain: "Step 1. Open Your Copy of the Notebook", tpl: "s1" },
     { group: "Step 1", label: "STEP 1 &middot; PART 2 OF 2", title: 'Make Sure the Supplier File Is <span class="hl">Open</span>', plain: "Step 1. Make Sure the Supplier File Is Open (Part 2 of 2)", tpl: "s1b" },
     { group: "Step 2", label: "STEP 2", title: 'Find the Table on <span class="hl">Page 3</span>', plain: "Step 2. Find the Table on Page 3", tpl: "s2" },
-    { group: "Step 3", label: "STEP 3", title: 'Add the Cell-by-Cell <span class="hl">Function</span>', plain: "Step 3. Add the Cell-by-Cell Function", tpl: "s3" },
+    { group: "Step 3", label: "STEP 3 &middot; PART 1 OF 2", title: 'Add the Cell-by-Cell <span class="hl">Function</span>', plain: "Step 3. Add the Cell-by-Cell Function", tpl: "s3" },
+    { group: "Step 3", label: "STEP 3 &middot; PART 2 OF 2", title: 'See What the Function <span class="hl">Does</span>', plain: "Step 3. See What the Function Does (Part 2 of 2)", tpl: "s3b" },
     { group: "Step 4", label: "STEP 4 &middot; PART 1 OF 2", title: 'Print Every <span class="hl">Row</span>', plain: "Step 4. Print Every Row", tpl: "s4" },
     { group: "Step 4", label: "STEP 4 &middot; PART 2 OF 2", title: 'Check Every <span class="hl">Row</span>', plain: "Step 4. Check Every Row (Part 2 of 2)", tpl: "s5" },
     { group: "Step 5", label: "STEP 5 (OPTIONAL)", title: 'See find_tables() Miss Page 2\'s <span class="hl">Table</span>', plain: "Step 5 (Optional). See find_tables() Miss Page 2's Table", tpl: "s6" }
