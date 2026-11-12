@@ -320,26 +320,32 @@ textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
 .feedback pre { background: transparent; border: 0; color: var(--ink); padding: 0; font-size: 13px; }
 .answer-box { display: flex; flex-direction: column; gap: 6px; }
 
-/* Long starters (more than 8 lines, class set by concept.js): the task and the feedback on the left,
-   the code box, buttons and answer on the right, so the Try fits the stage. */
+/* Long starters (more than 8 lines, class set by concept.js): the task, the buttons and the feedback
+   on the left, the code box and the answer on the right, so the Try fits the stage.
+   Pfizer x Extern (QA, 12 Nov 2026): the answer now shows in full (no max-height). To fit a 17-line
+   answer under an 18-line code box at the stage's 0.8 zoom, the heading sits over the left column
+   only, the buttons moved from under the code box to the left column, and code lines are 1.4 high. */
 .stack.try-wide {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.75fr); column-gap: 18px; row-gap: 10px;
-  grid-template-areas: "head head" "prompt label" "prompt code" "fb btns" "fb answer";
-  grid-template-rows: auto auto auto auto auto; align-items: start;
+  grid-template-areas: "head label" "prompt code" "btns answer" "fb answer";
+  grid-template-rows: auto auto auto 1fr; align-items: start; /* 1fr: the answer's extra height goes under the feedback, not between it and the buttons */
 }
 .try-wide > .try-head { grid-area: head; }
 .try-wide > .lead { grid-area: prompt; font-size: 14px !important; line-height: 21px; }
-.try-wide > label { grid-area: label; }
-.try-wide > textarea { grid-area: code; font-size: 12.5px; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; } /* one code line = one row */
+.try-wide > label { grid-area: label; align-self: end; }
+.try-wide > textarea { grid-area: code; font-size: 12.5px; line-height: 1.4; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; } /* one code line = one row */
 .try-wide > .row { grid-area: btns; gap: 8px !important; }
 .try-wide > .row .btn { padding: 0 14px; font-size: 14px; }
 .try-wide > #feedback { grid-area: fb; }
 .try-wide > #answer { grid-area: answer; }
-.try-wide .answer { max-height: 190px; font-size: 12.5px; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+.try-wide .answer { font-size: 12.5px; line-height: 1.4; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
 .try-wide .feedback pre { max-height: 150px; overflow-y: auto; }
 .answer-box:focus { outline: none; }
 .answer-box:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 .answer { background: var(--out-bg); color: var(--ink); border: 1px solid var(--out-line); font-size: 13px; line-height: 1.5; padding: 10px 16px; max-height: 260px; overflow-y: auto; } /* a code panel: may scroll */
+/* Pfizer x Extern (QA, 12 Nov 2026): the Try answer shows in full, with no scrolling inside it; the
+   stage zooms the panel down to fit it instead (stage.js). */
+#answer > .answer { max-height: none; overflow-y: visible; }
 
 /* ---- learn more ---- */
 .learn { display: flex; gap: 18px; }
@@ -1488,8 +1494,12 @@ function errorLine(error) {
 // judge(tryBlock, run, values, code) -> {ok, hint, detail?}
 //   tryBlock: {checks: [{expr, expect, hint}], expect_stdout: null|string, stdout_hint, error_hints?}
 //   run:      RunResult from the runner
-//   values:   one converted value per check, in order (from runner.evalChecks)
-//   code:     the student's code (Pfizer x Extern: only read by `error_hints` that test a line)
+//   values:   one converted value per `expr` check, in order (from runner.evalChecks)
+//   code:     the student's code (Pfizer x Extern: read by `error_hints` that test a line, and by
+//             `code_not_matches` checks)
+// Pfizer x Extern (QA, 12 Nov 2026): a check may be {code_not_matches: "regex", hint} instead of an
+// `expr`. It fails when the regular expression is found in the student's code, so a hint can name a
+// mistake only when the code really has it (e.g. {{lot}} in Strings). It takes no `values` entry.
 // When an `error_hints` entry matches, `hint` is its plain words and `detail` is Python's message.
 function judge(tryBlock, run, values, code = "") {
   if (run.timedOut) return { ok: false, hint: TIMEOUT_HINT };
@@ -1500,10 +1510,10 @@ function judge(tryBlock, run, values, code = "") {
   }
 
   const checks = tryBlock.checks || [];
-  for (let i = 0; i < checks.length; i++) {
-    if (!deepEqual(values[i], checks[i].expect)) {
-      return { ok: false, hint: checks[i].hint };
-    }
+  let k = 0;
+  for (const c of checks) {
+    const pass = c.code_not_matches !== undefined ? !new RegExp(c.code_not_matches).test(String(code)) : deepEqual(values[k++], c.expect);
+    if (!pass) return { ok: false, hint: c.hint };
   }
 
   if (tryBlock.expect_stdout != null) {
@@ -1823,8 +1833,20 @@ function validateConcept(l, c) {
     c.text(t, "solution", "try.");
     const checks = c.list(t, "checks", "try.");
     checks.forEach((chk, i) => {
-      c.text(chk, "expr", `try.checks[${i}].`);
       c.text(chk, "hint", `try.checks[${i}].`);
+      // Pfizer x Extern (QA, 12 Nov 2026): a check is an `expr` with `expect`, or a
+      // `code_not_matches` regular expression tested on the student's code (check.js).
+      if (isObj(chk) && chk.code_not_matches !== undefined) {
+        if (chk.expr !== undefined) return c.bad(`try.checks[${i}]`, "needs expr or code_not_matches, not both");
+        c.text(chk, "code_not_matches", `try.checks[${i}].`);
+        try {
+          new RegExp(chk.code_not_matches);
+        } catch {
+          c.bad(`try.checks[${i}].code_not_matches`, "is not a valid regular expression");
+        }
+        return;
+      }
+      c.text(chk, "expr", `try.checks[${i}].`);
       if (!isObj(chk) || !("expect" in chk)) c.bad(`try.checks[${i}].expect`);
     });
     const hasStdout = t.expect_stdout != null;
@@ -2921,6 +2943,11 @@ function tryPanel(l) {
   const rows = Math.max(6, String(t.starter).split("\n").length); // a starter ending in a newline gets its empty last row
   const box = h("textarea", { id: "code-box", spellcheck: "false", autocomplete: "off", autocapitalize: "off", rows: String(rows), style: `--rows:${rows}` });
   box.value = t.starter;
+  // Pfizer x Extern (QA, 12 Nov 2026): like the other code boxes, the Try box grows and shrinks with
+  // its code, wrapped or added lines included (fitCodeBox), and the stage re-fits after a change.
+  sizeCodeBox(box);
+  if (codeBoxObserver) codeBoxObserver.observe(box);
+  box.addEventListener("input", () => sizeCodeBox(box));
   const checkBtn = h("button", { type: "button", class: "btn btn-primary" }, "Run & check");
   const resetBtn = h("button", { type: "button", class: "btn btn-ghost" }, "Start over");
   const revealBtn = h("button", { type: "button", class: "btn btn-link", hidden: true }, "Show answer");
@@ -2940,7 +2967,8 @@ function tryPanel(l) {
     busy = true;
     checkBtn.disabled = true;
     checkBtn.textContent = "Running…";
-    const exprs = t.checks.map((c) => c.expr);
+    // Pfizer x Extern: only `expr` checks run in Python; a `code_not_matches` check reads the code (check.js).
+    const exprs = t.checks.filter((c) => c.expr !== undefined).map((c) => c.expr);
     const code = box.value;
     const { run: r, values } = await safeEval(code, exprs);
     busy = false;
@@ -2985,6 +3013,7 @@ function tryPanel(l) {
   });
   resetBtn.addEventListener("click", () => {
     box.value = t.starter;
+    sizeCodeBox(box);
     attempts = wrong = 0;
     solved = revealed = false;
     attemptsEl.textContent = "Attempts: 0";
