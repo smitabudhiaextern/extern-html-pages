@@ -1797,8 +1797,10 @@ function validateConcept(l, c) {
         items.forEach((it, i) => {
           if (!nonEmpty(it)) c.bad(`example.visual.items[${i}]`);
         });
-        if (!Number.isInteger(v.highlight) || v.highlight < 0 || v.highlight >= items.length) {
-          c.bad("example.visual.highlight", "must be the position of one of the items");
+        // Pfizer x Extern (QA, 12 Nov 2026): one position, or a list of positions (e.g. [0, 1, 2, 3]).
+        const hl = Array.isArray(v.highlight) ? v.highlight : [v.highlight];
+        if (!hl.length || hl.some((k) => !Number.isInteger(k) || k < 0 || k >= items.length)) {
+          c.bad("example.visual.highlight", "must be the position of one of the items, or a list of positions");
         }
       }
     }
@@ -2493,6 +2495,33 @@ function showOutput(outEl, r) {
   else outEl.append(r.stdout.trimEnd() || "(no output)");
 }
 
+// Pfizer x Extern (QA, 12 Nov 2026): a code box is as tall as its code really is, wrapped lines
+// included, so no line is cut off or scrolls inside the box. `rows` starts at the line count and
+// grows while the text is taller than the box (scrollHeight and clientHeight are in the same units,
+// so the stage's zoom doesn't change the result). A box that is hidden keeps its line count and is
+// sized when it shows (the ResizeObserver below). After a change, stage.js re-fits the panel.
+function fitCodeBox(box) {
+  const before = box.rows;
+  let rows = Math.max(2, box.value.split("\n").length);
+  if (box.getClientRects().length) {
+    box.rows = rows;
+    while (box.scrollHeight > box.clientHeight + 1 && rows < 200) box.rows = ++rows;
+  } else if (box.rows !== rows) box.rows = rows;
+  return box.rows !== before;
+}
+function sizeCodeBox(box) {
+  if (fitCodeBox(box)) document.dispatchEvent(new CustomEvent("lesson-refit"));
+}
+// A box that becomes visible (its slide, tab or demo opens) or changes width is sized again. The
+// work waits one frame, so changing the box's height never runs inside the observer's own callback.
+const codeBoxObserver =
+  typeof ResizeObserver === "function"
+    ? new ResizeObserver((entries) => {
+        const boxes = entries.map((e) => e.target);
+        requestAnimationFrame(() => boxes.forEach(sizeCodeBox));
+      })
+    : null;
+
 // codeRunner({id, label, onRun, onReset, exprs}) -> {box, buttons, status, setCode(code, editable), reset()}
 // `onRun(r, code, values)` is called after each run whose output is shown, with the code that ran
 // (Pfizer x Extern: with `exprs`, a list of Python expressions, each run also evaluates them after
@@ -2504,6 +2533,7 @@ function codeRunner({ id, label, onRun, onReset, exprs = null }) {
   let gen = 0;
   let busy = false;
   const box = h("textarea", { id, class: "code-edit", spellcheck: "false", autocomplete: "off", autocapitalize: "off", "aria-label": label });
+  if (codeBoxObserver) codeBoxObserver.observe(box);
   const runBtn = h("button", { type: "button", class: "btn btn-primary" }, runIcon(), "Run");
   const resetBtn = h("button", { type: "button", class: "btn btn-ghost" }, "Reset");
   const outEl = h("pre", { class: "out" });
@@ -2518,7 +2548,7 @@ function codeRunner({ id, label, onRun, onReset, exprs = null }) {
     gen += 1;
     original = code;
     box.value = code;
-    box.rows = Math.max(2, code.split("\n").length);
+    sizeCodeBox(box);
     box.readOnly = !editable;
     resetBtn.hidden = !editable;
     clearOut();
@@ -2547,7 +2577,7 @@ function codeRunner({ id, label, onRun, onReset, exprs = null }) {
   function reset() {
     gen += 1;
     box.value = original;
-    box.rows = Math.max(2, original.split("\n").length);
+    sizeCodeBox(box);
     clearOut();
     if (onReset) onReset();
     box.focus();
@@ -2555,10 +2585,9 @@ function codeRunner({ id, label, onRun, onReset, exprs = null }) {
 
   runBtn.addEventListener("click", doRun);
   resetBtn.addEventListener("click", reset);
-  // A line the student adds shows in full instead of scrolling inside the box.
-  box.addEventListener("input", () => {
-    box.rows = Math.max(2, box.value.split("\n").length);
-  });
+  // A line the student adds (or a line that grows long enough to wrap) shows in full instead of
+  // scrolling inside the box.
+  box.addEventListener("input", () => sizeCodeBox(box));
   box.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
@@ -2793,6 +2822,8 @@ function whatPanel(l) {
 
 function examplePanel(l) {
   const ex = l.example;
+  // Pfizer x Extern (QA, 12 Nov 2026): `highlight` may be one box number or a list of them.
+  const hl = ex.visual ? [].concat(ex.visual.highlight) : [];
   return h(
     "div",
     { class: "stack" },
@@ -2808,7 +2839,7 @@ function examplePanel(l) {
           ex.visual.items.map((v, i) =>
             h(
               "div",
-              { class: "box" + (i === ex.visual.highlight ? " hl" : "") },
+              { class: "box" + (hl.includes(i) ? " hl" : "") },
               h("span", { class: "box-idx" }, `${ex.visual.label}[${i}]`),
               h("div", { class: "box-val" }, v)
             )
@@ -2855,7 +2886,7 @@ function demoPanel(l) {
     promptEl.hidden = !d.prompt;
     runner.setCode(d.code, d.editable !== false);
     runner.box.value = edits[i];
-    runner.box.rows = Math.max(2, edits[i].split("\n").length);
+    sizeCodeBox(runner.box);
     noteEl.replaceChildren(...lines(d.note));
     noteEl.classList.remove("reveal-in");
     noteEl.hidden = !ran[i];
@@ -3049,6 +3080,8 @@ window.addEventListener("resize", refit);
 // Pfizer x Extern: a slide picture changes the height when it finishes loading (load does not bubble).
 panels.addEventListener("load", refit, true);
 document.addEventListener("lesson-ready", refit);
+// Pfizer x Extern (QA, 12 Nov 2026): a code box grew or shrank to fit its wrapped code (concept.js).
+document.addEventListener("lesson-refit", refit);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
 fitStage();
 
