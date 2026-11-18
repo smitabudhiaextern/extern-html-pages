@@ -534,6 +534,13 @@ textarea.ed-ta:focus-visible { outline: none; }
 .feedback .fb-msg code, .m-errhint code { font-size: 12.5px; }
 .m-answer { display: flex; flex-direction: column; gap: 6px; }
 
+/* numbered character boxes (v4 checkpoint 4): one box per character, its index under it; .on = highlighted */
+.m-boxes { display: inline-flex; gap: 4px; vertical-align: top; }
+.m-boxes > span { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.m-boxes b { display: flex; align-items: center; justify-content: center; width: 30px; height: 34px; border: 1.5px solid var(--line); border-radius: var(--radius-xs); background: var(--surface); font: 600 16px/1 var(--mono); color: var(--ink); }
+.m-boxes .on b { background: var(--surface-card); border-color: var(--ink); }
+.m-boxes small { font: 500 12px/14px var(--sans); color: var(--ink-muted); }
+
 /* stress test scoreboard */
 .m-note { font-size: 13.5px; line-height: 20px; color: var(--ink-muted); background: var(--gray-50); border-radius: var(--radius-xs); padding: 8px 12px; }
 .m-score-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
@@ -2027,7 +2034,8 @@ function h(tag, attrs, ...kids) {
   for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) el.append(kid);
   return el;
 }
-const paras = (list, cls = "m-p") => (list || []).map((t) => h("p", { class: cls, html: t }));
+// A paragraph that starts with <pre> is a block (for example an error message), so it isn't put inside a <p>.
+const paras = (list, cls = "m-p") => (list || []).map((t) => /^\s*<pre[\s>]/.test(t) ? h("div", { class: "m-out", html: t }) : h("p", { class: cls, html: t }));
 const announcer = document.getElementById("announce");
 function announce(text) {
   announcer.textContent = "";
@@ -2390,7 +2398,8 @@ function stressScreen(s, i) {
       if (fails >= 2) btns.failedTwice();
     }
     announce(`${passCount} of ${cases.length} pass.`);
-    requestAnimationFrame(() => revealInBody(check.el));
+    // On a fail, scroll down to the first failing row (the feedback sits just above the table).
+    requestAnimationFrame(() => revealInBody(firstFail >= 0 ? rows[firstFail].tr : check.el));
   }
   return card(s, i,
     h("div", { class: "m-text" }, paras(s.paras)),
@@ -2474,10 +2483,11 @@ const screens = SCREENS.map((s, i) => BUILD[s.kind](s, i));
 host.replaceChildren(...screens);
 
 const railItems = [];
+const bugCount = SCREENS.filter((s) => s.kind === "bug").length;
 SCREENS.forEach((s, i) => {
   const last = railItems[railItems.length - 1];
   if (s.kind === "bug" && last && last.kind === "bug") { last.screens.push(i); return; }
-  const label = { mission: "Mission", stress: "Stress Test", bug: "Bugs", done: "Done" }[s.kind] || String(s.n);
+  const label = { mission: "Mission", stress: "Stress Test", bug: bugCount === 1 ? "Bug" : "Bugs", done: "Done" }[s.kind] || String(s.n);
   const said = s.kind === "checkpoint" ? `Checkpoint ${s.n}` : label;
   railItems.push({ kind: s.kind, label, said, screens: [i] });
 });
