@@ -189,6 +189,11 @@ pre.out { background: var(--out-bg); border: 1px solid var(--out-line); color: v
 .boxes:has(> .box:nth-child(7)) .box { gap: 4px; }
 .boxes:has(> .box:nth-child(7)) .box-val { padding: 8px 10px; font-family: var(--mono); font-size: 16px; }
 .caption { font-size: 15px; line-height: 23px; color: var(--ink-muted); }
+/* Pfizer x Extern (Smita, 18 Nov 2026): a slide's {boxes} picture: one row, the number under each box. */
+.boxes.boxes-below:has(> .box) { gap: 4px 6px; }
+.boxes.boxes-below:has(> .box) .box { gap: 2px; }
+.boxes.boxes-below:has(> .box) .box-idx { text-align: center; }
+.boxes.boxes-below:has(> .box) .box-val { padding: 6px 0; font-family: var(--mono); font-size: 16px; }
 
 /* ---- demo ---- */
 .demo { display: flex; gap: 18px; }
@@ -285,6 +290,26 @@ textarea.code-edit[readonly] { cursor: default; }
 }
 .practice-side:has(.out-wrap:not([hidden])) .practice-wait { display: none; }
 .slide-after { color: var(--ink); }
+
+/* ---- Pfizer x Extern: guess, then run (M1-S2-V2-SLIDES.md additions A and B) ----
+   A {predict} item: the question, the pick-one buttons (the shell's .choice look) side by side, and
+   the reply under them: success style for the right option, the neutral "Not quite yet" style for a
+   wrong one (never red). A {run} item: the demo's code box, with its prompt above and its note after
+   the first Run. */
+.predict { display: flex; flex-direction: column; gap: 8px; }
+.predict-q { color: var(--ink); font-weight: 500; }
+.predict-options { display: grid; grid-template-columns: repeat(var(--opts, 3), minmax(0, 1fr)); gap: 8px; }
+.predict-options .choice { font-weight: 500; line-height: 20px; padding: 6px 12px; }
+.predict-options .choice:hover { border-color: var(--ink); }
+.predict-options .choice.ok:hover { border-color: var(--green-600); }
+.predict-fb.ok .fb-msg::before {
+  content: ""; display: inline-block; width: 9px; height: 5px; margin: 0 9px 3px 2px;
+  border-left: 2.5px solid var(--green-600); border-bottom: 2.5px solid var(--green-600); transform: rotate(-45deg);
+}
+.predict-fb { padding: 8px 12px; }
+.predict-fb .fb-msg { color: var(--ink); }
+.run-box, .run-box .run-status { display: flex; flex-direction: column; gap: 8px; }
+.run-prompt { font-size: 15px; line-height: 22px; color: var(--ink); font-weight: 500; }
 
 /* ---- buttons: black primary, outlined secondary, radius-xs (Light format) ---- */
 .btn {
@@ -1501,6 +1526,8 @@ function errorLine(error) {
 // Pfizer x Extern (QA, 12 Nov 2026): a check may be {code_not_matches: "regex", hint} instead of an
 // `expr`. It fails when the regular expression is found in the student's code, so a hint can name a
 // mistake only when the code really has it (e.g. {{lot}} in Strings). It takes no `values` entry.
+// {code_matches: "regex", hint} is the opposite: it fails when the regular expression is NOT found
+// (Strings v2: the prompt must use {lot} and {year}, not the values typed in by hand).
 // When an `error_hints` entry matches, `hint` is its plain words and `detail` is Python's message.
 function judge(tryBlock, run, values, code = "") {
   if (run.timedOut) return { ok: false, hint: TIMEOUT_HINT };
@@ -1513,7 +1540,12 @@ function judge(tryBlock, run, values, code = "") {
   const checks = tryBlock.checks || [];
   let k = 0;
   for (const c of checks) {
-    const pass = c.code_not_matches !== undefined ? !new RegExp(c.code_not_matches).test(String(code)) : deepEqual(values[k++], c.expect);
+    const pass =
+      c.code_not_matches !== undefined
+        ? !new RegExp(c.code_not_matches).test(String(code))
+        : c.code_matches !== undefined
+          ? new RegExp(c.code_matches).test(String(code))
+          : deepEqual(values[k++], c.expect);
     if (!pass) return { ok: false, hint: c.hint };
   }
 
@@ -1546,10 +1578,13 @@ function isLoadFailure(run) {
 //   {stdout_not_equals: "..."}
 //   {stdout_contains: "..."} / {stdout_not_contains: "..."}
 //   {stdout_matches: "regex"} a regular expression searched in the output
+//   {code_matches: "regex"} / {code_not_matches: "regex"}  a regular expression searched in the
+//                             student's code (Pfizer x Extern, M1-S2-V2-SLIDES.md addition C), e.g. so
+//                             a number typed by hand instead of the blank {lot} gets its own hint
 // The code must also run without an error. Checks run in order; the first that fails gives its
 // `hint` (or the practice's `hint_default`). An error gives the first matching `error_hints`
 // entry, else `hint_default`; `detail` is Python's own line.
-const PRACTICE_TESTS = ["expr", "stdout_equals", "stdout_not_equals", "stdout_contains", "stdout_not_contains", "stdout_matches"];
+const PRACTICE_TESTS = ["expr", "stdout_equals", "stdout_not_equals", "stdout_contains", "stdout_not_contains", "stdout_matches", "code_matches", "code_not_matches"];
 
 function practiceExprs(practice) {
   return (practice.checks || []).filter((c) => c && c.expr !== undefined).map((c) => c.expr);
@@ -1571,6 +1606,8 @@ function judgePractice(practice, run, values, code = "") {
     else if (c.stdout_contains !== undefined) pass = out.includes(String(c.stdout_contains));
     else if (c.stdout_not_contains !== undefined) pass = !out.includes(String(c.stdout_not_contains));
     else if (c.stdout_matches !== undefined) pass = new RegExp(c.stdout_matches).test(out);
+    else if (c.code_matches !== undefined) pass = new RegExp(c.code_matches).test(String(code));
+    else if (c.code_not_matches !== undefined) pass = !new RegExp(c.code_not_matches).test(String(code));
     else pass = true;
     if (!pass) return { ok: false, hint: c.hint || practice.hint_default };
   }
@@ -1710,11 +1747,12 @@ function validatePractice(pr, path, c) {
     const t = tests[0];
     if (!isStr(chk[t]) || (t !== "stdout_equals" && t !== "stdout_not_equals" && chk[t] === "")) c.bad(`${cp}.${t}`, "must be text");
     if (t === "expr" && !("expect" in chk)) c.bad(`${cp}.expect`);
-    if (t === "stdout_matches" && isStr(chk[t])) {
+    // Pfizer x Extern (M1-S2-V2-SLIDES.md addition C): code_matches / code_not_matches read the code.
+    if ((t === "stdout_matches" || t === "code_matches" || t === "code_not_matches") && isStr(chk[t])) {
       try {
         new RegExp(chk[t]);
       } catch {
-        c.bad(`${cp}.stdout_matches`, "is not a valid regular expression");
+        c.bad(`${cp}.${t}`, "is not a valid regular expression");
       }
     }
     if (chk.hint !== undefined) c.text(chk, "hint", `${cp}.`);
@@ -1729,6 +1767,69 @@ function validatePractice(pr, path, c) {
   }
 }
 
+// Pfizer x Extern (M1-S2-V2-SLIDES.md, additions A and B): two more item types for a slide's
+// `paragraphs` and `intro` (and, for predict only, `example.intro`).
+//   {predict: {question, options: [{label, ok, feedback}]}}  pick-one guess, 2 or 3 options, exactly
+//     one ok: true. Everything after it stays hidden until the first pick (concept.js).
+//   {run: {code, prompt?, note?, predict?}}  an editable Run / Reset code box with no check; `note`
+//     shows after the box's first Run, like a demo's note. With `predict`, the guess sits between the
+//     code and Run, so the student guesses from the code she can see (QA round 2).
+function validatePredictItem(p, path, c) {
+  if (!isObj(p)) return c.bad(path, "must be {question, options}");
+  c.text(p, "question", `${path}.`);
+  const opts = c.list(p, "options", `${path}.`, { min: 2 });
+  if (opts.length > 3) c.bad(`${path}.options`, "needs 2 or 3 options");
+  opts.forEach((o, i) => {
+    c.text(o, "label", `${path}.options[${i}].`);
+    c.text(o, "feedback", `${path}.options[${i}].`);
+    if (!isObj(o) || typeof o.ok !== "boolean") c.bad(`${path}.options[${i}].ok`, "must be true or false");
+  });
+  if (opts.length) exactlyOneOk(opts, `${path}.options`, c);
+}
+
+function validateRunItem(r, path, c) {
+  if (!isObj(r)) return c.bad(path, "must be {code, prompt?, note?, predict?}");
+  c.text(r, "code", `${path}.`);
+  if (r.prompt !== undefined) c.text(r, "prompt", `${path}.`);
+  if (r.note !== undefined) c.text(r, "note", `${path}.`);
+  // Strings v2, QA round 2: a guess asked about the code in this box. The code shows first; the
+  // prompt, Run / Reset and the output show after the first pick.
+  if (r.predict !== undefined) validatePredictItem(r.predict, `${path}.predict`, c);
+}
+
+// A row of numbered character boxes: the Example's `visual`, or a slide's {boxes} item.
+function validateBoxes(v, path, c) {
+  if (!isObj(v)) return c.bad(path, "must be {items, highlight}");
+  // Pfizer x Extern (Smita, 18 Nov 2026): `index: "below"` shows plain numbers under the boxes,
+  // so no label is needed then; `alt` is an optional text version of the picture.
+  if (v.index !== undefined && v.index !== "below") c.bad(`${path}.index`, 'must be "below" or left out');
+  if (v.index !== "below") c.text(v, "label", `${path}.`);
+  if (v.alt !== undefined) c.text(v, "alt", `${path}.`);
+  const items = c.list(v, "items", `${path}.`, { min: 1 });
+  items.forEach((it, i) => {
+    if (!nonEmpty(it)) c.bad(`${path}.items[${i}]`);
+  });
+  // Pfizer x Extern (QA, 12 Nov 2026): one position, or a list of positions (e.g. [0, 1, 2, 3]).
+  const hl = Array.isArray(v.highlight) ? v.highlight : [v.highlight];
+  if (!hl.length || hl.some((k) => !Number.isInteger(k) || k < 0 || k >= items.length)) {
+    c.bad(`${path}.highlight`, "must be the position of one of the items, or a list of positions");
+  }
+}
+
+// One item of a slide's `paragraphs` or `intro`, or of `example.intro` (no run box there).
+function validateItem(item, ip, c, { run = true } = {}) {
+  const only = (k) => isObj(item) && item[k] !== undefined && Object.keys(item).length === 1;
+  if (isStr(item)) {
+    if (!nonEmpty(item)) c.bad(ip);
+  } else if (only("code")) {
+    if (!nonEmpty(item.code)) c.bad(`${ip}.code`);
+  } else if (only("image")) validateImage(item.image, `${ip}.image`, c);
+  else if (only("predict")) validatePredictItem(item.predict, `${ip}.predict`, c);
+  else if (run && only("run")) validateRunItem(item.run, `${ip}.run`, c);
+  else if (only("boxes")) validateBoxes(item.boxes, `${ip}.boxes`, c);
+  else c.bad(ip, run ? "must be text, {code}, {image}, {boxes}, {predict} or {run}" : "must be text, {code}, {image}, {boxes} or {predict}");
+}
+
 function validateSlides(what, c) {
   // Slides replace everything else in Tab 1: anything left beside them would never show.
   ["heading", "paragraphs", "points", "code", "play"].forEach((k) => {
@@ -1738,16 +1839,8 @@ function validateSlides(what, c) {
     const sp = `what.slides[${i}]`;
     if (!isObj(s)) return c.bad(sp, "must be an object");
     c.text(s, "heading", `${sp}.`);
-    (s.paragraphs === undefined ? [] : c.list(s, "paragraphs", `${sp}.`)).forEach((item, j) => {
-      const ip = `${sp}.paragraphs[${j}]`;
-      if (isStr(item)) {
-        if (!nonEmpty(item)) c.bad(ip);
-      } else if (isObj(item) && item.code !== undefined && Object.keys(item).length === 1) {
-        if (!nonEmpty(item.code)) c.bad(`${ip}.code`);
-      } else if (isObj(item) && item.image !== undefined && Object.keys(item).length === 1) {
-        validateImage(item.image, `${ip}.image`, c);
-      } else c.bad(ip, "must be text, {code} or {image}");
-    });
+    (s.paragraphs === undefined ? [] : c.list(s, "paragraphs", `${sp}.`)).forEach((item, j) => validateItem(item, `${sp}.paragraphs[${j}]`, c));
+    (s.intro === undefined ? [] : c.list(s, "intro", `${sp}.`)).forEach((item, j) => validateItem(item, `${sp}.intro[${j}]`, c));
     if (s.image !== undefined) validateImage(s.image, `${sp}.image`, c);
     if (s.code !== undefined) c.text(s, "code", `${sp}.`);
     if (s.practice !== undefined) validatePractice(s.practice, `${sp}.practice`, c);
@@ -1796,24 +1889,15 @@ function validateConcept(l, c) {
   if (ex) {
     c.text(ex, "heading", "example.");
     c.text(ex, "code", "example.");
+    // Pfizer x Extern: `intro` items above the code (text, {code}, {image} or {predict}), `notes` below it.
+    if (ex.intro !== undefined) c.list(ex, "intro", "example.").forEach((item, j) => validateItem(item, `example.intro[${j}]`, c, { run: false }));
     // Pfizer x Extern (10 Nov 2026): the caption may be left out when `notes` carry the text below the code.
     if (ex.caption !== undefined || !Array.isArray(ex.notes) || !ex.notes.length) c.text(ex, "caption", "example.");
     if (ex.visual === undefined) c.bad("example.visual", "must be null or a boxes visual");
     else if (ex.visual !== null) {
       const v = ex.visual;
       if (!isObj(v) || v.type !== "boxes") c.bad("example.visual.type", 'must be "boxes"');
-      else {
-        c.text(v, "label", "example.visual.");
-        const items = c.list(v, "items", "example.visual.", { min: 1 });
-        items.forEach((it, i) => {
-          if (!nonEmpty(it)) c.bad(`example.visual.items[${i}]`);
-        });
-        // Pfizer x Extern (QA, 12 Nov 2026): one position, or a list of positions (e.g. [0, 1, 2, 3]).
-        const hl = Array.isArray(v.highlight) ? v.highlight : [v.highlight];
-        if (!hl.length || hl.some((k) => !Number.isInteger(k) || k < 0 || k >= items.length)) {
-          c.bad("example.visual.highlight", "must be the position of one of the items, or a list of positions");
-        }
-      }
+      else validateBoxes(v, "example.visual", c);
     }
   }
 
@@ -1837,13 +1921,17 @@ function validateConcept(l, c) {
       c.text(chk, "hint", `try.checks[${i}].`);
       // Pfizer x Extern (QA, 12 Nov 2026): a check is an `expr` with `expect`, or a
       // `code_not_matches` regular expression tested on the student's code (check.js).
-      if (isObj(chk) && chk.code_not_matches !== undefined) {
-        if (chk.expr !== undefined) return c.bad(`try.checks[${i}]`, "needs expr or code_not_matches, not both");
-        c.text(chk, "code_not_matches", `try.checks[${i}].`);
+      // Strings v2 (round 1 QA): or a `code_matches` regular expression that must be found in the code.
+      const codeKey = isObj(chk) ? ["code_not_matches", "code_matches"].find((k) => chk[k] !== undefined) : undefined;
+      if (codeKey) {
+        if (chk.expr !== undefined || (chk.code_not_matches !== undefined && chk.code_matches !== undefined)) {
+          return c.bad(`try.checks[${i}]`, "needs exactly one of expr, code_matches or code_not_matches");
+        }
+        c.text(chk, codeKey, `try.checks[${i}].`);
         try {
-          new RegExp(chk.code_not_matches);
+          new RegExp(chk[codeKey]);
         } catch {
-          c.bad(`try.checks[${i}].code_not_matches`, "is not a valid regular expression");
+          c.bad(`try.checks[${i}].${codeKey}`, "is not a valid regular expression");
         }
         return;
       }
@@ -2486,7 +2574,7 @@ const __m_concept = (() => {
 // `code` and **bold** in lesson text into real elements.
 const { evalChecks } = __m_runner;
 const { judge, revealAllowed, isLoadFailure, friendlyError, judgePractice, practiceExprs } = __m_check;
-const { h, inline, loadFailureNode, startFailed, safeRun, runErrorText, revealInPanel, focusRevealed, feedbackSlot, learnPanel, boot } = __m_shell;
+const { h, inline, loadFailureNode, startFailed, safeRun, runErrorText, revealInPanel, focusRevealed, feedbackSlot, choiceGroup, learnPanel, boot } = __m_shell;
 const TAB_LABELS = ["What is it?", "Example", "Demo", "Try it", "Learn more (optional)"];
 
 async function safeEval(code, exprs) {
@@ -2718,15 +2806,105 @@ function practiceBox(pr, i, afterEl) {
   );
 }
 
+// ---------- Guess, then run (Pfizer x Extern, M1-S2-V2-SLIDES.md additions A and B) ----------
+
+// A {predict} item: the question, one button per option (the shell's pick-one buttons) and the
+// picked option's reply under them: the right one in the success style, a wrong one in the neutral
+// style (a guess is never "wrong"). Every option stays clickable; the newest pick replaces the reply.
+// No score and no attempt count. What comes after the item stays hidden until the first pick
+// (gateAfterPredicts below).
+const predictGates = new WeakMap(); // predict element -> the elements it reveals on the first pick
+
+function predictBlock(p) {
+  const n = p.options.length;
+  const reply = h("div", { class: "predict-reply", role: "status", "aria-live": "polite" });
+  const el = h("div", { class: "predict", "data-options": String(n) });
+  let picked = false;
+  const group = choiceGroup(
+    p.options.map((o) => inline(o.label)),
+    {
+      className: "predict-options",
+      label: "Your guess",
+      onPick: (k) => {
+        const o = p.options[k];
+        group.mark(k, o.ok);
+        reply.replaceChildren(h("div", { class: "feedback predict-fb " + (o.ok ? "ok" : "no") }, h("span", { class: "fb-msg" }, inline(o.feedback))));
+        if (picked) return;
+        picked = true;
+        (predictGates.get(el) || []).forEach((node) => {
+          node.hidden = false;
+          node.classList.add("reveal-in");
+        });
+        document.dispatchEvent(new CustomEvent("lesson-refit"));
+      },
+    }
+  );
+  group.el.style.setProperty("--opts", String(n));
+  el.append(h("p", { class: "lead predict-q" }, lines(p.question)), group.el, reply);
+  predictGates.set(el, []);
+  return el;
+}
+
+// Hides everything after each predict in `nodes` (one panel's elements, in order) until that
+// predict's first pick. A second predict is itself revealed by the first, and gates what follows
+// it. Elements in `keep` (a slide's `after` line, which its practice shows) are left alone.
+function gateAfterPredicts(nodes, keep = []) {
+  let gated = null;
+  for (const el of nodes) {
+    if (!el) continue;
+    if (gated && !keep.includes(el)) {
+      el.hidden = true;
+      gated.push(el);
+    }
+    if (predictGates.has(el)) gated = predictGates.get(el);
+  }
+  return nodes;
+}
+
+// A {run} item: the demo's editable code box (Run, Reset, Output) with its `prompt` above it and its
+// `note` hidden until the box's first Run, like a demo's note. No check and no "Correct!".
+// With `run.predict` (QA round 2) the code box comes first, then the guess; the prompt, Run / Reset
+// and the output show after the first pick, so the student guesses from the code she can see.
+function runBlock(r, id) {
+  const note = r.note ? h("div", { class: "demo-note run-note", hidden: true }, lines(r.note)) : null;
+  const runner = codeRunner({
+    id,
+    label: "Code you can change",
+    onRun: (res) => {
+      if (isLoadFailure(res) || !note || !note.hidden) return; // the output already says Python couldn't load
+      note.hidden = false;
+      note.classList.add("reveal-in");
+    },
+  });
+  if (note) runner.status.append(note);
+  runner.setCode(r.code);
+  const prompt = r.prompt ? h("p", { class: "run-prompt" }, lines(r.prompt)) : null;
+  if (r.predict) {
+    const nodes = [runner.box, predictBlock(r.predict), prompt, runner.buttons, runner.status].filter(Boolean);
+    return h("div", { class: "run-box", "data-run": id }, gateAfterPredicts(nodes));
+  }
+  return h("div", { class: "run-box", "data-run": id }, prompt, runner.box, runner.buttons, runner.status);
+}
+
 // A slide's `paragraphs`, in order. An {image} item sits beside the text paragraphs right after it
 // (picture left, text right), so a picture and its line share one row instead of stacking.
-function slideItems(items) {
+// `runId(k)` names the k-th run box (1-based) on this slide, e.g. "slide-3-run-1".
+function slideItems(items, runId = (k) => `run-${k}`, runs = { n: 0 }) {
   const out = [];
   for (let k = 0; k < items.length; k++) {
     const item = items[k];
     if (typeof item === "string") out.push(h("p", { class: "lead" }, lines(item)));
     else if (item.code !== undefined) out.push(h("pre", {}, item.code));
-    else {
+    else if (item.predict !== undefined) out.push(predictBlock(item.predict));
+    else if (item.run !== undefined) out.push(runBlock(item.run, runId(++runs.n)));
+    else if (item.boxes !== undefined) {
+      // Pfizer x Extern (Smita, 18 Nov 2026): a {boxes} item draws a string as numbered character
+      // boxes (the Example's look). Text paragraphs right after it sit beside it, like an {image}.
+      const text = [];
+      while (typeof items[k + 1] === "string") text.push(h("p", { class: "lead" }, lines(items[++k])));
+      const fig = boxesVisual(item.boxes);
+      out.push(text.length ? h("div", { class: "slide-row" }, fig, h("div", { class: "stack slide-row-text" }, text)) : fig);
+    } else {
       const text = [];
       while (typeof items[k + 1] === "string") text.push(h("p", { class: "lead" }, lines(items[++k])));
       const fig = slideImage(item.image);
@@ -2738,18 +2916,19 @@ function slideItems(items) {
 
 function slideBody(s, i) {
   const after = s.after ? h("p", { class: "lead slide-after", hidden: true }, inline(s.after)) : null;
-  return h(
-    "div",
-    { class: "stack slide-body" },
+  const runId = (k) => `slide-${i + 1}-run-${k}`;
+  const runs = { n: 0 }; // run boxes on this slide, counted across `intro` and `paragraphs`
+  const nodes = [
     h("h2", {}, s.heading),
     // Pfizer x Extern (10 Nov 2026): optional `intro` strings shown above the slide image.
-    s.intro ? slideItems(s.intro) : null,
+    s.intro ? slideItems(s.intro, runId, runs) : null,
     s.image ? slideImage(s.image) : null,
-    slideItems(s.paragraphs || []),
+    slideItems(s.paragraphs || [], runId, runs),
     s.code ? h("pre", {}, s.code) : null,
     s.practice ? practiceBox(s.practice, i, after) : null,
-    after
-  );
+    after,
+  ].flat();
+  return h("div", { class: "stack slide-body" }, gateAfterPredicts(nodes, [after]));
 }
 
 function slidesPanel(l) {
@@ -2851,34 +3030,43 @@ function whatPanel(l) {
   );
 }
 
-function examplePanel(l) {
-  const ex = l.example;
-  // Pfizer x Extern (QA, 12 Nov 2026): `highlight` may be one box number or a list of them.
-  const hl = ex.visual ? [].concat(ex.visual.highlight) : [];
+// One box per item, each with its number: the Example's `visual` and a slide's {boxes} item.
+// Pfizer x Extern (QA, 12 Nov 2026): `highlight` may be one box number or a list of them.
+// Pfizer x Extern (Smita, 18 Nov 2026): `index: "below"` puts the plain number (0, 1, 2...) under
+// each box and keeps every box on one row; `alt` gives the picture a text version for screen readers.
+function boxesVisual(v) {
+  const hl = [].concat(v.highlight ?? []);
+  const below = v.index === "below";
   return h(
     "div",
-    { class: "stack" },
+    {
+      class: "boxes" + (below ? " boxes-below" : ""),
+      style: below ? `grid-template-columns: repeat(${v.items.length}, minmax(0, 1fr))` : null,
+      role: v.alt ? "img" : null,
+      "aria-label": v.alt || null,
+    },
+    v.items.map((val, i) => {
+      const idx = h("span", { class: "box-idx" }, below ? String(i) : `${v.label}[${i}]`);
+      const box = h("div", { class: "box-val" }, val);
+      return h("div", { class: "box" + (hl.includes(i) ? " hl" : "") }, below ? [box, idx] : [idx, box]);
+    })
+  );
+}
+
+function examplePanel(l) {
+  const ex = l.example;
+  // Pfizer x Extern (M1-S2-V2-SLIDES.md): a {predict} in `intro` hides what follows it (the later
+  // intro items, the code, notes, boxes and caption) until the first pick.
+  const nodes = [
     h("h2", {}, ex.heading),
     // Pfizer x Extern (10 Nov 2026): optional `intro` lines above the code and `notes` lines below it.
-    ex.intro ? slideItems(ex.intro) : null,
+    ex.intro ? slideItems(ex.intro, (k) => `example-run-${k}`) : null,
     h("pre", {}, ex.code),
     ex.notes ? slideItems(ex.notes) : null,
-    ex.visual
-      ? h(
-          "div",
-          { class: "boxes" },
-          ex.visual.items.map((v, i) =>
-            h(
-              "div",
-              { class: "box" + (hl.includes(i) ? " hl" : "") },
-              h("span", { class: "box-idx" }, `${ex.visual.label}[${i}]`),
-              h("div", { class: "box-val" }, v)
-            )
-          )
-        )
-      : null,
-    ex.caption ? h("p", { class: "caption" }, inline(ex.caption)) : null
-  );
+    ex.visual ? boxesVisual(ex.visual) : null,
+    ex.caption ? h("p", { class: "caption" }, inline(ex.caption)) : null,
+  ].flat();
+  return h("div", { class: "stack" }, gateAfterPredicts(nodes));
 }
 
 function demoPanel(l) {
@@ -2976,7 +3164,7 @@ function tryPanel(l) {
     busy = true;
     checkBtn.disabled = true;
     checkBtn.textContent = "Running…";
-    // Pfizer x Extern: only `expr` checks run in Python; a `code_not_matches` check reads the code (check.js).
+    // Pfizer x Extern: only `expr` checks run in Python; a `code_matches` / `code_not_matches` check reads the code (check.js).
     const exprs = t.checks.filter((c) => c.expr !== undefined).map((c) => c.expr);
     const code = box.value;
     const { run: r, values } = await safeEval(code, exprs);
