@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three OCR Engines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player, rail, "Click me" pulse, switches, chips, pictures with
+   boxes drawn over them and the spacing code: copied from pfizer3-p4-m2-learn.html (agent A4, itself from P3 module 9).
+   P4 module 4 Learn cards: "Learn How to Read a Scanned Page with PaddleOCR and EasyOCR" (merges Chaitanya's pages
+   "Know What is Layout-Aware OCR", "Learn How to Use PaddleOCR" and "Learn How to Use EasyOCR"). Ideas only, NO code:
+   all code is in the Try deck (pfizer3-p4-m4-steps.html, built later by agent B4). Agent B2, 19 November 2026.
+   5 cards, placed as in project-04/step2-coverage-m4.md:
+   1 Real-World OCR: When Tesseract Isn't Enough: his H2 (L3) as the title, L6 and L7 (fixed: F1, F2); switch Tesseract /
+     PaddleOCR / EasyOCR on Page 4 with a zoom on the top two lines (7 word boxes vs 2 line boxes).
+   2 Why Do We Even Need Layout Awareness?: his L11 question as the title, L12 word for word, L13 (fixed: F1), L14 ("So
+     yeah" dropped, "labeled" dropped: F2); click any box in the real table to see its text and the heading it sits under.
+   3 PaddleOCR Gives Each Line a Polygon: L16 ("real pharmaceutical documents" to "supplier documents"), L17 word for word,
+     P15 as the panel labels.
+   4 EasyOCR Is Quick to Set Up...: L18 ("ID cards" dropped) and 5 real table lines PaddleOCR and EasyOCR read differently.
+   5 What Each Engine Does, Side by Side: his 5-row table (L19), both columns, fixed: row 1 both (F2), row 2 EasyOCR (F3),
+     row 3 PaddleOCR (F4), row 4 EasyOCR (F5: "receipts, ID-style layouts" dropped); em dashes and emoji dropped. Each row
+     opens one line of what the real run on Page 4 showed.
+   Every fixed line is marked "Ask Chaitanya to review" in the gray note under the embed on the page, never here.
+   Ours: titles 2 to 4, eyebrows, one bold why line per card, hints, the definition of layout, card 2's result lines,
+   card 3's last panel line, the column headings of card 4, card 5's "What Page 4 showed us" lines (real, from the run).
+   REAL DATA. Page 4 = pharmaceutical-sdf-page4-certificate-processing.pdf (Drive 1UvYmChia7K90-xjCsHsGqhixmDrPfhHw).
+   PaddleOCR and EasyOCR boxes, texts and confidences (D.P, D.E): agent B4's Colab run, 19 November 2026, of the student
+   copy of his notebook (Drive 1lKyUnyJnMEUY34vnCMHMdh7Z8gzN-qzP: paddleocr 2.10.0, paddlepaddle 3.0.0,
+   PaddleOCR(use_angle_cls=True, lang='en', rec_batch_num=1); easyocr 1.7.2; Python 3.13.18; pdf2image at 300 dpi,
+   2550 x 3300), saved by a helper cell after STEP 14 (scratchpad p4s2/b4/colab-p4-results.json). 98 PaddleOCR regions
+   and 95 EasyOCR regions (85 above 0.5), the same numbers students see in STEP 5, STEP 10 and STEP 12. EasyOCR boxes are
+   corner 0 to corner 2 of its 4 corners, the rectangle his STEP 12 draws.
+   Agent B5, 19 Nov 2026 (QA q2 FAIL 5): the local Mac values B2 used are gone. Card 1: EasyOCR splits the title into
+   Certificate Of and Processing in Colab, so its zoom shows 3 boxes (E[0], E[1], E[3]). Card 4 rows re-picked so each
+   really differs in Colab (17242818 is 100.00% in EasyOCR now and UOM is read right, at 64.13%): Product Lot Number,
+   UOM, CS, Cust Item ID: CB0050L10-21, 17271868. Card 5 row 5: no restart is needed with the fixed install.
+   F2, 19 Nov 2026 (QA q2): card 5 row 1 PaddleOCR "its exact outline" became "its four-cornered box" (FAIL 6); card 4's
+   why line and card 5's row 4 line no longer say the Task is on Page 4 (the Task uses Page 6).
+   Card 1 Tesseract: the full-page overlay is pfizer3-p4-m2-l1-boxes.png (his Tesseract notebook's saved Step 13 output,
+   as in the m2 deck); the zoom boxes are agent A1's Colab run of the Tesseract student copy (300 dpi, Step 12 printout).
+   Pictures: pfizer3-p4-m2-l1-page4.png (from m2); pfizer3-p4-m4-l1-top.png and -l2-table.png are crops of the same
+   300 dpi picture (source: project-04/images/m4-learn-crops-source.py).
+   Fixed stage: 760 x 830 (Notion embed height 773 px) at every width, scaled as one piece to fit the frame and centred.
+   Nothing scrolls. Spare height first widens the gaps between blocks (up to 2x), then enlarges the card's main picture. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:830px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:20px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:17px;line-height:1.45;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:16px;line-height:1.55;color:var(--ink-muted);text-wrap:pretty}
+.p b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:14px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.row{display:flex;align-items:center;gap:var(--space-4)}
+.cols{display:flex;gap:22px;align-items:flex-start}
+.cols > .side{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:12px}
+code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card);color:var(--ink);padding:1px 5px;border-radius:5px;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:14.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them (an SVG in the picture's own units) */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none}
+.pic img{display:block;width:100%;height:auto;transition:opacity .45s ease}
+.pic.px img{image-rendering:pixelated}
+.pic img.over{position:absolute;left:0;top:0;opacity:0}
+.pic.plain img.over{opacity:1}
+.pic.plain img.base{opacity:0}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.pic rect{fill:none;stroke-width:2.5px;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16}
+.pic rect.gl{stroke:var(--highlight);fill:none;stroke-width:1.5px}
+.pic rect.b{stroke:var(--pfizer-blue);fill:var(--pfizer-blue);fill-opacity:.10}
+.pic rect.bl{stroke:var(--blue-200);fill:none;stroke-width:1.5px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){ .pic rect.pop{animation:none} }
+.pic text{font-family:var(--font-text);font-weight:700;fill:var(--pfizer-blue)}
+.pic text.g{fill:var(--highlight)}
+.pic circle{fill:var(--pfizer-blue);stroke:var(--surface);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.cap{margin:6px 0 0;font-size:12.5px;line-height:1.3;font-weight:600;color:var(--gray-600);text-align:center}
+.res{margin:0;font-size:16px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.res b{font-weight:700;color:var(--ink)}
+
+.whyl{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.whyl li{font-size:16px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.whyl li b{font-weight:600;color:var(--ink)}
+.whyh{margin:0;font-size:15px;line-height:1.4;font-weight:600;color:var(--ink)}
+
+/* Tiles (card 2) and chips (card 4) */
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;border-radius:var(--radius-xs)}
+.tile{display:flex;flex-direction:column;justify-content:center;gap:2px;text-align:left;background:var(--surface);border:1.5px solid var(--ink);border-radius:var(--radius-xs);padding:7px 10px;cursor:pointer;min-height:50px}
+.tile .n{font-size:12px;line-height:1.2;font-weight:600;color:var(--step-label)}
+.tile .t{font-size:14px;line-height:1.25;font-weight:600;color:inherit}
+.tile[aria-pressed="true"]{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.tile[aria-pressed="true"] .n{color:var(--blue-200)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;border-radius:var(--radius-xs)}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:14px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.panel{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.panel .ph{margin:0;font-size:16px;line-height:1.45;font-weight:600;color:var(--ink)}
+.panel .pp{margin:0;font-size:15.5px;line-height:1.5;color:var(--card-text);text-wrap:pretty}
+.panel .pp b{font-weight:600;color:var(--ink)}
+.panel ul{margin:0;padding-left:20px}
+.panel li{font-size:15.5px;line-height:1.5;color:var(--card-text)}
+.panel.two{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);column-gap:20px;row-gap:6px;align-content:start}
+.panel.two .ph{grid-column:1 / -1}
+.panel.two .pw{display:flex;flex-direction:column;gap:4px}
+.size{display:inline-block;font-size:13px;font-weight:600;color:var(--pfizer-blue);background:var(--surface);border:1px solid var(--blue-200);border-radius:999px;padding:2px 10px;margin-top:2px;align-self:flex-start}
+
+/* Card 3: what the page says vs what Tesseract read */
+.hits{position:absolute;inset:0}
+.hit{position:absolute;margin:0;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer}
+.hit:hover{background:rgba(0,51,160,.06)}
+.cmp{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 16px;display:grid;grid-template-columns:132px minmax(0,1fr);row-gap:6px;column-gap:12px;align-items:baseline}
+.cmp dt{font-size:12.5px;line-height:1.3;font-weight:600;color:var(--pfizer-blue);letter-spacing:.02em}
+.cmp dd{margin:0;font-family:var(--font-mono);font-size:15px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
+.cmp mark{background:var(--surface);color:var(--ink);border-radius:4px;padding:0 3px;box-shadow:0 0 0 1.5px var(--ink)}
+.cmp .ok{font-family:var(--font-text);font-size:13px;color:var(--gray-600)}
+
+/* Card 5: the key fields table */
+.ktbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.ktbl table{width:100%;border-collapse:collapse;font-size:14.5px;line-height:1.35}
+.ktbl th{text-align:left;font-size:12.5px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.ktbl td{padding:0;border-bottom:1px solid var(--line)}
+.ktbl tr:last-child td{border-bottom:0}
+.krow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);width:100%;border:0;background:var(--surface);text-align:left;padding:6px 12px;cursor:pointer;font-size:14.5px;line-height:1.35;color:var(--ink)}
+.krow:hover{background:var(--surface-card)}
+.krow[aria-pressed="true"]{background:var(--surface-card);box-shadow:inset 4px 0 0 var(--highlight)}
+.krow .f{font-weight:600}
+.krow .bx{font-family:var(--font-mono);font-size:13.5px}
+
+
+/* Added for this deck: polygons (PaddleOCR), the facts list (his table, one column per card), 3-column rows (card 4) */
+.pic polygon.gp{fill:none;stroke:var(--highlight);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.pic polygon.gpf{fill:var(--highlight);fill-opacity:.16;stroke:var(--highlight);stroke-width:2.5px;vector-effect:non-scaling-stroke}
+.pic polygon.pop{animation:pop .3s ease both}
+.hit[aria-pressed="true"]{background:transparent}
+.mono{font-family:var(--font-mono);font-size:.92em}
+.facts{margin:0;display:grid;grid-template-columns:150px minmax(0,1fr);border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.facts dt,.facts dd{margin:0;padding:5px 12px;font-size:14px;line-height:1.35;border-bottom:1px solid var(--line)}
+.facts dt{font-weight:600;color:var(--ink);background:var(--gray-50)}
+.facts dd{color:var(--card-text)}
+.facts dt:nth-last-of-type(1),.facts dd:last-child{border-bottom:0}
+.krow.k3{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);column-gap:10px;padding:5px 12px}
+.krow.k3 i{font-style:normal;font-size:12.5px;color:var(--gray-600)}
+.ktbl thead tr{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);column-gap:10px}
+.ktbl thead th{padding:6px 12px}
+.ktbl thead th + th{padding-left:0}
+.ktbl thead tr{background:var(--gray-50);border-bottom:1px solid var(--line)}
+.ktbl thead th{border-bottom:0}
+.krow.k3 span{min-width:0;overflow-wrap:anywhere}
+.krow.kt{padding:8px 12px;font-size:14px;line-height:1.4}
+.krow.kt .f{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How PaddleOCR and EasyOCR read a scanned page: five cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1, class, pad] in the SVG's own units */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b, n) {
+      var pad = b[5] != null ? b[5] : 0;
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0] - pad); r.setAttribute("y", b[1] - pad);
+      r.setAttribute("width", b[2] - b[0] + 2 * pad); r.setAttribute("height", b[3] - b[1] + 2 * pad);
+      r.setAttribute("rx", 1.5);
+      r.setAttribute("class", (b[4] || "g") + (pop ? " pop" : ""));
+      if (pop) r.style.animationDelay = (n * 0.04) + "s";
+      svg.appendChild(r);
+    });
+  }
+  function text(svg, x, y, s, size, anchor, cls) {
+    var t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y); t.setAttribute("font-size", size);
+    if (anchor) t.setAttribute("text-anchor", anchor);
+    if (cls) t.setAttribute("class", cls);
+    t.textContent = s; svg.appendChild(t); return t;
+  }
+  function dot(svg, x, y, r) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r || 4); svg.appendChild(c);
+  }
+
+  /* Click-me nudges: a pulsing outline on the element and a "Click me" tag beside it, until it is first clicked */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- Data (all real; see the note at the top) ---------- */
+
+  /* Local run, 19 Nov 2026 (see the note at the top): every text region on Page 4, in the 2550 x 3300 picture's pixels.
+     P: PaddleOCR, [[x1,y1,x2,y2,x3,y3,x4,y4] (the 4 corners of its polygon), text, confidence %].
+     E: EasyOCR, [[left, top, right, bottom] (corner 0 to corner 2, the rectangle his code draws), text, confidence %]. */
+  var D = {"P":[[[101,44,953,52,952,124,100,117],"Certificate Of Processing",99.89],[[1878,55,2335,55,2335,138,1878,138],"STERIS",90.92],[[104,144,818,144,818,189,104,189],"Prepared for GE HEALTHCARE",99.93],[[107,241,859,241,859,285,107,285],"Gamma Process Run ID 129708B",98.71],[[107,330,388,330,388,378,107,378],"Product Code",99.99],[[1081,330,1493,330,1493,378,1081,378],"Product Lot Number",99.53],[[1985,330,2176,330,2176,388,1985,388],"Quantity",99.96],[[2224,333,2339,333,2339,385,2224,385],"UOM",99.38],[[107,399,412,399,412,447,107,447],"Cytiva (25-40 kGy)",99.99],[[1098,399,1268,399,1268,447,1098,447],"17242818",99.49],[[2127,402,2179,402,2179,447,2127,447],"19",99.97],[[2262,399,2332,399,2332,454,2262,454],"cs",65.15],[[107,464,527,464,527,509,107,509],"Cust Item ID: 29-1846-12",99.58],[[104,526,413,530,412,578,104,574],"Cytiva (25-40 kGy)",97.48],[[1098,529,1268,529,1268,577,1098,577],"17269079",99.99],[[2148,533,2179,533,2179,574,2148,574],"1",99.99],[[2262,529,2332,529,2332,584,2262,584],"cS",61.8],[[107,595,579,595,579,639,107,639],"Cust Item ID: CB0050L10-21",98.04],[[104,656,413,660,412,708,104,705],"Cytiva (25-40 kGy)",97.8],[[1098,660,1272,660,1272,708,1098,708],"17271868",99.99],[[2141,660,2183,660,2183,708,2141,708],"2",99.97],[[2262,660,2332,660,2332,715,2262,715],"cs",61.7],[[107,725,703,725,703,770,107,770],"Cust Item ID: CB0001L722-01-05PK",99.26],[[104,787,416,791,415,839,104,835],"Cytiva (25-40 kGy)",99.97],[[1102,791,1268,791,1268,839,1102,839],"17271872",100.0],[[2141,791,2183,791,2183,842,2141,842],"5",99.97],[[2266,794,2328,794,2328,839,2266,839],"cS",68.08],[[107,856,579,856,579,901,107,901],"Cust Item ID: CB0002L11-01",97.49],[[104,918,413,921,412,970,104,966],"Cytiva (25-40 kGy)",97.18],[[1105,925,1268,925,1268,962,1105,962],"17271875",100.0],[[2141,921,2183,921,2183,969,2141,969],"4",99.97],[[2262,918,2332,918,2332,973,2262,973],"cs",71.48],[[111,990,679,990,679,1024,111,1024],"Cust Item ID: CB0002L10MDY01-2",97.9],[[107,1052,416,1052,416,1097,107,1097],"Cytiva (25-40 kGy)",99.99],[[1098,1048,1296,1048,1296,1097,1098,1097],"29JAN2021",99.97],[[2141,1048,2183,1048,2183,1100,2141,1100],"3",99.96],[[2262,1048,2332,1048,2332,1103,2262,1103],"cs",65.22],[[111,1121,499,1121,499,1155,111,1155],"Cust Item ID: 699968LT",95.65],[[107,1179,412,1179,412,1227,107,1227],"Cytiva (25-40 kGy)",99.97],[[1102,1186,1393,1186,1393,1220,1102,1220],"29JANUARY2021",96.31],[[2148,1182,2179,1182,2179,1224,2148,1224],"1",99.98],[[2262,1179,2332,1179,2332,1234,2262,1234],"cs",68.6],[[107,1244,506,1244,506,1292,107,1292],"Cust Item ID: 699968SF",99.53],[[107,1313,416,1313,416,1358,107,1358],"Cytiva (25-40 kGy)",99.98],[[1098,1313,1414,1313,1414,1358,1098,1358],"MBO28JAN21CGT",99.93],[[2148,1313,2179,1313,2179,1354,2148,1354],"6",99.97],[[2262,1310,2332,1310,2332,1365,2262,1365],"cS",64.01],[[107,1375,554,1375,554,1420,107,1420],"Cust Item ID: RDMBOMRT",99.83],[[100,1444,416,1444,416,1488,100,1488],"Cytiva (25-40 kGy)",99.45],[[1098,1440,1414,1440,1414,1485,1098,1485],"MBO29JAN21CGT",99.92],[[2127,1444,2179,1444,2179,1492,2127,1492],"10",99.96],[[2266,1440,2335,1440,2335,1495,2266,1495],"cs",68.1],[[69,1471,121,1471,121,1605,69,1605],"(GMT)",99.2],[[121,1612,655,1612,655,1657,121,1657],"Processing Run Start Date/Time:",99.99],[[773,1612,1206,1612,1206,1657,773,1657],"04-Feb-2021 12:00:00 am",99.91],[[1511,1616,1947,1616,1947,1660,1511,1660],"Approx. Downtime (hours):",99.97],[[2120,1616,2204,1616,2204,1657,2120,1657],"0.00",99.99],[[73,1647,118,1647,118,1698,73,1698],"4",88.11],[[114,1684,638,1684,638,1729,114,1729]," Processing Run End Date/Time:",99.48],[[769,1684,1206,1684,1206,1729,769,1729],"04-Feb-2021 01:27:00 am",99.83],[[76,1719,114,1719,114,1753,76,1753],"2",98.13],[[80,1763,107,1763,107,1825,80,1825],"22",99.88],[[128,1808,755,1812,755,1860,128,1856],"Minimum Specified Dose (kGy):",98.42],[[887,1808,984,1808,984,1860,887,1860],"25.0",99.99],[[1272,1808,1913,1812,1912,1860,1271,1856],"Minimum Delivered Dose (kGy):",98.11],[[2037,1808,2138,1808,2138,1860,2037,1860],"26.4",99.99],[[125,1904,766,1908,766,1956,125,1952],"Maximum Specified Dose (kGy):",99.93],[[887,1904,984,1904,984,1956,887,1956],"40.0",99.98],[[1275,1908,1916,1908,1916,1952,1275,1952],"Maximum Delivered Dose (kGy):",99.3],[[2041,1911,2131,1911,2131,1952,2041,1952],"36.7",100.0],[[69,1956,111,1956,111,2038,69,2038],"13-",99.77],[[423,1994,1968,2001,1968,2045,423,2038],"Product meets Customer specifications; zero nonconformities occurred during this irradiation run.",98.45],[[62,2018,121,2018,121,2200,62,2200],"uO ps/",62.77],[[66,2210,125,2210,125,2585,66,2585],"Approved\\Appro",97.62],[[1009,2238,1438,2241,1438,2300,1008,2296],"Signature Manifest",98.77],[[329,2317,773,2317,773,2362,329,2362],"Reviewed and E-Signed By",99.9],[[1577,2313,2086,2317,2086,2362,1576,2358],"Signed On 2/4/2021 at 9:48 AM",99.33],[[333,2372,1098,2372,1098,2417,333,2417],"Camara, Mariame (QS/RC Technician)",99.21],[[1576,2365,2020,2365,2020,2399,1576,2399],"UTC / GMT Offset (hh:mm): -5:00",96.49],[[329,2437,832,2437,832,2482,329,2482],"Document Content Revision: 1",99.39],[[68,2582,106,2577,116,2650,78,2655],"ebl",84.81],[[76,2643,114,2643,114,2747,76,2747],"bdfc",99.81],[[135,2636,503,2640,502,2688,135,2685],"Processing Location:",99.63],[[838,2643,2096,2643,2096,2678,838,2678],"Operating facilities are in compliance with applicable state and federal regulations (FDA, NRC, EPA",98.8],[[139,2688,281,2688,281,2736,139,2736],"STERIS",99.89],[[838,2681,2110,2681,2110,2716,838,2716],"and OSHA) and provide services under a quality system which meets the requirements of FDA QSR.",98.24],[[835,2712,2051,2712,2051,2757,835,2757],"EN/ISO 13485, and in alignment with the applicable standard, EN ANSI/AAMl/ISO 11137 or EN",96.82],[[139,2736,454,2736,454,2781,139,2781],"435 Whitney Street",97.81],[[828,2747,2062,2750,2061,2795,828,2791]," ANSI/AAMl/ISO 11135. For items processed with gamma irradiation, STERIS certifies that these",97.4],[[142,2781,558,2781,558,2826,142,2826],"Northborough, MA 01532",99.69],[[842,2798,2089,2798,2089,2822,842,2822],"items received the indicated doses within the precision and accuracy of the dosimetry system used",99.26],[[142,2826,502,2826,502,2870,142,2870],"Phone: 508-393-9323",98.86],[[66,2836,125,2836,125,3025,66,3025],"090177e",99.77],[[139,2874,461,2874,461,2918,139,2918],"Fax: 844-698-9776",99.96],[[104,3028,717,3032,717,3077,104,3073],"WI-00034/01354/01369 Last Rev in Rel. 3.6.5.1",98.77],[[1327,3039,1518,3039,1518,3073,1327,3073],"Release Date:",99.98],[[1566,3039,1736,3039,1736,3073,1566,3073]," 05-Jun-2017",96.67],[[2179,3032,2335,3032,2335,3070,2179,3070],"Page 1 of 2",97.61]],"E":[[[97,48,565,124],"Certificate Of",72.42],[[563,31,970,144],"Processing",99.99],[[1953,48,2348,152],"STERIS",99.66],[[97,136,824,203],"Prepared for GE HEALTHCARE",64.95],[[99,233,865,290],"Gamma Process Run ID 129708B",99.66],[[105,323,393,383],"Product Code",95.65],[[1078,333,1496,382],"Product_Lot Number",56.28],[[1984,329,2174,389],"Quantity",86.49],[[2228,331,2337,382],"UOM",64.13],[[106,400,416,450],"Cytiva (25-40 kGy)",75.39],[[1100,401,1268,446],"17242818",100.0],[[2129,404,2176,446],"19",76.8],[[2265,404,2325,446],"CS",99.17],[[107,466,526,508],"Cust Item ID: 29-1846-12",75.87],[[104,532,416,581],"Cytiva (25-40 kGy)",77.67],[[1100,533,1268,575],"17269079",100.0],[[2268,535,2325,577],"CS",98.14],[[107,597,580,639],"Cust Item ID: CBOOSOL10-21",68.14],[[105,658,416,712],"Cytiva (25-40 kGy)",68.3],[[1100,662,1268,706],"17271868",87.57],[[2148,668,2175,703],"2",100.0],[[2268,667,2325,706],"CS",99.68],[[107,726,704,768],"Cust Item ID: CBOOO1L722-01-O5PK",49.29],[[106,792,416,841],"Cytiva (25-40 kGy)",69.3],[[1100,793,1268,835],"17271872",100.0],[[2148,797,2175,832],"5",92.19],[[2268,796,2325,838],"CS",99.68],[[105,854,584,903],"Cust Item ID: CBOOO2L11-01",68.38],[[106,921,416,970],"Cytiva (25-40 kGy)",74.61],[[1103,922,1268,964],"17271875",51.41],[[2268,927,2325,967],"CS",99.18],[[107,986,683,1029],"Cust Item ID: CBOOOZL IOMDYO1-2",36.49],[[106,1050,419,1099],"Cytiva (25-40 kGy)",62.35],[[1100,1054,1294,1093],"29JAN2O21",58.51],[[2150,1057,2175,1092],"3",100.0],[[2268,1056,2328,1096],"CS",95.13],[[107,1115,505,1158],"Cust Item ID: 699968LT",84.14],[[106,1181,419,1231],"Cytiva (25-40 kGy)",69.32],[[1100,1182,1392,1225],"29JANUARY2021",80.13],[[2268,1185,2328,1227],"CS",97.39],[[107,1247,508,1289],"Cust Item ID: 699968SF",76.28],[[106,1310,419,1362],"Cytiva (25-40 kGy)",99.83],[[1103,1314,1413,1356],"MBO2BJANZICGT",65.04],[[2268,1317,2328,1356],"CS",99.57],[[106,1376,555,1424],"Cust Item ID: RDMBOMRT",99.59],[[101,1442,419,1491],"Cytiva (25-40 kGy)",73.16],[[1103,1443,1415,1488],"MBOZIJAN21CGT",32.27],[[2131,1448,2178,1488],"10",100.0],[[2268,1445,2328,1488],"CS",98.41],[[72,1480,112,1512],"F",54.04],[[68,1506,122,1607],"3",26.48],[[124,1612,656,1662],"Processing Run Start DatefTime:",35.76],[[770,1613,980,1655],"04-Feb-2021",79.58],[[997,1613,1201,1655],"12.00.00 am",92.7],[[1510,1613,1950,1669],"Approx. Downtime (hours):",67.64],[[2123,1616,2204,1658],"0.00",99.93],[[70,1622,122,1754],"8",98.86],[[124,1684,645,1734],"Processing Run End DatelTime:",67.32],[[770,1685,1201,1727],"04-Feb-2021 01.27:00 am",33.52],[[123,1804,765,1868],"Minimum Specified Dose (kGy):",81.25],[[891,1812,980,1856],"25.0",100.0],[[1272,1807,1917,1868],"Minimum Delivered Dose (kGy):",97.45],[[2041,1814,2132,1859],"26.4",95.07],[[126,1902,773,1964],"Maximum Specified Dose (kGy):",96.22],[[891,1909,982,1952],"40.0",100.0],[[1277,1906,1927,1963],"Maximum Delivered Dose (kGy):",80.55],[[2044,1909,2129,1954],"36.7",74.35],[[423,1994,1960,2049],"Product meets Customer specifications; zero nonconformities occurred during this irradiation run_",88.43],[[1005,2234,1444,2300],"Signature_Manifest",92.83],[[328,2316,774,2365],"Reviewed and E-Signed By",81.59],[[1572,2315,2087,2367],"Signed On 2/4/2021 at 9.48 AM",74.96],[[70,2181,125,2556],"|",14.92],[[329,2360,1106,2424],"Camara, Mariame (QSIRC Technician)",73.62],[[1574,2363,1645,2400],"UTC",99.91],[[1657,2363,1937,2403],"GMT Offset (hhmm):",93.07],[[1949,2364,2023,2397],"3.00",61.41],[[329,2438,794,2480],"Document Content Revision:",89.57],[[74,2613,119,2738],"9",44.94],[[141,2647,505,2691],"Processing Location:",75.55],[[834,2641,1949,2682],"Operating facilities are in compliance with applicable state and federal regulations (FDA_",59.74],[[1959,2645,2100,2678],"NRC, EPA",99.91],[[141,2691,278,2733],"STERIS",99.99],[[834,2677,2114,2719],"and OSHA) and provide services under a quality system which meets the requirements of FDA QSR,",87.83],[[834,2714,2050,2758],"ENIISO 13485, and in alignment with the applicable standard, EN ANSIIAAMIIISO 11137 or EN",60.57],[[140,2731,457,2784],"435 Whitney Street",99.94],[[834,2753,2060,2792],"ANSIIAAMIIISO 11135. For items processed with gamma irradiation, STERIS certifies that these",66.32],[[142,2779,563,2833],"Northborough, MA 01532",63.96],[[831,2789,2093,2832],"items received the indicated doses within the precision and accuracy of the dosimetry system used.",79.83],[[143,2827,505,2869],"Phone: 508-393-9323",65.34],[[69,2728,121,3023],"L",33.63],[[143,2874,464,2916],"Fax: 844-698-9776",76.52],[[110,3036,711,3073],"W1I-0003401354/01369 Last Rev In Rel: 3.6.5.1",36.22],[[1330,3040,1515,3069],"Release Date:",95.04],[[1568,3040,1734,3072],"05-Jun-2017",82.62],[[2178,3036,2333,3073],"Page 1 of 2",98.06]]};
+  var P = D.P, E = D.E;
+
+  /* Card 1 zoom: the top of Page 4, x 80 to 1000, y 30 to 210 of the 2550 x 3300 picture (pfizer3-p4-m4-l1-top.png).
+     Tesseract's word boxes there: agent A1's Colab run of the Tesseract notebook's student copy (300 dpi, Step 12 printout),
+     left, top, width and height halved, because Tesseract read the cleaned picture at twice the size (5100 x 6600). */
+  var TOPV = [80, 30, 920, 180];
+  var TESS_TOP = [["Certificate", 107, 56, 344, 55], ["Of", 476, 56, 78, 54], ["Processing", 576, 59, 376, 67],
+    ["Prepared", 107, 147, 202, 47], ["for", 326, 147, 59, 38], ["GE", 400, 148, 66, 37], ["HEALTHCARE", 484, 148, 332, 38]];
+  /* Card 2 and 4 crop: the table at the top of Page 4, x 80 to 2360, y 310 to 720 (pfizer3-p4-m4-l2-table.png) */
+  var TABV = [80, 310, 2280, 410];
+  function inTable(b) { return b[1] >= 310 && b[1] <= 712; }
+  function pbox(p) { var x = [p[0][0], p[0][2], p[0][4], p[0][6]], y = [p[0][1], p[0][3], p[0][5], p[0][7]];
+    return [Math.min.apply(0, x), Math.min.apply(0, y), Math.max.apply(0, x), Math.max.apply(0, y)]; }
+  function poly(svg, pts, cls, pop) {
+    var g = document.createElementNS(NS, "polygon");
+    g.setAttribute("points", pts.join(" ")); g.setAttribute("class", cls + (pop ? " pop" : "")); svg.appendChild(g); return g;
+  }
+  function pct(c) { return c.toFixed(2) + "%"; }
+
+  /* ---------- Card 1: the same page, three engines ---------- */
+  var ENG = {
+    t: { cap: "Tesseract drew <b>7 boxes</b> here, one for each word." },
+    p: { cap: "PaddleOCR drew <b>2 boxes</b> here, one for each line." },
+    e: { cap: "EasyOCR drew <b>3 boxes</b> here. It split the title into two pieces, Certificate Of and Processing." }
+  };
+  function initSee(root) {
+    var btns = root.querySelectorAll(".sw button"), fig = root.querySelector("#c1-pic"), svg = fig.querySelector("svg");
+    var zsvg = root.querySelector("#c1-zoom svg"), cap = root.querySelector("#c1-cap");
+    function show(v) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      fig.classList.toggle("plain", v === "t");
+      clear(svg);
+      if (v === "p") P.forEach(function (r) { poly(svg, r[0], "gp", false); });
+      if (v === "e") draw(svg, E.map(function (r) { return [r[0][0], r[0][1], r[0][2], r[0][3], "gl", 0]; }), false);
+      if (v === "t") draw(zsvg, TESS_TOP.map(function (w) { return [w[1], w[2], w[1] + w[3], w[2] + w[4], "g", 0]; }), true);
+      if (v === "p") { clear(zsvg); [0, 2].forEach(function (k) { poly(zsvg, P[k][0], "gpf", true); }); }
+      if (v === "e") draw(zsvg, [0, 1, 3].map(function (k) { var b = E[k][0]; return [b[0], b[1], b[2], b[3], "g", 0]; }), true);
+      cap.innerHTML = ENG[v].cap;
+      space();
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show("t");
+    nudge("c1", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 2: what the text says and where it lives ---------- */
+  var HEADS = P.slice(4, 8);   /* Product Code, Product Lot Number, Quantity, UOM */
+  function headOf(b) {
+    var cx = (b[0] + b[2]) / 2, best = null, d = 1e9;
+    HEADS.forEach(function (h) { var hb = pbox(h), hc = (hb[0] + hb[2]) / 2;
+      if (cx >= hb[0] - 60 && cx <= hb[2] + 60 || b[0] <= hb[2] && b[2] >= hb[0]) { var dd = Math.abs(cx - hc); if (dd < d) { d = dd; best = h; } } });
+    if (!best) HEADS.forEach(function (h) { var hb = pbox(h), dd = Math.abs(b[0] - hb[0]); if (dd < d) { d = dd; best = h; } });
+    return best;
+  }
+  function initWhere(root) {
+    var svg = root.querySelector("#c2-pic svg"), hits = root.querySelector("#c2-pic .hits"), res = root.querySelector("#c2-res");
+    var rows = P.filter(function (r) { return inTable(pbox(r)); });
+    function pick(n, pop) {
+      clear(svg);
+      rows.forEach(function (r, k) { poly(svg, r[0], k === n ? "gpf" : "gp", pop && k === n); });
+      var r = rows[n], b = pbox(r), h = headOf(b), isHead = HEADS.indexOf(r) >= 0;
+      res.innerHTML = '<p class="pp">PaddleOCR read <b>' + esc(r[1]) + '</b> (confidence ' + pct(r[2]) + ').<br>' +
+        (isHead ? 'This is one of the table\'s headings.' : 'Its box sits under the heading <b>' + esc(h[1]) + '</b>' +
+          (/^\d{8}$/.test(r[1]) ? ', so this number is a lot number.' : '.')) + '</p>';
+      each(hits.children, function (x, k) { x.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+    }
+    rows.forEach(function (r, k) {
+      var b = pbox(r), x = document.createElement("button");
+      x.type = "button"; x.className = "hit"; x.setAttribute("aria-label", r[1]);
+      x.style.left = ((b[0] - 8 - TABV[0]) / TABV[2] * 100) + "%"; x.style.width = ((b[2] - b[0] + 16) / TABV[2] * 100) + "%";
+      x.style.top = ((b[1] - 6 - TABV[1]) / TABV[3] * 100) + "%"; x.style.height = ((b[3] - b[1] + 12) / TABV[3] * 100) + "%";
+      x.addEventListener("click", function () { pick(k, true); });
+      hits.appendChild(x);
+    });
+    pick(rows.indexOf(P[9]), false);   /* 17242818 */
+    nudge("c2", root.querySelector("#c2-pic"), root.querySelector("#c2-hint"), "inline");
+  }
+
+  /* ---------- Card 3: what PaddleOCR gives back ---------- */
+  function initPaddle(root) {
+    var svg = root.querySelector("#c3-pic svg"), chips = root.querySelectorAll(".chip"), res = root.querySelector("#c3-res");
+    var LINES = [P[0], P[2]];
+    function pick(n, pop) {
+      clear(svg);
+      LINES.forEach(function (r, k) { poly(svg, r[0], k === n ? "gpf" : "gp", pop && k === n); });
+      var r = LINES[n], c = r[0];
+      for (var j = 0; j < 8; j += 2) dot(svg, c[j], c[j + 1], 7);
+      each(chips, function (x, k) { x.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      res.innerHTML = '<p class="pp"><b>What the text says:</b> ' + esc(r[1]) + '</p>' +
+        '<p class="pp"><b>How confident it is:</b> ' + pct(r[2]) + '</p>' +
+        '<p class="pp"><b>Where it is (4 corners of its polygon):</b> <span class="mono">' +
+          [0, 2, 4, 6].map(function (j) { return "(" + c[j] + ", " + c[j + 1] + ")"; }).join(" ") + '</span></p>' +
+        (n === 0 ? '<p class="pp">The title is scanned a little crooked, so its 4 corners don\'t line up in a perfect rectangle. The polygon tilts with it.</p>' : '<p class="pp">This line is straight, so its 4 corners make a plain rectangle.</p>');
+      space();
+    }
+    each(chips, function (x, k) { x.addEventListener("click", function () { pick(k, true); }); });
+    pick(0, false);
+    nudge("c3", root.querySelector(".chips"), root.querySelector("#c3-hint"), "inline");
+  }
+
+  /* ---------- Card 4: EasyOCR next to PaddleOCR ---------- */
+  /* The table lines where the two engines read differently, or are sure to a different degree: [PaddleOCR index, EasyOCR index] */
+  var PAIRS = [[5, 6], [7, 8], [11, 12], [17, 17], [19, 19]];
+  var PAGE_TXT = ["Product Lot Number", "UOM", "CS", "Cust Item ID: CB0050L10-21", "17271868"];   /* what Page 4 says, checked on the 300 dpi picture */
+  function initEasy(root) {
+    var svg = root.querySelector("#c4-pic svg"), rows = root.querySelectorAll(".krow");
+    var eRows = E.filter(function (r) { return inTable(r[0]); });
+    function pick(n, pop) {
+      var sel = E[PAIRS[n][1]];
+      draw(svg, eRows.map(function (r) { var b = r[0]; return [b[0], b[1], b[2], b[3], r === sel ? "g" : "gl", r === sel ? 6 : 0]; }), false);
+      each(rows, function (r, j) { r.setAttribute("aria-pressed", j === n ? "true" : "false"); });
+    }
+    each(rows, function (r, j) { r.addEventListener("click", function () { pick(j, true); }); });
+    pick(0, false);
+    nudge("c4", root.querySelector(".ktbl"), root.querySelector("#c4-hint"), "inline");
+  }
+
+
+  /* ---------- Card 5: his table, side by side (rows 1 to 4 fixed, see the note at the top) ---------- */
+  var SIDE = [
+    ["Understands layout", "Finds each line of text and its four-cornered box, even on a crowded page. It doesn't label tables or columns.", "Finds each line of text and its box. It doesn't label tables or columns."],
+    ["Works with tables", "Okay, needs a little extra setup", "Reads each cell as its own piece of text, with no rows or columns"],
+    ["What you get back", "A list with each line's text, confidence and polygon box", "Text + positions (bounding boxes)"],
+    ["Best for", "Long documents with lots of text", "Forms"],
+    ["Setup time", "Medium, takes a few extra steps", "Easy, up and running in minutes"]
+  ];
+  var SEEN = [
+    "On Page 4, both engines gave back a list of lines, each with a box. Neither said which column a number sits in. You worked that out from the boxes in card 2.",
+    "EasyOCR read the table's first row as 4 separate pieces: <b>Cytiva (25-40 kGy)</b>, <b>17242818</b>, <b>19</b> and <b>CS</b>. Nothing in its list ties them into one row. PaddleOCR's extra setup is a separate table tool, which this reading doesn't use.",
+    "PaddleOCR gave a Python list: for each line, 4 corners, then the text and the confidence. EasyOCR gave a list of box, text and confidence. Neither draws the boxes for you: you'll draw them yourself in Try It Yourself.",
+    "Page 4 has both kinds: a form-style table at the top and dense small text in the address block at the bottom. In the Task, you'll judge which engine does better on a new page.",
+    "In Colab, PaddleOCR's notebook runs an install cell with set versions and a fix cell before PaddleOCR starts. EasyOCR needs one install line."
+  ];
+  function initSide(root) {
+    var rows = root.querySelectorAll(".krow"), res = root.querySelector("#c5-res");
+    function pick(n) {
+      each(rows, function (r, j) { r.setAttribute("aria-pressed", j === n ? "true" : "false"); });
+      res.innerHTML = '<p class="ph">What Page 4 showed us: ' + SIDE[n][0] + '</p><p class="pp">' + SEEN[n] + '</p>';
+      space();
+    }
+    each(rows, function (r, j) { r.addEventListener("click", function () { pick(j); }); });
+    pick(0);
+    nudge("c5", root.querySelector(".ktbl"), root.querySelector("#c5-hint"), "inline");
+  }
+
+  function facts(rows) {
+    return '<dl class="facts">' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join("") + '</dl>';
+  }
+  var PAGE4_ALT = "Page 4 of the supplier's file bundle, a scanned Certificate of Processing from STERIS prepared for GE Healthcare: Gamma Process Run ID 129708B, a table of Cytiva products with their lot numbers, the processing run dates, the minimum and maximum doses, and a signature block.";
+  var TOP_ALT = "The top of Page 4: the title Certificate Of Processing and the line Prepared for GE HEALTHCARE.";
+  var TAB_ALT = "The table at the top of Page 4: the headings Product Code, Product Lot Number, Quantity and UOM, then rows such as Cytiva (25-40 kGy), lot number 17242818, quantity 19, CS, and Cust Item ID: 29-1846-12.";
+
+  var CARDS = [
+    { label: "Three Engines", eyebrow: "Same page, three readers",
+      html: '<h2 class="title">Real-World OCR: When <span class="hl">Tesseract</span> Isn\'t Enough</h2>' +
+        '<p class="why">Seeing all three engines box the same page shows you, in one look, what the two new ones do differently.</p>' +
+        '<p class="p">That\'s where <b>layout-aware OCR</b> comes in. Layout is how the text is arranged on the page. Unlike Tesseract, which gave every word its own box, layout-aware OCR tools keep the words that belong together in one box. They don\'t just read the text, they get where it lives on the page and how it\'s grouped.</p>' +
+        '<div class="row"><div class="nwrap"><div class="sw" role="group" aria-label="Choose an engine">' +
+          '<button type="button" data-view="t" aria-pressed="true">Tesseract</button>' +
+          '<button type="button" data-view="p" aria-pressed="false">PaddleOCR</button>' +
+          '<button type="button" data-view="e" aria-pressed="false">EasyOCR</button></div></div></div>' +
+        '<div class="cols"><div data-grow data-max="330" style="width:250px;flex:none">' +
+            '<figure class="pic" id="c1-pic"><img class="base" src="pfizer3-p4-m2-l1-page4.png" width="1224" height="1584" alt="' + PAGE4_ALT + '">' +
+            '<img class="over" src="pfizer3-p4-m2-l1-boxes.png" width="1224" height="1584" alt="">' +
+            '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 2550 3300"></svg></figure>' +
+            '<p class="cap">Page 4: Certificate of Processing</p></div>' +
+          '<div class="side">' +
+            '<p class="hint">Zoom in on the top of the page:</p>' +
+            '<figure class="pic" id="c1-zoom"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
+              '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOPV.join(" ") + '"></svg></figure>' +
+            '<p class="res" id="c1-cap" aria-live="polite"></p>' +
+            '<p class="res">Each green outline is one box the engine found. Tesseract boxes single words. PaddleOCR and EasyOCR box whole phrases and lines.</p>' +
+          '</div></div>',
+      init: initSee },
+
+    { label: "Layout", eyebrow: "What it says and where it lives",
+      html: '<h2 class="title">Why Do We Even Need <span class="hl">Layout</span> Awareness?</h2>' +
+        '<p class="why">The number you want only means something next to its label, and the box is what tells you which label it belongs to.</p>' +
+        '<p class="p">Imagine trying to pull a lot number from a certificate table... or an expiration date buried in a dense compliance form. If your OCR tool can\'t understand the layout, it just returns floating text. No context. No structure.</p>' +
+        '<p class="p">With layout-aware OCR, you get <i>both</i>: what the text says <i>and</i> where it lives, with the words that belong together kept in one box.</p>' +
+        '<p class="hint" id="c2-hint">Click any box in the table.</p>' +
+        '<div data-grow data-max="704" style="width:704px;align-self:center"><figure class="pic" id="c2-pic"><img src="pfizer3-p4-m4-l2-table.png" width="1520" height="273" alt="' + TAB_ALT + '">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TABV.join(" ") + '"></svg><div class="hits"></div></figure></div>' +
+        '<div class="panel" id="c2-res" aria-live="polite" style="min-height:74px"></div>' +
+        '<p class="p">Tesseract is like dumping a pile of sticky notes on your desk. Layout-aware OCR? It\'s like someone sorted those into folders for you.</p>',
+      init: initWhere },
+
+    { label: "PaddleOCR", eyebrow: "Meet PaddleOCR",
+      html: '<h2 class="title">PaddleOCR Gives Each Line a <span class="hl">Polygon</span></h2>' +
+        '<p class="why">You\'ll compare engines in the Task, so you need to know what each one gives back.</p>' +
+        '<p class="p">You don\'t need to become an expert in either, we\'re just going to get them running and observe how they behave on supplier documents.</p>' +
+        '<p class="p"><b>PaddleOCR:</b> Built by Baidu, this one\'s a <b>high-performance OCR engine</b> that handles dense, complex documents really well. It comes with dozens of pretrained models and supports multi-language recognition. Setup takes a little more time, but once it\'s up, it delivers <b>powerful and structured outputs</b>, great for documents filled with paragraphs, fields, and small text.</p>' +
+        '<p class="hint" id="c3-hint">Click a line to see what PaddleOCR gives back for it.</p>' +
+        '<div class="chips" role="group" aria-label="Two lines PaddleOCR found"><button type="button" class="chip" aria-pressed="false">Certificate Of Processing</button><button type="button" class="chip" aria-pressed="false">Prepared for GE HEALTHCARE</button></div>' +
+        '<div data-grow data-max="560" style="width:520px;align-self:center"><figure class="pic" id="c3-pic"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOPV.join(" ") + '"></svg></figure></div>' +
+        '<div class="panel" id="c3-res" aria-live="polite"></div>' + '',
+      init: initPaddle },
+
+    { label: "EasyOCR", eyebrow: "Meet EasyOCR",
+      html: '<h2 class="title">EasyOCR Is Quick to Set Up, and Reads the <span class="hl">Same</span> Page Differently</h2>' +
+        '<p class="why">Two engines can read the same line differently, and differences like this are what you\'ll write about in the Task.</p>' +
+        '<p class="p"><b>EasyOCR:</b> Like the name says, this one\'s <b>easy to use</b>. Lightweight and quick to install, it\'s great for scanned forms and straightforward layouts, like <b>pharmaceutical certificates</b> or compliance forms. It may not capture deep structural layout like PaddleOCR, but it gives <b>good results quickly</b> and handles most field-based forms decently.</p>' +
+        '<div data-grow data-max="704" style="width:704px;align-self:center"><figure class="pic" id="c4-pic"><img src="pfizer3-p4-m4-l2-table.png" width="1520" height="273" alt="' + TAB_ALT + '">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TABV.join(" ") + '"></svg></figure></div>' +
+        '<p class="hint" id="c4-hint">Click a row to find EasyOCR\'s box on the table.</p>' +
+        '<div class="ktbl"><table><thead><tr><th scope="col">On Page 4</th><th scope="col">PaddleOCR read</th><th scope="col">EasyOCR read</th></tr></thead><tbody>' +
+          PAIRS.map(function (q) { var p = P[q[0]], e = E[q[1]], page = PAGE_TXT[PAIRS.indexOf(q)];
+            return '<tr><td colspan="3"><button type="button" class="krow k3" aria-pressed="false"><span>' + esc(page) + '</span><span>' + esc(p[1]) + ' <i>' + pct(p[2]) + '</i></span><span>' + esc(e[1]) + ' <i>' + pct(e[2]) + '</i></span></button></td></tr>'; }).join("") +
+        '</tbody></table></div>' + '',
+      init: initEasy },
+    { label: "Side by Side", eyebrow: "PaddleOCR and EasyOCR",
+      html: '<h2 class="title">What Each Engine Does, <span class="hl">Side by Side</span></h2>' +
+        '<p class="why">This table is your starting point for the comparison you\'ll write in the Task.</p>' +
+        '<p class="hint" id="c5-hint">Click a row to see what Page 4 showed us.</p>' +
+        '<div class="ktbl"><table><thead><tr><th scope="col">What it does</th><th scope="col">PaddleOCR</th><th scope="col">EasyOCR</th></tr></thead><tbody>' +
+          SIDE.map(function (r) { return '<tr><td colspan="3"><button type="button" class="krow k3 kt" aria-pressed="false"><span class="f">' + r[0] + '</span><span>' + r[1] + '</span><span>' + r[2] + '</span></button></td></tr>'; }).join("") +
+        '</tbody></table></div>' +
+        '<div class="panel" id="c5-res" aria-live="polite" style="min-height:96px"></div>',
+      init: initSide }
+  ];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (copied from P3 module 9): spare height first widens the gaps between blocks, up to 2x; what is left
+     enlarges the card's main picture. A card that is too tall shrinks its main picture. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px";
+    var grow = null;
+    each(inner.querySelectorAll("[data-grow]"), function (g) {
+      if (!g.hasAttribute("data-base")) g.setAttribute("data-base", g.style.width || "");
+      g.style.width = g.getAttribute("data-base");
+      if (!grow && g.offsetHeight) grow = g;
+    });
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) {
+      var add = Math.min(GAP, spare / gaps);
+      inner.style.gap = (GAP + add) + "px";
+      spare = avail - inner.offsetHeight;
+    }
+    for (var j = 0; j < 4 && grow && spare < 0; j++) {
+      var gw = grow.offsetWidth, gh = grow.offsetHeight;
+      grow.style.width = Math.max(160, gw + spare * (gw / gh) - 1) + "px";
+      spare = avail - inner.offsetHeight;
+    }
+    if (!grow || spare < 2) return;
+    var max = +grow.getAttribute("data-max") || 704;
+    for (var k = 0; k < 3 && spare >= 2; k++) {
+      var w = grow.offsetWidth, h = grow.offsetHeight;
+      if (!h || w >= max) break;
+      grow.style.width = Math.min(max, w + spare * (w / h)) + "px";
+      spare = avail - inner.offsetHeight;
+      if (spare < 0) { grow.style.width = Math.max(0, grow.offsetWidth + spare * (w / h) - 1) + "px"; spare = avail - inner.offsetHeight; }
+    }
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .hits, .chips, .ktbl")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
