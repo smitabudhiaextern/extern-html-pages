@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading a Scan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer x Extern Core design system, Light format. Card player, rail, "Click me" pulse, switches, tiles, pictures with
+   boxes drawn over them and the spacing code: copied from pfizer3-p3-m9-learn.html (P3 module 9, the model Smita approved).
+   P4 module 2 Learn cards: "Learn How to Read a Scanned PDF with Tesseract" (merges Chaitanya's 3 pages: Preprocess,
+   Extract Text, Highlight Key Terms). Ideas only, NO code: all code is in the Try deck (pfizer3-p4-m2-steps.html).
+   4 cards, placed as in project-04/step1-coverage-p4.md (Learn card rows A6, A11, A13, A14, A16, A17, A42, A43, B4, C4 to C6):
+   1 See What Tesseract Finds on a Scan: switch "The scan" / "What Tesseract finds" on Page 4 (his A6, A11, A13).
+   2 Clean the Picture So the Letters Stand Out: his A14, A42, A17 (preprocessing), then his 4 light-bulb labels and lines
+     (A43) as tiles over the real picture at each stage, with one-line definitions of ours. His Step 5 "Why" bullets stay
+     in the Try (say everything once).
+   3 Read the Text, Then Find Each Word's Box: his B4; switch "The text" (click a line, compare with what Tesseract read)
+     / "The boxes" (10 word chips light their box, left, top, width, height and confidence).
+   4 Box Only the Key Fields, Then Save Them as JSON: his C4, C5, C6 ("In this module" becomes "Next" / "In this
+     reading"); the 4 JSON entries as rows that light their box on the cleaned page.
+   Not here, because the Overview video already says it (p4-overview-video-script.md rows 3 to 5): a scan is a picture,
+   get_text() finds 0 words, what OCR is. Ours: titles, eyebrows, one bold why line per card, hints, short definitions.
+   SME text kept word for word, except: em dashes replaced (no em dashes rule); "developed by Google" fixed to "first
+   built at HP and later developed by Google" (fact fix, Ask Chaitanya to review); "In this module" to "Next" / "In this
+   reading" (3 pages merged into one).
+   Real data. Page 4 = pharmaceutical-sdf-page4-certificate-processing.pdf (Drive 1UvYmChia7K90-xjCsHsGqhixmDrPfhHw).
+   The deck matches the STUDENT COPY of his notebook made by agent A1 (Drive 1n2-iMesweW8Y1olLFlqcmNtJOMhhIL3d): his cells
+   with import pymupdf and get_pixmap(dpi=300) instead of get_pixmap() (the dpi change waits for Smita's OK).
+   Card 1 "The scan" picture: PyMuPDF render of Page 4 at 144 dpi (for the screen). Card 2 and card 3 "The text" pictures
+   (-300.png): local run, 19 November 2026, PyMuPDF 1.26.5 + OpenCV 4.10, the copy's exact cells (get_pixmap(dpi=300),
+   COLOR_RGB2GRAY, adaptiveThreshold MEAN_C 11 2, bilateralFilter 9 75 75, resize 200% INTER_CUBIC: 2550 x 3300, then
+   5100 x 6600, as the Colab run printed). Script: project-04/images/m2-learn-crops-300-source.py. (At 72 dpi the same
+   local script, m2-learn-crops-source.py, matches the pictures saved in his notebook pixel for pixel.)
+   Card 1 "What Tesseract finds" picture (pfizer3-p4-m2-l1-boxes.png): his notebook's own saved Step 13 output (his Colab
+   run, 72 dpi, Tesseract 4.1.1). TODO-A6: replace it with the Step 13 output of the student-copy run (300 dpi).
+   Cards 3 and 4 text, boxes and confidence: agent A1's Colab run of the student copy, 19 November 2026 (Python 3.13,
+   PyMuPDF 2.1, Tesseract 5.3.4, pytesseract 0.3.13, OpenCV 5.0, 300 dpi): card 3 lines = Step 10 output; card 3 boxes =
+   Step 12 printout (first 10 words, 290 words in all); card 4 = Step 15 JSON (5 entries; Step 14 printed "Found 10 key
+   pharmaceutical terms"). The boxes are drawn here as SVG over the real cleaned picture (-l4-top-300.png, -l5-page-300.png).
+   If Smita keeps 72 dpi: the 72 dpi Colab values (his unchanged cells, A1's "SCRATCH dpi test" run) were Step 10 lines
+   "Gamma Process Run ID %29708B", "Cytva {25.40 kGy) 17242816 a.", "Cytve (25-40 kGy) 17289079 1 ¢s", 289 words, Z=STERIS
+   (880, 26, 242, 40) 84, JSON CERTIFICATE [50,26,166,26], PROCESSING [68,1272,90,16], LOT [604,158,31,28], STERIS
+   [68,1294,62,14]; swap LINES, WORDS, KEYS and the pictures back (TODO-A6).
+   Fixed stage: 760 x 840 at every width (Notion embed height 783 px), scaled as one piece to fit the frame and centred.
+   Nothing scrolls. Spare height first widens the gaps between blocks (up to 2x), then enlarges the card's main picture. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --space-2:8px; --space-3:14px; --space-4:18px; --space-5:26px;
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:840px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+.pg-label{font-size:11px;font-weight:500;line-height:1.2;color:var(--ink-muted);white-space:nowrap}
+.pg-label::after{content:attr(data-text);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:20px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:17px;line-height:1.45;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:16px;line-height:1.55;color:var(--ink-muted);text-wrap:pretty}
+.p b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:14px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.row{display:flex;align-items:center;gap:var(--space-4)}
+.cols{display:flex;gap:22px;align-items:flex-start}
+.cols > .side{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:12px}
+code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card);color:var(--ink);padding:1px 5px;border-radius:5px;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:14.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them (an SVG in the picture's own units) */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none}
+.pic img{display:block;width:100%;height:auto;transition:opacity .45s ease}
+.pic.px img{image-rendering:pixelated}
+.pic img.over{position:absolute;left:0;top:0;opacity:0}
+.pic.plain img.over{opacity:1}
+.pic.plain img.base{opacity:0}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.pic rect{fill:none;stroke-width:2.5px;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16}
+.pic rect.gl{stroke:var(--highlight);fill:none;stroke-width:1.5px}
+.pic rect.b{stroke:var(--pfizer-blue);fill:var(--pfizer-blue);fill-opacity:.10}
+.pic rect.bl{stroke:var(--blue-200);fill:none;stroke-width:1.5px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){ .pic rect.pop{animation:none} }
+.pic text{font-family:var(--font-text);font-weight:700;fill:var(--pfizer-blue)}
+.pic text.g{fill:var(--highlight)}
+.pic circle{fill:var(--pfizer-blue);stroke:var(--surface);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+.cap{margin:6px 0 0;font-size:12.5px;line-height:1.3;font-weight:600;color:var(--gray-600);text-align:center}
+.res{margin:0;font-size:16px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.res b{font-weight:700;color:var(--ink)}
+
+.whyl{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.whyl li{font-size:16px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.whyl li b{font-weight:600;color:var(--ink)}
+.whyh{margin:0;font-size:15px;line-height:1.4;font-weight:600;color:var(--ink)}
+
+/* Tiles (card 2) and chips (card 4) */
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;border-radius:var(--radius-xs)}
+.tile{display:flex;flex-direction:column;justify-content:center;gap:2px;text-align:left;background:var(--surface);border:1.5px solid var(--ink);border-radius:var(--radius-xs);padding:7px 10px;cursor:pointer;min-height:50px}
+.tile .n{font-size:12px;line-height:1.2;font-weight:600;color:var(--step-label)}
+.tile .t{font-size:14px;line-height:1.25;font-weight:600;color:inherit}
+.tile[aria-pressed="true"]{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.tile[aria-pressed="true"] .n{color:var(--blue-200)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;border-radius:var(--radius-xs)}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:14px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.panel{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.panel .ph{margin:0;font-size:16px;line-height:1.45;font-weight:600;color:var(--ink)}
+.panel .pp{margin:0;font-size:15.5px;line-height:1.5;color:var(--card-text);text-wrap:pretty}
+.panel .pp b{font-weight:600;color:var(--ink)}
+.panel ul{margin:0;padding-left:20px}
+.panel li{font-size:15.5px;line-height:1.5;color:var(--card-text)}
+.panel.two{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);column-gap:20px;row-gap:6px;align-content:start}
+.panel.two .ph{grid-column:1 / -1}
+.panel.two .pw{display:flex;flex-direction:column;gap:4px}
+.size{display:inline-block;font-size:13px;font-weight:600;color:var(--pfizer-blue);background:var(--surface);border:1px solid var(--blue-200);border-radius:999px;padding:2px 10px;margin-top:2px;align-self:flex-start}
+
+/* Card 3: what the page says vs what Tesseract read */
+.hits{position:absolute;inset:0}
+.hit{position:absolute;margin:0;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer}
+.hit:hover{background:rgba(0,51,160,.06)}
+.cmp{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 16px;display:grid;grid-template-columns:132px minmax(0,1fr);row-gap:6px;column-gap:12px;align-items:baseline}
+.cmp dt{font-size:12.5px;line-height:1.3;font-weight:600;color:var(--pfizer-blue);letter-spacing:.02em}
+.cmp dd{margin:0;font-family:var(--font-mono);font-size:15px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
+.cmp mark{background:var(--surface);color:var(--ink);border-radius:4px;padding:0 3px;box-shadow:0 0 0 1.5px var(--ink)}
+.cmp .ok{font-family:var(--font-text);font-size:13px;color:var(--gray-600)}
+
+/* Card 5: the key fields table */
+.ktbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-icon)}
+.ktbl table{width:100%;border-collapse:collapse;font-size:14.5px;line-height:1.35}
+.ktbl th{text-align:left;font-size:12.5px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.ktbl td{padding:0;border-bottom:1px solid var(--line)}
+.ktbl tr:last-child td{border-bottom:0}
+.krow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);width:100%;border:0;background:var(--surface);text-align:left;padding:6px 12px;cursor:pointer;font-size:14.5px;line-height:1.35;color:var(--ink)}
+.krow:hover{background:var(--surface-card)}
+.krow[aria-pressed="true"]{background:var(--surface-card);box-shadow:inset 4px 0 0 var(--highlight)}
+.krow .f{font-weight:600}
+.krow .bx{font-family:var(--font-mono);font-size:13.5px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How Tesseract reads a scanned page: four cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 4</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1, class, pad] in the SVG's own units */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b, n) {
+      var pad = b[5] != null ? b[5] : 0;
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0] - pad); r.setAttribute("y", b[1] - pad);
+      r.setAttribute("width", b[2] - b[0] + 2 * pad); r.setAttribute("height", b[3] - b[1] + 2 * pad);
+      r.setAttribute("rx", 1.5);
+      r.setAttribute("class", (b[4] || "g") + (pop ? " pop" : ""));
+      if (pop) r.style.animationDelay = (n * 0.04) + "s";
+      svg.appendChild(r);
+    });
+  }
+  function text(svg, x, y, s, size, anchor, cls) {
+    var t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y); t.setAttribute("font-size", size);
+    if (anchor) t.setAttribute("text-anchor", anchor);
+    if (cls) t.setAttribute("class", cls);
+    t.textContent = s; svg.appendChild(t); return t;
+  }
+  function dot(svg, x, y, r) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r || 4); svg.appendChild(c);
+  }
+
+  /* Click-me nudges: a pulsing outline on the element and a "Click me" tag beside it, until it is first clicked */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- Data (all real; see the note at the top) ---------- */
+
+  /* Card 2 and 3 crop: Page 4, x 20 to 400, y 52 to 172 in PDF points (the pictures are that area of the 300 dpi picture). */
+  var CROP = [20, 52, 380, 120];
+  /* Card 3, "The text": the text lines on the page (their rows in PDF points) and what Tesseract read for each one (the
+     student copy's Step 10 output, Colab, 300 dpi). "bad" lists the words Tesseract got wrong, to mark them. The crop
+     ends at x 400, so the Quantity and UOM columns sit outside the picture. */
+  var LINES = [
+    { y: [57, 68], page: "Gamma Process Run ID 129708B", ocr: "Gamma Process Run ID 129708B", bad: [] },
+    { y: [80, 91], page: "Product Code   Product Lot Number   Quantity   UOM", ocr: "Product Code Product Lot Number \u201c Quantity UOM", bad: ["\u201c"] },
+    { y: [97, 106], page: "Cytiva (25-40 kGy)   17242818   19   CS", ocr: "Cytiva (25-40 kGy) 17242818 19 .. CS", bad: [] },
+    { y: [113, 121], page: "Cust Item ID: 29-1846-12", ocr: "Cust Item ID: 29-1846-12", bad: [] },
+    { y: [129, 137], page: "Cytiva (25-40 kGy)   17269079   1   CS", ocr: "Cytiva (25-40 kGy) 17269079 1 cs", bad: [] },
+    { y: [144, 152], page: "Cust Item ID: CB0050L10-21", ocr: "Cust Item ID: CBOQ050L10-21", bad: ["CBOQ050L10-21"] },
+    { y: [160, 168], page: "Cytiva (25-40 kGy)   17271868   2   CS", ocr: "Cytiva (25-40 kGy) 17271868 2 CS", bad: [] }
+  ];
+  /* Card 3, "The boxes": the student copy's Step 12 printout, the first 10 words: left, top, width, height (pixels of the
+     cleaned 5100 x 6600 picture) and confidence. The picture is that picture's rows 60 to 600. */
+  var TOP = [0, 60, 5100, 540];
+  var WORDS = [
+    ["Certificate", 214, 112, 688, 110, 96], ["Of", 952, 112, 156, 108, 95], ["Processing", 1152, 118, 752, 134, 95],
+    ["Z=", 3668, 108, 186, 164, 37], ["STERIS", 3928, 122, 740, 152, 67], ["Prepared", 214, 294, 404, 94, 96],
+    ["for", 652, 294, 118, 76, 96], ["GE", 800, 296, 132, 74, 96], ["HEALTHCARE", 968, 296, 664, 76, 94],
+    ["Gamma", 214, 486, 350, 96, 96]
+  ];
+  /* Card 4: the student copy's Step 15 JSON (the 5 entries it keeps), boxes as [left, top, width, height] on the
+     5100 x 6600 picture */
+  var KEYS = [
+    ["CERTIFICATE", 214, 112, 688, 110], ["PROCESSING", 294, 5302, 368, 68], ["STERIS", 3430, 5522, 202, 44],
+    ["LOT", 2510, 678, 126, 64], ["QUALITY", 2734, 5372, 164, 56]
+  ];
+
+  /* ---------- Card 1: the scan vs what Tesseract finds ---------- */
+  function initSee(root) {
+    var fig = root.querySelector("#c1-pic"), btns = root.querySelectorAll(".sw button");
+    var a = root.querySelector("#c1-a"), b = root.querySelector("#c1-b");
+    function show(v) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      var t = v === "t";
+      fig.classList.toggle("plain", t); a.hidden = t; b.hidden = !t;
+      space();
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show("s");
+    nudge("c1", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 2: the cleaning steps ---------- */
+  var STAGES = {
+    orig: { img: "pfizer3-p4-m2-l2-orig-300.png", size: "2550 x 3300 pixels",
+      html: '<p class="ph">The page as a picture</p><p class="pp">Page 4, turned into a picture, as you did in Project 3 before you drew the green box. Nothing is cleaned yet.</p>' },
+    gray: { img: "pfizer3-p4-m2-l2-gray-300.png", size: "2550 x 3300 pixels",
+      html: '<p class="ph">Grayscale Conversion</p><p class="pp">Removes color distractions.</p><p class="pp">Grayscale means shades of gray only, no color.</p>' },
+    thr: { img: "pfizer3-p4-m2-l2-thr-300.png", size: "2550 x 3300 pixels",
+      html: '<p class="ph">Contrast Enhancement</p><p class="pp">Makes text stand out.</p><p class="pp">Every pixel becomes pure black or pure white, judged one small patch of the page at a time. This is called adaptive thresholding.</p>' },
+    bil: { img: "pfizer3-p4-m2-l2-bil-300.png", size: "2550 x 3300 pixels",
+      html: '<p class="ph">Noise Reduction</p><p class="pp">Eliminates unwanted specks.</p><p class="pp">Noise is stray dots that aren\'t part of any letter. The tool that smooths them away is a bilateral filter.</p>' },
+    res: { img: "pfizer3-p4-m2-l2-res-300.png", size: "5100 x 6600 pixels, twice as big",
+      html: '<p class="ph">Resizing</p><p class="pp">Makes small text easier to read.</p>' }
+  };
+  function initClean(root) {
+    var tiles = root.querySelectorAll(".tile"), img = root.querySelector("#c2-pic img"), panel = root.querySelector("#c2-res"), size = root.querySelector("#c2-size");
+    function pick(k) {
+      each(tiles, function (t) { t.setAttribute("aria-pressed", t.getAttribute("data-k") === k ? "true" : "false"); });
+      img.src = STAGES[k].img;
+      size.textContent = "Whole picture: " + STAGES[k].size + ".";
+      panel.innerHTML = STAGES[k].html;
+      space();
+    }
+    each(tiles, function (t) { t.addEventListener("click", function () { pick(t.getAttribute("data-k")); }); });
+    pick("orig");
+    nudge("c2", root.querySelector(".tiles"), root.querySelector("#c2-hint"), "inline");
+  }
+
+  /* ---------- Card 3: the text, and the boxes ---------- */
+  function initRead(root) {
+    var btns = root.querySelectorAll(".sw button"), vText = root.querySelector("#c3-text"), vBox = root.querySelector("#c3-box");
+    /* The text view */
+    var fig = root.querySelector("#c3-pic"), svg = fig.querySelector("svg"), hits = fig.querySelector(".hits");
+    var pageEl = root.querySelector("#c3-page"), ocrEl = root.querySelector("#c3-ocr");
+    function pickLine(n, pop) {
+      var L = LINES[n];
+      draw(svg, [[CROP[0] + 2, L.y[0], CROP[0] + CROP[2] - 2, L.y[1], "g", 0.5]], pop);
+      pageEl.textContent = L.page;
+      ocrEl.innerHTML = L.ocr.split(" ").map(function (w) { return L.bad.indexOf(w) >= 0 ? "<mark>" + esc(w) + "</mark>" : esc(w); }).join(" ") +
+        (L.bad.length ? "" : ' <span class="ok">(every word read right)</span>');
+      each(hits.children, function (h, k) { h.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+    }
+    LINES.forEach(function (L, n) {
+      var h = document.createElement("button");
+      h.type = "button"; h.className = "hit";
+      h.setAttribute("aria-label", "Line " + (n + 1) + ": " + L.page);
+      h.style.left = "0%"; h.style.width = "100%";
+      h.style.top = ((L.y[0] - 3 - CROP[1]) / CROP[3] * 100) + "%"; h.style.height = ((L.y[1] - L.y[0] + 6) / CROP[3] * 100) + "%";
+      h.addEventListener("click", function () { pickLine(n, true); });
+      hits.appendChild(h);
+    });
+    pickLine(5, false);
+    /* The boxes view */
+    var bsvg = root.querySelector("#c3-bpic svg"), chips = root.querySelectorAll(".chip"), res = root.querySelector("#c3-res");
+    function pickWord(n, pop) {
+      var bx = WORDS.map(function (w, k) { return [w[1], w[2], w[1] + w[3], w[2] + w[4], k === n ? "g" : "gl", 0]; });
+      draw(bsvg, bx, pop);
+      var w = WORDS[n];
+      dot(bsvg, w[1], w[2], 18);
+      each(chips, function (c, k) { c.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      res.innerHTML = '<b>' + esc(w[0]) + '</b>: left <b>' + w[1] + '</b>, top <b>' + w[2] + '</b>, width <b>' + w[3] + '</b>, height <b>' + w[4] + '</b>, confidence <b>' + w[5] + '</b>.' +
+        (w[0] === "Z=" ? ' Tesseract read the STERIS logo as two words, "Z=" and "STERIS". Its confidence in "Z=" is only 37, below 40, so the steps draw no box around it.' : '') +
+        (w[0] === "STERIS" ? ' This is the logo. Tesseract is less sure about it than about the words around it, which score 94 to 96.' : '');
+      space();
+    }
+    each(chips, function (c, k) { c.addEventListener("click", function () { pickWord(k, true); }); });
+    function show(v) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      vText.hidden = v !== "t"; vBox.hidden = v !== "b";
+      if (v === "b") pickWord(3, false);
+      space();
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show("t");
+    nudge("c3", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 4: key fields and JSON ---------- */
+  function initKeys(root) {
+    var svg = root.querySelector("#c4-pic svg"), rows = root.querySelectorAll(".krow");
+    function pick(n, pop) {
+      var bx = KEYS.map(function (k, j) { return [k[1], k[2], k[1] + k[3], k[2] + k[4], j === n ? "g" : "b", j === n ? 40 : 25]; });
+      draw(svg, bx, pop);
+      each(rows, function (r, j) { r.setAttribute("aria-pressed", j === n ? "true" : "false"); });
+    }
+    each(rows, function (r, j) { r.addEventListener("click", function () { pick(j, true); }); });
+    pick(2, false);
+    nudge("c4", root.querySelector(".ktbl"), root.querySelector("#c4-hint"), "inline");
+  }
+
+  var PAGE4_ALT = "Page 4 of the supplier's file bundle, a scanned Certificate of Processing from STERIS prepared for GE Healthcare: Gamma Process Run ID 129708B, a table of Cytiva products with their lot numbers, the processing run dates, the minimum and maximum doses, and a signature block.";
+  var TOP_ALT = "The top of Page 4: Gamma Process Run ID 129708B, the headings Product Code and Product Lot Number, and the first rows, Cytiva (25-40 kGy) with lot numbers 17242818, 17269079 and 17271868.";
+
+  var CARDS = [
+    { label: "What Tesseract Sees", eyebrow: "From a picture to words and boxes",
+      html: '<h2 class="title">See What <span class="hl">Tesseract</span> Finds on a Scan</h2>' +
+        '<p class="why">This is what you\'re building toward in this reading: a scan Python can\'t read, turned into words with boxes around them.</p>' +
+        '<div class="row"><div class="nwrap"><div class="sw" role="group" aria-label="Choose how to see Page 4">' +
+          '<button type="button" data-view="s" aria-pressed="true">The scan</button>' +
+          '<button type="button" data-view="t" aria-pressed="false">What Tesseract finds</button></div></div></div>' +
+        '<div class="cols"><div data-grow data-max="380" style="width:300px;flex:none">' +
+            '<figure class="pic" id="c1-pic"><img class="base" src="pfizer3-p4-m2-l1-page4.png" width="1224" height="1584" alt="' + PAGE4_ALT + '">' +
+            '<img class="over" src="pfizer3-p4-m2-l1-boxes.png" width="1224" height="1584" alt=""></figure>' +
+            '<p class="cap">Page 4: Certificate of Processing</p></div>' +
+          '<div class="side">' +
+            '<div id="c1-a"><p class="p"><i>So, what\'s the solution?</i></p>' +
+              '<p class="p">We need to take a scanned PDF, essentially just an image, and <b>extract structured, usable text</b>. Even more importantly, we need to determine <b>where</b> the text appears so we can <b>draw bounding boxes</b> around key fields.</p>' +
+              '<p class="hint" style="margin-top:4px">Now click What Tesseract finds.</p></div>' +
+            '<div id="c1-b" hidden style="display:flex;flex-direction:column;gap:12px">' +
+              '<p class="p">So, we need OCR to extract text. That\'s where <b>Tesseract OCR</b> comes in.</p>' +
+              '<p class="p">We\'ll be starting our journey with <b>Tesseract</b>, an open-source OCR engine first built at HP and later developed by Google, to extract text from scanned documents. Open-source means it\'s free, and anyone can read its code.</p>' +
+              '<p class="p">Each green box is one word Tesseract found on the cleaned-up page.</p></div>' +
+          '</div></div>',
+      init: initSee },
+
+    { label: "Clean", eyebrow: "Preprocessing",
+      html: '<h2 class="title">Clean the Picture So the Letters <span class="hl">Stand Out</span></h2>' +
+        '<p class="why">Tesseract reads only what it can see, so the clearer the letters, the fewer it gets wrong.</p>' +
+        '<p class="p">Remember, OCR isn\'t perfect. It can misread words, pick up noise as text, or miss important information. OCR works best when the text is <b>clear and well-defined</b>. If the image is noisy, blurry, or has poor contrast, the OCR engine might struggle to recognize the characters correctly.</p>' +
+        '<p class="p">So first, you prepare the scanned PDF, a step called <b>preprocessing</b>. This involves converting the PDF into an image, cleaning it up by removing noise, enhancing the contrast, and resizing it to make the text clearer.</p>' +
+        '<p class="hint" id="c2-hint">Click each step to see it on Page 4.</p>' +
+        '<div class="tiles" role="group" aria-label="The cleaning steps">' +
+          '<button type="button" class="tile" data-k="orig" aria-pressed="false"><span class="n">Start</span><span class="t">The picture</span></button>' +
+          '<button type="button" class="tile" data-k="gray" aria-pressed="false"><span class="n">Step 1</span><span class="t">Grayscale</span></button>' +
+          '<button type="button" class="tile" data-k="thr" aria-pressed="false"><span class="n">Step 2</span><span class="t">Contrast</span></button>' +
+          '<button type="button" class="tile" data-k="bil" aria-pressed="false"><span class="n">Step 3</span><span class="t">Noise</span></button>' +
+          '<button type="button" class="tile" data-k="res" aria-pressed="false"><span class="n">Step 4</span><span class="t">Resize</span></button>' +
+        '</div>' +
+        '<div class="cols"><div data-grow data-max="470" style="width:430px;flex:none"><figure class="pic" id="c2-pic"><img src="pfizer3-p4-m2-l2-orig-300.png" width="1520" height="480" alt="' + TOP_ALT + '"></figure>' +
+          '<p class="cap">The top of Page 4, zoomed in. <span id="c2-size"></span></p></div>' +
+          '<div class="side"><div class="panel" id="c2-res" aria-live="polite"></div></div></div>',
+      init: initClean },
+
+    { label: "Text and Boxes", eyebrow: "What Tesseract gives you",
+      html: '<h2 class="title">Read the Text, Then Find Each Word\'s <span class="hl">Box</span></h2>' +
+        '<p class="why">The text lets you search the page, and the boxes show where each word sits, which you\'ll need to mark key fields in the Task.</p>' +
+        '<p class="p">In simple words, in this reading, you\'ll clean up the text to fix common mistakes (like confusing "L0T" with "LOT" or "C0A" with "COA") and then draw bounding boxes around the words to see exactly where each one appears on the document, just like highlighting with a digital pen.</p>' +
+        '<div class="row"><div class="nwrap"><div class="sw" role="group" aria-label="Choose what to see">' +
+          '<button type="button" data-view="t" aria-pressed="true">The text</button>' +
+          '<button type="button" data-view="b" aria-pressed="false">The boxes</button></div></div></div>' +
+        '<div id="c3-text" style="display:flex;flex-direction:column;gap:12px">' +
+          '<p class="hint">Click any line on the page to compare it with what Tesseract read.</p>' +
+          '<div data-grow data-max="704" style="width:600px;align-self:center"><figure class="pic" id="c3-pic"><img src="pfizer3-p4-m2-l2-orig-300.png" width="1520" height="480" alt="' + TOP_ALT + '"><div class="hits"></div>' +
+            '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + CROP.join(" ") + '"></svg></figure></div>' +
+          '<dl class="cmp" aria-live="polite"><dt>ON THE PAGE</dt><dd id="c3-page"></dd><dt>TESSERACT READ</dt><dd id="c3-ocr"></dd></dl>' +
+          '<p class="res">Cleaning fixes some mistakes, but not all of them, so always check the values that matter against the page.</p>' +
+        '</div>' +
+        '<div id="c3-box" hidden style="display:flex;flex-direction:column;gap:12px">' +
+          '<p class="hint">Click a word to see its box.</p>' +
+          '<div class="chips" role="group" aria-label="The first 10 words Tesseract found">' +
+            WORDS.map(function (w) { return '<button type="button" class="chip" aria-pressed="false">' + esc(w[0]) + '</button>'; }).join("") + '</div>' +
+          '<figure class="pic" id="c3-bpic"><img src="pfizer3-p4-m2-l4-top-300.png" width="1275" height="135" alt="The top of the cleaned picture of Page 4: Certificate Of Processing, the STERIS logo, Prepared for GE HEALTHCARE and Gamma Process, each word in its own green box.">' +
+            '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOP.join(" ") + '"></svg></figure>' +
+          '<p class="res" id="c3-res" aria-live="polite" style="min-height:48px"></p>' +
+          '<p class="res">Tesseract gives each box as its left edge, its top edge, its width and its height, in pixels of the cleaned picture. Its confidence (from 0 to 100) says how sure it is about the word.</p>' +
+        '</div>',
+      init: initRead },
+
+    { label: "Key Fields", eyebrow: "Keep only what matters",
+      html: '<h2 class="title">Box Only the Key Fields, Then Save Them as <span class="hl">JSON</span></h2>' +
+        '<p class="why">A compliance check needs a few fields, like the certificate and the lot, not all 290 words Tesseract found.</p>' +
+        '<p class="p">But here\'s the next challenge: not all words are equally important. Next, you\'ll learn how to <b>identify and highlight only the key fields</b>, like "DATE," "CERTIFICATE," or "LOT," instead of treating all words the same. Then, you\'ll organize this valuable data into a <b>structured JSON format</b> that\'s ready for use in AI models or document automation tools.</p>' +
+        '<div class="cols"><div data-grow data-max="330" style="width:270px;flex:none">' +
+            '<figure class="pic" id="c4-pic"><img src="pfizer3-p4-m2-l5-page-300.png" width="612" height="792" alt="The cleaned picture of Page 4 with a box on each saved key field: CERTIFICATE in the title, LOT in the Product Lot Number heading, and PROCESSING and STERIS in the address block at the bottom left.">' +
+            '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 5100 6600"></svg></figure>' +
+            '<p class="cap">The cleaned picture of Page 4</p></div>' +
+          '<div class="side">' +
+            '<p class="hint" id="c4-hint">Click a field to find its box.</p>' +
+            '<div class="ktbl"><table><thead><tr><th scope="col">In the JSON: field and box (left, top, width, height)</th></tr></thead><tbody>' +
+              KEYS.map(function (k) { return '<tr><td><button type="button" class="krow" aria-pressed="false"><span class="f">' + k[0] + '</span><span class="bx">[' + k.slice(1).join(", ") + ']</span></button></td></tr>'; }).join("") +
+            '</tbody></table></div>' +
+            '<div class="panel"><p class="pp"><b>Note:</b> Modern AI systems, like document classification, information extraction, or large language models, can\'t work directly with raw OCR output. They need structured input. In this reading, you\'ll simulate how real AI pipelines operate by filtering useful fields and organizing them in machine-readable form.</p></div>' +
+          '</div></div>',
+      init: initKeys }
+  ];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (copied from P3 module 9): spare height first widens the gaps between blocks, up to 2x; what is left
+     enlarges the card's main picture. A card that is too tall shrinks its main picture. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px";
+    var grow = null;
+    each(inner.querySelectorAll("[data-grow]"), function (g) {
+      if (!g.hasAttribute("data-base")) g.setAttribute("data-base", g.style.width || "");
+      g.style.width = g.getAttribute("data-base");
+      if (!grow && g.offsetHeight) grow = g;
+    });
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) {
+      var add = Math.min(GAP, spare / gaps);
+      inner.style.gap = (GAP + add) + "px";
+      spare = avail - inner.offsetHeight;
+    }
+    for (var j = 0; j < 4 && grow && spare < 0; j++) {
+      var gw = grow.offsetWidth, gh = grow.offsetHeight;
+      grow.style.width = Math.max(160, gw + spare * (gw / gh) - 1) + "px";
+      spare = avail - inner.offsetHeight;
+    }
+    if (!grow || spare < 2) return;
+    var max = +grow.getAttribute("data-max") || 704;
+    for (var k = 0; k < 3 && spare >= 2; k++) {
+      var w = grow.offsetWidth, h = grow.offsetHeight;
+      if (!h || w >= max) break;
+      grow.style.width = Math.min(max, w + spare * (w / h)) + "px";
+      spare = avail - inner.offsetHeight;
+      if (spare < 0) { grow.style.width = Math.max(0, grow.offsetWidth + spare * (w / h) - 1) + "px"; spare = avail - inner.offsetHeight; }
+    }
+  }
+
+  CARDS.forEach(function (c, n) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span><span class="pg-label" data-text="' + c.label + '">' + c.label + '</span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .tiles, .hits, .chips, .ktbl")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
