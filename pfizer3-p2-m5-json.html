@@ -1151,6 +1151,11 @@ textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
     "hint": "doc_types should be [\"Certificate of Quality\", \"Unknown\", \"Chain of Custody\"]. Check the spelling of \"Unknown\" and that it goes in the except part."
    },
    {
+    "expr": "isinstance(summary, str)",
+    "expect": true,
+    "hint": "summary should be JSON text, so turn the list into JSON with json.dumps(doc_types)."
+   },
+   {
     "expr": "summary == '[\"Certificate of Quality\", \"Unknown\", \"Chain of Custody\"]'",
     "expect": true,
     "hint": "summary should be JSON text: summary = json.dumps(doc_types). str() gives single quotes, which isn't valid JSON."
@@ -1222,6 +1227,10 @@ textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
    {
     "code": "import json\n\nreplies = [\n    '{\"doc_type\": \"Certificate of Quality\"}',\n    '{\"doc_type\": \"Cover Letter\"',\n    '{\"doc_type\": \"Chain of Custody\"}',\n]\ndoc_types = []\nfor reply in replies:\n    try:\n        record = json.loads(reply)\n        doc_types.append(record[doc_type])\n    except json.JSONDecodeError:\n        doc_types.append(\"Unknown\")\n\nsummary = json.dumps(doc_types)\nprint(summary)",
     "hint_contains": "Put quote marks around the key"
+   },
+   {
+    "code": "import json\n\nreplies = [\n    '{\"doc_type\": \"Certificate of Quality\"}',\n    '{\"doc_type\": \"Cover Letter\"',\n    '{\"doc_type\": \"Chain of Custody\"}',\n]\ndoc_types = []\nfor reply in replies:\n    try:\n        record = json.loads(reply)\n        doc_types.append(record[\"doc_type\"])\n    except json.JSONDecodeError:\n        doc_types.append(\"Unknown\")\n\nsummary = doc_types\nprint(summary)",
+    "hint_contains": "turn the list into JSON with json.dumps(doc_types)"
    }
   ],
   "hint_default": "Only the broken reply should end up in the except part, so put both the json.loads() line and its append line under try:. After the loop, turn the whole list into JSON text with json.dumps().",
@@ -1651,8 +1660,11 @@ function article(word) {
 
 function errorHint(error) {
   const a = article(error.type);
-  let hint = error.message
-    ? `Your code stopped with ${a} ${error.type}: ${error.message}.`
+  // Pfizer x Extern (QA, 21 Nov 2026): no full stop after a message that already ends in . ? or !
+  // (e.g. "Perhaps you forgot a comma?" must not become "comma?.").
+  const msg = error.message ? String(error.message).trimEnd() : "";
+  let hint = msg
+    ? `Your code stopped with ${a} ${error.type}: ${msg}${/[.?!]$/.test(msg) ? "" : "."}`
     : `Your code stopped with ${a} ${error.type}.`;
   const title = Object.prototype.hasOwnProperty.call(ERROR_LESSONS, error.type)
     ? ERROR_LESSONS[error.type]
