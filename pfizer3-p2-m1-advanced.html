@@ -305,14 +305,12 @@ button{font:inherit;color:inherit}
 
 <!-- The Python side of the kernel. The worker loads both as modules. -->
 <script type="text/x-python" id="try-kernel">
-# The Try kernel: runs each cell the way Google Colab (IPython 7.34 on Python 3.12) does, and formats
-# errors the way Colab shows them. Cells share one namespace, like one Colab session.
+# The Try kernel: runs each cell the way Google Colab (IPython 7.34 on Python 3.12) does, and shows errors the
+# way plain Python 3.12 prints them (File "<your code>", line N, in <module>). Cells share one namespace.
 import ast
 import builtins
-import codeop
 import dis
 import errno
-import inspect
 import io
 import json
 import linecache
@@ -322,17 +320,20 @@ import sys
 import time
 import tokenize
 import traceback
+import warnings
 
 from try_pretty import pretty as _pretty
 
 _MAX_OUT = 20000
-_PREFIX = "/tmp/ipython-input-"
+_PREFIX = "<your code #"   # each cell's own file name inside the kernel; errors show it as _SHOWN
+_SHOWN = "<your code>"
+_dropped = {}   # file name -> blank lines dropped from the top of that cell, so error lines match the code box
 _HOME = "/content"
 _KERNEL_FILE = __file__
 _state = {"chunks": [], "size": 0, "trunc": False, "input": False, "deadline": 0.0, "limit": 5.0}
-# IPython compiles cells like codeop.Compile: these flags make an unclosed ( or string at the end of a cell
-# "SyntaxError: incomplete input", as Colab shows it.
-_FLAGS = codeop.Compile().flags
+# Compile as plain Python does (no codeop flags), so an unclosed ( at the end of a cell says
+# "SyntaxError: '(' was never closed", not IPython's "incomplete input".
+_FLAGS = 0
 # Pyodide's file system uses Emscripten's error numbers (ENOENT is 44). Colab runs on Linux (ENOENT is 2).
 _LINUX_ERRNO = {"EPERM": 1, "ENOENT": 2, "EIO": 5, "EBADF": 9, "EAGAIN": 11, "EACCES": 13, "EBUSY": 16, "EEXIST": 17,
                 "EXDEV": 18, "ENOTDIR": 20, "EISDIR": 21, "EINVAL": 22, "EMFILE": 24, "EFBIG": 27, "ENOSPC": 28,
@@ -370,7 +371,7 @@ def _try_open(file, mode="r", buffering=-1, encoding=None, errors=None, newline=
 
 
 def _murmur2(text, seed=0xC70F6907):
-    """ipykernel's murmur2_x86. Colab names a cell's file /tmp/ipython-input-<this hash of the cell's code>.py"""
+    """ipykernel's murmur2_x86: a short hash of the cell's code, which keeps each cell's file name unique."""
     m = 0x5BD1E995
     data = text.encode("utf8")
     length = len(data)
@@ -501,25 +502,40 @@ def reset():
            "__spec__": None, "__builtins__": builtins}
     for name in [n for n in linecache.cache if n.startswith(_PREFIX)]:
         del linecache.cache[name]
+    _dropped.clear()
     os.makedirs(_HOME, exist_ok=True)
     _clear_home()
     os.chdir(_HOME)
 
 
+_real_formatwarning = warnings.formatwarning
+
+
+def _formatwarning(message, category, filename, lineno, line=None):
+    """A warning from a code box names it "<your code>", with the line as the student sees it."""
+    if isinstance(filename, str) and filename.startswith(_PREFIX):
+        if line is None:
+            line = linecache.getline(filename, lineno)
+        lineno += _dropped.get(filename, 0)
+        filename = _SHOWN
+    return _real_formatwarning(message, category, filename, lineno, line)
+
+
 def _setup():
     global _builtins_snapshot
+    warnings.formatwarning = _formatwarning
     builtins.input = _try_input
     builtins.open = io.open = _try_open
     _builtins_snapshot = builtins.__dict__.copy()
     reset()
 
 
-# ---------- tracebacks, as IPython 7.34 VerboseTB / ListTB print them in Colab ----------
+# ---------- tracebacks, as plain Python 3.12 prints them ----------
 _STDLIB = None
 
 
 def _display_path(path):
-    """Pyodide keeps the standard library at /lib/python3.12 (or inside python312.zip). Colab's is /usr/lib/python3.12."""
+    """Pyodide keeps the standard library at /lib/python3.12 (or inside python312.zip). Show it as /usr/lib/python3.12."""
     global _STDLIB
     if _STDLIB is None:
         v = "python%d.%d" % sys.version_info[:2]
@@ -533,41 +549,8 @@ def _display_path(path):
     return path
 
 
-def _nullrepr(value, repr=repr):
-    return ""
-
-
-def _frame_entry(tb, context):
-    frame = tb.tb_frame
-    code = frame.f_code
-    file = code.co_filename or "?"
-    lnum = tb.tb_lineno or 0
-    func = code.co_name
-    try:
-        args, varargs, varkw, locals_ = inspect.getargvalues(frame)
-        call = inspect.formatargvalues(args, varargs, varkw, locals_, formatvalue=_nullrepr)
-    except KeyError:
-        call = "(***failed resolving arguments***)"
-    segs = [["g", _display_path(file)], ["", " in "], ["c", func + call], ["", "\n"]]
-    try:
-        all_lines = linecache.getlines(file, frame.f_globals)
-    except Exception:
-        all_lines = []
-    start = max(lnum - 1 - context // 2, 0)
-    for i, line in enumerate(all_lines[start:start + context], start + 1):
-        if not line.endswith("\n"):
-            line += "\n"
-        if i == lnum:
-            pad = 7 - len(str(i))
-            arrow = ("-" * (pad - 2) + "> ") if pad >= 2 else (">" if pad == 1 else "")
-            segs += [["g", arrow + str(i)], ["", " " + line]]
-        else:
-            segs += [["g", "%7d" % i], ["", " " + line]]
-    return segs, (code.co_filename, lnum, func)
-
-
 def _records(tb):
-    """The frames IPython shows: from the first cell frame down, without this kernel's own frames."""
+    """The frames Python would show: from the first code box frame down, without this kernel's own frames."""
     out = []
     started = False
     while tb is not None:
@@ -580,105 +563,94 @@ def _records(tb):
     return out
 
 
-def _exception_block(exc, context):
-    name = type(exc).__name__
-    try:
-        msg = str(exc)
-    except Exception:
-        msg = "<unprintable %s object>" % name
-    if isinstance(exc, OSError) and not getattr(exc, "_try_linux", False) and msg.startswith("[Errno %s]" % exc.errno):
-        msg = "[Errno %s]" % _linux_errno(exc.errno) + msg[len("[Errno %s]" % exc.errno):]
-    entries = [[["r", name], ["", "Traceback (most recent call last)".rjust(75 - len(name))]]]
-    tbs = _records(exc.__traceback__)
-    frames = [_frame_entry(t, context) for t in tbs]
-    keys = [f[1] for f in frames]
-    last_unique, repeat = len(frames), 0
-    if isinstance(exc, RecursionError) and "recursion" in msg.lower() and len(frames) > 500:
-        inner = set(keys[-(len(keys) // 4):])
-        seen = {}
-        last_unique = 0
-        for i in range(len(keys) - 1, -1, -1):
-            k = keys[i]
-            if k not in inner:
-                last_unique = i
-                break
-            if k in seen:
-                repeat = max(repeat, seen[k] - i)
-            seen[k] = i
-    for f in frames[: last_unique + repeat + 1]:
-        entries.append(f[0])
-    if repeat:
-        entries.append([["", "... last %d frames repeated, from the frame below ...\n" % repeat]])
-        entries.append(frames[last_unique + repeat + 1][0])
-    entries.append({"last": [["r", name], ["", ": " + msg]]})
-    return entries
+def _fix_stack(te):
+    frames = []
+    started = False
+    for fs in te.stack:
+        fn = fs.filename or ""
+        if fn.startswith(_PREFIX):
+            started = True
+        if not started or fn == _KERNEL_FILE:
+            continue
+        fs.line   # read the source line now, before the name and line number change
+        if fn.startswith(_PREFIX):
+            d = _dropped.get(fn, 0)
+            if fs.lineno is not None:
+                fs.lineno += d
+            if getattr(fs, "end_lineno", None) is not None:
+                fs.end_lineno += d
+            fs.filename = _SHOWN
+        else:
+            fs.filename = _display_path(fn)
+        frames.append(fs)
+    te.stack = traceback.StackSummary.from_list(frames)
 
 
-def _chained(exc):
-    cause = getattr(exc, "__cause__", None)
-    if cause:
-        return cause, True
-    if getattr(exc, "__suppress_context__", False):
-        return None, False
-    return getattr(exc, "__context__", None), False
-
-
-def _verbose_tb(exc):
-    blocks = [_exception_block(exc, 5)]
-    seen = {id(exc)}
-    cur = exc
-    while True:
-        nxt, is_cause = _chained(cur)
-        if nxt is None or id(nxt) in seen:
-            break
-        seen.add(id(nxt))
-        text = ("\nThe above exception was the direct cause of the following exception:\n" if is_cause
-                else "\nDuring handling of the above exception, another exception occurred:\n")
-        blocks.append([[["", text]]])
-        blocks.append(_exception_block(nxt, 3))
-        cur = nxt
-    entries = [[["r", "-" * 75]]]
-    for b in reversed(blocks):
-        entries += b
-    return entries
-
-
-def _syntax_entries(exc):
-    """IPython's SyntaxTB: File "...", line N, the line, a ^ under the place, then the error."""
-    entries = []
-    name = type(exc).__name__
-    filename = exc.filename or "<string>"
-    if exc.lineno:
-        lineno = exc.lineno
-        textline = linecache.getline(filename, exc.lineno)
+def _fix_syntax(te, fname, compiled):
+    fn = te.filename
+    if not isinstance(fn, str):
+        return
+    if fn.startswith(_PREFIX) or (not compiled and fn == "<string>"):
+        d = _dropped.get(fn if fn.startswith(_PREFIX) else fname, 0)
+        for attr in ("lineno", "end_lineno"):
+            v = getattr(te, attr, None)
+            if v is not None and str(v).isdigit():
+                setattr(te, attr, str(int(v) + d))
+        te.filename = _SHOWN
     else:
-        lineno = "unknown"
-        textline = ""
-    entries.append([["", '  File '], ["g", '"%s"' % filename], ["", ", line "], ["g", str(lineno)]])
-    if textline == "":
-        textline = exc.text
-    if textline is not None:
-        i = 0
-        while i < len(textline) and textline[i].isspace():
-            i += 1
-        entries.append([["", "    " + textline.strip()]])
-        if exc.offset is not None:
-            s = "    "
-            for c in textline[i:exc.offset - 1]:
-                s += c if c.isspace() else " "
-            entries.append([["", s], ["r", "^"]])
-    msg = exc.msg if getattr(exc, "msg", None) is not None else str(exc)
-    entries.append({"last": [["r", name]] + ([["", ": " + msg]] if msg else [])})
+        te.filename = _display_path(fn)
+
+
+def _fix_all(te, fname, compiled, seen):
+    if te is None or id(te) in seen:
+        return
+    seen.add(id(te))
+    _fix_stack(te)
+    t = getattr(te, "exc_type", None)
+    if isinstance(t, type) and issubclass(t, SyntaxError):
+        _fix_syntax(te, fname, compiled)
+    _fix_all(te.__cause__, fname, compiled, seen)
+    _fix_all(te.__context__, fname, compiled, seen)
+    for sub in getattr(te, "exceptions", None) or []:
+        _fix_all(sub, fname, compiled, seen)
+
+
+def _plain_entries(exc, fname, compiled):
+    """The traceback exactly as Python 3.12 prints it, as styled entries. The error's own last line is bold, its name red."""
+    te = traceback.TracebackException(type(exc), exc, exc.__traceback__, compact=True)
+    _fix_all(te, fname, compiled, set())
+    # Pyodide's error numbers are Emscripten's. Show Linux's ([Errno 2]), as open() already does.
+    if isinstance(exc, OSError) and not getattr(exc, "_try_linux", False) and isinstance(getattr(te, "_str", None), str):
+        pre = "[Errno %s]" % exc.errno
+        if te._str.startswith(pre):
+            te._str = "[Errno %s]" % _linux_errno(exc.errno) + te._str[len(pre):]
+    text = "".join(te.format())
+    tail = "".join(te.format_exception_only())
+    head = text[: len(text) - len(tail)] if text.endswith(tail) else ""
+    if not text.endswith(tail):
+        tail = text
+    t = te.exc_type
+    stype = t.__qualname__
+    if t.__module__ not in ("__main__", "builtins"):
+        stype = t.__module__ + "." + stype
+    lines = tail.rstrip("\n").split("\n")
+    k = len(lines) - 1
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i] == stype or lines[i].startswith(stype + ": "):
+            k = i
+            break
+    entries = []
+    before = head + "".join(line + "\n" for line in lines[:k])
+    if before:
+        entries.append([["", before.rstrip("\n")]])
+    final = lines[k]
+    if final.startswith(stype):
+        entries.append({"last": [["r", stype], ["", final[len(stype):]]]})
+    else:
+        entries.append({"last": [["", final]]})
+    if lines[k + 1:]:
+        entries.append([["", "\n".join(lines[k + 1:])]])
     return entries
-
-
-def _syntax_with_frames(exc):
-    """A SyntaxError raised while the code runs (for example by eval): Python's own list format."""
-    entries = [[["", "Traceback (most recent call last):"]]]
-    for t in _records(exc.__traceback__):
-        fs = traceback.extract_tb(t, limit=1)[0]
-        entries.append([["", '  File "%s", line %s, in %s\n    %s' % (_display_path(fs.filename), fs.lineno, fs.name, (fs.line or "").strip())]])
-    return entries + _syntax_entries(exc)
 
 
 def _first_cell_line(exc, fname):
@@ -745,19 +717,11 @@ def _quiet(code):
     return False
 
 
-def _cell_name(code):
-    try:
-        first = next(dis.findlinestarts(code))[1]
-    except StopIteration:
-        return code
-    return code.replace(co_name="<cell line: %s>" % (first,))
-
-
 def run(src, limit=5.0):
     """Run one cell. Returns JSON: the output chunks and, on an error, the traceback as styled entries."""
     st = _state
     st.update(chunks=[], size=0, trunc=False, input=False, limit=float(limit))
-    fname = _PREFIX + str(_murmur2(src)) + ".py"
+    fname = _PREFIX + str(_murmur2(src)) + ">"
     saved = sys.stdout, sys.stderr, sys.displayhook
     sys.stdout, sys.stderr, sys.displayhook = _Stream("out"), _Stream("err"), _display
     error = None
@@ -766,12 +730,8 @@ def run(src, limit=5.0):
         tree = None
         try:
             code_text, dropped = _transform(src)
+            _dropped[fname] = dropped
             linecache.cache[fname] = (len(code_text), None, [line + "\n" for line in code_text.splitlines()], fname)
-            try:
-                # IPython first checks whether the cell needs top-level await (this can print a SyntaxWarning for "<>").
-                compile(code_text, "<>", "exec", getattr(ast, "PyCF_ALLOW_TOP_LEVEL_AWAIT", 0))
-            except Exception:
-                pass
             tree = compile(code_text, fname, "exec", _FLAGS | ast.PyCF_ONLY_AST, 1)
         except (OverflowError, SyntaxError, ValueError, TypeError, MemoryError) as exc:
             error = _error(exc, fname, compiled=False)
@@ -783,7 +743,7 @@ def run(src, limit=5.0):
             for node, mode in [(n, "exec") for n in plain] + [(n, "single") for n in interactive]:
                 try:
                     mod = ast.Module([node], []) if mode == "exec" else ast.Interactive([node])
-                    code = _cell_name(compile(mod, fname, mode, _FLAGS, 1))
+                    code = compile(mod, fname, mode, _FLAGS, 1)
                 except BaseException as exc:
                     error = _error(exc, fname, compiled=False)
                     break
@@ -810,21 +770,17 @@ def _error(exc, fname, compiled):
     except Exception:
         msg = ""
     info = {"type": name, "msg": msg, "line": 0}
+    try:
+        info["entries"] = _plain_entries(exc, fname, compiled)
+    except Exception:
+        info["entries"] = [{"last": [["r", name]] + ([["", ": " + msg]] if msg else [])}]
     if isinstance(exc, SyntaxError) and not (compiled and type(exc) is not SyntaxError):
         if compiled:
-            info["entries"] = _syntax_with_frames(exc)
             info["line"] = _first_cell_line(exc, fname)
         else:
-            info["entries"] = _syntax_entries(exc)
             info["line"] = (exc.lineno or 0) if exc.filename in (fname, "<string>") else 0
         info["syntax"] = True
-    elif isinstance(exc, SystemExit):
-        info["entries"] = [[["", "An exception has occurred, use %tb to see the full traceback.\n"]],
-                           {"last": [["r", name]] + ([["", ": " + msg]] if msg else [])}]
-    elif not compiled:
-        info["entries"] = [{"last": [["r", name], ["", ": " + msg]]}]
-    else:
-        info["entries"] = _verbose_tb(exc)
+    elif compiled:
         info["line"] = _first_cell_line(exc, fname)
     return info
 
@@ -1906,7 +1862,9 @@ if __name__ == '__main__':
       if (o !== btn) toggle(o, document.getElementById(o.getAttribute("aria-controls")), false);
     });
     btn.setAttribute("aria-expanded", open ? "true" : "false");
-    btn.lastChild.textContent = open ? btn.lastChild.textContent.replace("Show", "Hide") : btn.lastChild.textContent.replace("Hide", "Show");
+    if (!btn.getAttribute("data-label")) btn.setAttribute("data-label", btn.lastChild.textContent);
+    var label = btn.getAttribute("data-label");   /* "Show a hint" or "Show the answer" */
+    btn.lastChild.textContent = open ? label.replace(/^Show (a|an|the) /, "Hide the ") : label;
     panel.hidden = !open;
     refit();
   }
@@ -2158,8 +2116,8 @@ if __name__ == '__main__':
     });
   }
 
-  /* ---------- Output and Colab-style tracebacks ---------- */
-  /* The kernel sends the traceback as IPython 7.34 builds it (the version Colab runs): a list of entries, each a list of
+  /* ---------- Output and tracebacks ---------- */
+  /* The kernel sends the traceback as plain Python 3.12 prints it: a list of entries, each a list of
      [style, text] parts, joined by new lines. Styles: "r" red, "g" green, "c" cyan, "" plain. The last entry is bold. */
   var TB_CLASS = { r: "tb-red", g: "tb-green", c: "tb-cyan" };
   function span(cls, text) { return '<span class="' + cls + '">' + esc(text) + "</span>"; }
