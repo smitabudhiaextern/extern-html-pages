@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG and LlamaIndex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 5, module 2 Learn deck: "How RAG Works, Then Your First Gemini Chatbot".
+   Merges Chaitanya's (SME) concept pages "Understanding the RAG Pipeline" (Notion 7ef1d028...) and "Meet LlamaIndex:
+   AI's Smart Librarian" (73c1d028...) into one Learn deck. Ideas only, NO code: the code is in the Try (Simple Chatbot).
+   Built 22 November 2026 from source/m2-learn-build.py (+ m2-learn-style.css, m2-learn-player.js). Never hand-patch this
+   file: change the source and rebuild. Card plan and coverage: step1-coverage-m2-learn.md.
+   12 cards: 1 Why AI Needs Your Documents First, 2 RAG Works in Three Steps, 3 A Simple RAG Pipeline, Step by Step,
+   4 Two Key Technologies, 5 Why Searching by Meaning Works Better, 6 Meet LlamaIndex, 7 What Changes With LlamaIndex,
+   8 The Five Key Stages, 9 The Four Core Components, 10 The Two Models LlamaIndex Needs, 11 Why We Picked MiniLM Over
+   OpenAI, 12 Quick Recap (his two Quick Recaps as one card).
+   SME text word for word, except the swaps Smita approved on 22 November 2026 (kor-step1.md section 7): S2 ("reduces
+   hallucinations", "grounded in the documents you give it"), S3 (Gemini "has a free tier with daily limits", checked
+   22 Nov 2026 on aistudio.google.com/docs/rate-limits and /docs/pricing), S5 ("supplier documents (like SDFs)"), S6
+   ("Pfizer's supplier files hold private data"), S7 (lot 17242818 and "Expiration Date" examples in place of password
+   reset, "recover credentials" and "customer support database"), S10 ("gives you a tool for each stage"). Em dashes and
+   emoji in his text replaced. "In the last module, we saw" became "You just saw" (two pages are now one reading).
+   Gray "Ask Chaitanya to review" notes go on the page under the embed, never in here.
+   Ours: titles, eyebrows, one bold why line per card, click hints, captions, short term definitions (query, context,
+   gamma irradiation, vector, GPT, framework, pretraining, APIs, metadata, LLMs, MiniLM, Hugging Face, runs locally, OpenAI
+   APIs, third-party cloud APIs, infrastructure), the "You already know" pointer on card 1 and the card 5 lead-in "Steps
+   1 to 3 were on the last card". Fix round 1 (22 Nov 2026): card 10 "This seems simple enough" and "the table above"
+   now point to the table on the last card (his table sits on card 9); his Hugging Face link on all-MiniLM-L6-v2 restored
+   on card 11. Full SWAPS list (groups A and B): step1-coverage-m2-learn.md.
+   REAL DATA: the supplier file sample-sdf-document.pdf (3 pages, the Project 3 file). Picture pfizer3-p5-m2-learn-p2-fields.png
+   is page 2 at x 44 to 200, y 102 to 172 pt, zoom 4 (source/m2-learn-crops.py, PyMuPDF 1.26.5); boxes from search_for.
+   "expire" appears 0 times in the file's 3 pages; "Expiration" appears on pages 2 and 3 (checked with PyMuPDF).
+   No card shows an answer to the Step 3 Task prompts (test methods, storage conditions).
+   Fixed stage: 760 x 1032 at every width (Notion embed height 961 px = 1032 x 708 / 760), scaled as one piece to fit the
+   frame and centred. Nothing scrolls. Tallest state: card 12 with the Done message. */
+
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:784px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How RAG and LlamaIndex work: 24 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 24</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"P2": {"w": 624, "h": 280, "lot": [30, 28, 426, 89], "exp": [30, 200, 495, 262], "img": "pfizer3-p5-m2-learn-p2-fields.png", "alt": "Page 2 of the supplier file: Lot Number: 17242818, Date of Manufacture: 20210126, Expiration Date: 20230126."}, "Q": "When does lot 17242818 expire?"};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  function picHTML() {
+    return '<figure class="pic"><img src="' + D.P2.img + '" alt="' + D.P2.alt + '" width="' + D.P2.w + '" height="' + D.P2.h + '">' +
+      '<div class="ov"><svg viewBox="0 0 ' + D.P2.w + ' ' + D.P2.h + '" preserveAspectRatio="none" aria-hidden="true"></svg></div></figure>';
+  }
+
+  /* ---------- Card 1: the two lines a guessing AI can't know ---------- */
+  /* The switch changes only the picture and its caption: the page with both lines boxed, or a blank page with a question mark. */
+  var CAP1 = {
+    see: "Page 2 of the supplier file. You can read the lot number and the expiration date.",
+    ai: "An AI that never saw this file has nothing to read here, so it can only guess the lot number and the expiration date."
+  };
+  function initPage(root) {
+    var btns = root.querySelectorAll(".sw button"), fig = root.querySelector("#c1-pic"), svg = fig.querySelector("svg"), cap = root.querySelector("#c1-cap");
+    var blank = document.createElement("div"); blank.className = "blank"; blank.setAttribute("aria-hidden", "true"); blank.textContent = "?";
+    fig.appendChild(blank);
+    function show(v) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      blank.hidden = v !== "ai";
+      if (v === "see") draw(svg, [D.P2.lot, D.P2.exp], true); else clear(svg);
+      cap.textContent = CAP1[v];
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show("see");
+    nudge("c1", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 2: one question through Retrieval, Augmentation, Generation (the picture changes, the text never) ---------- */
+  var RAG = [
+    function () { return '<div class="picwrap">' + picHTML() + '<p class="cap"><b>Retrieval:</b> for the question "' + D.Q + '", the line that answers it is found on Page 2 of the supplier file.</p></div>'; },
+    function () { return '<div class="ctx"><span class="cl">What the AI now reads (its context)</span><span class="cq">Question: "' + D.Q + '"</span><span class="cd">Expiration Date: 20230126</span></div>'; },
+    function () { return '<div class="ctx"><span class="cl">What the AI writes from</span><span class="cq">The retrieved line, plus its own knowledge of how to word an answer. It no longer has to guess the date.</span><span class="cd">Expiration Date: 20230126</span></div>'; }
+  ];
+  function initRag(root) {
+    var rows = root.querySelectorAll(".step"), view = root.querySelector("#c2-view");
+    function pick(n, pop) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      view.innerHTML = RAG[n]();
+      var svg = view.querySelector("svg");
+      if (svg) draw(svg, [D.P2.exp], pop);
+      space();
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k, true); }); });
+    pick(0, false);
+    nudge("c2", root.querySelector(".steps"), root.querySelector("#c2-hint"), "inline");
+  }
+
+  /* ---------- Card 4: each step lights its part of the flow ---------- */
+  function initEmbed(root) {
+    var rows = root.querySelectorAll(".step"), boxes = root.querySelectorAll("#c4-flow .fbox");
+    function pick(n) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      each(boxes, function (b, k) { b.classList.toggle("on", k === n); b.classList.toggle("dim", k !== n); });
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c4", root.querySelector(".steps"), root.querySelector("#c4-hint"), "inline");
+  }
+
+  /* ---------- Card 5: keyword search vs search by meaning on Page 2 (the switch changes only the picture and its caption) ---------- */
+  var CAP5 = {
+    k: '<b>0 matches.</b> The word "expire" isn\'t anywhere in the supplier file\'s 3 pages, so a keyword search finds nothing.',
+    m: 'A search by meaning looks for the line that means the same as "when does it expire?" On Page 2, that\'s <b>Expiration Date: 20230126</b>.'
+  };
+  function initMeaning(root) {
+    var btns = root.querySelectorAll(".sw button"), svg = root.querySelector("#c5-pic svg"), cap = root.querySelector("#c5-cap");
+    function show(v) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      if (v === "m") draw(svg, [D.P2.exp], true); else clear(svg);
+      cap.innerHTML = CAP5[v];
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show("k");
+    nudge("c5", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 10: play the flow, one box at a time ---------- */
+  var timer = null;
+  function initFlow(root) {
+    var boxes = root.querySelectorAll("#c10-flow .fbox"), btn = root.querySelector("#c10-play");
+    function play() {
+      if (timer) clearInterval(timer);
+      var k = 0;
+      function step() {
+        each(boxes, function (b, j) { b.classList.toggle("on", j === k); b.classList.toggle("dim", j > k); });
+        k++;
+        if (k > boxes.length) { clearInterval(timer); timer = null; each(boxes, function (b) { b.classList.remove("dim"); b.classList.add("on"); }); }
+      }
+      step(); timer = setInterval(step, 800);
+    }
+    btn.addEventListener("click", play);
+    nudge("c10", btn, btn.parentNode);
+  }
+
+  var INITS = { initPage: initPage, initRag: initRag, initEmbed: initEmbed, initMeaning: initMeaning, initFlow: initFlow };
+  var CARDS = [{label:"Why RAG",eyebrow:"Where AI falls short",html:"<h2 class=\"title\">Why AI Needs Your <span class=\"hl\">Documents</span> First</h2><p class=\"why\">An AI can only answer from the supplier file if it finds the right part first. That's what RAG does.</p><p class=\"p\">You already know AI hallucinations from Project 1: false answers stated as true. Even AI with web access can:</p><ul class=\"ul\"><li>Miss critical details (e.g., private quality databases)</li><li>Cite unreliable sources</li><li>Guess when unsure</li></ul><p class=\"p\"><b>Retrieval-Augmented Generation (RAG).</b> RAG acts like an AI assistant with a research team, fetching the most relevant documents before answering a question. This reduces hallucinations and keeps responses grounded in the documents you give it.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"see\" aria-pressed=\"true\">What you see</button><button type=\"button\" data-view=\"ai\" aria-pressed=\"false\">What an AI without the file sees</button></div></div></div><div class=\"picwrap\"><figure class=\"pic\" id=\"c1-pic\"><img src=\"pfizer3-p5-m2-learn-p2-fields.png\" alt=\"Page 2 of the supplier file: Lot Number: 17242818, Date of Manufacture: 20210126, Expiration Date: 20230126.\" width=\"624\" height=\"280\"><div class=\"ov\"><svg viewBox=\"0 0 624 280\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap\" id=\"c1-cap\"></p></div>",init:initPage},
+{label:"Weakness",eyebrow:"How RAG works",html:"<h2 class=\"title\">RAG Tackles AI's Biggest <span class=\"hl\">Weakness</span></h2><p class=\"why\">A RAG chatbot answers from documents, not from guesses.</p><p class=\"p\">RAG tackles AI's biggest weakness: <b>factual accuracy.</b> Instead of guessing, RAG-powered AI <b>retrieves</b> relevant documents before answering, so its responses are <b>based on the information in those documents.</b></p>",init:null},
+{label:"Three Steps",eyebrow:"How RAG works",html:"<h2 class=\"title\">RAG Works in <span class=\"hl\">Three</span> Steps</h2><p class=\"why\">Every RAG pipeline you build in this project does these three steps, in this order.</p><ol class=\"steps wrap\"><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">1</span><span><b>Retrieval:</b> The AI <b>searches a trusted database</b> (instead of just the web) to find <b>relevant documents</b> for the query (the question you ask).</span></button></li><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">2</span><span><b>Augmentation:</b> It <b>adds the retrieved data</b> to its context (the text the AI reads before it answers), helping it better understand the query.</span></button></li><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">3</span><span><b>Generation:</b> The AI then <b>uses both the retrieved data and its own knowledge</b> to create more accurate and useful responses.</span></button></li></ol><p class=\"hint\" id=\"c2-hint\">Click each step to follow one question through it.</p><div id=\"c2-view\"></div>",init:initRag},
+{label:"Example",eyebrow:"A worked example",html:"<h2 class=\"title\">A Simple RAG <span class=\"hl\">Pipeline</span>, Step by Step</h2><p class=\"why\">One question, followed from start to finish.</p><p class=\"p\">Let's take a look at a simple RAG pipeline:</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Step</th><th scope=\"col\">What Happens?</th></tr></thead><tbody><tr><td class=\"k\">1. User Question</td><td><span class=\"q\">\"What does the quality certificate say about batch testing?\"</span></td></tr><tr><td class=\"k\">2. Retrieval</td><td>The system fetches <b>official certificates of quality</b> related to batch testing.</td></tr><tr><td class=\"k\">3. Generation</td><td>The AI summarizes the key points <b>from trusted sources</b>.</td></tr><tr><td class=\"k\">Final Response</td><td>A <b>fact-based answer</b>, grounded in the certificates it found.</td></tr></tbody></table></div>",init:null},
+{label:"Regular vs RAG",eyebrow:"A worked example",html:"<h2 class=\"title\">Regular AI vs <span class=\"hl\">RAG-Powered</span> AI</h2><p class=\"why\">See what changes when the AI fetches the reports before it answers.</p><p class=\"p\">A quality analyst asks: <span class=\"q\">\"Which products passed gamma irradiation testing in the last batch?\"</span></p><p class=\"p\">Gamma irradiation uses gamma rays, a type of radiation, to kill germs on medical products.</p><div class=\"two\"><div class=\"box white\"><p class=\"bh\">Regular AI</p><p class=\"bp\">A <b>regular AI</b> might give a generic or outdated answer.</p></div><div class=\"box\"><p class=\"bh\">RAG-powered AI</p><p class=\"bp\">A <b>RAG-powered AI</b> fetches <b>real quality reports</b> and <b>certificates</b>, providing an accurate summary.</p></div></div>",init:null},
+{label:"Embeddings",eyebrow:"Under the hood",html:"<h2 class=\"title\">Two Key Technologies: Embeddings and a <span class=\"hl\">Vector</span> Database</h2><p class=\"why\">These two let RAG find the right line even when your words differ from the file's.</p><p class=\"p\">At its core, RAG relies on <b>two key technologies</b>: an <b>embedding</b> and a <b>vector database</b> (a database that stores text as lists of numbers, called vectors). Let's see how they work:</p>",init:null},
+{label:"Steps 1 to 3",eyebrow:"Under the hood",html:"<h2 class=\"title\">From Question to <span class=\"hl\">Search</span></h2><p class=\"why\">This is how RAG searches by meaning.</p><ol class=\"steps wrap\"><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">1</span><span><b>You ask a question</b><br>e.g., <span class=\"q\">\"When does lot 17242818 expire?\"</span></span></button></li><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">2</span><span><b>AI turns your question into an \"embedding.\"</b><br>This is a numeric representation of meaning, so it understands the <i>intent</i>, not just the words.</span></button></li><li><button type=\"button\" aria-pressed=\"false\" class=\"step\"><span class=\"n\">3</span><span><b>It searches a vector database</b><br>Unlike traditional databases that look for exact keyword matches, a vector database compares <i>concepts</i>. It finds documents that mean the same thing, even if they use different words.</span></button></li></ol><p class=\"hint\" id=\"c4-hint\">Click each step to see where it happens.</p><div class=\"flow\" id=\"c4-flow\"><div class=\"fbox\"><span class=\"fl\">Your question</span><span class=\"ft\">\"When does lot 17242818 expire?\"</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Embedding</span><span class=\"ft\">Numbers that stand for its meaning</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Vector database</span><span class=\"ft\">The file's text, stored as numbers</span></div></div>",init:initEmbed},
+{label:"Steps 4 and 5",eyebrow:"Under the hood",html:"<h2 class=\"title\">Steps 4 and 5: Retrieve, Then <span class=\"hl\">Answer</span></h2><p class=\"why\">This is where the text RAG found becomes your answer.</p><p class=\"p\">Steps 1 to 3 were on the last card. Here are steps 4 and 5:</p><ol class=\"steps static\"><li><div class=\"step\"><span class=\"n\">4</span><span><b>It retrieves the most relevant documents</b><br>These could be help articles, research papers, policy files, whatever the AI has access to.</span></div></li><li><div class=\"step\"><span class=\"n\">5</span><span><b>Then the AI uses those documents to answer your question</b><br>So the response is grounded in real content, not just generated from memory.</span></div></li></ol>",init:null},
+{label:"Meaning",eyebrow:"Meaning, not keywords",html:"<h2 class=\"title\">Why Searching by <span class=\"hl\">Meaning</span> Works Better</h2><p class=\"why\">A RAG chatbot can find an answer even when you don't know the file's exact words.</p><p class=\"p\"><i>But why is this better?</i></p><div class=\"two\"><div class=\"box white\"><p class=\"bp\"><b>Traditional keyword search</b> = Like searching the supplier file for the word \"expire\" and hoping the exact word exists</p></div><div class=\"box\"><p class=\"bp\"><b>RAG-based search</b> = Like asking a librarian who knows which certificate <i>explains</i> when the lot expires, even if it uses different terms like \"Expiration Date.\"</p></div></div><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a search\"><button type=\"button\" data-view=\"k\" aria-pressed=\"true\">Keyword search: \"expire\"</button><button type=\"button\" data-view=\"m\" aria-pressed=\"false\">Search by meaning</button></div></div></div><div class=\"picwrap\"><figure class=\"pic\" id=\"c5-pic\"><img src=\"pfizer3-p5-m2-learn-p2-fields.png\" alt=\"Page 2 of the supplier file: Lot Number: 17242818, Date of Manufacture: 20210126, Expiration Date: 20230126.\" width=\"624\" height=\"280\"><div class=\"ov\"><svg viewBox=\"0 0 624 280\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap\" id=\"c5-cap\"></p></div>",init:initMeaning},
+{label:"Reach Files",eyebrow:"Meet LlamaIndex",html:"<h2 class=\"title\">RAG Still Needs a Way to Reach Your <span class=\"hl\">Documents</span></h2><p class=\"why\">RAG only works if something connects your AI to your files.</p><p class=\"p\">You just saw how RAG helps AI models stop \"making things up\" by pulling answers directly from real documents. But how does your AI <i>actually</i> connect to those documents in the first place?</p><p class=\"p\">That's where tools like <b>LlamaIndex</b> come in.</p>",init:null},
+{label:"LlamaIndex",eyebrow:"Meet LlamaIndex",html:"<h2 class=\"title\">Meet LlamaIndex, Your AI's <span class=\"hl\">Librarian</span></h2><p class=\"why\">LlamaIndex is the tool you'll use to build RAG in this project and the ones after it.</p><p class=\"p\">LlamaIndex is a powerful framework (a ready-made set of building blocks for code) that helps AI models like <b>Gemini, Claude, or GPT</b> (the AI model behind ChatGPT) find, organize, and use information from outside sources such as PDFs, databases, Notion pages, or even Google Drive.</p><div class=\"src\"><div class=\"chips\"><span class=\"chip\">PDFs</span><span class=\"chip\">Databases</span><span class=\"chip\">Notion pages</span><span class=\"chip\">Google Drive</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"hub\">LlamaIndex<small>finds and organizes</small></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"hub\">Gemini, Claude or GPT<small>uses it to answer</small></div></div>",init:null},
+{label:"Librarian",eyebrow:"What LlamaIndex changes",html:"<h2 class=\"title\">Without LlamaIndex the AI Guesses, With It the AI <span class=\"hl\">Searches</span></h2><p class=\"why\">This is the difference LlamaIndex makes to a RAG chatbot's answers.</p><p class=\"p\">Think of it like giving your AI a <b>super-smart librarian</b>:</p><ul class=\"ul\"><li><b>Without LlamaIndex</b> &rarr; The AI can't see your files. It's just guessing based on pretraining (what it learned from huge amounts of text before you ever used it).</li><li><b>With LlamaIndex</b> &rarr; The AI can <b>search, understand, and quote directly from your data,</b> just like a research assistant.</li></ul>",init:null},
+{label:"Without/With",eyebrow:"What LlamaIndex changes",html:"<h2 class=\"title\">What Changes With <span class=\"hl\">LlamaIndex</span></h2><p class=\"why\">Each row is a mistake LlamaIndex helps your chatbot avoid.</p><p class=\"p\">Example: How LlamaIndex Improves AI Responses</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Without LlamaIndex</th><th scope=\"col\">With LlamaIndex</th></tr></thead><tbody><tr><td>AI model <b>doesn't know</b> about your company's policies.</td><td>AI <b>retrieves policies</b> from a document before answering.</td></tr><tr><td>AI provides <b>outdated</b> quality specifications.</td><td>AI pulls <b>quality data</b> from supplier documents (like SDFs).</td></tr><tr><td>AI makes up <b>incorrect</b> product information.</td><td>AI fetches <b>official details</b> from a company database.</td></tr></tbody></table></div><p class=\"p\">In simple terms, <b>LlamaIndex helps AI \"look up\" answers instead of making things up.</b></p>",init:null},
+{label:"Five Stages",eyebrow:"The five stages",html:"<h2 class=\"title\">The <span class=\"hl\">Five</span> Key Stages in a RAG Pipeline</h2><p class=\"why\">The notebooks in the rest of this project follow these stages.</p><p class=\"p\">Before diving into LlamaIndex, let's first understand the stages of any RAG pipeline. Every AI retrieval system follows these <b>five steps</b>:</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Step</th><th scope=\"col\">What It Does</th><th scope=\"col\">Example</th></tr></thead><tbody><tr><td class=\"k\">1. Loading</td><td>Brings in information from files, websites, or databases.</td><td>Uploading a <b>pharmaceutical SDF document.</b></td></tr><tr><td class=\"k\">2. Indexing/<br>Organizing</td><td>Breaks the information into smaller, searchable pieces.</td><td>Splitting the <b>PDF into sections</b> like \"Test Methods\" and \"Expiration Dates.\"</td></tr><tr><td class=\"k\">3. Storing</td><td>Saves the organized info so AI can find it quickly.</td><td>Putting the sections into a <b>smart filing cabinet (vector database)</b>.</td></tr></tbody></table></div>",init:null},
+{label:"Stages 4 and 5",eyebrow:"The five stages",html:"<h2 class=\"title\">Stages 4 and 5: Search, Then <span class=\"hl\">Check</span></h2><p class=\"why\">These two stages turn stored text into a checked answer.</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Step</th><th scope=\"col\">What It Does</th><th scope=\"col\">Example</th></tr></thead><tbody><tr><td class=\"k\">4. Querying/<br>Searching</td><td>Finds the right info when someone asks a question.</td><td>Asking <b>\"What test methods were used?\"</b> and pulling the answer from the PDF.</td></tr><tr><td class=\"k\">5. Evaluating/<br>Checking</td><td>Makes sure the answer is correct and helpful.</td><td>Seeing if the AI gave the <b>right test method info</b> or made a mistake.</td></tr></tbody></table></div><p class=\"p\">Each of these steps improves how accurately AI retrieves and generates responses, and <b>LlamaIndex gives you a tool for each stage.</b></p>",init:null},
+{label:"Components",eyebrow:"Inside LlamaIndex",html:"<h2 class=\"title\">The Four Core <span class=\"hl\">Components</span> of LlamaIndex</h2><p class=\"why\">You'll meet each of these parts in the notebooks of Steps 2 and 3.</p><p class=\"p\">LlamaIndex has <b>four core components</b> that map directly to the RAG pipeline stages:</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Component</th><th scope=\"col\">Purpose</th><th scope=\"col\">Example</th></tr></thead><tbody><tr><td class=\"k\">Data Loaders</td><td>Extract text from PDFs, databases, APIs (ways for programs to share data).</td><td>Load a pharmaceutical <b>SDF</b> document for AI processing.</td></tr><tr><td class=\"k\">Indexing<br>Mechanism</td><td>Organize data into a searchable format (vector embeddings) and store metadata (facts about the text, like which page it came from).</td><td>Splitting a <b>100-page document</b> into smaller searchable chunks.</td></tr></tbody></table></div>",init:null},
+{label:"Find and Answer",eyebrow:"Inside LlamaIndex",html:"<h2 class=\"title\">Components 3 and 4: Retrievers and the Query <span class=\"hl\">Engine</span></h2><p class=\"why\">These two parts find the right text and turn it into an answer.</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Component</th><th scope=\"col\">Purpose</th><th scope=\"col\">Example</th></tr></thead><tbody><tr><td class=\"k\">Retrievers</td><td>Find the <b>most relevant</b> text when a query is made.</td><td>Pull the Expiration Date line for lot 17242818 from the <b>supplier file</b>.</td></tr><tr><td class=\"k\">Query Engine</td><td>Uses LLMs (large language models: AI that writes text, like Gemini) to generate <b>answers</b> based on retrieved documents.</td><td>AI answers quality questions using actual SDF specifications.</td></tr></tbody></table></div>",init:null},
+{label:"Flow",eyebrow:"What LlamaIndex needs",html:"<h2 class=\"title\">The Flow From Document to <span class=\"hl\">Answer</span></h2><p class=\"why\">Every RAG chatbot you build follows this path, from upload to answer.</p><p class=\"p\">The table on the last two cards seems simple enough, but what does the flow look like?</p><div class=\"row\"><div class=\"nwrap\"><button type=\"button\" class=\"btn-play\" id=\"c10-play\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M4 2.5v11l9-5.5z\" fill=\"currentColor\"/></svg>Play the flow</button></div></div><div class=\"flow\" id=\"c10-flow\"><div class=\"fbox\"><span class=\"ft\">Upload a document</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">LlamaIndex processes it</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Retrieves relevant text</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">LLM generates an accurate response</span></div></div><p class=\"p\">There seem to be two important terms used in the table on the last two cards: LLMs and Embeddings. To successfully work with <b>LlamaIndex</b>, we need <b>two important things</b>:</p>",init:initFlow},
+{label:"Two Models",eyebrow:"What LlamaIndex needs",html:"<h2 class=\"title\">Model 1: A Language Model to Write <span class=\"hl\">Answers</span></h2><p class=\"why\">These are the two models in your notebooks: Gemini in this reading's Try, and a small embedding model called MiniLM from Step 2.</p><div class=\"box\"><p class=\"bh\">1. A Language Model (LLM) for Answering Questions</p><p class=\"bp\">LLMs are AI models that generate text-based responses. We'll be using Google's Gemini API because it has a free tier with daily limits, is easy to set up, and works well for our needs.</p></div>",init:null},
+{label:"Embedding Model",eyebrow:"What LlamaIndex needs",html:"<h2 class=\"title\">Model 2: An Embedding Model to Find the Right <span class=\"hl\">Text</span></h2><p class=\"why\">This model is what lets RAG search by meaning.</p><div class=\"box\"><p class=\"bh\">2. An Embedding Model for Finding Relevant Information</p><p class=\"bp\">Embedding models convert text into numbers, making it easy to search and retrieve relevant content. We'll be using:</p><ul><li>Hugging Face MiniLM (No API key needed, simple alternative)</li></ul><p class=\"bp\">Hugging Face is a website that shares free AI models.</p></div><p class=\"p\">By combining these, we can <b>process documents, retrieve information, and answer questions</b> effectively.</p>",init:null},
+{label:"MiniLM",eyebrow:"Our choices",html:"<h2 class=\"title\">The Embedding Model We Use: <span class=\"hl\">MiniLM</span></h2><p class=\"why\">This is the embedding model you'll use from Step 2 on.</p><p class=\"p\"><b>Which Embedding Models Are We Using?</b></p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Model</th><th scope=\"col\">Purpose</th><th scope=\"col\">Cost</th><th scope=\"col\">Why This Model?</th></tr></thead><tbody><tr><td><a href=\"https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2\" target=\"_blank\" rel=\"noopener\">Hugging Face (<span class=\"mono\">all-MiniLM-L6-v2</span>)</a></td><td>Converts text into embeddings for retrieval</td><td>Free</td><td>Runs locally (inside your own Colab session, so your text isn't sent to an outside AI company's service to be turned into numbers), no API key needed, fast and lightweight</td></tr></tbody></table></div>",init:null},
+{label:"Why Not OpenAI",eyebrow:"Our choices",html:"<h2 class=\"title\">Why We Picked MiniLM Over <span class=\"hl\">OpenAI</span></h2><p class=\"why\">In the Task, you'll explain your own model choices, so here's why we picked these.</p><div class=\"box\"><p class=\"bh\">But Why Aren't We Using OpenAI APIs?</p><p class=\"bp\">OpenAI is the company behind ChatGPT. Its APIs let your code use its models, and you pay for each use.</p><ul><li><b>Expensive:</b> Costs can add up quickly, making large-scale use impractical.</li><li><b>Privacy Concerns:</b> Pfizer's supplier files hold private data, so using <b>third-party cloud APIs</b> (services another company runs on its own computers) isn't ideal.</li><li><b>Not Deployable Locally:</b> Future solutions need to run on <b>our own infrastructure</b> (computers we control ourselves).</li></ul></div>",init:null},
+{label:"Recap",eyebrow:"Quick recap",html:"<h2 class=\"title\">Quick <span class=\"hl\">Recap</span>: RAG and LlamaIndex</h2><p class=\"why\">RAG reduces <b>hallucinations</b>, improves <b>accuracy</b>, and helps keep <b>AI-generated responses grounded in trusted data</b>.</p><div class=\"recap\"><div class=\"box\"><p class=\"bh\">Why AI Needs RAG</p><ul><li>Standard AI (like ChatGPT) can hallucinate or provide outdated answers.</li><li>RAG reduces this by retrieving data before generating responses.</li></ul><p class=\"bh\" style=\"margin-top:4px\">Why We Need LlamaIndex</p><ul><li>AI <b>doesn't remember</b> external documents.</li><li><b>LlamaIndex</b> helps AI retrieve and use real data.</li></ul></div><div class=\"box\"><p class=\"bh\">How RAG Works</p><ul><li><b>Retrieval</b> &rarr; AI searches a trusted database for relevant documents.</li><li><b>Augmentation</b> &rarr; AI adds that info to its context.</li><li><b>Generation</b> &rarr; AI combines retrieved data + its own knowledge for an accurate response.</li></ul></div></div>",init:null},
+{label:"Recap 2",eyebrow:"Quick recap",html:"<h2 class=\"title\">Quick Recap: The Pipeline and Its <span class=\"hl\">Parts</span></h2><p class=\"why\">Keep these stages and parts in mind for the notebooks in Steps 2 and 3.</p><div class=\"recap\"><div class=\"box\"><p class=\"bh\">Key Steps in a RAG Pipeline</p><ul><li><b>Loading</b> &rarr; Upload files like PDFs.</li><li><b>Indexing</b> &rarr; Organize data into smaller, searchable chunks.</li><li><b>Storing</b> &rarr; Save data in a vector database.</li><li><b>Searching</b> &rarr; Retrieve relevant content when queried.</li><li><b>Checking</b> &rarr; Ensure accuracy before responding.</li></ul></div><div class=\"box\"><p class=\"bh\">Essential Components</p><ul><li><b>LLMs (e.g., Gemini)</b> &rarr; Generate answers.</li><li><b>Embedding Models (e.g., MiniLM)</b> &rarr; Find relevant information.</li></ul><p class=\"bh\" style=\"margin-top:4px\">Why It Matters</p><ul><li>Reduces hallucinations and improves accuracy.</li><li>Essential for finance, law, and healthcare, where precision is critical.</li></ul></div></div><p class=\"take\"><b>Key Takeaway:</b> RAG-powered AI delivers fact-based, reliable answers, making it ideal for high-stakes industries.</p>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
