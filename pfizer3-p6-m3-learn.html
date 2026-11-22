@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tune the Retriever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 6, module 3 Learn deck: "Learn How to Tune the Retriever". Ideas only, NO code: the code is in
+   the Try deck (pfizer3-p6-m3-steps.html). SME: Chaitanya's Notion page 4a31d028 "Learn How To Tune Retriever Parameters".
+   Built 23 November 2026 by m3-learn-build.py; never hand-patch this file. Coverage and SWAPS: step1-coverage-m3.md.
+   Pfizer x Extern Core design system, Light format. Shell, tokens, rail, switches and "Click me" pulse copied from
+   pfizer3-p5-m2-learn-v6.html (P5 module 2). Real data: Chaitanya's saved Colab run in notebook 11uOMjeC (Feb 2026; same model, chunking and question as the student copy). The tuned cut-off is a PLACEHOLDER until the A1 Colab run.
+   Fixed stage 760 x 860 at every width (Notion embed height 801 px = stage x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:860px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P6 m3 additions, built from the same tokens ---- */
+/* Ranked list of the 10 retrieved chunks (real run) */
+.lst{position:relative;display:flex;flex-direction:column;gap:3px}
+.axis{display:grid;grid-template-columns:28px 52px 190px minmax(0,1fr);column-gap:10px;font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label);padding:0 10px}
+.axis.nobars{grid-template-columns:28px 52px minmax(0,1fr)}
+.axis .ticks{display:flex;justify-content:space-between;letter-spacing:0;text-transform:none;font-weight:500;color:var(--gray-600)}
+.axis .ticks i{font-style:normal}
+.rk{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.rk li{display:grid;grid-template-columns:28px 52px 190px minmax(0,1fr) auto;column-gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);padding:1px 10px;transition:opacity .25s ease,background .25s ease,border-color .25s ease}
+.rk.nobars li{grid-template-columns:28px 52px minmax(0,1fr) auto}
+.rk .rn{width:22px;height:22px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.rk .sc{font-family:var(--font-mono);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+.rk .bar{display:block;height:10px;border-radius:5px;background:var(--gray-50);border:1px solid var(--line);overflow:hidden}
+.rk .bar b{display:block;height:100%;background:var(--blue-200)}
+.rk .tx{min-width:0;font-size:15px;line-height:1.3;color:var(--card-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk .tag{font-size:12.5px;font-weight:600;color:var(--pfizer-blue);white-space:nowrap}
+.rk .tag:empty{display:none}
+.rk li.on{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.rk li.on .rn{background:var(--pfizer-blue);color:var(--on-action)}
+.rk li.on .bar b{background:var(--pfizer-blue)}
+.rk li.off{opacity:.38}
+.rk li.off .tag{color:var(--ink)}
+.cut{position:absolute;width:0;border-left:2.5px dashed var(--ink);pointer-events:none}
+.cut span{display:none}
+.lstwrap{display:flex;flex-direction:column;gap:8px}
+.lstwrap .cap{margin:0;font-size:16px;line-height:1.4;color:var(--ink-muted);font-weight:500}
+.lstwrap .cap b{color:var(--ink);font-weight:600}
+.note{margin:0;border-left:4px solid var(--pfizer-blue);background:var(--surface-card);border-radius:0 var(--radius-xs) var(--radius-xs) 0;padding:8px 14px;font-size:17px;line-height:1.45;color:var(--card-text)}
+.note b{color:var(--ink);font-weight:600}
+.ph{border:2px dashed var(--ink);padding:6px 10px;font-weight:700;font-size:15px;color:var(--ink);background:var(--surface)}
+.flow .fbox .fn{font-family:var(--font-serif);font-size:30px;line-height:1.1;color:var(--ink)}
+.two .box .bp{font-size:17px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to tune the retriever: 11 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 11</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"top10": [{"rank": 1, "score": 0.332, "text": "Best regards,\nMike Toner\nProduct Manager\nmichaeltoner@cytiva.com\n\nCertificate of Quality \nThis product is manufactured in compliance with our ISO 9001 certified quality management system."}, {"rank": 2, "score": 0.311, "text": "5 bar, 5 min hold\nPass\nVisual Inspection\nNo defects visible\nPass\nPackage Integrity\nSealed,"}, {"rank": 3, "score": 0.26, "text": "derived ingredients or in compliance with EMA/410/01.  \nCountry of Origin: USA \n\nCytiva\ncytiva.com\nCertificate of Quality\nThis product is manufactured in compliance with our ISO 9001 certified quality management system."}, {"rank": 4, "score": 0.259, "text": "Conformance \nBio-safety\nAll polymeric materials in contact with the process fluid comply with United States Pharmacopeia (USP) <88> Biological \nReactivity Test Class VI and are free from animal derived ingredients or in compliance with"}, {"rank": 5, "score": 0.256, "text": "Gradient C, Modified, ÄKTATM ready\nExpiration Date:  20230126 \nProduct Release Criteria \nWe hereby certify that the defined product has been manufactured to meet its specifications and have been verified to \nmeet predetermined Critical to Quality attributes"}, {"rank": 6, "score": 0.248, "text": "Regulatory Conformance \nBio-safety\nAll polymeric materials in contact with the process fluid comply with United States Pharmacopeia (USP) <88> Biological \nReactivity Test Class VI and are free from animal derived ingredients or in"}, {"rank": 7, "score": 0.23, "text": "Date:  20230126 \nProduct Release Criteria \nWe hereby certify that the defined product has been manufactured to meet its specifications and have been verified to \nmeet predetermined Critical to Quality attributes and the flow kit has been formally released for delivery."}, {"rank": 8, "score": 0.228, "text": "C, Modified, ÄKTATM ready\nExpiration Date:  20230126 \nProduct Release Criteria \nWe hereby certify that the defined product has been manufactured to meet its specifications and have been verified to \nmeet predetermined Critical to Quality attributes and"}, {"rank": 9, "score": 0.227, "text": "Flow Gradient C, Modified, ÄKTATM ready\nExpiration Date:  20230126 \nProduct Release Criteria \nWe hereby certify that the defined product has been manufactured to meet its specifications and have been verified to \nmeet predetermined Critical to Quality"}, {"rank": 10, "score": 0.227, "text": "Issued by Cytiva Westborough Quality Assurance\nThis document has been electronically produced and is valid without a signature."}], "groups": [[1, 3], [4, 6], [5, 7, 8, 9]], "thr": ["0.2", "0.25", "0.75"], "cap1": {"all": "The 10 chunks pulled for <i>\"What test methods were used for quality control?\"</i>, best match first.", "top": "The chunk ranked <b>first</b> is an email sign-off and a line about the supplier's ISO 9001 quality system. It doesn't name a single test method."}, "cap4": {"all": "The same 10 chunks, best match first.", "rep": "Each highlighted chunk repeats lines that another chunk in the list already has. Only <b>2 of the 10</b> chunks say something no other chunk says."}, "cap6": {"0.2": "A cut-off of <b>0.2</b> keeps <b>10 of 10</b> chunks. Every score is above it, so nothing is removed.", "0.25": "A cut-off of <b>0.25</b> keeps <b>5 of 10</b> chunks and removes the 5 weakest. <span class=\"ph\">PLACEHOLDER: from the A1 run</span>", "0.75": "A cut-off of <b>0.75</b> keeps <b>0 of 10</b> chunks. No chunk scores that high, so your AI would have nothing to read."}};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  function picHTML_unused() {
+    return '<figure class="pic"><img src="' + D.P2.img + '" alt="' + D.P2.alt + '" width="' + D.P2.w + '" height="' + D.P2.h + '">' +
+      '<div class="ov"><svg viewBox="0 0 ' + D.P2.w + ' ' + D.P2.h + '" preserveAspectRatio="none" aria-hidden="true"></svg></div></figure>';
+  }
+
+  /* ---------- The ranked list of the 10 chunks the retriever pulled (real run, D.top10) ---------- */
+  /* Every row: rank, score, a bar on a 0 to 1 axis, the chunk's text on one line. Switches change only the highlight and the caption. */
+  var timer = null;
+  function oneLine(t) { return t.replace(/\s*\n\s*/g, " / ").replace(/\s+/g, " ").trim(); }
+  function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function groupOf(rank) {
+    for (var g = 0; g < D.groups.length; g++) if (D.groups[g].indexOf(rank) >= 0) return g;
+    return -1;
+  }
+  function listHTML(bars) {
+    var h = '<div class="axis' + (bars ? '' : ' nobars') + '" aria-hidden="true"><span></span><span>Score</span>' + (bars ? '<span class="ticks"><i>0</i><i>0.25</i><i>0.5</i><i>0.75</i><i>1</i></span>' : '') + '<span>Chunk text</span></div><ol class="rk' + (bars ? '' : ' nobars') + '">';
+    D.top10.forEach(function (c) {
+      h += '<li data-rank="' + c.rank + '"><span class="rn">' + c.rank + '</span><span class="sc">' + c.score.toFixed(3) + '</span>' +
+        (bars ? '<span class="bar"><b style="width:' + (c.score * 100).toFixed(1) + '%"></b></span>' : '') +
+        '<span class="tx">' + esc(oneLine(c.text)) + '</span><span class="tag"></span></li>';
+    });
+    return h + '</ol>' + (bars ? '<div class="cut" hidden><span></span></div>' : '');
+  }
+  function mark(root, fn) {
+    each(root.querySelectorAll(".rk li"), function (li) {
+      var r = +li.getAttribute("data-rank"), s = fn(r);
+      li.className = s.cls || "";
+      li.querySelector(".tag").textContent = s.tag || "";
+    });
+  }
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* Card 1: all 10, or the one ranked first */
+  function initTop(root) {
+    root.querySelector(".lst").innerHTML = listHTML(false);
+    var cap = root.querySelector(".cap");
+    wire(root, function (v) {
+      mark(root, function (r) { return v === "top" ? (r === 1 ? { cls: "on" } : { cls: "off" }) : {}; });
+      cap.innerHTML = D.cap1[v];
+    }, "c1", "all");
+  }
+
+  /* Card 3: top_k = 2, 5 or 10 */
+  function initK(root) {
+    root.querySelector(".lst").innerHTML = listHTML(false);
+    var cap = root.querySelector(".cap");
+    wire(root, function (v) {
+      var k = +v;
+      mark(root, function (r) { return r <= k ? { cls: "on" } : { cls: "off" }; });
+      cap.innerHTML = "With <b>top_k = " + k + "</b>, the AI reads only the " + k + " chunk" + (k > 1 ? "s" : "") + " ranked " + (k > 1 ? "1 to " + k : "1") + ".";
+    }, "c3", "5");
+  }
+
+  /* Card 4: show which chunks repeat each other */
+  var LET = ["A", "B", "C", "D", "E"];
+  function initRep(root) {
+    root.querySelector(".lst").innerHTML = listHTML(false);
+    var cap = root.querySelector(".cap");
+    wire(root, function (v) {
+      mark(root, function (r) {
+        if (v !== "rep") return {};
+        var g = groupOf(r);
+        return g < 0 ? { cls: "off" } : { cls: "on g" + g, tag: "Same as " + D.groups[g].filter(function (x) { return x !== r; }).map(function (x) { return "#" + x; }).join(", ") };
+      });
+      cap.innerHTML = D.cap4[v];
+    }, "c4", "all");
+  }
+
+  /* Card 5: the scores, drawn as bars on a 0 to 1 axis (no switch) */
+  function initScore(root) {
+    root.querySelector(".lst").innerHTML = listHTML(true);
+  }
+
+  /* Card 6: a cut-off line; chunks under it are dropped */
+  function initThr(root) {
+    root.querySelector(".lst").innerHTML = listHTML(true);
+    var cap = root.querySelector(".cap"), cut = root.querySelector(".cut");
+    wire(root, function (v) {
+      var t = +v, kept = D.top10.filter(function (c) { return c.score > t; }).length;
+      mark(root, function (r) { return D.top10[r - 1].score > t ? { cls: "on" } : { cls: "off", tag: "Removed" }; });
+      cut.hidden = false;
+      var track = root.querySelector(".rk li .bar");  /* .lst is the offsetParent (position:relative) */
+      var ol = root.querySelector(".rk");
+      cut.style.left = (track.offsetLeft + track.offsetWidth * Math.min(t, 1)) + "px";
+      cut.style.top = (ol.offsetTop - 4) + "px"; cut.style.height = (ol.offsetHeight + 8) + "px";
+      cut.querySelector("span").textContent = "Cut-off " + v;
+      cap.innerHTML = D.cap6[v] || ("Threshold <b>" + v + "</b> keeps <b>" + kept + " of 10</b> chunks.");
+    }, "c6", D.thr[0]);
+  }
+
+  /* Card 7: each setting lights its part of the flow (as P5 card "Steps 1 to 3") */
+  function initFlow(root) {
+    var rows = root.querySelectorAll(".step"), boxes = root.querySelectorAll(".flow .fbox");
+    function pick(n) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      each(boxes, function (b, k) { b.classList.toggle("on", k === n + 1); b.classList.toggle("dim", k !== n + 1); });
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c7", root.querySelector(".steps"), root.querySelector(".hint"), "inline");
+  }
+
+  var INITS = { initTop: initTop, initK: initK, initRep: initRep, initScore: initScore, initThr: initThr, initFlow: initFlow };
+  var CARDS = [{label:"Why These",eyebrow:"Before the answer",html:"<h2 class=\"title\">Why Did the AI Pull <span class=\"hl\">These</span> Chunks?</h2><p class=\"why\">Your chatbot can only answer from the chunks it pulls, so it pays to know how it picks them.</p><p class=\"p\">Imagine your AI just pulled <b>10 snippets from the 3-page supplier file.</b> Some are spot-on. Others? Off-topic.</p><p class=\"p\">Now you're left wondering: <b>How did it choose these? Why these 10 and not the 3 better ones?</b> This is where <b>retrieval tuning</b> (changing the settings that decide which chunks come back) comes in.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"all\" aria-pressed=\"false\">All 10 chunks</button><button type=\"button\" data-view=\"top\" aria-pressed=\"false\">The one ranked first</button></div></div></div><div class=\"lstwrap\"><div class=\"lst\"></div><p class=\"cap\"></p></div>",init:initTop},
+{label:"Two Levers",eyebrow:"Two settings you control",html:"<h2 class=\"title\">Two <span class=\"hl\">Levers</span> Control What Gets Retrieved</h2><p class=\"why\">These two settings are the ones you'll choose for your own pipeline in the Task.</p><p class=\"p\">In this reading, you'll learn how to <b>control what gets retrieved in the first place</b>, by tuning two key levers:</p><ul class=\"ul\"><li><b class=\"mono\">top_k</b>: <i>How many chunks should the AI grab?</i></li><li><b>Similarity threshold</b>: <i>How strict should it be about what's \"relevant\"?</i></li></ul><p class=\"p\">With these tools, you move from \"whatever came back\" to <b>retrieval you control</b>, and that's what makes your RAG pipeline not just functional, but <i>trustworthy</i>.</p><div class=\"flow\"><div class=\"fbox\"><span class=\"fl\">All chunks</span><span class=\"fn\">73</span><span class=\"fs\">in the supplier file</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox on\"><span class=\"fl\">Lever 1: top_k</span><span class=\"fs\">keeps the best few</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox on\"><span class=\"fl\">Lever 2: threshold</span><span class=\"fs\">drops weak matches</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Your AI</span><span class=\"fs\">reads only what's left</span></div></div>",init:null},
+{label:"top_k",eyebrow:"Lever 1",html:"<h2 class=\"title\"><span class=\"mono\">top_k</span>: How Many Chunks the AI <span class=\"hl\">Grabs</span></h2><p class=\"why\">This one number decides how much of the supplier file your AI gets to read.</p><p class=\"p\">In the example below, the AI pulled in <b>5 chunks</b> from the document. But here's the question: <b>Is 5 enough to find the best answer? Or too much, maybe?</b></p><p class=\"p\">That's exactly what <b class=\"mono\">top_k</b> controls: it tells the AI <i>how many chunks</i> to grab when searching for an answer.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose top_k\"><button type=\"button\" data-view=\"2\" aria-pressed=\"false\">top_k = 2</button><button type=\"button\" data-view=\"5\" aria-pressed=\"false\">top_k = 5</button><button type=\"button\" data-view=\"10\" aria-pressed=\"false\">top_k = 10</button></div></div></div><div class=\"lstwrap\"><div class=\"lst\"></div><p class=\"cap\"></p></div>",init:initK},
+{label:"Too Low or High",eyebrow:"Lever 1",html:"<h2 class=\"title\">Too Few Chunks or Too <span class=\"hl\">Many</span>?</h2><p class=\"why\">Too few chunks can miss the answer, and too many can bury it in noise.</p><div class=\"two\"><div class=\"box white\"><p class=\"bh\">What happens if the number is too low?</p><ul><li>You might miss important details.</li><li>The AI gives vague or incomplete answers.</li></ul></div><div class=\"box white\"><p class=\"bh\">What if the number is too high?</p><ul><li>The AI might pull in unrelated chunks.</li><li>Too much noise means messy answers.</li></ul></div></div><p class=\"take\">So, <b>how many should <i>your</i> system look at?</b> That's what you'll experiment with in Try It Yourself.</p>",init:null},
+{label:"Repetition",eyebrow:"What to watch for",html:"<h2 class=\"title\">Repetition: When Chunks Say the <span class=\"hl\">Same</span> Thing</h2><p class=\"why\">Every repeated chunk takes a place that a new clue could have used.</p><p class=\"p\">Repetition means the chunks the AI retrieved are <b>saying the same thing over and over</b>, without adding new information.</p><p class=\"p\">Let's say you ask: <i>\"What test methods were used for quality control?\"</i></p><p class=\"p\">If you set <span class=\"mono\">top_k = 10</span> and 7 of those chunks are all from the same paragraph, repeating the same sentence about sterility testing, that's <i>too repetitive</i>.</p><p class=\"p\">It's like hearing the same answer 10 times instead of getting different clues that build a better understanding.</p><p class=\"take\"><b>Too much repetition means less variety</b>, which can <b>hurt answer quality</b>.</p>",init:null},
+{label:"Repeats",eyebrow:"What to watch for",html:"<h2 class=\"title\">Repetition in the Supplier <span class=\"hl\">File</span></h2><p class=\"why\">Spotting repeats tells you when a bigger top_k adds noise instead of new information.</p><p class=\"p\">These are the 10 chunks from the last cards. Click <b>Show the repeats</b> to see which ones say the same thing as another chunk.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"all\" aria-pressed=\"false\">The 10 chunks</button><button type=\"button\" data-view=\"rep\" aria-pressed=\"false\">Show the repeats</button></div></div></div><div class=\"lstwrap\"><div class=\"lst\"></div><p class=\"cap\"></p></div>",init:initRep},
+{label:"Score",eyebrow:"Lever 2",html:"<h2 class=\"title\">A Similarity <span class=\"hl\">Score</span> Says How Close a Chunk Is</h2><p class=\"why\">You can only pick a sensible cut-off once you know what scores your model gives.</p><p class=\"p\">Even after pulling in the top chunks, <b>not all of them are equally useful</b>. Some might look similar to the query, but aren't actually helpful.</p><p class=\"p\">Every chunk the retriever pulls gets a score (usually between 0 and 1) that tells you: <b>How similar is this chunk to the query?</b> The score range depends on your embedding model. With the MiniLM model in your notebook, the 10 best scores for this question ran from <b>0.227 to 0.332</b>.</p><div class=\"lstwrap\"><div class=\"lst\"></div></div>",init:initScore},
+{label:"Threshold",eyebrow:"Lever 2",html:"<h2 class=\"title\">A Threshold Is a <span class=\"hl\">Cut-Off</span> for Weak Matches</h2><p class=\"why\">A cut-off drops the weakest chunks before your AI reads them.</p><p class=\"p\">That's where <b>similarity thresholds</b> come in. A threshold is a cut-off score: every chunk that scores lower is removed.</p><p class=\"p\">This can <b>improve the quality of the chunks your AI reads</b>, especially in noisy or inconsistent documents.</p><p class=\"note\"><b>Important:</b> You need to check your actual scores before setting thresholds. Run a test query, print the scores, and see what range your model produces.</p><p class=\"note\"><b>Pro Tip:</b> Filtering by score gives you <b>more control</b>, but it's easy to overdo. If your threshold is too high, you might end up with <b>zero results</b>, especially on uncommon queries.</p>",init:null},
+{label:"Cut-Offs",eyebrow:"Lever 2",html:"<h2 class=\"title\">Three Cut-Offs on the Same <span class=\"hl\">10</span> Chunks</h2><p class=\"why\">The same cut-off can remove nothing, some chunks or every chunk, so you set it from your own scores.</p><p class=\"p\">Click each cut-off to see which of the 10 chunks it keeps.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a cut-off\"><button type=\"button\" data-view=\"0.2\" aria-pressed=\"false\">Cut-off 0.2</button><button type=\"button\" data-view=\"0.25\" aria-pressed=\"false\">Cut-off 0.25</button><button type=\"button\" data-view=\"0.75\" aria-pressed=\"false\">Cut-off 0.75</button></div></div></div><div class=\"lstwrap\"><div class=\"lst\"></div><p class=\"cap\"></p></div>",init:initThr},
+{label:"Reranker",eyebrow:"After the two levers",html:"<h2 class=\"title\">A Reranker Can Only Reorder What the Levers <span class=\"hl\">Keep</span></h2><p class=\"why\">That's why you set top_k and the threshold first.</p><p class=\"p\">You've already learned how chunking and embeddings help your AI <i>understand and search meaningfully</i>. You've also explored <b>reranking</b>, which helps reorder results after they're retrieved.</p><p class=\"p\">A reranker, the small model you met in Project 5, Step 2, reads your question and each chunk together, then gives each chunk a new score.</p><p class=\"take\">But here's the catch: <b>If the wrong chunks get pulled in the first place, reranking can only do so much.</b></p><div class=\"flow\"><div class=\"fbox\"><span class=\"fl\">All chunks</span><span class=\"fn\">73</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">top_k = 10</span><span class=\"fn\">10</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Cut-off 0.25</span><span class=\"fn\">5</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox on\"><span class=\"fl\">Reranker</span><span class=\"fn\">5</span><span class=\"fs\">same chunks, new order</span></div></div><p class=\"p\"><span class=\"ph\">PLACEHOLDER: from the A1 run</span></p>",init:null},
+{label:"Recap",eyebrow:"Quick recap",html:"<h2 class=\"title\">Quick <span class=\"hl\">Recap</span></h2><p class=\"why\">Keep these three points in mind when you choose your own settings in the Task.</p><ol class=\"steps static\"><li><div class=\"step\"><span class=\"n\">1</span><span><b><span class=\"mono\">top_k</span> controls how many chunks your AI pulls in</b>: too few might miss key info, too many might add noise or repetition.</span></div></li><li><div class=\"step\"><span class=\"n\">2</span><span><b>Similarity thresholds help filter out weak matches,</b> and keeping only high-scoring chunks can improve clarity and precision.</span></div></li><li><div class=\"step\"><span class=\"n\">3</span><span><b>Tuning these settings gives you real control over retrieval quality</b> and sets the foundation for sharper, more trustworthy answers in your RAG pipeline.</span></div></li></ol>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
