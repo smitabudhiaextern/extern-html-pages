@@ -363,7 +363,7 @@ textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
 /* Smita, 23 Nov 2026: a hint that shows the answer code looks like the answer box: no outer frame,
    the line, then the code in full (the stage zooms to fit, like #answer). */
 .try-hint.try-hint-code { padding: 0; border: 0; background: transparent; }
-#try-hint > .answer { max-height: none; overflow-y: visible; }
+#try-hint > .answer { max-height: none; overflow-y: auto; } /* stage.js caps its height (fit-rest) so opening the hint never zooms the panel down */
 
 /* Long starters (more than 8 lines, class set by concept.js): the task, the buttons and the feedback
    on the left, the code box and the answer on the right, so the Try fits the stage.
@@ -372,24 +372,23 @@ textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3
    only, the buttons moved from under the code box to the left column, and code lines are 1.4 high. */
 .stack.try-wide {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.75fr); column-gap: 18px; row-gap: 10px;
-  grid-template-areas: "head label" "prompt code" "btns answer" "hint answer" "fb answer";
+  grid-template-areas: "head label" "prompt right" "btns right" "hint right" "fb right";
   grid-template-rows: auto auto auto auto 1fr; align-items: start; /* 1fr: the answer's extra height goes under the feedback, not between it and the buttons */
 }
 .try-wide > .try-head { grid-area: head; }
 .try-wide > .lead { grid-area: prompt; font-size: 14px !important; line-height: 21px; }
 .try-wide > label { grid-area: label; align-self: end; }
-.try-wide > textarea { grid-area: code; font-size: 12.5px; line-height: 1.4; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; } /* one code line = one row */
+.try-wide > .try-right { grid-area: right; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.try-wide .try-right > textarea { font-size: 12.5px; line-height: 1.4; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; } /* one code line = one row */
 .try-wide > .row { grid-area: btns; gap: 8px !important; }
 .try-wide > .row .btn { padding: 0 14px; font-size: 14px; }
 .try-wide > #feedback { grid-area: fb; }
-.try-wide > #answer { grid-area: answer; }
 .try-wide > #try-hint { grid-area: hint; }
-.try-wide > #try-hint.try-hint-code { grid-area: answer; } /* the answer code goes where the answer shows; the two never show together */
 .try-wide .answer { font-size: 12.5px; line-height: 1.4; padding: 10px 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
 .try-wide .feedback pre { max-height: 150px; overflow-y: auto; }
 /* Pfizer x Extern (M3-S2-SLIDES.md): in a Try that uses pandas, the feedback runs under both columns,
    so a printed table shows every column, and keeps them in line (it scrolls sideways if ever too wide). */
-.stack.try-wide.try-table { grid-template-areas: "head label" "prompt code" "btns answer" "hint answer" "fb fb"; grid-template-rows: auto auto auto auto auto; }
+.stack.try-wide.try-table { grid-template-areas: "head label" "prompt right" "btns right" "hint right" "fb fb"; grid-template-rows: auto auto auto 1fr auto; }
 .try-table .feedback pre { white-space: pre; overflow-wrap: normal; overflow-x: auto; }
 .answer-box:focus { outline: none; }
 .answer-box:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
@@ -3552,7 +3551,7 @@ function tryPanel(l) {
         "div",
         { hidden: true, id: "try-hint", class: "answer-box try-hint" + (t.hint_code ? " try-hint-code" : "") },
         h("p", { class: "try-hint-text" }, h("strong", {}, "Hint: "), inline(t.hint_default)),
-        t.hint_code ? h("pre", { class: "answer" }, t.hint_code) : null
+        t.hint_code ? h("pre", { class: "answer fit-rest", tabindex: "0" }, t.hint_code) : null
       )
     : null;
   const slot = feedbackSlot();
@@ -3662,22 +3661,25 @@ function tryPanel(l) {
     focusRevealed(answer);
   });
 
+  const wide = rows > 8;
   return h(
     "div",
     // Pfizer x Extern: "try-wide" puts a long starter (more than 8 lines) beside the task
     // (styles.css), so the whole Try fits the fixed embed stage. Same elements, same order.
     // Pfizer x Extern (M3-S2-SLIDES.md): "try-table" when the Try uses pandas, so a printed table keeps
     // its columns in the narrow feedback box (styles.css) instead of wrapping.
-    { class: "stack" + (rows > 8 ? " try-wide" : "") + (/^\s*(import|from)\s+pandas\b/m.test(String(t.starter)) ? " try-table" : ""), style: "gap:12px" },
+    // Smita, 23 Nov 2026 (QA): in "try-wide" the code box, a hint with answer code and the answer sit in
+    // one right-hand column ("try-right"), so each shows right under the code box with no gap.
+    { class: "stack" + (wide ? " try-wide" : "") + (/^\s*(import|from)\s+pandas\b/m.test(String(t.starter)) ? " try-table" : ""), style: "gap:12px" },
     h("div", { class: "try-head" }, h("h2", {}, "Try it yourself"), attemptsEl),
     h("p", { class: "lead", style: "font-size:15px" }, lines(t.prompt)),
     h("label", { for: "code-box", class: "small-label" }, "Your code"),
-    box,
+    wide ? h("div", { class: "try-right" }, box, t.hint_code ? hintBox : null, answer) : box,
     h("div", { class: "row", style: "gap:10px" }, checkBtn, resetBtn, hintBtn, revealBtn),
-    hintBox,
+    wide && t.hint_code ? null : hintBox,
     loadNote,
     feedback,
-    answer
+    wide ? null : answer
   );
 }
 
@@ -3697,6 +3699,11 @@ return {  };
 
 const STAGE_W = 760;
 const ZOOM_MIN = 0.8;
+// Smita, 23 Nov 2026 (QA): a ".fit-rest" box (the Try hint's answer code) never zooms the panel down.
+// It starts at FIT_REST_MIN px for the zoom search, then grows into the room that is left and
+// scrolls inside itself for the rest.
+const FIT_REST_MIN = 72;
+const FIT_REST_STEP = 8;
 
 const root = document.documentElement;
 const stage = document.getElementById("lesson");
@@ -3721,6 +3728,8 @@ function fitPanel() {
   if (!active) return;
   let z = 1;
   active.style.zoom = "1";
+  const fills = [...active.querySelectorAll(".fit-rest")].filter((el) => el.getClientRects().length);
+  fills.forEach((el) => (el.style.maxHeight = FIT_REST_MIN + "px"));
   // Pfizer x Extern (QA, 19 Nov 2026): code boxes re-measure their wrapped rows at each zoom tried
   // (concept.js), so the zoom picked here is the one they really fit at. Without it a box that wraps
   // at one zoom and not at the next made the panel flip between the two for ever (Dictionaries slide 4).
@@ -3729,6 +3738,15 @@ function fitPanel() {
     z = Math.max(ZOOM_MIN, Math.round((z - 0.025) * 1000) / 1000);
     active.style.zoom = String(z);
     document.dispatchEvent(new CustomEvent("lesson-zoom"));
+  }
+  const fits = () => panels.scrollHeight <= panels.clientHeight + 1;
+  for (const el of fills) {
+    let mh = FIT_REST_MIN;
+    while (fits() && el.scrollHeight > el.clientHeight + 1) {
+      mh += FIT_REST_STEP;
+      el.style.maxHeight = mh + "px";
+    }
+    if (!fits() && mh > FIT_REST_MIN) el.style.maxHeight = mh - FIT_REST_STEP + "px";
   }
   if (panels.scrollHeight > panels.clientHeight + 1) panels.classList.add("overflow"); // last resort only
   else panels.scrollTop = 0;
