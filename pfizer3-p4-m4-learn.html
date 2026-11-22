@@ -46,6 +46,14 @@
    as in the m2 deck); the zoom boxes are agent A1's Colab run of the Tesseract student copy (300 dpi, Step 12 printout).
    Pictures: pfizer3-p4-m2-l1-page4.png (from m2); pfizer3-p4-m4-l1-top.png and -l2-table.png are crops of the same
    300 dpi picture (source: project-04/images/m4-learn-crops-source.py).
+   Agent s2learn, 22 Nov 2026 (P4 fix pass F17, F18, F19): 7 cards now. Card 1 gets our lead line "Tesseract struggles
+   once a page has tables and columns." before his L6, our 21-word repeat line is cut to its first sentence, the full page is
+   a small thumbnail and the zoom gets the room; his L16 ("You don't need to become an expert in either...") moves from
+   card 3 to card 1, after our line naming the two engines. Card 3 is split: 3 "Meet PaddleOCR" (his L17, Page 4 with all
+   98 PaddleOCR boxes) and 4 "PaddleOCR Gives Each Line a Polygon" (chips, picture, panel; the corners are labelled as x, y
+   pixel positions). Cards 2 and 4 (now 5): the picked box is Pfizer blue and the other boxes fade; card 2 also lights the
+   heading the box sits under, with a dashed line between them; card 5's percentages are 14px (13 on screen). Card 5 (now
+   6) is his table alone at 16px; new card 7 "What Page 4 Showed Us" lists the five findings openly (ours, from the run).
    Fixed stage: 760 x 830 (Notion embed height 773 px) at every width, scaled as one piece to fit the frame and centred.
    Nothing scrolls. Spare height first widens the gaps between blocks (up to 2x), then enlarges the card's main picture. */
 :root{
@@ -200,7 +208,7 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
 .facts dd{color:var(--card-text)}
 .facts dt:nth-last-of-type(1),.facts dd:last-child{border-bottom:0}
 .krow.k3{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);column-gap:10px;padding:5px 12px}
-.krow.k3 i{font-style:normal;font-size:12.5px;color:var(--gray-600)}
+.krow.k3 i{font-style:normal;font-size:14px;color:var(--gray-600)}
 .ktbl thead tr{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);column-gap:10px}
 .ktbl thead th{padding:6px 12px}
 .ktbl thead th + th{padding-left:0}
@@ -209,6 +217,23 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
 .krow.k3 span{min-width:0;overflow-wrap:anywhere}
 .krow.kt{padding:8px 12px;font-size:14px;line-height:1.4}
 .krow.kt .f{font-weight:600}
+
+.pic polygon.fade,.pic rect.fade{opacity:.3}
+.pic polygon.bp{fill:var(--pfizer-blue);fill-opacity:.25;stroke:var(--pfizer-blue);stroke-width:3px;vector-effect:non-scaling-stroke}
+.pic polygon.bh{fill:var(--pfizer-blue);fill-opacity:.10;stroke:var(--pfizer-blue);stroke-width:3px;vector-effect:non-scaling-stroke}
+.pic rect.bs{stroke:var(--pfizer-blue);fill:var(--pfizer-blue);fill-opacity:.25;stroke-width:3px}
+.pic line.cn{stroke:var(--pfizer-blue);stroke-width:2px;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+.pic polygon.gpall{fill:none;stroke:var(--highlight);stroke-width:1.2px;vector-effect:non-scaling-stroke}
+.panel b.bl{color:var(--pfizer-blue)}
+.ktbl.big table,.krow.kt.big{font-size:16px;line-height:1.4}
+.ktbl.big th{font-size:14px}
+.krow.kt.big{padding:10px 12px}
+.krow.kt.big,.krow.kt.big:hover{cursor:default;background:var(--surface)}
+.found{margin:0;display:flex;flex-direction:column;gap:6px}
+.found div{border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:7px 16px}
+.found dt{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--step-label)}
+.found dd{margin:4px 0 0;font-size:16px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.found dd b{font-weight:600;color:var(--ink)}
 
 /* Done message and foot */
 .donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
@@ -225,10 +250,10 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
 </style>
 </head>
 <body>
-<div class="app" id="app" role="region" aria-label="How PaddleOCR and EasyOCR read a scanned page: five cards">
+<div class="app" id="app" role="region" aria-label="How PaddleOCR and EasyOCR read a scanned page: seven cards">
   <header class="top">
     <nav class="rail" id="rail" aria-label="Cards"></nav>
-    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+    <div class="where"><span id="where-count">Card 1 of 7</span></div>
   </header>
   <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
   <p class="donemsg" id="donemsg" role="status"></p>
@@ -354,10 +379,18 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     var rows = P.filter(function (r) { return inTable(pbox(r)); });
     function pick(n, pop) {
       clear(svg);
-      rows.forEach(function (r, k) { poly(svg, r[0], k === n ? "gpf" : "gp", pop && k === n); });
       var r = rows[n], b = pbox(r), h = headOf(b), isHead = HEADS.indexOf(r) >= 0;
-      res.innerHTML = '<p class="pp">PaddleOCR read <b>' + esc(r[1]) + '</b> (confidence ' + pct(r[2]) + ').<br>' +
-        (isHead ? 'This is one of the table\'s headings.' : 'Its box sits under the heading <b>' + esc(h[1]) + '</b>' +
+      rows.forEach(function (q, k) { if (k !== n && (isHead || q !== h)) poly(svg, q[0], "gp fade", false); });
+      if (!isHead) {
+        var hb = pbox(h), ln = document.createElementNS(NS, "line");
+        ln.setAttribute("x1", (hb[0] + hb[2]) / 2); ln.setAttribute("y1", hb[3] + 4);
+        ln.setAttribute("x2", (b[0] + b[2]) / 2); ln.setAttribute("y2", b[1] - 4);
+        ln.setAttribute("class", "cn"); svg.appendChild(ln);
+        poly(svg, h[0], "bh", pop);
+      }
+      poly(svg, r[0], "bp", pop);
+      res.innerHTML = '<p class="pp">PaddleOCR read <b class="bl">' + esc(r[1]) + '</b> (confidence ' + pct(r[2]) + ').<br>' +
+        (isHead ? 'This is one of the table\'s headings.' : 'Its box sits under the heading <b class="bl">' + esc(h[1]) + '</b>' +
           (/^\d{8}$/.test(r[1]) ? ', so this number is a lot number.' : '.')) + '</p>';
       each(hits.children, function (x, k) { x.setAttribute("aria-pressed", k === n ? "true" : "false"); });
     }
@@ -373,7 +406,13 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     nudge("c2", root.querySelector("#c2-pic"), root.querySelector("#c2-hint"), "inline");
   }
 
-  /* ---------- Card 3: what PaddleOCR gives back ---------- */
+  /* ---------- Card 3: Page 4 with all of PaddleOCR's boxes ---------- */
+  function initPaddleAll(root) {
+    var svg = root.querySelector("#c3a-pic svg");
+    clear(svg); P.forEach(function (r) { poly(svg, r[0], "gpall", false); });
+  }
+
+  /* ---------- Card 4: what PaddleOCR gives back ---------- */
   function initPaddle(root) {
     var svg = root.querySelector("#c3-pic svg"), chips = root.querySelectorAll(".chip"), res = root.querySelector("#c3-res");
     var LINES = [P[0], P[2]];
@@ -385,7 +424,7 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
       each(chips, function (x, k) { x.setAttribute("aria-pressed", k === n ? "true" : "false"); });
       res.innerHTML = '<p class="pp"><b>What the text says:</b> ' + esc(r[1]) + '</p>' +
         '<p class="pp"><b>How confident it is:</b> ' + pct(r[2]) + '</p>' +
-        '<p class="pp"><b>Where it is (4 corners of its polygon):</b> <span class="mono">' +
+        '<p class="pp"><b>Where it is (x, y pixel position of each of its 4 corners):</b> <span class="mono">' +
           [0, 2, 4, 6].map(function (j) { return "(" + c[j] + ", " + c[j + 1] + ")"; }).join(" ") + '</span></p>' +
         (n === 0 ? '<p class="pp">The title is scanned a little crooked, so its 4 corners don\'t line up in a perfect rectangle. The polygon tilts with it.</p>' : '<p class="pp">This line is straight, so its 4 corners make a plain rectangle.</p>');
       space();
@@ -404,7 +443,7 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     var eRows = E.filter(function (r) { return inTable(r[0]); });
     function pick(n, pop) {
       var sel = E[PAIRS[n][1]];
-      draw(svg, eRows.map(function (r) { var b = r[0]; return [b[0], b[1], b[2], b[3], r === sel ? "g" : "gl", r === sel ? 6 : 0]; }), false);
+      draw(svg, eRows.map(function (r) { var b = r[0]; return [b[0], b[1], b[2], b[3], r === sel ? "bs" : "gl fade", r === sel ? 6 : 0]; }), false);
       each(rows, function (r, j) { r.setAttribute("aria-pressed", j === n ? "true" : "false"); });
     }
     each(rows, function (r, j) { r.addEventListener("click", function () { pick(j, true); }); });
@@ -422,23 +461,12 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     ["Setup time", "Medium, takes a few extra steps", "Easy, up and running in minutes"]
   ];
   var SEEN = [
-    "On Page 4, both engines gave back a list of lines, each with a box. Neither said which column a number sits in. You worked that out from the boxes in card 2.",
-    "EasyOCR read the table's first row as 4 separate pieces: <b>Cytiva (25-40 kGy)</b>, <b>17242818</b>, <b>19</b> and <b>CS</b>. Nothing in its list ties them into one row. PaddleOCR's extra setup is a separate table tool, which this reading doesn't use.",
-    "PaddleOCR gave a Python list: for each line, 4 corners, then the text and the confidence. EasyOCR gave a list of box, text and confidence. Neither draws the boxes for you: you'll draw them yourself in Try It Yourself.",
-    "Page 4 has both kinds: a form-style table at the top and dense small text in the address block at the bottom. In the Task, you'll judge which engine does better on a new page.",
-    "In Colab, PaddleOCR's notebook runs an install cell with set versions and a fix cell before PaddleOCR starts. EasyOCR needs one install line."
+    "<b>Neither engine labels tables or columns.</b> You work out which column a number sits in from where its box sits, as on card 2.",
+    "EasyOCR read the table's first row as 4 separate pieces: <b>Cytiva (25-40 kGy)</b>, <b>17242818</b>, <b>19</b> and <b>CS</b>. PaddleOCR's extra setup is a separate table tool, which this reading doesn't use.",
+    "PaddleOCR gave each line's 4 corners, text and confidence. EasyOCR gave each line's box, text and confidence. Neither draws the boxes for you: you'll draw them in Try It Yourself.",
+    "Page 4 has both kinds: a form-style table at the top and dense small text at the bottom. In the Task, you'll judge which engine does better on a new page.",
+    "PaddleOCR's notebook runs an install cell with set versions and a fix cell before PaddleOCR starts. EasyOCR needs one install line."
   ];
-  function initSide(root) {
-    var rows = root.querySelectorAll(".krow"), res = root.querySelector("#c5-res");
-    function pick(n) {
-      each(rows, function (r, j) { r.setAttribute("aria-pressed", j === n ? "true" : "false"); });
-      res.innerHTML = '<p class="ph">What Page 4 showed us: ' + SIDE[n][0] + '</p><p class="pp">' + SEEN[n] + '</p>';
-      space();
-    }
-    each(rows, function (r, j) { r.addEventListener("click", function () { pick(j); }); });
-    pick(0);
-    nudge("c5", root.querySelector(".ktbl"), root.querySelector("#c5-hint"), "inline");
-  }
 
   function facts(rows) {
     return '<dl class="facts">' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join("") + '</dl>';
@@ -451,22 +479,23 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     { label: "Three Engines", eyebrow: "Same page, three readers",
       html: '<h2 class="title">Real-World OCR: When <span class="hl">Tesseract</span> Isn\'t Enough</h2>' +
         '<p class="why">Seeing all three engines box the same page shows you, in one look, what the two new ones do differently.</p>' +
-        '<p class="p">That\'s where <b>layout-aware OCR</b> comes in. Layout is how the text is arranged on the page. Unlike Tesseract, which gave every word its own box, layout-aware OCR tools keep the words that belong together in one box. They don\'t just read the text, they get where it lives on the page and how it\'s grouped.</p>' +
+        '<p class="p">Tesseract struggles once a page has tables and columns. That\'s where <b>layout-aware OCR</b> comes in. Layout is how the text is arranged on the page. Unlike Tesseract, which gave every word its own box, layout-aware OCR tools keep the words that belong together in one box. They don\'t just read the text, they get where it lives on the page and how it\'s grouped.</p>' +
+        '<p class="p">In this reading, you\'ll meet two layout-aware engines, <b>PaddleOCR</b> and <b>EasyOCR</b>. You don\'t need to become an expert in either, we\'re just going to get them running and observe how they behave on supplier documents.</p>' +
         '<div class="row"><div class="nwrap"><div class="sw" role="group" aria-label="Choose an engine">' +
           '<button type="button" data-view="t" aria-pressed="true">Tesseract</button>' +
           '<button type="button" data-view="p" aria-pressed="false">PaddleOCR</button>' +
           '<button type="button" data-view="e" aria-pressed="false">EasyOCR</button></div></div></div>' +
-        '<div class="cols"><div data-grow data-max="330" style="width:250px;flex:none">' +
+        '<div class="cols"><div style="width:150px;flex:none">' +
             '<figure class="pic" id="c1-pic"><img class="base" src="pfizer3-p4-m2-l1-page4.png" width="1224" height="1584" alt="' + PAGE4_ALT + '">' +
             '<img class="over" src="pfizer3-p4-m2-l1-boxes.png" width="1224" height="1584" alt="">' +
             '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 2550 3300"></svg></figure>' +
-            '<p class="cap">Page 4: Certificate of Processing</p></div>' +
+            '<p class="cap">All of Page 4</p></div>' +
           '<div class="side">' +
             '<p class="hint">Zoom in on the top of the page:</p>' +
-            '<figure class="pic" id="c1-zoom"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
-              '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOPV.join(" ") + '"></svg></figure>' +
+            '<div><figure class="pic" id="c1-zoom"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
+              '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOPV.join(" ") + '"></svg></figure></div>' +
             '<p class="res" id="c1-cap" aria-live="polite"></p>' +
-            '<p class="res">Each green outline is one box the engine found. Tesseract boxes single words. PaddleOCR and EasyOCR box whole phrases and lines.</p>' +
+            '<p class="res">Each green outline is one box the engine found.</p>' +
           '</div></div>',
       init: initSee },
 
@@ -484,13 +513,20 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
       init: initWhere },
 
     { label: "PaddleOCR", eyebrow: "Meet PaddleOCR",
+      html: '<h2 class="title">Meet <span class="hl">PaddleOCR</span>, the First New Engine</h2>' +
+        '<p class="why">Knowing what PaddleOCR is built for helps you judge it fairly in the Task.</p>' +
+        '<div class="cols"><div class="side"><p class="p"><b>PaddleOCR:</b> Built by Baidu, this one\'s a <b>high-performance OCR engine</b> that handles dense, complex documents really well. It comes with dozens of pretrained models (ready-made files that have already learned to read text, so you don\'t have to teach them) and supports multi-language recognition. Setup takes a little more time, but once it\'s up, it delivers <b>powerful and structured outputs</b>, great for documents filled with paragraphs, fields, and small text.</p>' +
+          '<p class="res">On Page 4, PaddleOCR found <b>98 lines of text</b>, from the title down to the small print at the bottom. Each green outline is one of them.</p></div>' +
+          '<div data-grow data-max="380" style="width:300px;flex:none"><figure class="pic" id="c3a-pic"><img src="pfizer3-p4-m2-l1-page4.png" width="1224" height="1584" alt="' + PAGE4_ALT + ' Each of the 98 lines PaddleOCR found has a green outline.">' +
+          '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 2550 3300"></svg></figure></div></div>',
+      init: initPaddleAll },
+
+    { label: "Its Output", eyebrow: "What PaddleOCR gives back",
       html: '<h2 class="title">PaddleOCR Gives Each Line a <span class="hl">Polygon</span></h2>' +
         '<p class="why">You\'ll compare engines in the Task, so you need to know what each one gives back.</p>' +
-        '<p class="p">You don\'t need to become an expert in either, we\'re just going to get them running and observe how they behave on supplier documents.</p>' +
-        '<p class="p"><b>PaddleOCR:</b> Built by Baidu, this one\'s a <b>high-performance OCR engine</b> that handles dense, complex documents really well. It comes with dozens of pretrained models (ready-made files that have already learned to read text, so you don\'t have to teach them) and supports multi-language recognition. Setup takes a little more time, but once it\'s up, it delivers <b>powerful and structured outputs</b>, great for documents filled with paragraphs, fields, and small text.</p>' +
         '<p class="hint" id="c3-hint">Click a line to see what PaddleOCR gives back for it.</p>' +
         '<div class="chips" role="group" aria-label="Two lines PaddleOCR found"><button type="button" class="chip" aria-pressed="false">Certificate Of Processing</button><button type="button" class="chip" aria-pressed="false">Prepared for GE HEALTHCARE</button></div>' +
-        '<div data-grow data-max="560" style="width:520px;align-self:center"><figure class="pic" id="c3-pic"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
+        '<div data-grow data-max="704" style="width:520px;align-self:center"><figure class="pic" id="c3-pic"><img src="pfizer3-p4-m4-l1-top.png" width="920" height="180" alt="' + TOP_ALT + '">' +
           '<svg aria-hidden="true" preserveAspectRatio="none" viewBox="' + TOPV.join(" ") + '"></svg></figure></div>' +
         '<div class="panel" id="c3-res" aria-live="polite"></div>' + '',
       init: initPaddle },
@@ -510,12 +546,14 @@ code.c{font-family:var(--font-mono);font-size:.9em;background:var(--surface-card
     { label: "Side by Side", eyebrow: "PaddleOCR and EasyOCR",
       html: '<h2 class="title">What Each Engine Does, <span class="hl">Side by Side</span></h2>' +
         '<p class="why">This table is your starting point for the comparison you\'ll write in the Task.</p>' +
-        '<p class="hint" id="c5-hint">Click a row to see what Page 4 showed us.</p>' +
-        '<div class="ktbl"><table><thead><tr><th scope="col">What it does</th><th scope="col">PaddleOCR</th><th scope="col">EasyOCR</th></tr></thead><tbody>' +
-          SIDE.map(function (r) { return '<tr><td colspan="3"><button type="button" class="krow k3 kt" aria-pressed="false"><span class="f">' + r[0] + '</span><span>' + r[1] + '</span><span>' + r[2] + '</span></button></td></tr>'; }).join("") +
-        '</tbody></table></div>' +
-        '<div class="panel" id="c5-res" aria-live="polite" style="min-height:96px"></div>',
-      init: initSide }
+        '<div class="ktbl big"><table><thead><tr><th scope="col">What it does</th><th scope="col">PaddleOCR</th><th scope="col">EasyOCR</th></tr></thead><tbody>' +
+          SIDE.map(function (r) { return '<tr><td colspan="3"><div class="krow k3 kt big"><span class="f">' + r[0] + '</span><span>' + r[1] + '</span><span>' + r[2] + '</span></div></td></tr>'; }).join("") +
+        '</tbody></table></div>' },
+
+    { label: "Page 4 Results", eyebrow: "What the run showed",
+      html: '<h2 class="title">What <span class="hl">Page 4</span> Showed Us</h2>' +
+        '<p class="why">A table tells you what each engine promises. Page 4 shows you what each one really did.</p>' +
+        '<dl class="found">' + SIDE.map(function (r, n) { return '<div><dt>' + r[0] + '</dt><dd>' + SEEN[n] + '</dd></div>'; }).join("") + '</dl>' }
   ];
   var END_LABEL = "Done";
 
