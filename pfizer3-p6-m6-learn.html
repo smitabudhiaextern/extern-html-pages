@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plug an Open-Source Model into RAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 6, module 6 Learn deck: "Learn How to Plug an Open-Source Model into Your RAG Pipeline". Ideas
+   only, NO code: the code is in the Try deck (pfizer3-p6-m6-steps.html). SME: Chaitanya's Notion page f3a1d028 "Task:
+   Integrating Open-Source LLMs into RAG (with a PDF!)". Built 23 November 2026 by learn-build.py (scratchpad p6s2/m6);
+   never hand-patch this file. Coverage and SWAPS: step2-coverage-m6.md. Pfizer x Extern Core design system, Light
+   format; shell, rail, switches and "Click me" pulse copied unchanged from pfizer3-p6-m3-learn.html.
+   Real data: FINAL: his notebook unchanged, real Colab runs 23 Nov 2026: b1-notebook-and-runs.md section 3 (617 words, 1 chunk, 1,286 prompt tokens) and s2-colab-feasibility.md section 3 (his page's sterilization question: chunk score 0.597, answer); Step 1's 73 chunks from a1-notebook-and-runs.md
+   Page pictures: the 3 pages of the supplier file (sample-sdf-document.pdf), rendered with PyMuPDF.
+   Fixed stage 760 x 760 at every width (Notion embed height 708 px = stage x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:760px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P6 m6 additions, built from the same tokens ---- */
+.pages{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;position:relative}
+.pages figure{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:6px;line-height:0;transition:opacity .3s ease}
+.pages img{display:block;width:100%;height:auto}
+.pages figcaption{line-height:1.2;font-size:13px;font-weight:600;color:var(--ink-muted);padding:6px 2px 0}
+.pages.dim figure{opacity:.28}
+.outbox{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%;border:1.5px solid var(--pfizer-blue);background:var(--surface);border-radius:var(--radius-sm);padding:14px 18px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px rgba(0,0,0,.08)}
+.outbox .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.outbox .code{font-family:var(--font-mono);font-size:17px;line-height:1.4;color:var(--ink)}
+.cap2{margin:0;font-size:16px;line-height:1.4;color:var(--ink-muted);font-weight:500}
+.cap2 b{color:var(--ink);font-weight:600}
+.flow .fbox .fn{font-family:var(--font-serif);font-size:28px;line-height:1.1;color:var(--ink)}
+.detail{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:4px;min-height:112px}
+.detail .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.detail .dt{font-size:16.5px;line-height:1.45;color:var(--ink)}
+.detail .mono2{font-family:var(--font-mono);font-size:14.5px;line-height:1.4;color:var(--ink)}
+.tiles{display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:150px}
+.tiles i{display:block;width:30px;height:30px;border-radius:5px;background:var(--surface-card);border:1.5px solid var(--blue-200)}
+.tiles i.on{background:var(--pfizer-blue);border-color:var(--pfizer-blue)}
+.tiles .one{flex:1 1 100%;height:150px;border-radius:var(--radius-sm);background:var(--pfizer-blue);display:flex;align-items:center;justify-content:center;color:var(--on-action);font-size:18px;font-weight:600;text-align:center;padding:0 20px}
+.note{margin:0;border-left:4px solid var(--pfizer-blue);background:var(--surface-card);border-radius:0 var(--radius-xs) var(--radius-xs) 0;padding:8px 14px;font-size:17px;line-height:1.45;color:var(--card-text)}
+.note b{color:var(--ink);font-weight:600}
+.pages img{height:236px;object-fit:cover;object-position:top}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to plug an open-source model into your RAG pipeline: 4 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 4</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"cap1": {"pdf": "The supplier file holds supplier documents: <b>3 pages</b>.", "text": "PyMuPDF pulls the words out of all 3 pages. This is the line your notebook prints."}, "flowOn": [[0, 1], [1, 2], [2, 3], [3, 4]], "det": [{"label": "Your question", "html": "<span class=\"dt\"><i>\"What sterilization method was used for this product?\"</i></span>"}, {"label": "What BGE found (similarity score 0.597)", "html": "<span class=\"mono2\">Cytiva / 100 Results Way / Marlborough, MA 01752 / United States / Page 1 / 1 / cytiva.com / 3 June, 2022 ...</span><span class=\"dt\">One chunk came back: the whole supplier file, all 617 words.</span>"}, {"label": "What Mistral reads", "html": "<span class=\"dt\">Your question, that chunk and LlamaIndex's instructions: 1,286 tokens in all (tokens are small pieces of words). Mistral can read up to 2,048 at once.</span>"}, {"label": "Mistral's answer, from the file", "html": "<span class=\"dt\">Both the autoclave and gamma irradiation methods were used for sterilization of this product. The autoclave method was used for pump tubing sterilization, while gamma irradiation was used for inlets sterilization.</span>"}], "step1": 73, "oneLabel": "1 chunk: all 617 words of the supplier file", "cap3": {"s1": "In Step 1's notebooks, chunks of 50 tokens cut the file into <b>73 chunks</b>, and top_k picked the closest few.", "one": "This notebook doesn't set a chunk size, so LlamaIndex uses its own: up to 1,024 tokens. The 617-word file fits in <b>1 chunk</b>, so top_k = 2 can only hand Mistral that one: the whole file."}};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  function picHTML_unused() {
+    return '<figure class="pic"><img src="' + D.P2.img + '" alt="' + D.P2.alt + '" width="' + D.P2.w + '" height="' + D.P2.h + '">' +
+      '<div class="ov"><svg viewBox="0 0 ' + D.P2.w + ' ' + D.P2.h + '" preserveAspectRatio="none" aria-hidden="true"></svg></div></figure>';
+  }
+
+  var timer = null;
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    each(btns, function (y) { y.setAttribute("aria-pressed", y.getAttribute("data-view") === first ? "true" : "false"); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* Card 1: the 3 pages of the supplier file, or the line the notebook prints after pulling the text out */
+  function initPdf(root) {
+    var pages = root.querySelector(".pages"), box = root.querySelector(".outbox"), cap = root.querySelector(".cap2");
+    wire(root, function (v) {
+      pages.classList.toggle("dim", v === "text");
+      box.hidden = v !== "text";
+      cap.innerHTML = D.cap1[v];
+    }, "c1", "pdf");
+  }
+
+  /* Card 2: each step lights its part of the flow and shows the real run's detail */
+  function initFlow(root) {
+    var rows = root.querySelectorAll(".step"), boxes = root.querySelectorAll(".flow .fbox"), det = root.querySelector(".detail");
+    function pick(n) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      each(boxes, function (b, k) { b.classList.toggle("on", D.flowOn[n].indexOf(k) >= 0); b.classList.toggle("dim", D.flowOn[n].indexOf(k) < 0); });
+      det.innerHTML = '<span class="cl">' + D.det[n].label + '</span>' + D.det[n].html;
+      space();
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c2", root.querySelector(".steps"), root.querySelector(".hint"), "inline");
+  }
+
+  /* Card 3: Step 1's 73 small chunks, or this notebook's single chunk */
+  function initTiles(root) {
+    var t = root.querySelector(".tiles"), cap = root.querySelector(".cap2");
+    wire(root, function (v) {
+      if (v === "s1") {
+        var h = "";
+        for (var k = 0; k < D.step1; k++) h += "<i></i>";
+        t.innerHTML = h;
+      } else {
+        t.innerHTML = '<div class="one">' + D.oneLabel + "</div>";
+      }
+      cap.innerHTML = D.cap3[v];
+    }, "c3", "s1");
+  }
+
+  var INITS = { initPdf: initPdf, initFlow: initFlow, initTiles: initTiles };
+  var CARDS = [{label:"The Text",eyebrow:"Before Mistral can answer",html:"<h2 class=\"title\">First, Pull the <span class=\"hl\">Text</span> Out of the PDF</h2><p class=\"why\">Mistral can only answer from the supplier file once your code has pulled the words out of it.</p><p class=\"p\">Before Mistral can help us <i>understand</i> the supplier file, we have to:</p><ul class=\"ul\"><li>Extract the <b>text</b> from the PDF.</li><li>Give Mistral a way to search and make sense of it.</li></ul><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"pdf\" aria-pressed=\"false\">The PDF</button><button type=\"button\" data-view=\"text\" aria-pressed=\"false\">The text</button></div></div></div><div class=\"pages\"><figure><img src=\"pfizer3-p6-m6-learn-page1.png\" alt=\"Page 1 of the supplier file\" width=\"979\" height=\"1267\"><figcaption>Page 1</figcaption></figure><figure><img src=\"pfizer3-p6-m6-learn-page2.png\" alt=\"Page 2 of the supplier file\" width=\"979\" height=\"1267\"><figcaption>Page 2</figcaption></figure><figure><img src=\"pfizer3-p6-m6-learn-page3.png\" alt=\"Page 3 of the supplier file\" width=\"979\" height=\"1267\"><figcaption>Page 3</figcaption></figure><div class=\"outbox\" hidden><span class=\"cl\">Your notebook prints</span><span class=\"code\">Extracted 617 words from the PDF.</span></div></div><p class=\"cap2\"></p>",init:"initPdf"},
+{label:"Index",eyebrow:"Then a way to search it",html:"<h2 class=\"title\">Indexing Lets Mistral <span class=\"hl\">Jump</span> to the Answer</h2><p class=\"why\">Your pipeline has two parts: one finds the text, and the other writes the answer.</p><p class=\"p\">Now that we have the text, we need a way to search it intelligently, like how your brain skims and jumps to the part that answers your question. That's what indexing does.</p><p class=\"p\">We're also loading Mistral as our assistant, and an embedding model, <b>BGE</b>, the one you tested in Step 1, that turns the text into numbers so the closest part can be found.</p><p class=\"p\">Let's index our supplier file so that BGE can <b>find the closest chunks</b> and Mistral-7B can <b>write the answer</b> from them.</p><div class=\"two\"><div class=\"box\"><p class=\"bh\">BGE finds</p><p class=\"bp\">the chunks of the supplier file closest to your question.</p></div><div class=\"box\"><p class=\"bh\">Mistral writes</p><p class=\"bp\">one answer, using only your question and those chunks.</p></div></div><p class=\"take\">We just gave Mistral a memory and a way to navigate it. It's like handing it a highlighter and saying: \"Here's the spec. Find the right parts.\"</p>",init:null},
+{label:"One Question",eyebrow:"One question, start to finish",html:"<h2 class=\"title\">Follow One <span class=\"hl\">Question</span> Through the Pipeline</h2><p class=\"why\">This is what happens when you ask the sterilization question in Try It Yourself.</p><p class=\"hint\">Click each step.</p><ol class=\"steps\"><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">1</span><span>You ask a question.</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">2</span><span>BGE finds the closest chunks (<span class=\"mono\">top_k = 2</span>).</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">3</span><span>Mistral reads the question and the chunks.</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">4</span><span>Mistral writes one answer.</span></button></li></ol><div class=\"flow\"><div class=\"fbox\"><span class=\"fl\">Question</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">BGE</span><span class=\"fs\">finds chunks</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Chunks</span><span class=\"fs\">from the file</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Mistral</span><span class=\"fs\">reads, then writes</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Answer</span></div></div><div class=\"detail\"></div>",init:"initFlow"},
+{label:"One Chunk",eyebrow:"What the run shows",html:"<h2 class=\"title\">The Supplier File Fits in <span class=\"hl\">One</span> Chunk</h2><p class=\"why\">It means every model in the upcoming Task reads exactly the same text, so only the model that writes the answer changes.</p><p class=\"p\">Click each view to compare how the supplier file is cut into chunks.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a notebook\"><button type=\"button\" data-view=\"s1\" aria-pressed=\"false\">Step 1: 73 chunks</button><button type=\"button\" data-view=\"one\" aria-pressed=\"false\">This notebook: 1 chunk</button></div></div></div><div class=\"tiles\"></div><p class=\"cap2\"></p>",init:"initTiles"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
