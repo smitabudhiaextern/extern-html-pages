@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P4 EasyOCR Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* P4 module 4, "Try It Yourself": read Page 4 (the scanned Certificate of Processing) with PaddleOCR, then EasyOCR, in a
+   saved copy of the SME's (Chaitanya's) notebook "Layout_OCR_Pharmaceutical".
+   Built by agent B5, 19 November 2026, with build_steps.py (scratchpad p4s2/b5), from agent B4's real Colab run.
+   Structure, rail, Back and Next, code blocks, Copy button and spacing code: copied from the P4 module 2 Try deck
+   (pfizer3-p4-m2-steps.html, itself from P3 module 9). Slide plan: project-04/m4-try-skeleton-b4.md.
+   Notebook: our fixed copy "Layout-Aware OCR: PaddleOCR and EasyOCR (Pfizer 3.0)", Drive 1lKyUnyJnMEUY34vnCMHMdh7Z8gzN-qzP
+   (anyone with the link can view), copied from his original 150jij_nvIOIYHgsElORStuTfaGuye6b2, which was never edited.
+   Only 2 cells differ (B4, SWAPS A and B, "Ask Chaitanya to review" on the page): STEP 1 installs paddleocr==2.10.0 and
+   paddlepaddle==3.0.0 (his 2.9.1 and 2.6.2 don't install on Colab's Python 3.13), and STEP 4 adds rec_batch_num=1 (without it
+   Colab runs out of memory at EasyOCR's STEP 10). Code on "in your notebook" blocks equals the copy's cells exactly (no Copy
+   button). The one cell students add, "Print Extracted Text", is his EasyOCR page's code (Copy button).
+   Pending version (agent FX2, 20 Nov 2026): a second added cell, ours, not his (approved by Smita 20 Nov), prints all of
+   PaddleOCR's text; its output picture is C2's real Colab run.
+   Agent FX2, 20 Nov 2026 (QA q7 a6 and a11, q8): his page's step headings ("Step N:" left off, because the notebook's
+   STEP numbers differ) and his lead lines restored word for word as bold lead lines, as Smita approved for E8; one
+   restart rule for this notebook, word for word on every page.
+   Outputs: B4's student-order run in a scratch copy (outputs-train.json, t_*), exact text; where a slide shows part of a
+   long output it says so. Pictures: pfizer3-p4-m4-try-s06-out.png (B4's shot) and three crops of B4's shots to the
+   figure only (s05-fig, s09-fig, s15-fig; crop_figs.py).
+   Ours: titles, labels, "Press Run" lines, "What this code does" bullets, "now holds" notes, one-line notes on the real
+   output, the install and restart lines. Everything else is his text, with the changes listed for Smita in B5's report.
+   Fixed stage: one design stage that scales as a single piece to fit the frame, so nothing ever scrolls. Wide frames use a
+   760 x 1035 stage (Notion embed height 964 px at the 708 px column); frames under 560 px wide use a 420 x 1228 stage.
+   Spare height widens the gaps between blocks, up to 2x.
+   P4 fix pass (22 Nov 2026, audit items F21 to F24): his cells show at the normal 13 px code size; a cell too long for one
+   slide is shown over two (the comment at its top, then the rest with the Run line), every line as in the notebook; the
+   code-line table, STEP 7's and STEP 12's result pictures and the recap are split over more slides; STEP 4's output is a
+   larger output-only crop of B4's shot (pfizer3-p4-m4-try-s06-out2.png, crop.py in scratchpad p4fix/try2).
+   Split, 23 Nov 2026 (Smita approved): the 48-slide deck pfizer3-p4-m4-steps.html (kept live, unchanged) is built as
+   two decks, PART=2 of 2 here. Both add the STEP 1.5 "What this code does" box. Same stage, look and slide content.
+   Look: Pfizer x Extern Core, Light format. Every color, size, radius and font comes from design-system/tokens.json. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:1035px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Header: step rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+.narrow .pg-word{display:none}
+.narrow .pg.pg-fit{flex:none}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 0}
+.narrow .card{padding:18px 16px;border-left:0;border-right:0;border-radius:0}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.p code.nw,.list code.nw{white-space:nowrap}
+.list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:22px;text-wrap:pretty}
+.list b{font-weight:600}
+.list code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.list li::marker{color:var(--step-label);font-weight:600}
+.see{margin-top:4px}
+
+/* Buttons (design system Button, Light) */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Run card: a notebook cell (no Copy button: the cells are already in the notebook), or the one cell students add (Copy button) */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin:0}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run.out pre{font-size:12px}
+
+/* The Colab screenshot: the full width of the card (edge to edge), opens full size in a new tab.
+   Under 560 px the card itself runs edge to edge, so the picture is as wide as the frame. */
+.shot{margin:0 calc(-1 * var(--space-5));border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden;line-height:0;background:var(--surface)}
+.narrow .shot{margin:0 -16px}
+.shot a{display:block}
+.shot img{display:block;width:100%;height:auto}
+.shot-cap{margin:-6px 0 0;font-size:13px;line-height:18px;color:var(--gray-600)}
+
+/* A picture of the page: framed like the output blocks, as wide as the text */
+.pagepic{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.pagepic a{display:block}
+.pagepic img{display:block;width:100%;height:auto}
+
+/* Table and analysis box (from the Learn deck) */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.m{font-family:var(--font-mono);font-size:13px;color:var(--ink);white-space:nowrap}
+.tbl td code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .tbl table{font-size:13px}
+.narrow .tbl td,.narrow .tbl th{padding:5px 8px}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px;font-size:15px;line-height:22px;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl p{margin:0}
+.concl p + p{margin-top:6px}
+.concl code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+
+/* A smaller code font for the long function in Step 3 (from the 11 November module 9 steps deck) */
+.run.small pre{font-size:12px;line-height:1.32;padding:8px 14px}
+.narrow .run.small pre{font-size:10.5px;line-height:1.35}
+
+/* Tip box (from the 11 November module 9 Learn deck): pale-blue card, Pfizer blue bulb in a white square */
+.tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px}
+.tip-icon{flex:none;width:30px;height:30px;border-radius:var(--radius-xs);background:var(--surface);display:grid;place-items:center;color:var(--pfizer-blue)}
+.tip-icon svg{width:18px;height:18px}
+.tip p{margin:0;font-size:15px;line-height:22px;color:var(--card-text);text-wrap:pretty}
+.tip b{font-weight:600;color:var(--card-title)}
+
+/* Last slide: his closing line and Key Takeaway (takeaway box copied from the module 7 cheat sheet slide) */
+.inner.end-slide{gap:var(--space-4)}
+.end-slide .p{font-size:17px;line-height:1.55}
+.take{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:14px 18px;font-size:17px;line-height:1.55;color:var(--card-text)}
+.take b{font-weight:700;color:var(--card-title)}
+.take code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .take{font-size:15px;padding:12px 16px}
+.narrow .end-slide .p{font-size:16px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* Added for P4 module 4 (from the P4 module 2 Try deck): "now holds" note, code font, columns, pictures, recap */
+.holds{margin:0;display:flex;align-items:center;gap:8px;background:var(--surface-card);border-left:4px solid var(--pfizer-blue);border-radius:var(--radius-xs);padding:7px 12px;font-size:14px;line-height:20px;font-weight:600;color:var(--card-title)}
+.holds code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px}
+.holds svg{width:16px;height:16px;flex:none;color:var(--pfizer-blue)}
+.pg-word{display:none}
+.pg-label{text-align:center}
+.pg.pg-fit{flex:none}
+.pg.pg-fit .pg-label{text-align:left}
+.narrow .pg-label{display:none}
+.narrow .pg.pg-fit{flex:1 1 0}
+/* Code wraps (nothing may scroll); his cells are long, so they use the small code font */
+.run pre{font-size:13px;line-height:1.45;padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run pre{font-size:13px;padding:8px 10px}
+/* Final QA fix, 22 Nov 2026: output text is the same size as code (13 px), on wide and narrow frames */
+.run.out pre{font-size:13px;line-height:1.45}
+.narrow .run.out pre{font-size:13px}
+/* The two comparison tables (STEP 13, STEP 14) are 50 to 55 characters wide: on narrow frames only they keep the smaller
+   size so their columns don't wrap */
+.narrow .run.out.wide pre{font-size:10.5px}
+/* An output list in columns: the heading lines across the top, the list down 2 columns (same text, same order) */
+.run.out pre.head{padding-bottom:0}
+.run.out pre.foot{padding-top:0}
+.run.out pre.colpre{column-count:2;column-gap:24px;padding-top:4px;white-space:pre}
+.narrow .run.out pre.colpre{column-count:1}
+/* Text next to a Colab picture of the page */
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+.pair.text-fig{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.pair.fig-text{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+.half{display:flex;flex-direction:column;gap:10px;min-width:0}
+.half .p{font-size:14.5px;line-height:21px}
+.fig{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.fig a{display:block}
+.fig img{display:block;width:100%;height:auto}
+.half .shot-cap{margin:-4px 0 0}
+.narrow .pair{gap:10px}
+.narrow .half .p{font-size:13px;line-height:19px}
+.half-head{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+/* His STEP 7 code-line table */
+.tbl-slide .tbl td,.tbl-slide .tbl th{padding:8px 12px}
+.narrow .tbl-slide .tbl td,.narrow .tbl-slide .tbl th{padding:6px 10px}
+.tbl td.cl{width:38%}
+.tbl td.cl code{white-space:normal;overflow-wrap:anywhere;font-size:12.5px}
+.narrow .tbl td.cl code{font-size:11px}
+/* P4 fix pass, 22 Nov 2026 (F23): the code-line table is split over two slides, so it shows at 15 px with code at 13 px */
+.tbl-slide .tbl table{font-size:15px;line-height:1.45}
+.tbl-slide .tbl th{font-size:13px}
+.tbl-slide .tbl td.cl code{font-size:13px}
+.narrow .tbl-slide .tbl table{font-size:14px}
+.narrow .tbl-slide .tbl td.cl code{font-size:12px}
+/* A large result picture with a short text column beside it (stacked on narrow frames) */
+.pair.bigfig{grid-template-columns:minmax(0,2.2fr) minmax(0,1fr)}
+.narrow .pair.bigfig{grid-template-columns:1fr}
+/* Quick Recap */
+.recap-slide .list{font-size:15px;line-height:1.5;gap:8px}
+.recap-slide .list ul{margin:3px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.recap-slide .list ul li::marker{color:var(--ink-muted)}
+.recap2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.recap2 .list{font-size:14px;line-height:1.45}
+.rh{margin:0 0 6px;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.narrow .recap2{grid-template-columns:1fr;gap:10px}
+.narrow .recap-slide .list{font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Part 2: Read Page 4 Again with EasyOCR and Compare: The Steps</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Steps"></nav>
+    <div class="where"><b id="where-section">Start</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+<template id="t1">
+<p class="p">Keep working in the same notebook, from STEP 8. If Colab disconnected or you closed the notebook, run STEPS 1 to 7 again first (Runtime → Run before, or run each cell in order).</p><p class="p">To use <b>Runtime → Run before</b>, click the <code class="nw"># STEP 8</code> cell first. When STEP 1 says the session needs to restart, ignore it. Don't restart. When STEP 3 asks, pick <code>pharmaceutical-sdf-page4-certificate-processing.pdf</code> again.</p>
+</template>
+
+<template id="t2">
+<p class="p"><b>Step-by-Step: Run EasyOCR on a PDF</b></p><p class="p">So far, you've explored how PaddleOCR helps us extract <b>text and its location</b> from complex pharmaceutical documents. But what if you want something faster, simpler, and lighter? That's where <b>EasyOCR</b> comes in.</p><p class="p">While it's not as deep or structured as PaddleOCR, EasyOCR is perfect for quick wins, especially when working with <b>scanned forms</b>, or smaller batches of documents.</p>
+</template>
+
+<template id="t3">
+<p class="p">Let's try it out using the <b>same pharmaceutical SDF</b> from earlier. You'll load the file, extract text, and draw boxes around everything EasyOCR finds, so you can see exactly what's working (and what's not).</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span>No new upload: EasyOCR reads the picture STEP 3 made.</span></p><p class="p"><b>Install EasyOCR and Some Helpers</b><br>Before we start, we'll need a few tools:</p><p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 8</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code>
+# ============================================
+# STEP 8: Install and Import EasyOCR
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Setting up EasyOCR - it's much simpler than PaddleOCR!
+#
+# WHY THIS MATTERS:
+# Sometimes simpler is better. EasyOCR is:
+# - Faster to install
+# - Easier to use
+# - Still quite accurate
+#
+# WHAT YOU'LL SEE:
+# Installation progress, then a ready message.
+# ============================================
+
+!pip install easyocr
+
+import easyocr
+
+print("\nEasyOCR installed and imported!")</code></pre></figure>
+</template>
+
+<template id="t4">
+<p class="p"><b>Run EasyOCR and visualize results</b><br>Next, make an EasyOCR reader for English text.</p><p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 9</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code># ============================================
+# STEP 9: Initialize EasyOCR Reader
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Creating an EasyOCR reader for English text.
+#
+# WHY THIS MATTERS:
+# EasyOCR downloads model files on first use.
+# After that, initialization is very fast.
+#
+# WHAT YOU'LL SEE:
+# Model download progress (first time only).
+# ============================================
+
+print("Initializing EasyOCR reader...")
+
+# Create a reader for English
+reader = easyocr.Reader(['en'])
+
+print("EasyOCR reader ready!")
+
+# TIP: You can add more languages like ['en', 'fr'] for multilingual documents.</code></pre></figure>
+</template>
+
+<template id="t5">
+<p class="half-head">Under STEP 8</p><figure class="run out"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0"><code>Successfully installed easyocr-1.7.2 ninja-1.13.2 python-bidi-0.6.12
+
+EasyOCR installed and imported!</code></pre></figure><p class="shot-cap">The output is long. These are its last lines.</p><p class="p">It takes about 15 seconds and doesn't ask for a restart. Don't restart now, or PaddleOCR's results are wiped.</p><p class="half-head">Under STEP 9</p><figure class="run out"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0"><code>WARNING:easyocr.easyocr:Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.
+WARNING:easyocr.easyocr:Downloading detection model, please wait. This may take several minutes depending upon your network connection.
+Initializing EasyOCR reader...
+Progress: |██████████████████████████████████████████████████| 100.0% CompleteWARNING:easyocr.easyocr:Downloading recognition model, please wait. This may take several minutes depending upon your network connection.
+Progress: |██████████████████████████████████████████████████| 100.0% CompleteEasyOCR reader ready!</code></pre></figure><p class="p">The warning about CUDA or MPS only means EasyOCR runs on the computer's main processor instead of a graphics chip. It's slower, and that's okay. The first time, it also downloads its 2 model files.</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>reader</code> now holds EasyOCR, ready to read English text.</span></p>
+</template>
+
+<template id="t6">
+<p class="p">Now it's time to extract the text and draw boxes so we can <b>see what EasyOCR picked up</b>.</p><p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 10</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code># ============================================
+# STEP 10: Run EasyOCR on the Pharmaceutical SDF
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Processing the same document with EasyOCR.
+#
+# WHY THIS MATTERS:
+# This lets us compare EasyOCR results with PaddleOCR!
+# Each engine may find different things.
+#
+# WHAT YOU'LL SEE:
+# Processing time and number of text regions found.
+# ============================================
+
+print("Running EasyOCR on your pharmaceutical document...")
+
+# Run OCR
+easy_result = reader.readtext(image_path)
+
+print(f"\nEasyOCR found {len(easy_result)} text regions!")
+
+# TIP: EasyOCR typically runs faster than PaddleOCR.</code></pre></figure>
+</template>
+
+<template id="t7">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="run out"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0"><code>Running EasyOCR on your pharmaceutical document...
+
+EasyOCR found 95 text regions!</code></pre></figure><p class="p">On Page 4, EasyOCR found 95 text regions. It can take a minute or two.</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>easy_result</code> now holds everything EasyOCR found: for each text region, its box, its text and its confidence.</span></p>
+</template>
+
+<template id="t8">
+<p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 11</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code># ============================================
+# STEP 11: Display EasyOCR Results
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Showing what EasyOCR found.
+#
+# WHY THIS MATTERS:
+# EasyOCR returns: (bounding_box, text, confidence)
+# The bounding box is 4 corner points.
+#
+# WHAT YOU'LL SEE:
+# A list of detected text with confidence scores.
+# ============================================
+
+print("Sample of EasyOCR Results:")
+print("=" * 60)
+
+# Show first 15 results
+for i, (bbox, text, confidence) in enumerate(easy_result[:15]):
+    print(f"{i+1:2d}. [{confidence:.2%}] {text}")
+
+if len(easy_result) &gt; 15:
+    print(f"\n... and {len(easy_result) - 15} more text regions!")</code></pre></figure>
+</template>
+
+<template id="t9">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="run out"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0" class="head"><code>Sample of EasyOCR Results:
+============================================================</code></pre><pre tabindex="0" class="colpre"><code> 1. [72.42%] Certificate Of
+ 2. [99.99%] Processing
+ 3. [99.66%] STERIS
+ 4. [64.95%] Prepared for GE HEALTHCARE
+ 5. [99.66%] Gamma Process Run ID 129708B
+ 6. [95.65%] Product Code
+ 7. [56.28%] Product_Lot Number
+ 8. [86.49%] Quantity
+ 9. [64.13%] UOM
+10. [75.39%] Cytiva (25-40 kGy)
+11. [100.00%] 17242818
+12. [76.80%] 19
+13. [99.17%] CS
+14. [75.87%] Cust Item ID: 29-1846-12
+15. [77.67%] Cytiva (25-40 kGy)</code></pre><pre tabindex="0" class="foot"><code>
+... and 80 more text regions!</code></pre></figure>
+</template>
+
+<template id="t10">
+<p class="p">This cell is long, so we show it over two slides. Here is the comment at its top. The rest of the cell, and when to press <b>Run</b>, are on the next slide.</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell, lines 1 to 14 of 43</span></div><pre tabindex="0"><code># ============================================
+# STEP 12: Visualize EasyOCR Results
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Drawing boxes around EasyOCR detections.
+#
+# WHY THIS MATTERS:
+# Visual comparison helps us see differences between engines.
+#
+# WHAT YOU'LL SEE:
+# Your document with red boxes around EasyOCR detections.
+# ============================================</code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li>It keeps only the results EasyOCR is more than 50% sure of (<code>confidence &gt; 0.5</code>).</li><li>For each one, it draws a red rectangle from the box's top-left corner, <code>bbox[0]</code>, to its bottom-right corner, <code>bbox[2]</code>, writes the confidence above it and adds the text to <code>extracted_text</code>.</li></ul>
+</template>
+
+<template id="t11">
+<p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 12</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; the rest of the cell, lines 15 to 43</span></div><pre tabindex="0"><code># Load a fresh copy of the image
+img_easy = image.copy()
+draw = ImageDraw.Draw(img_easy)
+
+# Collect high-confidence text
+extracted_text = []
+
+for (bbox, text, confidence) in easy_result:
+    if confidence &gt; 0.5:  # Only show high-confidence results
+        # Get bounding box corners
+        top_left = tuple(map(int, bbox[0]))
+        bottom_right = tuple(map(int, bbox[2]))
+
+        # Draw rectangle
+        draw.rectangle([top_left, bottom_right], outline='red', width=2)
+
+        # Add confidence score
+        draw.text((top_left[0], top_left[1] - 20), f"{confidence:.2f}", fill='red')
+
+        extracted_text.append(text)
+
+# Display
+plt.figure(figsize=(15, 10))
+plt.imshow(img_easy)
+plt.title(f'EasyOCR Results - {len(extracted_text)} text segments found')
+plt.axis('off')
+plt.show()
+
+# TIP: Compare this with the PaddleOCR visualization above!</code></pre></figure>
+</template>
+
+<template id="t12">
+<p class="p">Let's visualize what EasyOCR found:</p><div class="pair bigfig"><div class="half"><p class="p see"><b>What you'll see in Colab:</b></p><figure class="fig"><a href="pfizer3-p4-m4-try-s15-fig.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p4-m4-try-s15-fig.png" width="1110" height="1523" alt="The picture under STEP 12 in Colab, titled EasyOCR Results - 85 text segments found: Page 4 with a red rectangle and a small red confidence number on each piece of text EasyOCR was more than 50% sure of. The title has two rectangles, Certificate Of and Processing."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="shot-cap">Click the picture to open it full size.</p></div><div class="half"><p class="p">85 of EasyOCR's 95 results are more than 50% sure, so the title says <code>85 text segments found</code>. Each small red number is a confidence, from 0 to 1.</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>extracted_text</code> now holds the text of those 85 results, in order.</span></p></div></div>
+</template>
+
+<template id="t13">
+<div class="pair"><div class="half"><p class="half-head">PaddleOCR, STEP 7</p><figure class="fig"><a href="pfizer3-p4-m4-try-s09-fig.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p4-m4-try-s09-fig.png" width="1110" height="1523" alt="PaddleOCR&#x27;s picture from STEP 7: Page 4 with a red polygon around each line of text."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="shot-cap">Click the picture to open it full size.</p></div><div class="half"><p class="half-head">EasyOCR, STEP 12</p><figure class="fig"><a href="pfizer3-p4-m4-try-s15-fig.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p4-m4-try-s15-fig.png" width="1110" height="1523" alt="EasyOCR&#x27;s picture from STEP 12: Page 4 with a red rectangle around each piece of text it was more than 50% sure of."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="shot-cap">Click the picture to open it full size.</p></div></div><p class="p">Compare STEP 11's list with PaddleOCR's in STEP 6. EasyOCR split the title into two pieces, so each line after it moves down by one. Line 7 reads <code>Product_Lot Number</code>, with a <code>_</code> that isn't on the page, and line 13 reads <code>CS</code> in capitals, where PaddleOCR read <code>cs</code>.</p><p class="p">Now look at the two pictures side by side. EasyOCR's boxes are plain rectangles, the title has two of them, and a few lines, such as <code>Cust Item ID: CB0001L722-01-05PK</code>, have no box, because EasyOCR was less than 50% sure of them.</p>
+</template>
+
+<template id="t14">
+<p class="p">Now let's see the raw results in a cleaner format. This cell isn't in the notebook. Click the <code class="nw"># STEP 12</code> cell, then click <b>+ Code</b> at the top of the notebook. A new cell appears under it. Paste this in and press <b>Run</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python</span><button type="button" class="copy" data-copy="PRINT" aria-label="Copy the Python cell"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg><span>Copy</span></button></div><pre tabindex="0"><code>print(f"\n📝 Extracted Text ({len(extracted_text)} segments):")
+for i, text in enumerate(extracted_text, 1):
+    print(f"{i:2d}. {text}")</code></pre></figure><p class="p"><i>What you'll see:</i> Bounding boxes around detected text, confidence scores, and a full list of extracted phrases. Try comparing this visually with the PaddleOCR output from earlier.</p>
+</template>
+
+<template id="t15">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="run out"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0" class="head"><code>📝 Extracted Text (85 segments):</code></pre><pre tabindex="0" class="colpre"><code> 1. Certificate Of
+ 2. Processing
+ 3. STERIS
+ 4. Prepared for GE HEALTHCARE
+ 5. Gamma Process Run ID 129708B
+ 6. Product Code
+ 7. Product_Lot Number
+ 8. Quantity
+ 9. UOM
+10. Cytiva (25-40 kGy)
+11. 17242818
+12. 19
+13. CS
+14. Cust Item ID: 29-1846-12
+15. Cytiva (25-40 kGy)
+16. 17269079
+17. CS
+18. Cust Item ID: CBOOSOL10-21
+19. Cytiva (25-40 kGy)
+20. 17271868
+21. 2
+22. CS
+23. Cytiva (25-40 kGy)
+24. 17271872</code></pre></figure><p class="shot-cap">The list goes on to line 85, which reads <code>Page 1 of 2</code>. These are its first 24 lines.</p>
+</template>
+
+<template id="t16">
+<p class="p">STEP 6 printed only PaddleOCR's first 15 results. This next cell prints every line PaddleOCR read, so you can compare it with EasyOCR's list letter by letter. We added it for you: it isn't in the notebook or on the expert's page.</p><p class="p">Click the cell you just added, then click <b>+ Code</b>. A new cell appears under it. Paste this in and press <b>Run</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; our cell, not in the notebook</span><button type="button" class="copy" data-copy="PADDLEPRINT" aria-label="Copy the Python cell"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3.3c0-.7-.6-1.3-1.3-1.3H3.8c-.7 0-1.3.6-1.3 1.3v5.4c0 .7.6 1.3 1.3 1.3H4" stroke="currentColor" stroke-width="1.4"/></svg><span>Copy</span></button></div><pre tabindex="0"><code>print(f"\n📝 PaddleOCR Text ({len(result[0])} regions):")
+for i, line in enumerate(result[0], 1):
+    print(f"{i:3d}. {line[1][0]}")</code></pre></figure><p class="p see"><b>What you'll see in Colab:</b></p><figure class="fig" style="max-width:530px"><a href="pfizer3-p4-m4-try-paddleprint-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p4-m4-try-paddleprint-out.png" width="1000" height="742" alt="The output of the new cell in Colab: PaddleOCR Text (98 regions), then the numbered lines PaddleOCR read from Page 4, starting with 1. Certificate Of Processing."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="shot-cap">This picture shows the first 20 of its 98 lines. PaddleOCR keeps <code>Certificate Of Processing</code> on one line, where EasyOCR split it in two, and line 12 reads <code>cs</code> in small letters.</p>
+</template>
+
+<template id="t17">
+<p class="p">Part 3 of your notebook puts the two engines side by side, in numbers.</p><p class="p">This cell is long, so we show it over two slides. Here is the comment at its top. The rest of the cell, and when to press <b>Run</b>, are on the next slide.</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell, lines 1 to 14 of 35</span></div><pre tabindex="0"><code># ============================================
+# STEP 13: Compare OCR Engine Statistics
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Comparing basic statistics from both OCR engines.
+#
+# WHY THIS MATTERS:
+# Numbers help us objectively compare performance.
+#
+# WHAT YOU'LL SEE:
+# A comparison table of key metrics.
+# ============================================</code></pre></figure>
+</template>
+
+<template id="t18">
+<p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 13</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; the rest of the cell, lines 15 to 35</span></div><pre tabindex="0"><code># Calculate statistics for PaddleOCR
+paddle_count = len(result[0]) if result[0] else 0
+paddle_confidences = [line[1][1] for line in result[0]] if result[0] else []
+paddle_avg_conf = sum(paddle_confidences) / len(paddle_confidences) if paddle_confidences else 0
+
+# Calculate statistics for EasyOCR
+easy_count = len(easy_result)
+easy_confidences = [conf for (_, _, conf) in easy_result]
+easy_avg_conf = sum(easy_confidences) / len(easy_confidences) if easy_confidences else 0
+
+# Print comparison
+print("OCR Engine Comparison")
+print("=" * 55)
+print(f"{'Metric':&lt;25} {'PaddleOCR':&lt;15} {'EasyOCR':&lt;15}")
+print("-" * 55)
+print(f"{'Text regions detected:':&lt;25} {paddle_count:&lt;15} {easy_count:&lt;15}")
+print(f"{'Average confidence:':&lt;25} {f'{paddle_avg_conf:.2%}':&lt;15} {f'{easy_avg_conf:.2%}':&lt;15}")
+print(f"{'High conf (&gt;90%):':&lt;25} {sum(1 for c in paddle_confidences if c &gt; 0.9):&lt;15} {sum(1 for c in easy_confidences if c &gt; 0.9):&lt;15}")
+print(f"{'Low conf (&lt;50%):':&lt;25} {sum(1 for c in paddle_confidences if c &lt; 0.5):&lt;15} {sum(1 for c in easy_confidences if c &lt; 0.5):&lt;15}")
+
+# TIP: More detections isn't always better - accuracy matters too!</code></pre></figure>
+</template>
+
+<template id="t19">
+<p class="p">This cell is long, so we show it over two slides. Here is the comment at its top. The rest of the cell, and when to press <b>Run</b>, are on the next slide.</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell, lines 1 to 15 of 39</span></div><pre tabindex="0"><code># ============================================
+# STEP 14: Check for Key Pharmaceutical Terms
+# ============================================
+#
+# WHAT WE'RE DOING:
+# Checking if each engine found important pharmaceutical terms.
+#
+# WHY THIS MATTERS:
+# For pharmaceutical compliance, we need to extract specific fields.
+# The "best" OCR is the one that finds what we need!
+#
+# WHAT YOU'LL SEE:
+# Which engine found which key terms.
+# ============================================</code></pre></figure>
+</template>
+
+<template id="t20">
+<p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># STEP 14</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; the rest of the cell, lines 16 to 39</span></div><pre tabindex="0"><code># Define key pharmaceutical terms
+key_terms = ["CERTIFICATE", "LOT", "BATCH", "VENDOR", "EXPIRATION",
+             "DATE", "COA", "MANUFACTURER", "STERIS", "PROCESSING", "QUALITY"]
+
+# Get all text from each engine (uppercase for matching)
+paddle_texts = [line[1][0].upper() for line in result[0]] if result[0] else []
+easy_texts = [text.upper() for (_, text, _) in easy_result]
+
+# Check which terms were found
+print("Key Pharmaceutical Terms Found:")
+print("=" * 50)
+print(f"{'Term':&lt;15} {'PaddleOCR':&lt;12} {'EasyOCR':&lt;12}")
+print("-" * 50)
+
+for term in key_terms:
+    paddle_found = any(term in text for text in paddle_texts)
+    easy_found = any(term in text for text in easy_texts)
+
+    paddle_mark = "Found" if paddle_found else "--"
+    easy_mark = "Found" if easy_found else "--"
+
+    print(f"{term:&lt;15} {paddle_mark:&lt;12} {easy_mark:&lt;12}")
+
+# TIP: Try running this on different pages to see consistency!</code></pre></figure>
+</template>
+
+<template id="t21">
+<p class="half-head">Under STEP 13</p><figure class="run out wide"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0"><code>OCR Engine Comparison
+=======================================================
+Metric                    PaddleOCR       EasyOCR        
+-------------------------------------------------------
+Text regions detected:    98              95             
+Average confidence:       95.43%          78.68%         
+High conf (&gt;90%):         86              38             
+Low conf (&lt;50%):          0               10             </code></pre></figure><p class="p">On Page 4, PaddleOCR found 98 regions and was more than 90% sure of 86 of them. EasyOCR found 95 and was more than 90% sure of 38.</p><p class="half-head">Under STEP 14</p><figure class="run out wide"><div class="code-head"><span class="code-lang">Output</span></div><pre tabindex="0" class="head"><code>Key Pharmaceutical Terms Found:
+==================================================
+Term            PaddleOCR    EasyOCR     
+--------------------------------------------------</code></pre><pre tabindex="0" class="colpre"><code>CERTIFICATE     Found        Found       
+LOT             Found        Found       
+BATCH           --           --          
+VENDOR          --           --          
+EXPIRATION      --           --          
+DATE            Found        Found       
+COA             --           --          
+MANUFACTURER    --           --          
+STERIS          Found        Found       
+PROCESSING      Found        Found       
+QUALITY         Found        Found       </code></pre></figure><p class="p">Both engines found the same 6 of the 11 terms. Neither found the other 5, such as BATCH and VENDOR, because Page 4 doesn't have them.</p>
+</template>
+
+<template id="t22">
+<ul class="list"><li><b>Tesseract</b> gives every word its own box. Great for clean docs, but it doesn't keep the words of a line or a phrase together.</li><li><b>Layout-aware OCR</b> tools like PaddleOCR and EasyOCR keep the words that belong together in one box, so they know <i>where</i> text lives and <i>how</i> it's grouped into lines.</li><li><b>PaddleOCR</b> is powerful for complex pages; <b>EasyOCR</b> is fast and works well for forms.</li></ul>
+</template>
+
+<template id="t23">
+<ol class="list"><li><b>Installing and Setting Up PaddleOCR</b><ul><li>Installed PaddleOCR along with helper libraries like <code>pdf2image</code> and <code>poppler-utils</code>.</li><li>Converted the pharmaceutical SDF into a clean image that OCR can read.</li></ul></li><li><b>Running OCR and Visualizing Output</b><ul><li>Used PaddleOCR to detect text and its location on the page.</li><li>Drew boxes and labels around the detected text using OpenCV.</li></ul></li><li><b>Why It's Powerful</b><ul><li>Unlike basic OCR, PaddleOCR finds each line of text and a four-cornered box around it, even on dense pages with multiple columns.</li></ul></li></ol>
+</template>
+
+<template id="t24">
+<ol class="list"><li><b>Why Use EasyOCR</b><ul><li>It's lightweight, easy to install, and perfect for scanned forms or small batches.</li><li>Doesn't require a deep setup like PaddleOCR, great for fast results.</li></ul></li><li><b>How It Works</b><ul><li>Converts a PDF page into an image, then reads the text using EasyOCR.</li><li>Draws boxes and confidence scores so you can visually verify what it captured.</li></ul></li><li><b>When It Shines</b><ul><li>Works well on structured forms and documents with clean layouts.</li><li>Faster setup, but less layout-aware than PaddleOCR.</li></ul></li></ol>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var CELLS = {"PADDLEPRINT": "print(f\"\\n📝 PaddleOCR Text ({len(result[0])} regions):\")\nfor i, line in enumerate(result[0], 1):\n    print(f\"{i:3d}. {line[1][0]}\")", "PRINT": "print(f\"\\n📝 Extracted Text ({len(extracted_text)} segments):\")\nfor i, text in enumerate(extracted_text, 1):\n    print(f\"{i:2d}. {text}\")"};
+  var GROUPS = ["Start", "Step 8", "Step 9", "Step 10", "Step 11", "Step 12", "Print", "Step 13", "Step 14", "End"];
+  var SLIDES = [
+    {"group": "Start", "label": "PART 2 &middot; GET READY", "title": "Keep Working in the <span class=\"hl\">Same Notebook</span>", "plain": "Keep Working in the Same Notebook", "tpl": "t1"},
+    {"group": "Step 8", "label": "STEP 8 &middot; PART 1 OF 2: MEET EASYOCR", "title": "Same Page, a <span class=\"hl\">Lighter Engine</span>", "plain": "Step 8. Same Page, a Lighter Engine", "tpl": "t2"},
+    {"group": "Step 8", "label": "STEP 8 &middot; PART 2 OF 2: RUN IT", "title": "Install <span class=\"hl\">EasyOCR</span>", "plain": "Step 8. Install EasyOCR (Part 2 of 2)", "tpl": "t3"},
+    {"group": "Step 9", "label": "STEP 9 &middot; RUN IT", "title": "Start <span class=\"hl\">EasyOCR</span>", "plain": "Step 9. Start EasyOCR", "tpl": "t4"},
+    {"group": "Step 9", "label": "STEP 8 AND STEP 9 &middot; SEE IT", "title": "Check That EasyOCR Is <span class=\"hl\">Ready</span>", "plain": "Steps 8 and 9. Check That EasyOCR Is Ready", "tpl": "t5", "where": "Steps 8 and 9"},
+    {"group": "Step 10", "label": "STEP 10 &middot; PART 1 OF 2: RUN IT", "title": "Let EasyOCR Read the <span class=\"hl\">Same Picture</span>", "plain": "Step 10. Let EasyOCR Read the Same Picture", "tpl": "t6"},
+    {"group": "Step 10", "label": "STEP 10 &middot; PART 2 OF 2: SEE IT", "title": "See How Many Regions <span class=\"hl\">EasyOCR Found</span>", "plain": "Step 10. See How Many Regions EasyOCR Found (Part 2 of 2)", "tpl": "t7"},
+    {"group": "Step 11", "label": "STEP 11 &middot; PART 1 OF 2: RUN IT", "title": "Look at What EasyOCR <span class=\"hl\">Found</span>", "plain": "Step 11. Look at What EasyOCR Found", "tpl": "t8"},
+    {"group": "Step 11", "label": "STEP 11 &middot; PART 2 OF 2: SEE IT", "title": "See EasyOCR's <span class=\"hl\">First 15</span> Results", "plain": "Step 11. See EasyOCR's First 15 Results (Part 2 of 2)", "tpl": "t9"},
+    {"group": "Step 12", "label": "STEP 12 &middot; PART 1 OF 4: READ THE TOP", "title": "Draw EasyOCR's <span class=\"hl\">Boxes</span>", "plain": "Step 12. Draw EasyOCR's Boxes", "tpl": "t10"},
+    {"group": "Step 12", "label": "STEP 12 &middot; PART 2 OF 4: RUN IT", "title": "Run EasyOCR's <span class=\"hl\">Drawing Cell</span>", "plain": "Step 12. Run EasyOCR's Drawing Cell (Part 2 of 4)", "tpl": "t11"},
+    {"group": "Step 12", "label": "STEP 12 &middot; PART 3 OF 4: SEE IT", "title": "See EasyOCR's <span class=\"hl\">Rectangles</span>", "plain": "Step 12. See EasyOCR's Rectangles (Part 3 of 4)", "tpl": "t12", "cls": "pair-slide"},
+    {"group": "Step 12", "label": "STEP 12 &middot; PART 4 OF 4: COMPARE", "title": "<span class=\"hl\">Compare</span> EasyOCR's Results with PaddleOCR's", "plain": "Step 12. Compare EasyOCR's Results with PaddleOCR's (Part 4 of 4)", "tpl": "t13", "cls": "pair-slide"},
+    {"group": "Print", "label": "PRINT THE TEXT &middot; ADD A CELL", "title": "Print the <span class=\"hl\">Text</span> EasyOCR Read, in a Cell of Your Own", "plain": "Print the Text EasyOCR Read, in a Cell of Your Own", "tpl": "t14", "where": "Print the Text"},
+    {"group": "Print", "label": "PRINT THE TEXT &middot; SEE IT", "title": "See the <span class=\"hl\">Text</span> EasyOCR Read", "plain": "See the Text EasyOCR Read", "tpl": "t15", "where": "Print the Text"},
+    {"group": "Print", "label": "PRINT THE TEXT &middot; ADD ANOTHER CELL", "title": "Print All of <span class=\"hl\">PaddleOCR's Text</span>, in Another Cell", "plain": "Print All of PaddleOCR's Text, in Another Cell", "tpl": "t16", "where": "Print the Text"},
+    {"group": "Step 13", "label": "STEP 13 &middot; PART 1 OF 2: READ THE TOP", "title": "Compare the Two Engines' <span class=\"hl\">Numbers</span>", "plain": "Step 13. Compare the Two Engines' Numbers", "tpl": "t17"},
+    {"group": "Step 13", "label": "STEP 13 &middot; PART 2 OF 2: RUN IT", "title": "Run the <span class=\"hl\">Comparison</span> Cell", "plain": "Step 13. Run the Comparison Cell (Part 2 of 2)", "tpl": "t18"},
+    {"group": "Step 14", "label": "STEP 14 &middot; PART 1 OF 2: READ THE TOP", "title": "Check Which <span class=\"hl\">Key Terms</span> Each Engine Found", "plain": "Step 14. Check Which Key Terms Each Engine Found", "tpl": "t19"},
+    {"group": "Step 14", "label": "STEP 14 &middot; PART 2 OF 2: RUN IT", "title": "Run the <span class=\"hl\">Key Terms</span> Cell", "plain": "Step 14. Run the Key Terms Cell (Part 2 of 2)", "tpl": "t20"},
+    {"group": "Step 14", "label": "STEP 13 AND STEP 14 &middot; SEE IT", "title": "See the Two Engines <span class=\"hl\">Side by Side</span>", "plain": "Steps 13 and 14. See the Two Engines Side by Side", "tpl": "t21", "where": "Steps 13 and 14"},
+    {"group": "End", "label": "QUICK RECAP &middot; 1 OF 3", "title": "Quick Recap: Two Engines That Read <span class=\"hl\">Lines</span>", "plain": "Quick Recap: Two Engines That Read Lines", "tpl": "t22", "where": "Quick Recap", "cls": "recap-slide"},
+    {"group": "End", "label": "QUICK RECAP &middot; 2 OF 3", "title": "Quick Recap: <span class=\"hl\">PaddleOCR</span>", "plain": "Quick Recap: PaddleOCR", "tpl": "t23", "where": "Quick Recap", "cls": "recap-slide"},
+    {"group": "End", "label": "QUICK RECAP &middot; 3 OF 3", "title": "Quick Recap: <span class=\"hl\">EasyOCR</span>", "plain": "Quick Recap: EasyOCR", "tpl": "t24", "where": "Quick Recap", "cls": "recap-slide"}
+  ];
+  var STAGE = { wide: [760, 1035], narrow: [420, 1228] };
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var sz = narrow ? STAGE.narrow : STAGE.wide;
+    app.style.width = sz[0] + "px"; app.style.height = sz[1] + "px";
+    var k = Math.min(window.innerWidth / sz[0], window.innerHeight / sz[1]);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  var GROUP_LABEL = { "Print": "Print" };
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    var isStep = g.name.indexOf("Step ") === 0;
+    b.type = "button"; b.className = "pg" + (isStep ? "" : " pg-fit");
+    var shown = GROUP_LABEL[g.name] || g.name;
+    b.setAttribute("aria-label", (g.name === "Print" ? "Print the Text" : shown) + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    var word = isStep ? '<span class="pg-word">Step </span>' + g.name.replace("Step ", "") : shown;
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + word + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span"), orig = label.textContent;
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = orig; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner' + (s.cls ? " " + s.cls : "") + '"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + document.getElementById(s.tpl).innerHTML + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(CELLS[b.getAttribute("data-copy")], b, pre); });
+    });
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.where || s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+    space();
+    Array.prototype.forEach.call(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  /* Spacing (Smita, 17 November 2026): no big empty area at the bottom of a slide. Spare height widens the gaps
+     between blocks, up to 2x. */
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = "";
+    var cs = getComputedStyle(card);
+    var avail = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var base = parseFloat(getComputedStyle(inner).rowGap) || 14;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (base + Math.min(base, spare / gaps)) + "px";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    space();
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #slide=N opens slide N directly */
+  var hm = location.hash.match(/slide=(\d+)/);
+  if (hm) i = Math.min(SLIDES.length - 1, Math.max(0, +hm[1] - 1));
+  window.addEventListener("resize", function () { scaleStage(); space(); });
+  scaleStage();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
