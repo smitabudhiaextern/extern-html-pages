@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Query Processing, Reranking and Hybrid Retrieval</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 5, Step 2, page m4 Learn deck: "Query Processing, Reranking and Hybrid Retrieval".
+   Merges Chaitanya's (SME) concept pages "Learn How to Enhance RAG with Query Processing" (Notion 53a1d028...) and
+   "Learn How to Enhance RAG using Retrieval Optimization" (eb51d028...) into one Learn deck. Ideas only, NO code: the
+   code is in the Try (his Hands-On notebook nb3, Drive 1WdoPa7WTcyn85zQL0CxKgm8jUbpuP56-).
+   Built 23 November 2026 from source/m4-learn-build.py (+ m4-learn-style.css, m4-learn-player.js, m4-learn-head.txt),
+   the same way as the Step 1 deck (m2-learn-*). Never hand-patch this file: change the source and rebuild.
+   SME text word for word, except the decided changes (p5-decisions.md 1 to 5 and 26 to 41) and the fit check
+   (step2-fitcheck-m4.md section 6): "In the last modules" became "In the last reading", "In this module, you'll learn"
+   became "Next, you'll learn" (B1); the 2 C to 8 C example is framed "Suppose you ask" (decision 30); "LLM-Assisted
+   Reranking" and his reranking table kept as is (decision 29); his closing line kept in full (B4, listed for Smita);
+   em dashes became commas, full stops or brackets; his emoji (cross and tick) were dropped from the example labels;
+   his "- " list dashes inside the technique table cells became line breaks. Quick Recaps, GIF banners, the dify
+   diagram, "In the next module" and "end of this module" lines removed (decisions 33 to 35).
+   Ours: titles, eyebrows, one bold why line per card, captions, labels under the pages, the flow-box labels and short
+   term definitions (chunk, embeddings, query, intent, synonyms, recall, LLM, GMP pointer, vector similarity, semantic,
+   keyword search, precision, nuance, hybrid, BM25). Full list: step2-coverage-m4.md.
+   REAL DATA: the supplier file sample-sdf-document (Project 5).pdf (3 pages, the Project 3 file). Crops and page
+   thumbnails rendered with PyMuPDF 1.26.5 by source/m4-learn-crops.py; boxes from search_for. Pages, ranks and scores
+   come from nb3's saved outputs: STEP 11 (query expansion of the QC question), STEP 18 (vector 0.2626 p1 / 0.1730 p3,
+   BM25 1.1288 p1 / 0.1068 p2, hybrid = vector) and STEP 19 (first search 0.2104 p3 / 0.2027 p2 / 0.1796 p1; reranker
+   keeps p3 and p2, top_n=2). No text is drawn over any page picture; labels sit under it.
+   Fixed stage: 760 x 760 at every width, scaled as one piece to fit the frame and centred. Nothing scrolls. */
+
+/* Pfizer x Extern Core design system, Light format. P5 m4 Learn deck: copied from m2-learn-style.css (P5 m2), plus the m4 blocks at the end. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:760px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---------- m4 additions (same tokens only) ---------- */
+/* Wide and mid-width page crops, with the caption under the picture */
+.pic.wide{width:100%}
+.pic.mid{width:540px;align-self:flex-start}
+.cap.under{margin:0;font-size:17px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.cap b{color:var(--ink)}
+
+/* Page thumbnails (whole supplier pages). Labels sit under each page, never on it. */
+.thumbs{display:flex;gap:12px;flex:none}
+.th{margin:0;width:112px;display:flex;flex-direction:column;gap:5px;transition:opacity .3s ease}
+.th img{display:block;width:112px;height:auto;border:1.5px solid var(--line);border-radius:6px;background:var(--surface);transition:border-color .3s ease,box-shadow .3s ease}
+.th figcaption{display:flex;flex-direction:column;gap:1px;line-height:1.25}
+.th .pn{font-size:14px;font-weight:600;color:var(--ink)}
+.th .sc{font-size:14px;font-weight:600;color:var(--step-label);font-variant-numeric:tabular-nums;min-height:17px}
+.th.on img{border-color:var(--pfizer-blue);box-shadow:0 0 0 3px var(--pfizer-blue)}
+.th.dim{opacity:.38}
+.tview{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+.tview .cap{margin:0;font-size:18px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start}
+.duo .side{display:flex;flex-direction:column;gap:8px;width:360px}
+.duo .side .cap{margin:0;font-size:16.5px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo .side .thumbs{gap:12px}
+
+/* Clickable boxes (card 4): the text never changes, a click changes the picture */
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:var(--radius-sm)}
+.box.pick{text-align:left;cursor:pointer;border-width:1.5px;font:inherit}
+.box.pick .bh,.box.pick .bp{display:block}
+.box.pick[aria-pressed="true"]{border-color:var(--pfizer-blue);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.box.pick[aria-pressed="false"]{background:var(--surface);border-color:var(--line)}
+
+/* Key and value table (one technique per card) */
+.kv td.k{width:170px;white-space:normal}
+
+/* Ranked results that swap places (card 11) */
+.rank{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.rank li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;column-gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:9px 12px;font-size:18px;line-height:1.4;color:var(--card-text)}
+.rank li .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.rank li .tg{font-size:13px;font-weight:600;color:var(--pfizer-blue);background:var(--surface-card);border:1px solid var(--blue-200);border-radius:999px;padding:3px 10px;white-space:nowrap;visibility:hidden}
+.rank li.top{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.rank li.top .n{background:var(--pfizer-blue);color:var(--on-action)}
+.rank li.top .tg{visibility:visible;background:var(--surface)}
+.rank li.mv{animation:pop .35s ease both}
+.tbl.rr td.k{white-space:normal;width:210px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Query processing, reranking and hybrid retrieval: 17 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 17</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"ST": {"c1": {"0": {"pages": {"1": ["on", ""], "2": ["on", ""], "3": ["on", ""]}, "cap": "One rewrite in the run shown here: \"Detail the analytical methods employed for identity, purity, and quality verification in the specification data sheet.\""}, "1": {"pages": {"3": ["on", "#1"], "2": ["on", "#2"], "1": ["dim", "Dropped"]}, "cap": "For \"What sterilization method was used?\", the reranker dropped page 1."}, "2": {"pages": {"1": ["on", "Both"], "2": ["on", "Keyword"], "3": ["on", "Meaning"]}, "cap": "For a storage question, the searches agreed only on page 1."}}, "c3": {"0": {"boxes": {"c3-pic": [[427, 48, 742, 160]]}, "cap": "Suppose you ask <b>\"Where is the supplier based?\"</b> Page 1 of the supplier file never uses the word \"based\". It shows an address instead."}}, "c4": {"w": {"flow": [1], "cap": "The first question shares only \"storage\" with the document's phrase."}, "r": {"flow": [0, 1, 2], "cap": "The rewritten question uses all three of the document's words."}}, "c5": {"0": {"boxes": {"c5-pic": [[14, 286, 235, 333], [464, 286, 605, 333]]}, "cap": "Page 3 of the supplier file says \"Expiration Date\". Another file might say \"shelf life\"."}}, "c6": {"0": {"boxes": {"c6-pic": [[14, 15, 729, 124]]}, "cap": "Page 2 of the supplier file calls itself a \"Certificate of Quality\". The rewritten query uses the file's word, \"certificate\"."}}, "c7": {"0": {"boxes": {"c7-pic": [[14, 70, 187, 117]]}, "cap": "The supplier file never says \"batch\". Page 3 calls it a \"Lot Number\"."}}, "c10": {"b": {"pages": {"3": ["on", "#1 · 0.2104"], "2": ["on", "#2 · 0.2027"], "1": ["on", "#3 · 0.1796"]}, "cap": "Before reranking, the first search in the run shown here ranked pages 3, 2 and 1 for \"What sterilization method was used?\"."}, "a": {"pages": {"3": ["on", "#1"], "2": ["on", "#2"], "1": ["dim", "Dropped"]}, "cap": "The reranker kept pages 3 and 2 in the same order and dropped page 1, the letter, which says nothing about sterilization."}}, "c11": {"w": {"order": ["a", "b"]}, "r": {"order": ["b", "a"]}}, "c15": {"v": {"pages": {"1": ["on", "#1 · 0.2626"], "3": ["on", "#2 · 0.1730"], "2": ["dim", ""]}, "cap": "Vector search (by meaning) picked pages 1 and 3."}, "k": {"pages": {"1": ["on", "#1 · 1.1288"], "2": ["on", "#2 · 0.1068"], "3": ["dim", ""]}, "cap": "Keyword search picked pages 1 and 2. Its scores use a different scale, so they look bigger."}, "h": {"pages": {"1": ["on", "#1 · 0.2626"], "3": ["on", "#2 · 0.1730"], "2": ["dim", ""]}, "cap": "Hybrid sorted both lists by score as they are, kept one copy of page 1, and kept the top 2: pages 1 and 3, like vector search."}}, "c16": {"0": {"flow": [0]}, "1": {"flow": [1]}, "2": {"flow": [2]}}, "c18": {"0": {"flow": [0]}, "1": {"flow": [1]}, "2": {"flow": [3]}, "3": {"flow": [2]}}}};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- One init for every m4 card with a picture (copied idea from the m2 cards, made generic) ----------
+     Each card holds one element with data-key. D.ST[key] has one state per button (data-v), or a single state "0" for a
+     card with no buttons. A state can set: boxes (per picture id, in the picture's own pixels), pages (per page number:
+     [class, label under the page]), flow (indexes of lit flow boxes), order (ids of the ranked rows, top first) and cap.
+     Buttons change only the picture, the labels under the pages and the caption. The card's text never changes. */
+  function initState(root) {
+    var host = root.querySelector("[data-key]");
+    if (!host) return;
+    var S = D.ST[host.getAttribute("data-key")];
+    var btns = root.querySelectorAll("[data-v]");
+    function show(v, pop) {
+      var s = S[v];
+      each(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-v") === v ? "true" : "false"); });
+      each(root.querySelectorAll(".pic"), function (fig) {
+        var svg = fig.querySelector("svg"); if (!svg) return;
+        draw(svg, (s.boxes && s.boxes[fig.id]) || [], pop);
+      });
+      if (s.pages) each(root.querySelectorAll(".th"), function (th) {
+        var st = s.pages[th.getAttribute("data-p")] || ["", ""];
+        th.className = "th" + (st[0] ? " " + st[0] : "");
+        th.querySelector(".sc").textContent = st[1];
+      });
+      if (s.flow) each(root.querySelectorAll(".fbox"), function (b, k) {
+        var on = s.flow.indexOf(k) >= 0; b.classList.toggle("on", on); b.classList.toggle("dim", !on);
+      });
+      if (s.order) {
+        var list = root.querySelector(".rank");
+        s.order.forEach(function (id, k) {
+          var li = list.querySelector('[data-id="' + id + '"]');
+          list.appendChild(li);
+          li.querySelector(".n").textContent = k + 1;
+          li.classList.toggle("top", k === 0);
+          if (pop) { li.classList.remove("mv"); void li.offsetWidth; li.classList.add("mv"); }
+        });
+      }
+      var cap = root.querySelector(".cap.vz");
+      if (cap) cap.innerHTML = s.cap || "";
+      space();
+    }
+    each(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-v"), true); }); });
+    show(btns.length ? btns[0].getAttribute("data-v") : "0", false);
+    var group = root.querySelector(".sw, .steps:not(.static), .picks");
+    if (group) {
+      var hint = root.querySelector(".nhost");
+      nudge(host.getAttribute("data-key"), group, hint || group.parentNode, hint ? "inline" : "");
+    }
+  }
+
+  var timer = null;
+  var INITS = { initState: initState };
+  var CARDS = [{label:"Half the Job",eyebrow:"Beyond finding",html:"<h2 class=\"title\">Finding Information Is Only <span class=\"hl\">Half</span> the Job</h2><p class=\"why\">These tools help your chatbot find the best part of a file.</p><div class=\"keyhost\" data-key=\"c1\" hidden></div><p class=\"p\">In the last reading, you learned how to chunk documents and build embeddings so AI can find information more accurately.</p><p class=\"p\">But sometimes, <b>just finding information isn't enough</b>. We want AI to <b>understand the question better</b>, <b>find the <i>best</i> answers</b>, and <b>combine multiple search strategies</b>. How do we do that?<span class=\"nhost\"></span></p><div class=\"duo\"><ol class=\"steps \"><li><button type=\"button\" class=\"step\" data-v=\"0\" aria-pressed=\"false\"><span class=\"n\">1</span><span><b>Query processing</b></span></button></li><li><button type=\"button\" class=\"step\" data-v=\"1\" aria-pressed=\"false\"><span class=\"n\">2</span><span><b>Reranking</b></span></button></li><li><button type=\"button\" class=\"step\" data-v=\"2\" aria-pressed=\"false\"><span class=\"n\">3</span><span><b>Hybrid retrieval</b></span></button></li></ol><div class=\"side\"><div class=\"thumbs vz\"><figure class=\"th\" data-p=\"1\"><img src=\"pfizer3-p5-m4-learn-page1.png\" alt=\"Page 1 of the supplier file: a letter about storage conditions.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 1</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"2\"><img src=\"pfizer3-p5-m4-learn-page2.png\" alt=\"Page 2 of the supplier file: a Certificate of Quality.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 2</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"3\"><img src=\"pfizer3-p5-m4-learn-page3.png\" alt=\"Page 3 of the supplier file: a second Certificate of Quality, with a table of tests.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 3</span><span class=\"sc\"></span></figcaption></figure></div><p class=\"cap vz \"></p></div></div>",init:"initState"},
+{label:"Query Processing",eyebrow:"Query processing",html:"<h2 class=\"title\">Query Processing Helps AI Understand What You're Really <span class=\"hl\">Asking</span></h2><p class=\"why\">AI should search for meaning, not just words. Query processing helps bridge this gap.</p><p class=\"p\">Let's start with Query Processing!</p><p class=\"p\">Before AI can retrieve the right answer, it needs to <b>understand the question properly</b>. That's what query processing (improving the query, the question you type) is all about.</p><p class=\"p\">It's not enough for AI to match keywords. It needs to interpret the <i>intent</i> (what you really want to know) behind your question and align it with how the information is written in the documents.</p>",init:null},
+{label:"File's Words",eyebrow:"Query processing",html:"<h2 class=\"title\">Query Processing Puts Your Question in the Document's <span class=\"hl\">Words</span></h2><p class=\"why\">If your words don't match the file's words, the AI can look in the wrong place.</p><div class=\"keyhost\" data-key=\"c3\" hidden></div><p class=\"p\">If your phrasing doesn't match the document's language, AI might overlook the right section entirely. Query processing helps close that gap, <b>translating your question into the document's language</b> so the AI knows exactly where to look.</p><figure class=\"pic mid\" id=\"c3-pic\"><img src=\"pfizer3-p5-m4-learn-p1-address.png\" alt=\"Page 1 of the supplier file, top right: Cytiva, 100 Results Way, Marlborough, MA 01752, United States.\" width=\"780\" height=\"174\"><div class=\"ov\"><svg viewBox=\"0 0 780 174\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Example",eyebrow:"An example",html:"<h2 class=\"title\">The Same Question, With and Without Query <span class=\"hl\">Processing</span></h2><p class=\"why\">A small rewrite can point the search at the right sentence.</p><div class=\"keyhost\" data-key=\"c4\" hidden></div><p class=\"p\"><b>Example:</b><span class=\"nhost\"></span></p><div class=\"picks\" role=\"group\" aria-label=\"Choose a question\"><button type=\"button\" class=\"box pick\" data-v=\"w\" aria-pressed=\"false\"><span class=\"bh\">Without Query Processing:</span><span class=\"bp\"><i>\"What are the storage conditions?\"</i> &rarr; AI might miss the right section if the document uses the phrase \"recommended storage temperature\" instead.</span></button><button type=\"button\" class=\"box pick\" data-v=\"r\" aria-pressed=\"false\"><span class=\"bh\">With Query Processing:</span><span class=\"bp\"><i>\"What are the recommended storage temperature and conditions for this product?\"</i></span></button></div><p class=\"p\">It essentially <b>rephrases your question</b> to better match the language used in the document, leading to <b>more accurate search results</b>.</p><p class=\"p\">The document's phrase, word by word:</p><div class=\"flow vz\"><div class=\"fbox\"><span class=\"ft\">recommended</span></div><div class=\"fbox\"><span class=\"ft\">storage</span></div><div class=\"fbox\"><span class=\"ft\">temperature</span></div></div><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Expansion",eyebrow:"Techniques to improve query processing",html:"<h2 class=\"title\">Query Expansion Adds the Words a File Might <span class=\"hl\">Use</span></h2><p class=\"why\">Your notebook runs this technique, query expansion.</p><div class=\"keyhost\" data-key=\"c5\" hidden></div><div class=\"tbl kv\"><table><tbody><tr><td class=\"k\">Technique</td><td><b>Query Expansion</b></td></tr><tr><td class=\"k\">How It Works</td><td>AI <b>adds synonyms or related terms</b> to improve recall.</td></tr><tr><td class=\"k\">Example (Before &amp; After)</td><td><b>User Query:</b> \"What is the expiration date?\"<br><b>Expanded Query:</b> \"What is the batch expiration date for this pharmaceutical product?\"</td></tr><tr><td class=\"k\">Why It Helps?</td><td>Bridges terminology gaps (e.g., document may use \"shelf life\" instead of \"expiration date\").</td></tr></tbody></table></div><p class=\"p\"><b>Synonyms</b> are different words with the same meaning. <b>Recall</b> means finding more of the passages that hold your answer.</p><div class=\"picwrap\"><figure class=\"pic \" id=\"c5-pic\"><img src=\"pfizer3-p5-m4-learn-p3-dates.png\" alt=\"Page 3 of the supplier file: Product, Lot Number 18356721, Product Article Number, Date of Manufacture 20240315, Product Description and Expiration Date 20260315.\" width=\"858\" height=\"348\"><div class=\"ov\"><svg viewBox=\"0 0 858 348\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz \"></p></div>",init:"initState"},
+{label:"Rewriting",eyebrow:"Techniques to improve query processing",html:"<h2 class=\"title\">Query Rewriting Restructures the <span class=\"hl\">Question</span></h2><p class=\"why\">Rewriting turns a loose question into one that uses the file's words.</p><div class=\"keyhost\" data-key=\"c6\" hidden></div><div class=\"tbl kv\"><table><tbody><tr><td class=\"k\">Technique</td><td><b>Query Rewriting</b></td></tr><tr><td class=\"k\">How It Works</td><td>AI <b>restructures the question</b> to better match document language.</td></tr><tr><td class=\"k\">Example (Before &amp; After)</td><td><b>Original Query:</b> \"Tell me about the test results.\"<br><b>Rewritten Query:</b> \"What quality control test methods and results are documented in the certificate?\"</td></tr><tr><td class=\"k\">Why It Helps?</td><td>Improves AI's ability to match document wording, especially in legal/technical text.</td></tr></tbody></table></div><figure class=\"pic mid\" id=\"c6-pic\"><img src=\"pfizer3-p5-m4-learn-p2-top.png\" alt=\"Page 2 of the supplier file: the heading Certificate of Quality, then Product: ÄKTA ready Gradient Flow Section With Inlets.\" width=\"1200\" height=\"252\"><div class=\"ov\"><svg viewBox=\"0 0 1200 252\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Prompt Eng.",eyebrow:"Techniques to improve query processing",html:"<h2 class=\"title\">Prompt Engineering Lets an LLM Clarify the <span class=\"hl\">Question</span></h2><p class=\"why\">Better input &rarr; Better results.</p><div class=\"keyhost\" data-key=\"c7\" hidden></div><div class=\"tbl kv\"><table><tbody><tr><td class=\"k\">Technique</td><td><b>Prompt Engineering</b></td></tr><tr><td class=\"k\">How It Works</td><td>AI <b>clarifies or rephrases queries</b> before retrieval.</td></tr><tr><td class=\"k\">Example (Before &amp; After)</td><td><b>User Query:</b> \"Does this batch comply?\"<br><b>LLM Reformulation:</b> \"Are there GMP compliance records, quality test results, or certificates of quality for this batch?\"</td></tr><tr><td class=\"k\">Why It Helps?</td><td>Breaks down vague queries, leading to more precise responses.</td></tr></tbody></table></div><p class=\"p\">You met LLMs, like Gemini, in the first reading of this project, and GMP (Good Manufacturing Practice) in Project 1.</p><figure class=\"pic mid\" id=\"c7-pic\"><img src=\"pfizer3-p5-m4-learn-p3-lot.png\" alt=\"Page 3 of the supplier file: Product, AKTA ready Low Flow Kit, and Lot Number, 18356721.\" width=\"858\" height=\"129\"><div class=\"ov\"><svg viewBox=\"0 0 858 129\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Best Result",eyebrow:"Picking the best",html:"<h2 class=\"title\">Reranking and Hybrid Search Help Pick the <span class=\"hl\">Best</span> Result</h2><p class=\"why\">Finding several answers is not the same as putting the best one first.</p><p class=\"p\">Query processing helps AI understand <i>what</i> you're asking. But once the AI retrieves possible answers, how does it know <b>which one is best</b>?</p><p class=\"p\">Next, you'll learn how to improve the <i>results</i> your AI retrieves by using <b>reranking</b> and <b>hybrid search</b>. These tools help the AI pick the most useful answers, even when documents are long, dense, or inconsistently written.</p>",init:null},
+{label:"Reranking",eyebrow:"Reranking",html:"<h2 class=\"title\">Reranking Keeps the Most Useful Results and Drops the <span class=\"hl\">Rest</span></h2><p class=\"why\">Sorting retrieved results makes AI generate more accurate answers.</p><div class=\"keyhost\" data-key=\"c10\" hidden></div><p class=\"p\">Let's say your AI finds several relevant pieces of information, but <b>not all of them are equally helpful</b>. Reranking fixes that.</p><p class=\"p\">It <b>reorganizes retrieved results</b>, putting the most useful ones at the top, so your final answer is stronger, clearer, and more accurate.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-v=\"b\" aria-pressed=\"false\">Before reranking</button><button type=\"button\" data-v=\"a\" aria-pressed=\"false\">After reranking</button></div></div></div><div class=\"tview\"><div class=\"thumbs vz\"><figure class=\"th\" data-p=\"1\"><img src=\"pfizer3-p5-m4-learn-page1.png\" alt=\"Page 1 of the supplier file: a letter about storage conditions.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 1</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"2\"><img src=\"pfizer3-p5-m4-learn-page2.png\" alt=\"Page 2 of the supplier file: a Certificate of Quality.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 2</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"3\"><img src=\"pfizer3-p5-m4-learn-page3.png\" alt=\"Page 3 of the supplier file: a second Certificate of Quality, with a table of tests.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 3</span><span class=\"sc\"></span></figcaption></figure></div><p class=\"cap vz \"></p></div>",init:"initState"},
+{label:"Example",eyebrow:"An example",html:"<h2 class=\"title\">Reranking Puts the Useful Answer <span class=\"hl\">First</span></h2><p class=\"why\">Your chatbot only reads the top few results, so the useful one has to make the cut.</p><div class=\"keyhost\" data-key=\"c11\" hidden></div><p class=\"p\"><b>Example:</b> Suppose you ask: <span class=\"q\">\"How long does delivery take for this product?\"</span></p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-v=\"w\" aria-pressed=\"false\">Without Re-ranking</button><button type=\"button\" data-v=\"r\" aria-pressed=\"false\">With Re-ranking</button></div></div></div><ol class=\"rank vz\"><li data-id=\"a\"><span class=\"n\">1</span><span class=\"q\">\"Delivery details are listed on your order confirmation.\"</span><span class=\"tg\">Top result</span></li><li data-id=\"b\"><span class=\"n\">2</span><span class=\"q\">\"Orders arrive within 5 business days.\"</span><span class=\"tg\">Top result</span></li></ol><p class=\"p\">Re-ranking <b>reorganizes search results</b> so the most useful answers come first.</p>",init:"initState"},
+{label:"Rerank Ways",eyebrow:"Techniques for reranking",html:"<h2 class=\"title\">Reranking Can Use Meaning, or Meaning and <span class=\"hl\">Keywords</span></h2><p class=\"why\">Combining different reranking methods improves retrieval quality.</p><p class=\"p\">AI uses different strategies to decide which retrieved results are most helpful:</p><div class=\"tbl rr\"><table><thead><tr><th scope=\"col\">Reranking Method</th><th scope=\"col\">How It Works</th><th scope=\"col\">Best Use Case</th></tr></thead><tbody><tr><td class=\"k\">Embedding Similarity Reranking</td><td><b>Sorts results by closest match</b> to the query using <b>vector similarity</b>.</td><td>Simple ranking based on <b>semantic similarity</b>.</td></tr><tr><td class=\"k\">Hybrid Reranking</td><td><b>Combines vector similarity &amp; keyword search</b> for improved accuracy.</td><td>When exact matches <b>AND related meanings</b> matter.</td></tr></tbody></table></div><p class=\"p\"><b>Vector similarity</b> is how close two embeddings are, so how alike two texts are in meaning. <b>Semantic</b> means about meaning.</p>",init:null},
+{label:"LLM Reranking",eyebrow:"Techniques for reranking",html:"<h2 class=\"title\">An LLM Can Rerank by Answer <span class=\"hl\">Quality</span></h2><p class=\"why\">LLM-assisted reranking helps filter out irrelevant text.</p><div class=\"tbl rr\"><table><thead><tr><th scope=\"col\">Reranking Method</th><th scope=\"col\">How It Works</th><th scope=\"col\">Best Use Case</th></tr></thead><tbody><tr><td class=\"k\">LLM-Assisted Reranking</td><td>Uses an <b>LLM to score retrieved text</b>, ranking based on <b>answer quality</b>.</td><td>Ensures <b>contextually correct &amp; complete responses</b>.</td></tr></tbody></table></div>",init:null},
+{label:"Hybrid",eyebrow:"Hybrid retrieval",html:"<h2 class=\"title\">Hybrid Retrieval Uses Keywords and Meaning <span class=\"hl\">Together</span></h2><p class=\"why\">Keyword search and vector search can pick different pages for the same question.</p><p class=\"p\">Sometimes, good answers don't come from one strategy alone. Keyword search (like Google) gives <b>precision</b>, but misses nuance. Vector search (using embeddings) gives <b>meaning</b>, but may overlook exact terms.</p><p class=\"p\">So what if we combine both?</p><p class=\"p\"><b>Hybrid Retrieval</b> does exactly that, <b>merging keyword and vector search</b> to deliver responses that are <b>both accurate and contextually rich</b>.</p><div class=\"box white\"><p class=\"bp\"><b>Keyword search</b> finds text that shares your exact words. <b>Precision</b> here means exact matches. <b>Nuance</b> means small shades of meaning. <b>Hybrid</b> means a mix of two kinds.</p></div>",init:null},
+{label:"Two Searches",eyebrow:"Hybrid retrieval",html:"<h2 class=\"title\">Two Searches Can Pick Different <span class=\"hl\">Pages</span></h2><p class=\"why\">That's why your notebook runs both searches and merges them.</p><div class=\"keyhost\" data-key=\"c15\" hidden></div><p class=\"p\">Your notebook's keyword search is called BM25. It scores each chunk by how often your question's words appear in it, and rare words count more.</p><p class=\"p\">In the run shown here, the question was <span class=\"q\">\"What are the storage conditions for this product?\"</span></p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a search\"><button type=\"button\" data-v=\"v\" aria-pressed=\"false\">Vector search</button><button type=\"button\" data-v=\"k\" aria-pressed=\"false\">Keyword search (BM25)</button><button type=\"button\" data-v=\"h\" aria-pressed=\"false\">Hybrid</button></div></div></div><div class=\"tview\"><div class=\"thumbs vz\"><figure class=\"th\" data-p=\"1\"><img src=\"pfizer3-p5-m4-learn-page1.png\" alt=\"Page 1 of the supplier file: a letter about storage conditions.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 1</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"2\"><img src=\"pfizer3-p5-m4-learn-page2.png\" alt=\"Page 2 of the supplier file: a Certificate of Quality.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 2</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"3\"><img src=\"pfizer3-p5-m4-learn-page3.png\" alt=\"Page 3 of the supplier file: a second Certificate of Quality, with a table of tests.\" width=\"459\" height=\"594\"><figcaption><span class=\"pn\">Page 3</span><span class=\"sc\"></span></figcaption></figure></div><p class=\"cap vz \"></p></div>",init:"initState"},
+{label:"3 Steps",eyebrow:"How it works",html:"<h2 class=\"title\">How Hybrid Retrieval Works, in 3 <span class=\"hl\">Steps</span></h2><p class=\"why\">Your notebook's complete pipeline (STEP 20) does all three before Gemini answers.<span class=\"nhost\"></span></p><div class=\"keyhost\" data-key=\"c16\" hidden></div><ol class=\"steps \"><li><button type=\"button\" class=\"step\" data-v=\"0\" aria-pressed=\"false\"><span class=\"n\">1</span><span>Step 1: Keyword Search &rarr; AI finds sections with exact word matches.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"1\" aria-pressed=\"false\"><span class=\"n\">2</span><span>Step 2: Vector Search &rarr; AI retrieves conceptually similar content.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"2\" aria-pressed=\"false\"><span class=\"n\">3</span><span>Step 3: Merge &amp; Rerank &rarr; AI blends both to produce the best response.</span></button></li></ol><div class=\"flow vz\"><div class=\"fbox\"><span class=\"fl\">List 1</span><span class=\"ft\">Exact words</span></div><span class=\"arr\" aria-hidden=\"true\">+</span><div class=\"fbox\"><span class=\"fl\">List 2</span><span class=\"ft\">Similar meaning</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Result</span><span class=\"ft\">One best list</span></div></div>",init:"initState"},
+{label:"Example",eyebrow:"An example",html:"<h2 class=\"title\">One Question, Three Kinds of <span class=\"hl\">Search</span></h2><p class=\"why\">Each search finds a different piece, and hybrid keeps both.</p><p class=\"p\"><b>Example:</b></p><p class=\"p\"><b>Query:</b> <span class=\"q\">\"What test results are in the certificate?\"</span></p><ul class=\"ul\"><li><b>Keyword Search:</b> Finds a section titled <b>\"Test Results\"</b>.</li><li><b>Vector Search:</b> Finds a paragraph about <b>quality compliance records &amp; certificates</b> (related but not an exact match).</li><li><b>Hybrid Search:</b> Combines both to return a <b>more complete answer</b>.</li></ul><p class=\"take\">Hybrid retrieval boosts accuracy because it balances precision (keyword search) and flexibility (vector search).</p>",init:null},
+{label:"Why All This",eyebrow:"Putting it together",html:"<h2 class=\"title\">Why Did We Study All <span class=\"hl\">This</span>?</h2><p class=\"why\">Each tool fixes one way a search can go wrong.</p><div class=\"keyhost\" data-key=\"c18\" hidden></div><p class=\"p\">Each concept you've learned (chunking, embeddings, query processing, reranking, and hybrid retrieval) solves a <b>specific retrieval problem</b>:<span class=\"nhost\"></span></p><ol class=\"steps \"><li><button type=\"button\" class=\"step\" data-v=\"0\" aria-pressed=\"false\"><span class=\"n\">1</span><span><b>Query processing</b> &rarr; Helps AI understand what you're <i>really</i> asking.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"1\" aria-pressed=\"false\"><span class=\"n\">2</span><span><b>Chunking &amp; embeddings</b> &rarr; Break long documents into smart pieces the AI can search.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"2\" aria-pressed=\"false\"><span class=\"n\">3</span><span><b>Reranking</b> &rarr; Prioritizes the most helpful results.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"3\" aria-pressed=\"false\"><span class=\"n\">4</span><span><b>Hybrid retrieval</b> &rarr; Catches both exact matches and related ideas.</span></button></li></ol><div class=\"flow vz\"><div class=\"fbox\"><span class=\"ft\">Question</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Chunks</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Search</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Order</span></div></div><p class=\"take\">When these steps work together, your RAG pipeline becomes powerful, accurate, and trustworthy, <b>returning exactly what's needed, nothing more, nothing less.</b></p>",init:"initState"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps, .picks")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>

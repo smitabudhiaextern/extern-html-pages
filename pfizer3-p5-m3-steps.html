@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P5 Chunking and Embeddings Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* P5 module 3, "Try It Yourself": run Chaitanya's notebook "Embeddings and Chunking with LlamaIndex and Gemini"
+   (Drive 1vspTqcwV_aGNYupFxJs4kU5G6YRrXkUW, his original, unchanged: decision 26, p5-decisions.md), STEP 0 to STEP 11.
+   Built by m3-steps-build.py (06-content/project-05/source/). Shell copied from the P5 Step 1 Try deck (m2).
+   Code blocks equal his notebook cells exactly; text is his Notion page (8771) or notebook markdown for each step.
+   Ours: titles, labels, "What this code does" bullets, "now holds" notes, click lines, notes on the output.
+   Numbers on the slides: see m3-steps-saved-run-list.txt. Colab shots pending: none.
+   Fixed stage 760 x 1160 (frames under 560 px wide: 450 x 1250), scaled as one piece so nothing scrolls.
+   Look: Pfizer x Extern Core, Light format; every color, size, radius and font comes from design-system/tokens.json. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:1160px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Header: step rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+.narrow .pg-word{display:none}
+.narrow .pg.pg-fit{flex:none}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 0}
+.narrow .card{padding:18px 16px;border-left:0;border-right:0;border-radius:0}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.p code.nw,.list code.nw{white-space:nowrap}
+.list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:22px;text-wrap:pretty}
+.list b{font-weight:600}
+.list code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.list li::marker{color:var(--step-label);font-weight:600}
+.see{margin-top:4px}
+
+/* Buttons (design system Button, Light) */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Run card: a notebook cell (no Copy button: the cells are already in the notebook), or the one cell students add (Copy button) */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin:0}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run.out pre{font-size:12px}
+
+/* The Colab screenshot: the full width of the card (edge to edge), opens full size in a new tab.
+   Under 560 px the card itself runs edge to edge, so the picture is as wide as the frame. */
+.shot{margin:0 calc(-1 * var(--space-5));border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden;line-height:0;background:var(--surface)}
+.narrow .shot{margin:0 -16px}
+.shot a{display:block}
+.shot img{display:block;width:100%;height:auto}
+.shot-cap{margin:-6px 0 0;font-size:13px;line-height:18px;color:var(--gray-600)}
+
+/* A picture of the page (slide 14: the table in foo.pdf): framed like the output blocks, as wide as the text */
+.pagepic{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.pagepic a{display:block}
+.pagepic img{display:block;width:100%;height:auto}
+
+/* Table and analysis box (from the Learn deck) */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.m{font-family:var(--font-mono);font-size:13px;color:var(--ink);white-space:nowrap}
+.tbl td code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .tbl table{font-size:13px}
+.narrow .tbl td,.narrow .tbl th{padding:5px 8px}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px;font-size:15px;line-height:22px;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl p{margin:0}
+.concl p + p{margin-top:6px}
+.concl code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+
+/* A smaller code font for the long function in Step 3 (from the 11 November module 9 steps deck) */
+.run.small pre{font-size:12px;line-height:1.32;padding:8px 14px}
+.narrow .run.small pre{font-size:10.5px;line-height:1.35}
+
+/* Tip box (from the 11 November module 9 Learn deck): pale-blue card, Pfizer blue bulb in a white square */
+.tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px}
+.tip-icon{flex:none;width:30px;height:30px;border-radius:var(--radius-xs);background:var(--surface);display:grid;place-items:center;color:var(--pfizer-blue)}
+.tip-icon svg{width:18px;height:18px}
+.tip p{margin:0;font-size:15px;line-height:22px;color:var(--card-text);text-wrap:pretty}
+.tip b{font-weight:600;color:var(--card-title)}
+
+/* Last slide: his closing line and Key Takeaway (takeaway box copied from the module 7 cheat sheet slide) */
+.inner.end-slide{gap:var(--space-4)}
+.end-slide .p{font-size:17px;line-height:1.55}
+.take{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:14px 18px;font-size:17px;line-height:1.55;color:var(--card-text)}
+.take b{font-weight:700;color:var(--card-title)}
+.take code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .take{font-size:15px;padding:12px 16px}
+.narrow .end-slide .p{font-size:16px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* Added for P4 module 2 (copied from the P3 module 8 Try deck): "now holds" note, the SME's callout box, the Quick Recap size */
+.holds{margin:0;display:flex;align-items:center;gap:8px;background:var(--surface-card);border-left:4px solid var(--pfizer-blue);border-radius:var(--radius-xs);padding:7px 12px;font-size:14px;line-height:20px;font-weight:600;color:var(--card-title)}
+.holds code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px}
+.holds svg{width:16px;height:16px;flex:none;color:var(--pfizer-blue)}
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:9px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:15px;line-height:1.48;color:var(--ink-muted)}
+.note b{font-weight:600;color:var(--ink)}
+.recap-slide .list{font-size:17px;line-height:1.55;gap:14px}
+.recap-slide .list ul{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:2px}
+.recap-slide .list ul li::marker{color:var(--ink-muted)}
+.narrow .recap-slide .list{font-size:15.5px;gap:10px}
+/* Many steps in the rail: numbers only */
+.pg-word{display:none}
+.pg-label{text-align:center}
+.pg.pg-fit{flex:none}
+.pg.pg-fit .pg-label{text-align:left}
+/* Under 560 px there is no room for the 7 group labels: the rail shows only the progress bars, and "Step N" sits beside the count */
+.narrow .pg-label{display:none}
+.narrow .pg.pg-fit{flex:1 1 0}
+/* Code and output: Project 3's size (fix pass, 22 November 2026: 14 px on the 760 stage, 13 px at the 708 px column; 13 px on
+   the narrow stage). Long lines wrap, so nothing scrolls; long cells and outputs are cut over more slides instead */
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run.out pre{font-size:14px;line-height:1.5}
+.narrow .run pre,.narrow .run.out pre{font-size:13px}
+/* F02: zoomed crops of one strip of the page, before and after a step */
+.zoom{margin:0;display:flex;flex-direction:column;gap:6px}
+.zoom a{display:block;line-height:0}
+.zoom img{display:block;height:auto;max-width:100%;border:1px solid var(--line);border-radius:var(--radius-xs)}
+/* The STEP 15 JSON: the 3 heading lines across the top, the JSON in two columns (same text, same order) */
+.run.out.json pre.head{padding-bottom:0}
+.run.out.json pre.cols{column-count:2;column-gap:24px;padding-top:4px}
+.narrow .run.out.json pre.cols{column-gap:12px;font-size:10.5px}
+/* A page picture from Colab (tall): shown smaller and centred, so the slide stays short; opens full size */
+.shot.tall{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface)}
+.shot.tall img{width:auto;max-width:100%;height:var(--pic-h,480px);margin:0 auto}
+.narrow .shot.tall{margin:0}
+.narrow .shot.tall img{height:var(--pic-hn,520px)}
+/* q3 Proposal A: two Colab page pictures side by side (STEP 6 + 7, STEP 8 + 9), each with its own notes under it */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.half{display:flex;flex-direction:column;gap:8px;min-width:0}
+.half-head{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.half .p{margin:0}
+.half .list{font-size:14.5px;line-height:1.45;gap:4px}
+.half code{overflow-wrap:anywhere}
+.pair-slide .shot.tall img{width:auto;height:auto;max-width:100%;max-height:330px}
+.narrow .pair{gap:10px}
+.narrow .pair-slide .shot.tall img{height:auto;max-height:300px}
+.narrow .half .list{font-size:13.5px}
+.pic-sm .shot.tall img{height:435px}
+
+/* Code lines wrap at every width (his cells have lines up to 116 characters), each with a hanging indent */
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run pre code{display:block}
+.run pre .ln{display:block;padding-left:calc(var(--i) + 2ch);text-indent:calc(-1 * (var(--i) + 2ch))}
+.run pre .ln:empty::before{content:"\200b"}
+/* Colab shots: drawn no taller than the slot reserved for them, centred, open full size in a new tab */
+.shot.fit{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.shot.fit img{width:auto;max-width:100%;max-height:var(--mh);margin:0 auto}
+/* A shot not taken yet: a visible box of the reserved height (removed once the PNG exists and the deck is rebuilt) */
+.shot.pending{margin:0;height:var(--mh);border:2px dashed var(--ink-muted);border-radius:var(--radius-sm);background:var(--gray-50);
+  display:flex;align-items:center;justify-content:center;line-height:20px}
+.pend{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:8px 16px;font-size:13px;color:var(--ink-muted)}
+.pend b{font-size:15px;letter-spacing:.06em;color:var(--ink)}
+.p a{color:var(--pfizer-blue);text-underline-offset:2px}
+.list a{color:var(--pfizer-blue);text-underline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Chunk, Embed and Search Three Practice Files: The Steps</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Steps"></nav>
+    <div class="where"><b id="where-section">Start</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+
+<template id="t1">
+<p class="p">In this practice, you will see how chunking impacts AI's ability to retrieve <b>the most relevant and accurate responses</b>.</p><p class="p">All the code discussed in this section is available in this Colab file:</p><div class="links"><a class="btn btn-secondary" href="https://colab.research.google.com/drive/1vspTqcwV_aGNYupFxJs4kU5G6YRrXkUW" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Embeddings and Chunking with LlamaIndex and Gemini (Colab notebook)</span><span class="sr-only"> (opens in a new tab)</span></a></div><ol class="list"><li>Open the notebook and click <b>File &rarr; Save a copy in Drive</b>. Work in the copy that opens.</li><li>Run the cells in order, from top to bottom, until <code class="nw"># STEP 11</code>. The Experiments cells below STEP 11 are for the Challenge. Each step's cell has a heading near its top, such as <code class="nw"># STEP 0</code>.</li><li>Every code block on these slides is already in your notebook, so you don't copy or type any code. Just press <b>Run</b> on each cell when a slide asks you to.</li></ol><p class="p">The notebook makes its own 3 practice files about AI, in a folder called <code>sample_docs</code>, so there's nothing to upload.</p>
+</template>
+
+<template id="t2">
+<p class="p">Before we begin, we need to install all necessary packages. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 0</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 0: Install Required Libraries</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Installing all the libraries we need for embeddings, chunking, and search.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Each library handles a different piece of our AI search system.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: Download progress bars. This may take a few minutes — be patient!</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># TROUBLESHOOTING: If you see errors, try running this cell again.</span><span class="ln" style="--i:0ch"># Some packages may already be installed, which is fine.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">!pip install -q llama-index==0.14.25</span><span class="ln" style="--i:0ch">!pip install -q llama-index-embeddings-huggingface==0.8.0</span><span class="ln" style="--i:0ch">!pip install -q llama-index-llms-google-genai==0.11.3</span><span class="ln" style="--i:0ch">!pip install -q llama-index-embeddings-openai==0.6.0</span><span class="ln" style="--i:0ch">!pip install -q llama-index-vector-stores-chroma==0.6.0</span><span class="ln" style="--i:0ch">!pip install -q sentence-transformers</span><span class="ln" style="--i:0ch">!pip install -q chromadb</span><span class="ln" style="--i:0ch">!pip install -q scikit-learn</span><span class="ln" style="--i:0ch">!pip install -q nest_asyncio</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li>You already know <code>!pip install</code>, <code>-q</code> and exact versions such as <code>==0.14.25</code> from the chatbot notebook.</li><li>The libraries: LlamaIndex (the RAG toolkit), its Hugging Face embeddings (runs MiniLM), Google GenAI (talks to Gemini), OpenAI embeddings (only for an optional cell), Chroma (the vector store), sentence-transformers (the embedding models), scikit-learn (measures how alike two embeddings are) and nest_asyncio.</li></ul>
+</template>
+
+<template id="t3">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:200px"><a href="pfizer3-p5-m3-try-s0-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s0-out.png" width="1800" height="274" alt="The STEP 0 cell in Colab after it ran: a green tick and 58s to the left of the cell. Under it, no progress bars: one yellow line, WARNING: huggingface-hub 1.33.0 does not provide the extra &#x27;inference&#x27;, then red ERROR: pip&#x27;s dependency resolver lines that name google-adk (opentelemetry-api and opentelemetry-sdk) and tweepy (oauthlib)."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">When the cell is done, a green tick appears next to it. This may take a few minutes. In the run shown here, the cell printed one yellow line, <code>WARNING: huggingface-hub 1.33.0 does not provide the extra 'inference'</code>. It's only a warning, so it's safe to ignore. The red lines below it named <code>google-adk</code> and <code>tweepy</code>, both tools Colab preinstalls that this notebook doesn't use.</p><div class="note"><span class="num">SEEING RED LINES?</span><p><b>Seeing red "ERROR: pip's dependency resolver&hellip;" lines?</b> If they mention <code>google-adk</code>, <code>opentelemetry</code> or <code>jedi</code>, you can ignore them. Those are tools Colab preinstalls that this notebook doesn't use. Keep going. If a later cell fails with an <code>ImportError</code>, choose <b>Runtime &rarr; Restart session</b>, then run all cells again.</p></div>
+</template>
+
+<template id="t4">
+<p class="p">Now let's set up our environment. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 1a</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 1a: Import Python Libraries</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Loading the Python tools we&#x27;ll use throughout this notebook.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Each import gives us access to specific functionality.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: No output — imports are silent unless there&#x27;s an error.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">import os</span><span class="ln" style="--i:0ch">import time</span><span class="ln" style="--i:0ch">import pandas as pd</span><span class="ln" style="--i:0ch">import matplotlib.pyplot as plt</span><span class="ln" style="--i:0ch">from IPython.display import display, Markdown</span><span class="ln" style="--i:0ch">import nest_asyncio</span><span class="ln" style="--i:0ch">nest_asyncio.apply()</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>pandas</code> (as <code>pd</code>) makes tables, and <code>matplotlib</code> (as <code>plt</code>) draws charts. <code>time</code> measures how long something takes.</li><li><code>display</code> and <code>Markdown</code> show Gemini's answers as formatted text in STEP 11.</li><li>You already know <code>nest_asyncio.apply()</code> from the chatbot notebook: it lets Gemini calls run inside Colab.</li></ul><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:90px"><a href="pfizer3-p5-m3-try-s1a-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s1a-out.png" width="1244" height="162" alt="The top of the STEP 1a cell in Colab after it ran: a green tick and 0s to the left of the cell."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">No output, just a green tick: the imports worked.</p>
+</template>
+
+<template id="t5">
+<p class="p">You saved your key in Colab Secrets in Step 1.</p><p class="p">Set up your Gemini API key. Use Colab Secrets, the same way as in the Chatbot practice: save your key as <code>GEMINI_API_KEY</code> with Notebook access on, then run the cell with the heading <code class="nw"># STEP 1</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 1: Set Up Your API Key</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING:</span><span class="ln" style="--i:0ch"># Setting our Google API key so we can use Gemini later for AI-powered queries.</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS:</span><span class="ln" style="--i:0ch"># The API key is like a password that lets our code talk to Google&#x27;s AI.</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE:</span><span class="ln" style="--i:0ch"># No output — the key is saved silently.</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># TROUBLESHOOTING:</span><span class="ln" style="--i:0ch"># - Get your free API key at: https://aistudio.google.com/app/apikey</span><span class="ln" style="--i:0ch"># - Make sure there are no extra spaces around your key</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">import os</span><span class="ln" style="--i:0ch">from google.colab import userdata</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Reads your key from Colab Secrets (the key icon in the left sidebar).</span><span class="ln" style="--i:0ch"># Never paste your key into a code cell.</span><span class="ln" style="--i:0ch">os.environ[&quot;GOOGLE_API_KEY&quot;] = userdata.get(&#x27;GEMINI_API_KEY&#x27;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>userdata.get('GEMINI_API_KEY')</code> reads your key from Colab Secrets.</li><li><code>os.environ["GOOGLE_API_KEY"] = ...</code> saves it where the Gemini library looks for a key.</li></ul>
+</template>
+
+<template id="t6">
+<p class="p">If <b>Notebook access</b> is off for this copy, Colab first asks whether your notebook may read the secret <code>GEMINI_API_KEY</code>:</p><figure class="shot fit" style="--mh:130px"><a href="pfizer3-p5-m3-try-s1-dialog.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s1-dialog.png" width="1120" height="294" alt="Colab&#x27;s pop-up, heading: Notebook does not have secret access. Buttons: Cancel and Grant access."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">Click <b>Grant access</b>. (If you click Cancel, the cell stops with <code>NotebookAccessError</code>.)</p><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:90px"><a href="pfizer3-p5-m3-try-s1-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s1-out.png" width="1244" height="162" alt="The top of the STEP 1 cell in Colab after it ran: a green tick and 0s to the left of the cell."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">No output, just a green tick. The key is saved silently.</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>os.environ["GOOGLE_API_KEY"]</code> now holds: your key, ready for Gemini in STEP 11.</span></p>
+</template>
+
+<template id="t7">
+<p class="p">We'll create a small sample of documents to work with. First, let's create a directory and some sample files. Press <b>Run</b> on the cell that starts with <code># Create a folder to store our sample documents</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Create a folder to store our sample documents</span><span class="ln" style="--i:0ch">!mkdir -p sample_docs</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>!mkdir -p sample_docs</code> makes a folder called <code>sample_docs</code>. The <code>!</code> sends the line to Colab's command line, as with <code>!pip</code>.</li></ul>
+</template>
+
+<template id="t8">
+<p class="p">Then press <b>Run</b> on the cell with the heading <code class="nw"># STEP 2</code>. Here is the top of it. The cell writes two more files the same way:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 2: Create Sample Documents</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Creating 3 sample text files about AI topics.</span><span class="ln" style="--i:0ch"># These will be the &quot;documents&quot; our AI will search through.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: In the real world, these would be pharmaceutical documents,</span><span class="ln" style="--i:0ch"># research papers, or quality reports. We use simple AI text for practice.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: No output — the files are created silently in the sample_docs folder.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Let&#x27;s create some example documents</span><span class="ln" style="--i:0ch">with open(&quot;sample_docs/ai_history.txt&quot;, &quot;w&quot;) as f:</span><span class="ln" style="--i:4ch">    f.write(&quot;&quot;&quot;Artificial Intelligence (AI) has a rich history dating back to the 1950s.</span><span class="ln" style="--i:0ch">The term was first coined by John McCarthy in 1956 at the Dartmouth Conference.</span><span class="ln" style="--i:0ch">Early AI research focused on symbolic methods and rule-based systems.</span><span class="ln" style="--i:0ch">In the 1980s, expert systems became popular but faced limitations.</span><span class="ln" style="--i:0ch">The 1990s and early 2000s saw a shift towards machine learning approaches.</span><span class="ln" style="--i:0ch">The deep learning revolution began around 2012 with breakthrough results in computer vision.</span><span class="ln" style="--i:0ch">Today, large language models like GPT, LLaMA, and Gemini represent cutting-edge AI capabilities.</span><span class="ln" style="--i:0ch">These models are trained on vast amounts of text data and can generate human-like responses.&quot;&quot;&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>with open(..., "w") as f:</code> opens a new text file for writing, and <code>f.write(...)</code> puts the text inside. The 3 files are <code>ai_history.txt</code>, <code>neural_networks.txt</code> and <code>embeddings.txt</code>.</li></ul>
+</template>
+
+<template id="t9">
+<p class="p">Both cells show a green tick and no output. To see the files, click the <b>folder icon</b> on the left of Colab and open <b>sample_docs</b>.</p><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:330px"><a href="pfizer3-p5-m3-try-s2-files.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s2-files.png" width="1820" height="564" alt="Colab&#x27;s Files panel with the sample_docs folder open, showing ai_history.txt, embeddings.txt and neural_networks.txt, next to the two cells with green ticks."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure>
+</template>
+
+<template id="t10">
+<p class="p"><b>Start Without Chunking:</b> Let's first <b>load a document</b> without chunking and see what happens. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 3</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 3: Load Documents</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Loading all our sample documents using LlamaIndex&#x27;s SimpleDirectoryReader.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: This is the first step in any RAG pipeline — getting your documents into the system.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: A count of how many documents were loaded, plus a preview of each one.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.core import SimpleDirectoryReader</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Load documents</span><span class="ln" style="--i:0ch">documents = SimpleDirectoryReader(&quot;sample_docs&quot;).load_data()</span><span class="ln" style="--i:0ch">print(f&quot;Loaded {len(documents)} documents.&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Display document contents</span><span class="ln" style="--i:0ch">for i, doc in enumerate(documents):</span><span class="ln" style="--i:4ch">    print(f&quot;\n--- Document {i+1}: {doc.metadata[&#x27;file_name&#x27;]} ---&quot;)</span><span class="ln" style="--i:4ch">    print(doc.text[:200] + &quot;...&quot;)  # Show first 200 chars</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>SimpleDirectoryReader("sample_docs")</code> reads every file in the folder, and <code>.load_data()</code> turns each one into a document (one loaded file).</li><li>The loop prints each file's name and its first 200 characters.</li></ul><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>documents</code> now holds: one document for each file.</span></p>
+</template>
+
+<template id="t11">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:360px"><a href="pfizer3-p5-m3-try-s3-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s3-out.png" width="1740" height="704" alt="The STEP 3 output in Colab: the llama-index-readers-file warning lines, Loaded 3 documents., and the first 200 characters of each of the 3 files."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">STEP 3 loaded 3 documents, one for each file. Nothing is split yet: each file is still one whole piece of text. Next, let's see how chunking splits them.</p><div class="note"><span class="num">SEEING A WARNING?</span><p>The <code>llama-index-readers-file</code> package not found warning is safe to ignore. That package is only for other file types, such as PDFs.</p></div>
+</template>
+
+<template id="t12">
+<p class="p">Now that we have seen the <b>problem</b>, let's explore different ways to <b>break our document into manageable chunks</b>.</p><p class="p"><b>Fixed-Length Chunking:</b> Splitting text into equal-sized chunks (your notebook uses <b>100 tokens per chunk</b>). Works best for structured text, but may cut sentences <b>awkwardly</b>. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 4</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 4: Fixed-Length Chunking</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Breaking our documents into fixed-size chunks (100 tokens each, no overlap).</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: AI can&#x27;t process huge documents at once — chunking breaks them into manageable pieces.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: The total number of chunks created, plus a sample chunk.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.core.node_parser import SentenceSplitter</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Fixed-length chunking with no overlap</span><span class="ln" style="--i:0ch">splitter_fixed = SentenceSplitter(chunk_size=100, chunk_overlap=0)</span><span class="ln" style="--i:0ch">chunks_fixed = splitter_fixed.get_nodes_from_documents(documents)</span><span class="ln" style="--i:0ch">print(f&quot;Total Fixed-Length Chunks Created: {len(chunks_fixed)}&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Display a sample chunk</span><span class="ln" style="--i:0ch">print(f&quot;\nSample fixed-length chunk:&quot;)</span><span class="ln" style="--i:0ch">print(chunks_fixed[0].text)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>SentenceSplitter(chunk_size=100, chunk_overlap=0)</code> cuts text into pieces of up to 100 tokens (a token is a word or part of a word). <code>0</code> means no overlap.</li><li><code>get_nodes_from_documents</code> cuts all 3 documents into nodes, LlamaIndex's name for chunks. <code>chunks_fixed</code> holds them.</li></ul>
+</template>
+
+<template id="t13">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:230px"><a href="pfizer3-p5-m3-try-s4-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s4-out.png" width="1740" height="321" alt="The STEP 4 output in Colab: Total Fixed-Length Chunks Created, then the sample fixed-length chunk, the first lines of ai_history.txt."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">STEP 4 made 6 chunks from the 3 files. The sample chunk is the first 5 lines of <code>ai_history.txt</code>, and it ends on a full sentence: <code>SentenceSplitter</code> tries to break between sentences, so on these files no sentence was cut.</p>
+</template>
+
+<template id="t14">
+<p class="p"><b>Overlapping Chunking:</b> Overlapping chunks <b>carry a portion of the previous chunk</b> to keep context intact. Prevents AI from losing meaning when <b>retrieving information</b>. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 5</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 5: Overlapping Chunks</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Creating chunks with 20-token overlap between consecutive chunks.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Overlap prevents important context from being lost at chunk boundaries.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: Chunk count and an example showing how two chunks share overlapping text.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Chunking with overlap</span><span class="ln" style="--i:0ch">splitter_overlap = SentenceSplitter(chunk_size=100, chunk_overlap=20)</span><span class="ln" style="--i:0ch">chunks_overlap = splitter_overlap.get_nodes_from_documents(documents)</span><span class="ln" style="--i:0ch">print(f&quot;Total Overlapping Chunks Created: {len(chunks_overlap)}&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Display a sample chunk with its neighbor to see overlap</span><span class="ln" style="--i:0ch">print(f&quot;\nOverlap Example:&quot;)</span><span class="ln" style="--i:0ch">print(f&quot;Chunk 1: {chunks_overlap[0].text}&quot;)</span><span class="ln" style="--i:0ch">print(f&quot;Chunk 2: {chunks_overlap[1].text}&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>chunk_overlap=20</code> makes each chunk repeat up to 20 tokens from the end of the chunk before it.</li><li>The last two <code>print</code> lines show chunk 1 and chunk 2, so you can spot the repeated text.</li></ul><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>chunks_overlap</code> now holds: the overlapping chunks.</span></p>
+</template>
+
+<template id="t15">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:330px"><a href="pfizer3-p5-m3-try-s5-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s5-out.png" width="1740" height="461" alt="The STEP 5 output in Colab: Total Overlapping Chunks Created, then Chunk 1 and Chunk 2, both containing the sentence about the 1990s and early 2000s."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">Chunk 2 starts with the last sentence of chunk 1, "The 1990s and early 2000s saw a shift towards machine learning approaches." That repeated sentence is the overlap.</p><p class="p">But there is a trade-off: slightly more storage space is used due to overlapping text. STEP 7 shows it as longer chunks.</p>
+</template>
+
+<template id="t16">
+<p class="p"><b>Semantic Chunking (Advanced):</b> Uses <b>AI embeddings</b> to <b>find natural topic shifts</b> and split accordingly. Best when <b>documents contain multiple unrelated sections</b>. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 6</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 6: Semantic Chunking</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Using AI embeddings to find natural topic breaks and split there.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Semantic chunking preserves meaning better than fixed-size splitting.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: Chunk count and a sample — notice how it splits at topic boundaries.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.core.node_parser import SemanticSplitterNodeParser</span><span class="ln" style="--i:0ch">from llama_index.embeddings.huggingface import HuggingFaceEmbedding</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>SemanticSplitterNodeParser</code> is the splitter that follows meaning, and <code>HuggingFaceEmbedding</code> loads an embedding model from Hugging Face, a website that shares free AI models.</li></ul>
+</template>
+
+<template id="t17">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Initialize embedding model for semantic splitting</span><span class="ln" style="--i:0ch">embed_model = HuggingFaceEmbedding(model_name=&quot;sentence-transformers/all-MiniLM-L6-v2&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Create semantic chunker</span><span class="ln" style="--i:0ch">semantic_splitter = SemanticSplitterNodeParser(embed_model=embed_model)</span><span class="ln" style="--i:0ch">chunks_semantic = semantic_splitter.get_nodes_from_documents(documents)</span><span class="ln" style="--i:0ch">print(f&quot;Total Semantic Chunks Created: {len(chunks_semantic)}&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Display a sample semantic chunk</span><span class="ln" style="--i:0ch">print(f&quot;\nSample semantic chunk:&quot;)</span><span class="ln" style="--i:0ch">print(chunks_semantic[0].text)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>all-MiniLM-L6-v2</code> is MiniLM, the embedding model you already know from Step 1.</li><li><code>SemanticSplitterNodeParser</code> embeds each sentence, compares neighbouring sentences and splits where the meaning changes.</li></ul><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>chunks_semantic</code> now holds: the semantic chunks.</span></p>
+</template>
+
+<template id="t18">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:500px"><a href="pfizer3-p5-m3-try-s6-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s6-out.png" width="1740" height="1288" alt="The STEP 6 output in Colab: the HF Hub warning (twice), the green model download bars, Total Semantic Chunks Created: 6, and the sample semantic chunk, 4 lines ending with the 1980s line."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">The semantic sample chunk stops after the 1980s line, one line earlier than the fixed chunk in STEP 4. But there is a trade-off: it first had to download MiniLM and embed every sentence, which takes extra processing time.</p><div class="note"><span class="num">SEEING A WARNING?</span><p>The "unauthenticated requests to the HF Hub" warning and the download bars are safe to ignore. The HF Hub is Hugging Face's website, where the notebook downloads MiniLM the first time.</p></div>
+</template>
+
+<template id="t19">
+<p class="p">Let's compare our chunking strategies. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 7</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 7: Compare Chunking Strategies</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Comparing all three chunking strategies side by side.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Seeing the differences helps you choose the right strategy for your documents.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: A table and two bar charts comparing chunk counts and average lengths.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">chunking_comparison = pd.DataFrame({</span><span class="ln" style="--i:4ch">    &#x27;Strategy&#x27;: [&#x27;Fixed-Length&#x27;, &#x27;Overlapping&#x27;, &#x27;Semantic&#x27;],</span><span class="ln" style="--i:4ch">    &#x27;Number of Chunks&#x27;: [len(chunks_fixed), len(chunks_overlap), len(chunks_semantic)],</span><span class="ln" style="--i:4ch">    &#x27;Average Chunk Length&#x27;: [</span><span class="ln" style="--i:8ch">        sum(len(chunk.text) for chunk in chunks_fixed) / len(chunks_fixed),</span><span class="ln" style="--i:8ch">        sum(len(chunk.text) for chunk in chunks_overlap) / len(chunks_overlap),</span><span class="ln" style="--i:8ch">        sum(len(chunk.text) for chunk in chunks_semantic) / len(chunks_semantic)</span><span class="ln" style="--i:4ch">    ]</span><span class="ln" style="--i:0ch">})</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">display(chunking_comparison)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>pd.DataFrame</code> builds a table with each strategy's number of chunks and average chunk length (in characters). <code>display</code> shows it.</li></ul>
+</template>
+
+<template id="t20">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Visualize the comparison</span><span class="ln" style="--i:0ch">plt.figure(figsize=(12, 5))</span><span class="ln" style="--i:0ch">plt.subplot(1, 2, 1)</span><span class="ln" style="--i:0ch">plt.bar(chunking_comparison[&#x27;Strategy&#x27;], chunking_comparison[&#x27;Number of Chunks&#x27;])</span><span class="ln" style="--i:0ch">plt.title(&#x27;Number of Chunks by Strategy&#x27;)</span><span class="ln" style="--i:0ch">plt.ylabel(&#x27;Count&#x27;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">plt.subplot(1, 2, 2)</span><span class="ln" style="--i:0ch">plt.bar(chunking_comparison[&#x27;Strategy&#x27;], chunking_comparison[&#x27;Average Chunk Length&#x27;])</span><span class="ln" style="--i:0ch">plt.title(&#x27;Average Chunk Length by Strategy&#x27;)</span><span class="ln" style="--i:0ch">plt.ylabel(&#x27;Characters&#x27;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">plt.tight_layout()</span><span class="ln" style="--i:0ch">plt.show()</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>plt.subplot</code> puts two charts side by side, and <code>plt.bar</code> draws each one from the table.</li></ul>
+</template>
+
+<template id="t21">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:150px"><a href="pfizer3-p5-m3-try-s7-table.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s7-table.png" width="1740" height="274" alt="The STEP 7 table in Colab: Strategy, Number of Chunks and Average Chunk Length for Fixed-Length, Overlapping and Semantic."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><figure class="shot fit" style="--mh:275px"><a href="pfizer3-p5-m3-try-s7-charts.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s7-charts.png" width="1740" height="687" alt="The STEP 7 bar charts in Colab: Number of Chunks by Strategy and Average Chunk Length by Strategy."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">On these 3 short practice files, all three strategies made 6 chunks. The overlapping chunks are longer on average (about 389 characters against about 349), because each one repeats a sentence from the chunk before.</p><div class="tip"><span class="tip-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><p>In the Task, you'll choose a chunking strategy for the supplier file and say why you chose it.</p></div>
+</template>
+
+<template id="t22">
+<p class="p">Embeddings convert text into numerical vectors. Let's explore different embedding models. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 8</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 8: Test HuggingFace Embedding Models</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Testing two different embedding models to see how they convert text to numbers.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Different models produce different quality embeddings — bigger isn&#x27;t always better.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: A table showing each model&#x27;s dimensions (how many numbers it uses) and speed.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.embeddings.huggingface import HuggingFaceEmbedding</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Initialize a list to store results</span><span class="ln" style="--i:0ch">embedding_results = []</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Test different HuggingFace embedding models</span><span class="ln" style="--i:0ch">hf_models = [</span><span class="ln" style="--i:4ch">    &quot;sentence-transformers/all-MiniLM-L6-v2&quot;,  # Small, fast model (384 dimensions)</span><span class="ln" style="--i:4ch">    &quot;sentence-transformers/all-mpnet-base-v2&quot;,  # More powerful (768 dimensions)</span><span class="ln" style="--i:0ch">]</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>hf_models</code> lists two models: MiniLM and mpnet (<code>all-mpnet-base-v2</code>).</li></ul>
+</template>
+
+<template id="t23">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">for model_name in hf_models:</span><span class="ln" style="--i:4ch">    start_time = time.time()</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    embed_model = HuggingFaceEmbedding(model_name=model_name)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    # Generate an embedding for a test sentence</span><span class="ln" style="--i:4ch">    test_text = &quot;Embeddings are numerical representations of text in vector space.&quot;</span><span class="ln" style="--i:4ch">    embedding = embed_model.get_text_embedding(test_text)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    end_time = time.time()</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    embedding_results.append({</span><span class="ln" style="--i:8ch">        &#x27;Model&#x27;: model_name,</span><span class="ln" style="--i:8ch">        &#x27;Dimensions&#x27;: len(embedding),</span><span class="ln" style="--i:8ch">        &#x27;Generation Time (s)&#x27;: end_time - start_time</span><span class="ln" style="--i:4ch">    })</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Display results</span><span class="ln" style="--i:0ch">embedding_df = pd.DataFrame(embedding_results)</span><span class="ln" style="--i:0ch">display(embedding_df)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li>The loop loads each model, embeds one test sentence and times it with <code>time.time()</code>.</li><li><code>len(embedding)</code> counts the dimensions: how many numbers each embedding has.</li></ul>
+</template>
+
+<template id="t24">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:130px"><a href="pfizer3-p5-m3-try-s8-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s8-out.png" width="1740" height="210" alt="The STEP 8 table in Colab: Model, Dimensions and Generation Time (s). all-MiniLM-L6-v2: 384 dimensions, 0.618532 seconds. all-mpnet-base-v2: 768 dimensions, 4.267908 seconds."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">In the run shown here, MiniLM made 384 numbers in under a second, and mpnet made 768 in about 4 seconds. mpnet uses twice as many numbers, and its first run also downloads a bigger model, so it took longer. Your times will be a little different.</p><p class="p">You can skip the cell under <b>3.2 OpenAI Embeddings (Optional)</b>. Optional Reading explains it.</p>
+</template>
+
+<template id="t25">
+<p class="p">Let's visualize how different texts are related in embedding space. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 9</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 9: Visualize Embedding Similarity</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Creating embeddings for 6 sentences and measuring how similar they are.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: This shows how AI &quot;understands&quot; meaning — similar ideas have similar numbers.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: A colored heatmap where brighter colors = more similar sentences.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">import numpy as np</span><span class="ln" style="--i:0ch">from sklearn.metrics.pairwise import cosine_similarity</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Define some test sentences</span><span class="ln" style="--i:0ch">test_sentences = [</span><span class="ln" style="--i:4ch">    &quot;Neural networks are a powerful machine learning technique.&quot;,</span><span class="ln" style="--i:4ch">    &quot;Deep learning models have many layers of neurons.&quot;,</span><span class="ln" style="--i:4ch">    &quot;Embeddings represent words or sentences as vectors.&quot;,</span><span class="ln" style="--i:4ch">    &quot;Vector representations help computers understand semantics.&quot;,</span><span class="ln" style="--i:4ch">    &quot;The history of AI begins in the 1950s.&quot;,</span><span class="ln" style="--i:4ch">    &quot;Artificial intelligence research has evolved over decades.&quot;</span><span class="ln" style="--i:0ch">]</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>test_sentences</code> holds 6 sentences: two about neural networks, two about embeddings and two about AI history.</li></ul>
+</template>
+
+<template id="t26">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Create embeddings for each sentence</span><span class="ln" style="--i:0ch">embed_model = HuggingFaceEmbedding(model_name=&quot;sentence-transformers/all-MiniLM-L6-v2&quot;)</span><span class="ln" style="--i:0ch">embeddings = [embed_model.get_text_embedding(sent) for sent in test_sentences]</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Calculate similarity matrix</span><span class="ln" style="--i:0ch">similarity_matrix = cosine_similarity(embeddings)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Visualize the similarity matrix</span><span class="ln" style="--i:0ch">plt.figure(figsize=(10, 8))</span><span class="ln" style="--i:0ch">plt.imshow(similarity_matrix, cmap=&#x27;viridis&#x27;)</span><span class="ln" style="--i:0ch">plt.colorbar(label=&#x27;Cosine Similarity&#x27;)</span><span class="ln" style="--i:0ch">plt.xticks(np.arange(len(test_sentences)), [f&quot;Sent {i+1}&quot; for i in range(len(test_sentences))], rotation=45)</span><span class="ln" style="--i:0ch">plt.yticks(np.arange(len(test_sentences)), [f&quot;Sent {i+1}&quot; for i in range(len(test_sentences))])</span><span class="ln" style="--i:0ch">plt.title(&#x27;Semantic Similarity Between Sentences&#x27;)</span><span class="ln" style="--i:0ch">plt.tight_layout()</span><span class="ln" style="--i:0ch">plt.show()</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Print the sentences for reference</span><span class="ln" style="--i:0ch">for i, sent in enumerate(test_sentences):</span><span class="ln" style="--i:4ch">    print(f&quot;Sentence {i+1}: {sent}&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>cosine_similarity</code> scores how close two embeddings are: 1 means the same meaning, and lower means less alike.</li><li><code>plt.imshow</code> draws a heatmap: a grid where each square's colour shows the score for two sentences.</li></ul>
+</template>
+
+<template id="t27">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:680px"><a href="pfizer3-p5-m3-try-s9-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s9-out.png" width="1740" height="1753" alt="The STEP 9 output in Colab: a Loading weights bar, the heatmap Semantic Similarity Between Sentences, and the 6 Sentence lines printed under it."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">The yellow line from top left to bottom right is each sentence compared with itself, a score of 1. Off that line, the brightest squares pair sentences on the same topic: 3 and 4 (embeddings and vectors), 1 and 2 (neural networks), and 5 and 6 (AI history).</p>
+</template>
+
+<template id="t28">
+<p class="p">Now, let's combine what we've learned to build a vector database. You already know vector databases from Step 1. Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 10</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 10: Build a Vector Store</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Building a vector database that stores our document embeddings for fast search.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: Vector databases are the &quot;brain&quot; of any RAG system — they enable semantic search.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: &quot;Vector store created successfully!&quot; — your search engine is ready!</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.core import VectorStoreIndex, StorageContext</span><span class="ln" style="--i:0ch">from llama_index.vector_stores.chroma import ChromaVectorStore</span><span class="ln" style="--i:0ch">import chromadb</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Initialize a Chroma client</span><span class="ln" style="--i:0ch">chroma_client = chromadb.Client()</span><span class="ln" style="--i:0ch">chroma_collection = chroma_client.get_or_create_collection(&quot;semantic_search_demo&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>chromadb.Client()</code> starts Chroma, a free vector database that runs inside your Colab session, and makes a collection (a named box for embeddings) in it.</li></ul>
+</template>
+
+<template id="t29">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Create vector store</span><span class="ln" style="--i:0ch">vector_store = ChromaVectorStore(chroma_collection=chroma_collection)</span><span class="ln" style="--i:0ch">storage_context = StorageContext.from_defaults(vector_store=vector_store)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Let&#x27;s use overlapping chunks for our index</span><span class="ln" style="--i:0ch">embed_model = HuggingFaceEmbedding(model_name=&quot;sentence-transformers/all-MiniLM-L6-v2&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Create index</span><span class="ln" style="--i:0ch">index = VectorStoreIndex.from_documents(</span><span class="ln" style="--i:4ch">    documents,</span><span class="ln" style="--i:4ch">    storage_context=storage_context,</span><span class="ln" style="--i:4ch">    embed_model=embed_model</span><span class="ln" style="--i:0ch">)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">print(&quot;Vector store created successfully!&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>ChromaVectorStore</code> and <code>StorageContext</code> tell LlamaIndex to keep its embeddings in that Chroma box.</li><li><code>VectorStoreIndex.from_documents(documents, ...)</code> embeds the documents with MiniLM and stores the embeddings.</li></ul><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>index</code> now holds: your searchable store, ready for STEP 11.</span></p>
+</template>
+
+<template id="t30">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:80px"><a href="pfizer3-p5-m3-try-s10-out.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s10-out.png" width="1740" height="147" alt="The STEP 10 output in Colab: a Loading weights bar, then Vector store created successfully!"><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">"Vector store created successfully!" means your search engine is ready.</p><div class="note"><span class="num">GOOD TO KNOW</span><p>The comment in this cell says it uses overlapping chunks, but the code builds the index from <code>documents</code>, the 3 whole files. LlamaIndex splits them with its own default size of 1,024 tokens, and each file is shorter than that, so no file is split. That's why the chunks you made in STEP 4 to STEP 6 aren't used by this search, and chunking doesn't change it on these 3 short files. The difference shows on long files with many chunks. If you code in Python, the Challenge below these slides has you embed the overlapping chunks yourself.</p></div>
+</template>
+
+<template id="t31">
+<p class="p">STEP 10 already built the store, and STEP 11 tests it.</p><p class="p">Now that you've seen chunks and embeddings, let's <b>store the embeddings and test document retrieval</b>. We'll use Gemini to generate answers from the retrieved chunks.</p><p class="p">Press <b>Run</b> on the cell with the heading <code class="nw"># STEP 11</code>. Here is the top of it:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; top of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 11: Query with Gemini</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING: Querying our vector database using Gemini to generate AI-powered answers.</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS: This is the full RAG pipeline in action — retrieve relevant chunks, then generate answers.</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE: For each query: the AI&#x27;s response plus the source chunks it used.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">from llama_index.llms.google_genai import GoogleGenAI</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Initialize Gemini LLM</span><span class="ln" style="--i:0ch">llm = GoogleGenAI(model=&quot;gemini-3.5-flash-lite&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Set up query engine with our custom components</span><span class="ln" style="--i:0ch">query_engine = index.as_query_engine(</span><span class="ln" style="--i:4ch">    llm=llm,</span><span class="ln" style="--i:4ch">    similarity_top_k=2  # Retrieve top 2 most similar chunks</span><span class="ln" style="--i:0ch">)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>GoogleGenAI(model="gemini-3.5-flash-lite")</code> connects to Gemini, with the key from STEP 1.</li><li><code>index.as_query_engine(...)</code> builds a query engine: it searches the index, then hands what it finds to Gemini.</li><li><code>similarity_top_k=2</code> is how many pieces the search hands to Gemini: the 2 closest.</li></ul>
+</template>
+
+<template id="t32">
+<p class="p">Here's the rest of the same cell:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; rest of the cell</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Function to query and display results</span><span class="ln" style="--i:0ch">def run_query(query_text):</span><span class="ln" style="--i:4ch">    print(f&quot;Query: {query_text}&quot;)</span><span class="ln" style="--i:4ch">    print(&quot;-&quot; * 50)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    # Get response</span><span class="ln" style="--i:4ch">    response = query_engine.query(query_text)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    print(&quot;Response:&quot;)</span><span class="ln" style="--i:4ch">    display(Markdown(response.response))</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    print(&quot;\nSource Nodes:&quot;)</span><span class="ln" style="--i:4ch">    for i, node in enumerate(response.source_nodes):</span><span class="ln" style="--i:8ch">        print(f&quot;\nSource {i+1} (Score: {node.score:.4f}):&quot;)</span><span class="ln" style="--i:8ch">        print(&quot;-&quot; * 40)</span><span class="ln" style="--i:8ch">        print(node.text)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    return response</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Try different queries</span><span class="ln" style="--i:0ch">queries = [</span><span class="ln" style="--i:4ch">    &quot;How did neural networks develop over time?&quot;,</span><span class="ln" style="--i:4ch">    &quot;What are embeddings and how are they used?&quot;,</span><span class="ln" style="--i:4ch">    &quot;Explain the history of artificial intelligence.&quot;</span><span class="ln" style="--i:0ch">]</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"># Run each query</span><span class="ln" style="--i:0ch">for query in queries:</span><span class="ln" style="--i:4ch">    run_query(query)</span><span class="ln" style="--i:4ch">    print(&quot;\n&quot; + &quot;=&quot;*80 + &quot;\n&quot;)</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>run_query</code> asks one question, shows Gemini's answer, then prints each source with its score. The last loop runs it for the 3 questions in <code>queries</code>.</li><li><code>response.source_nodes</code> holds the sources, the pieces of text Gemini read. <code>node.score</code> is how close each one is to the question.</li></ul>
+</template>
+
+<template id="t33">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:520px"><a href="pfizer3-p5-m3-try-s11-q1.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p5-m3-try-s11-q1.png" width="1740" height="1213" alt="The STEP 11 output in Colab for the question How did neural networks develop over time?: Gemini&#x27;s answer, then Source 1 and Source 2 with their scores."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">For the first question, the search handed Gemini <code>neural_networks.txt</code> (score 0.5048) and <code>ai_history.txt</code> (score 0.4195). For each question, the search handed Gemini the 2 files closest in meaning, best match first, and Gemini answered from them. Gemini writes a new answer every time, so yours will be worded differently.</p><p class="p">Scroll down in your notebook for the other two questions. You're done with the practice, so you can stop after STEP 11. The Experiments cells below it are for the Challenge, under these slides.</p>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var CELLS = {"step0": "# ============================================\n# STEP 0: Install Required Libraries\n# ============================================\n#\n# WHAT WE'RE DOING: Installing all the libraries we need for embeddings, chunking, and search.\n# WHY THIS MATTERS: Each library handles a different piece of our AI search system.\n# WHAT YOU'LL SEE: Download progress bars. This may take a few minutes \u2014 be patient!\n#\n# TROUBLESHOOTING: If you see errors, try running this cell again.\n# Some packages may already be installed, which is fine.\n# ============================================\n!pip install -q llama-index==0.14.25\n!pip install -q llama-index-embeddings-huggingface==0.8.0\n!pip install -q llama-index-llms-google-genai==0.11.3\n!pip install -q llama-index-embeddings-openai==0.6.0\n!pip install -q llama-index-vector-stores-chroma==0.6.0\n!pip install -q sentence-transformers\n!pip install -q chromadb\n!pip install -q scikit-learn\n!pip install -q nest_asyncio", "step1a": "# ============================================\n# STEP 1a: Import Python Libraries\n# ============================================\n#\n# WHAT WE'RE DOING: Loading the Python tools we'll use throughout this notebook.\n# WHY THIS MATTERS: Each import gives us access to specific functionality.\n# WHAT YOU'LL SEE: No output \u2014 imports are silent unless there's an error.\n# ============================================\nimport os\nimport time\nimport pandas as pd\nimport matplotlib.pyplot as plt\nfrom IPython.display import display, Markdown\nimport nest_asyncio\nnest_asyncio.apply()", "step1": "# ============================================\n# STEP 1: Set Up Your API Key\n# ============================================\n#\n# WHAT WE'RE DOING:\n# Setting our Google API key so we can use Gemini later for AI-powered queries.\n#\n# WHY THIS MATTERS:\n# The API key is like a password that lets our code talk to Google's AI.\n#\n# WHAT YOU'LL SEE:\n# No output \u2014 the key is saved silently.\n#\n# TROUBLESHOOTING:\n# - Get your free API key at: https://aistudio.google.com/app/apikey\n# - Make sure there are no extra spaces around your key\n# ============================================\nimport os\nfrom google.colab import userdata\n\n# Reads your key from Colab Secrets (the key icon in the left sidebar).\n# Never paste your key into a code cell.\nos.environ[\"GOOGLE_API_KEY\"] = userdata.get('GEMINI_API_KEY')", "mkdir": "# Create a folder to store our sample documents\n!mkdir -p sample_docs", "step2": "# ============================================\n# STEP 2: Create Sample Documents\n# ============================================\n#\n# WHAT WE'RE DOING: Creating 3 sample text files about AI topics.\n# These will be the \"documents\" our AI will search through.\n# WHY THIS MATTERS: In the real world, these would be pharmaceutical documents,\n# research papers, or quality reports. We use simple AI text for practice.\n# WHAT YOU'LL SEE: No output \u2014 the files are created silently in the sample_docs folder.\n# ============================================\n\n# Let's create some example documents\nwith open(\"sample_docs/ai_history.txt\", \"w\") as f:\n    f.write(\"\"\"Artificial Intelligence (AI) has a rich history dating back to the 1950s.\nThe term was first coined by John McCarthy in 1956 at the Dartmouth Conference.\nEarly AI research focused on symbolic methods and rule-based systems.\nIn the 1980s, expert systems became popular but faced limitations.\nThe 1990s and early 2000s saw a shift towards machine learning approaches.\nThe deep learning revolution began around 2012 with breakthrough results in computer vision.\nToday, large language models like GPT, LLaMA, and Gemini represent cutting-edge AI capabilities.\nThese models are trained on vast amounts of text data and can generate human-like responses.\"\"\")\n\nwith open(\"sample_docs/neural_networks.txt\", \"w\") as f:\n    f.write(\"\"\"Neural networks are computing systems inspired by biological neural networks.\nThe perceptron, developed by Frank Rosenblatt in 1958, was one of the earliest neural network models.\nModern neural networks consist of layers of interconnected nodes or \"neurons.\"\nEach connection can transmit a signal from one neuron to another.\nThe receiving neuron processes the signal and signals downstream neurons connected to it.\nDeep neural networks contain multiple hidden layers between input and output layers.\nConvolutional Neural Networks (CNNs) revolutionized image processing.\nRecurrent Neural Networks (RNNs) and transformers handle sequential data like text or time series.\"\"\")\n\nwith open(\"sample_docs/embeddings.txt\", \"w\") as f:\n    f.write(\"\"\"Embeddings are dense vector representations of data in a continuous vector space.\nWord embeddings map words to vectors where similar words are positioned closer together.\nPopular word embedding techniques include Word2Vec, GloVe, and FastText.\nSentence embeddings capture meaning at the sentence level rather than individual words.\nModels like Universal Sentence Encoder and SBERT create powerful sentence embeddings.\nDocument embeddings represent entire documents as fixed-length vectors.\nEmbeddings enable semantic search by finding documents with similar meaning, not just keyword matches.\nThey also power recommendation systems, clustering, and classification tasks.\nRecent models like OpenAI's text-embedding-ada and Cohere's embedding models offer state-of-the-art performance.\"\"\")", "step3": "# ============================================\n# STEP 3: Load Documents\n# ============================================\n#\n# WHAT WE'RE DOING: Loading all our sample documents using LlamaIndex's SimpleDirectoryReader.\n# WHY THIS MATTERS: This is the first step in any RAG pipeline \u2014 getting your documents into the system.\n# WHAT YOU'LL SEE: A count of how many documents were loaded, plus a preview of each one.\n# ============================================\nfrom llama_index.core import SimpleDirectoryReader\n\n# Load documents\ndocuments = SimpleDirectoryReader(\"sample_docs\").load_data()\nprint(f\"Loaded {len(documents)} documents.\")\n\n# Display document contents\nfor i, doc in enumerate(documents):\n    print(f\"\\n--- Document {i+1}: {doc.metadata['file_name']} ---\")\n    print(doc.text[:200] + \"...\")  # Show first 200 chars", "step4": "# ============================================\n# STEP 4: Fixed-Length Chunking\n# ============================================\n#\n# WHAT WE'RE DOING: Breaking our documents into fixed-size chunks (100 tokens each, no overlap).\n# WHY THIS MATTERS: AI can't process huge documents at once \u2014 chunking breaks them into manageable pieces.\n# WHAT YOU'LL SEE: The total number of chunks created, plus a sample chunk.\n# ============================================\nfrom llama_index.core.node_parser import SentenceSplitter\n\n# Fixed-length chunking with no overlap\nsplitter_fixed = SentenceSplitter(chunk_size=100, chunk_overlap=0)\nchunks_fixed = splitter_fixed.get_nodes_from_documents(documents)\nprint(f\"Total Fixed-Length Chunks Created: {len(chunks_fixed)}\")\n\n# Display a sample chunk\nprint(f\"\\nSample fixed-length chunk:\")\nprint(chunks_fixed[0].text)", "step5": "# ============================================\n# STEP 5: Overlapping Chunks\n# ============================================\n#\n# WHAT WE'RE DOING: Creating chunks with 20-token overlap between consecutive chunks.\n# WHY THIS MATTERS: Overlap prevents important context from being lost at chunk boundaries.\n# WHAT YOU'LL SEE: Chunk count and an example showing how two chunks share overlapping text.\n# ============================================\n\n# Chunking with overlap\nsplitter_overlap = SentenceSplitter(chunk_size=100, chunk_overlap=20)\nchunks_overlap = splitter_overlap.get_nodes_from_documents(documents)\nprint(f\"Total Overlapping Chunks Created: {len(chunks_overlap)}\")\n\n# Display a sample chunk with its neighbor to see overlap\nprint(f\"\\nOverlap Example:\")\nprint(f\"Chunk 1: {chunks_overlap[0].text}\")\nprint(f\"Chunk 2: {chunks_overlap[1].text}\")", "step6": "# ============================================\n# STEP 6: Semantic Chunking\n# ============================================\n#\n# WHAT WE'RE DOING: Using AI embeddings to find natural topic breaks and split there.\n# WHY THIS MATTERS: Semantic chunking preserves meaning better than fixed-size splitting.\n# WHAT YOU'LL SEE: Chunk count and a sample \u2014 notice how it splits at topic boundaries.\n# ============================================\nfrom llama_index.core.node_parser import SemanticSplitterNodeParser\nfrom llama_index.embeddings.huggingface import HuggingFaceEmbedding\n\n# Initialize embedding model for semantic splitting\nembed_model = HuggingFaceEmbedding(model_name=\"sentence-transformers/all-MiniLM-L6-v2\")\n\n# Create semantic chunker\nsemantic_splitter = SemanticSplitterNodeParser(embed_model=embed_model)\nchunks_semantic = semantic_splitter.get_nodes_from_documents(documents)\nprint(f\"Total Semantic Chunks Created: {len(chunks_semantic)}\")\n\n# Display a sample semantic chunk\nprint(f\"\\nSample semantic chunk:\")\nprint(chunks_semantic[0].text)", "step7": "# ============================================\n# STEP 7: Compare Chunking Strategies\n# ============================================\n#\n# WHAT WE'RE DOING: Comparing all three chunking strategies side by side.\n# WHY THIS MATTERS: Seeing the differences helps you choose the right strategy for your documents.\n# WHAT YOU'LL SEE: A table and two bar charts comparing chunk counts and average lengths.\n# ============================================\nchunking_comparison = pd.DataFrame({\n    'Strategy': ['Fixed-Length', 'Overlapping', 'Semantic'],\n    'Number of Chunks': [len(chunks_fixed), len(chunks_overlap), len(chunks_semantic)],\n    'Average Chunk Length': [\n        sum(len(chunk.text) for chunk in chunks_fixed) / len(chunks_fixed),\n        sum(len(chunk.text) for chunk in chunks_overlap) / len(chunks_overlap),\n        sum(len(chunk.text) for chunk in chunks_semantic) / len(chunks_semantic)\n    ]\n})\n\ndisplay(chunking_comparison)\n\n# Visualize the comparison\nplt.figure(figsize=(12, 5))\nplt.subplot(1, 2, 1)\nplt.bar(chunking_comparison['Strategy'], chunking_comparison['Number of Chunks'])\nplt.title('Number of Chunks by Strategy')\nplt.ylabel('Count')\n\nplt.subplot(1, 2, 2)\nplt.bar(chunking_comparison['Strategy'], chunking_comparison['Average Chunk Length'])\nplt.title('Average Chunk Length by Strategy')\nplt.ylabel('Characters')\n\nplt.tight_layout()\nplt.show()", "step8": "# ============================================\n# STEP 8: Test HuggingFace Embedding Models\n# ============================================\n#\n# WHAT WE'RE DOING: Testing two different embedding models to see how they convert text to numbers.\n# WHY THIS MATTERS: Different models produce different quality embeddings \u2014 bigger isn't always better.\n# WHAT YOU'LL SEE: A table showing each model's dimensions (how many numbers it uses) and speed.\n# ============================================\nfrom llama_index.embeddings.huggingface import HuggingFaceEmbedding\n\n# Initialize a list to store results\nembedding_results = []\n\n# Test different HuggingFace embedding models\nhf_models = [\n    \"sentence-transformers/all-MiniLM-L6-v2\",  # Small, fast model (384 dimensions)\n    \"sentence-transformers/all-mpnet-base-v2\",  # More powerful (768 dimensions)\n]\n\nfor model_name in hf_models:\n    start_time = time.time()\n\n    embed_model = HuggingFaceEmbedding(model_name=model_name)\n\n    # Generate an embedding for a test sentence\n    test_text = \"Embeddings are numerical representations of text in vector space.\"\n    embedding = embed_model.get_text_embedding(test_text)\n\n    end_time = time.time()\n\n    embedding_results.append({\n        'Model': model_name,\n        'Dimensions': len(embedding),\n        'Generation Time (s)': end_time - start_time\n    })\n\n# Display results\nembedding_df = pd.DataFrame(embedding_results)\ndisplay(embedding_df)", "step9": "# ============================================\n# STEP 9: Visualize Embedding Similarity\n# ============================================\n#\n# WHAT WE'RE DOING: Creating embeddings for 6 sentences and measuring how similar they are.\n# WHY THIS MATTERS: This shows how AI \"understands\" meaning \u2014 similar ideas have similar numbers.\n# WHAT YOU'LL SEE: A colored heatmap where brighter colors = more similar sentences.\n# ============================================\nimport numpy as np\nfrom sklearn.metrics.pairwise import cosine_similarity\n\n# Define some test sentences\ntest_sentences = [\n    \"Neural networks are a powerful machine learning technique.\",\n    \"Deep learning models have many layers of neurons.\",\n    \"Embeddings represent words or sentences as vectors.\",\n    \"Vector representations help computers understand semantics.\",\n    \"The history of AI begins in the 1950s.\",\n    \"Artificial intelligence research has evolved over decades.\"\n]\n\n# Create embeddings for each sentence\nembed_model = HuggingFaceEmbedding(model_name=\"sentence-transformers/all-MiniLM-L6-v2\")\nembeddings = [embed_model.get_text_embedding(sent) for sent in test_sentences]\n\n# Calculate similarity matrix\nsimilarity_matrix = cosine_similarity(embeddings)\n\n# Visualize the similarity matrix\nplt.figure(figsize=(10, 8))\nplt.imshow(similarity_matrix, cmap='viridis')\nplt.colorbar(label='Cosine Similarity')\nplt.xticks(np.arange(len(test_sentences)), [f\"Sent {i+1}\" for i in range(len(test_sentences))], rotation=45)\nplt.yticks(np.arange(len(test_sentences)), [f\"Sent {i+1}\" for i in range(len(test_sentences))])\nplt.title('Semantic Similarity Between Sentences')\nplt.tight_layout()\nplt.show()\n\n# Print the sentences for reference\nfor i, sent in enumerate(test_sentences):\n    print(f\"Sentence {i+1}: {sent}\")", "step10": "# ============================================\n# STEP 10: Build a Vector Store\n# ============================================\n#\n# WHAT WE'RE DOING: Building a vector database that stores our document embeddings for fast search.\n# WHY THIS MATTERS: Vector databases are the \"brain\" of any RAG system \u2014 they enable semantic search.\n# WHAT YOU'LL SEE: \"Vector store created successfully!\" \u2014 your search engine is ready!\n# ============================================\nfrom llama_index.core import VectorStoreIndex, StorageContext\nfrom llama_index.vector_stores.chroma import ChromaVectorStore\nimport chromadb\n\n# Initialize a Chroma client\nchroma_client = chromadb.Client()\nchroma_collection = chroma_client.get_or_create_collection(\"semantic_search_demo\")\n\n# Create vector store\nvector_store = ChromaVectorStore(chroma_collection=chroma_collection)\nstorage_context = StorageContext.from_defaults(vector_store=vector_store)\n\n# Let's use overlapping chunks for our index\nembed_model = HuggingFaceEmbedding(model_name=\"sentence-transformers/all-MiniLM-L6-v2\")\n\n# Create index\nindex = VectorStoreIndex.from_documents(\n    documents,\n    storage_context=storage_context,\n    embed_model=embed_model\n)\n\nprint(\"Vector store created successfully!\")", "step11": "# ============================================\n# STEP 11: Query with Gemini\n# ============================================\n#\n# WHAT WE'RE DOING: Querying our vector database using Gemini to generate AI-powered answers.\n# WHY THIS MATTERS: This is the full RAG pipeline in action \u2014 retrieve relevant chunks, then generate answers.\n# WHAT YOU'LL SEE: For each query: the AI's response plus the source chunks it used.\n# ============================================\nfrom llama_index.llms.google_genai import GoogleGenAI\n\n# Initialize Gemini LLM\nllm = GoogleGenAI(model=\"gemini-3.5-flash-lite\")\n\n# Set up query engine with our custom components\nquery_engine = index.as_query_engine(\n    llm=llm,\n    similarity_top_k=2  # Retrieve top 2 most similar chunks\n)\n\n# Function to query and display results\ndef run_query(query_text):\n    print(f\"Query: {query_text}\")\n    print(\"-\" * 50)\n\n    # Get response\n    response = query_engine.query(query_text)\n\n    print(\"Response:\")\n    display(Markdown(response.response))\n\n    print(\"\\nSource Nodes:\")\n    for i, node in enumerate(response.source_nodes):\n        print(f\"\\nSource {i+1} (Score: {node.score:.4f}):\")\n        print(\"-\" * 40)\n        print(node.text)\n\n    return response\n\n# Try different queries\nqueries = [\n    \"How did neural networks develop over time?\",\n    \"What are embeddings and how are they used?\",\n    \"Explain the history of artificial intelligence.\"\n]\n\n# Run each query\nfor query in queries:\n    run_query(query)\n    print(\"\\n\" + \"=\"*80 + \"\\n\")"};
+  var GROUPS = ["Start", "STEP 0", "STEP 1", "STEP 2", "STEP 3", "STEP 4", "STEP 5", "STEP 6", "STEP 7", "STEP 8", "STEP 9", "STEP 10", "STEP 11"];
+  var SLIDES = [
+    {"group": "Start", "label": "GET READY", "title": "Open the <span class=\"hl\">Notebook</span>", "plain": "Open the Notebook", "tpl": "t1", "where": "Start"},
+    {"group": "STEP 0", "label": "STEP 0 &middot; PART 1 OF 2: RUN IT", "title": "Install the <span class=\"hl\">Libraries</span>", "plain": "STEP 0. Install the Libraries", "tpl": "t2"},
+    {"group": "STEP 0", "label": "STEP 0 &middot; PART 2 OF 2: SEE IT", "title": "Check That the Install <span class=\"hl\">Finished</span>", "plain": "STEP 0. Check That the Install Finished (Part 2 of 2)", "tpl": "t3"},
+    {"group": "STEP 1", "label": "STEP 1a &middot; RUN IT AND SEE IT", "title": "Import the <span class=\"hl\">Tools</span>", "plain": "STEP 1a. Import the Tools", "tpl": "t4"},
+    {"group": "STEP 1", "label": "STEP 1 &middot; PART 1 OF 2: RUN IT", "title": "Give the Notebook Your <span class=\"hl\">Key</span>", "plain": "STEP 1. Give the Notebook Your Key", "tpl": "t5"},
+    {"group": "STEP 1", "label": "STEP 1 &middot; PART 2 OF 2: SEE IT", "title": "Let the Notebook Read Your <span class=\"hl\">Secret</span>", "plain": "STEP 1. Let the Notebook Read Your Secret (Part 2 of 2)", "tpl": "t6"},
+    {"group": "STEP 2", "label": "STEP 2 &middot; PART 1 OF 3: RUN IT", "title": "Make a Folder for the <span class=\"hl\">Files</span>", "plain": "STEP 2. Make a Folder for the Files", "tpl": "t7"},
+    {"group": "STEP 2", "label": "STEP 2 &middot; PART 2 OF 3: RUN IT", "title": "Make Three Practice <span class=\"hl\">Files</span>", "plain": "STEP 2. Make Three Practice Files (Part 2 of 3)", "tpl": "t8"},
+    {"group": "STEP 2", "label": "STEP 2 &middot; PART 3 OF 3: SEE IT", "title": "Find the Files in <span class=\"hl\">Colab</span>", "plain": "STEP 2. Find the Files in Colab (Part 3 of 3)", "tpl": "t9", "cls": "end-slide"},
+    {"group": "STEP 3", "label": "STEP 3 &middot; PART 1 OF 2: RUN IT", "title": "Load the <span class=\"hl\">Documents</span>", "plain": "STEP 3. Load the Documents", "tpl": "t10"},
+    {"group": "STEP 3", "label": "STEP 3 &middot; PART 2 OF 2: SEE IT", "title": "Three Files, Three <span class=\"hl\">Documents</span>", "plain": "STEP 3. Three Files, Three Documents (Part 2 of 2)", "tpl": "t11"},
+    {"group": "STEP 4", "label": "STEP 4 &middot; PART 1 OF 2: RUN IT", "title": "Fixed-Length <span class=\"hl\">Chunking</span>", "plain": "STEP 4. Fixed-Length Chunking", "tpl": "t12"},
+    {"group": "STEP 4", "label": "STEP 4 &middot; PART 2 OF 2: SEE IT", "title": "Your Fixed-Length <span class=\"hl\">Chunks</span>", "plain": "STEP 4. Your Fixed-Length Chunks (Part 2 of 2)", "tpl": "t13", "cls": "end-slide"},
+    {"group": "STEP 5", "label": "STEP 5 &middot; PART 1 OF 2: RUN IT", "title": "Overlapping <span class=\"hl\">Chunks</span>", "plain": "STEP 5. Overlapping Chunks", "tpl": "t14"},
+    {"group": "STEP 5", "label": "STEP 5 &middot; PART 2 OF 2: SEE IT", "title": "Spot the <span class=\"hl\">Overlap</span>", "plain": "STEP 5. Spot the Overlap (Part 2 of 2)", "tpl": "t15", "cls": "end-slide"},
+    {"group": "STEP 6", "label": "STEP 6 &middot; PART 1 OF 3: RUN IT", "title": "Semantic <span class=\"hl\">Chunking</span>", "plain": "STEP 6. Semantic Chunking", "tpl": "t16"},
+    {"group": "STEP 6", "label": "STEP 6 &middot; PART 2 OF 3: RUN IT", "title": "Split Where the Meaning <span class=\"hl\">Changes</span>", "plain": "STEP 6. Split Where the Meaning Changes (Part 2 of 3)", "tpl": "t17"},
+    {"group": "STEP 6", "label": "STEP 6 &middot; PART 3 OF 3: SEE IT", "title": "Where the Topic <span class=\"hl\">Changed</span>", "plain": "STEP 6. Where the Topic Changed (Part 3 of 3)", "tpl": "t18", "cls": "end-slide"},
+    {"group": "STEP 7", "label": "STEP 7 &middot; PART 1 OF 3: RUN IT", "title": "Compare the Three <span class=\"hl\">Strategies</span>", "plain": "STEP 7. Compare the Three Strategies", "tpl": "t19"},
+    {"group": "STEP 7", "label": "STEP 7 &middot; PART 2 OF 3: RUN IT", "title": "Draw the Two <span class=\"hl\">Charts</span>", "plain": "STEP 7. Draw the Two Charts (Part 2 of 3)", "tpl": "t20"},
+    {"group": "STEP 7", "label": "STEP 7 &middot; PART 3 OF 3: SEE IT", "title": "Count and Length Side by <span class=\"hl\">Side</span>", "plain": "STEP 7. Count and Length Side by Side (Part 3 of 3)", "tpl": "t21", "cls": "end-slide"},
+    {"group": "STEP 8", "label": "STEP 8 &middot; PART 1 OF 3: RUN IT", "title": "Compare Two Embedding <span class=\"hl\">Models</span>", "plain": "STEP 8. Compare Two Embedding Models", "tpl": "t22"},
+    {"group": "STEP 8", "label": "STEP 8 &middot; PART 2 OF 3: RUN IT", "title": "Time Each <span class=\"hl\">Model</span>", "plain": "STEP 8. Time Each Model (Part 2 of 3)", "tpl": "t23"},
+    {"group": "STEP 8", "label": "STEP 8 &middot; PART 3 OF 3: SEE IT", "title": "Small Model or Big <span class=\"hl\">Model</span>", "plain": "STEP 8. Small Model or Big Model (Part 3 of 3)", "tpl": "t24", "cls": "end-slide"},
+    {"group": "STEP 9", "label": "STEP 9 &middot; PART 1 OF 3: RUN IT", "title": "Measure How Close Sentences <span class=\"hl\">Are</span>", "plain": "STEP 9. Measure How Close Sentences Are", "tpl": "t25"},
+    {"group": "STEP 9", "label": "STEP 9 &middot; PART 2 OF 3: RUN IT", "title": "Score Every <span class=\"hl\">Pair</span>", "plain": "STEP 9. Score Every Pair (Part 2 of 3)", "tpl": "t26"},
+    {"group": "STEP 9", "label": "STEP 9 &middot; PART 3 OF 3: SEE IT", "title": "Read the <span class=\"hl\">Heatmap</span>", "plain": "STEP 9. Read the Heatmap (Part 3 of 3)", "tpl": "t27", "cls": "end-slide"},
+    {"group": "STEP 10", "label": "STEP 10 &middot; PART 1 OF 3: RUN IT", "title": "Build a Vector <span class=\"hl\">Store</span>", "plain": "STEP 10. Build a Vector Store", "tpl": "t28"},
+    {"group": "STEP 10", "label": "STEP 10 &middot; PART 2 OF 3: RUN IT", "title": "Fill the Store With Your <span class=\"hl\">Documents</span>", "plain": "STEP 10. Fill the Store With Your Documents (Part 2 of 3)", "tpl": "t29"},
+    {"group": "STEP 10", "label": "STEP 10 &middot; PART 3 OF 3: SEE IT", "title": "Your Search Engine Is <span class=\"hl\">Ready</span>", "plain": "STEP 10. Your Search Engine Is Ready (Part 3 of 3)", "tpl": "t30", "cls": "end-slide"},
+    {"group": "STEP 11", "label": "STEP 11 &middot; PART 1 OF 3: RUN IT", "title": "Ask Gemini Three <span class=\"hl\">Questions</span>", "plain": "STEP 11. Ask Gemini Three Questions", "tpl": "t31"},
+    {"group": "STEP 11", "label": "STEP 11 &middot; PART 2 OF 3: RUN IT", "title": "The Query <span class=\"hl\">Function</span>", "plain": "STEP 11. The Query Function (Part 2 of 3)", "tpl": "t32"},
+    {"group": "STEP 11", "label": "STEP 11 &middot; PART 3 OF 3: SEE IT", "title": "Read the Answer and Its <span class=\"hl\">Sources</span>", "plain": "STEP 11. Read the Answer and Its Sources (Part 3 of 3)", "tpl": "t33"}
+  ];
+  var STAGE = { wide: [760, 1160], narrow: [450, 1250] };
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var sz = narrow ? STAGE.narrow : STAGE.wide;
+    app.style.width = sz[0] + "px"; app.style.height = sz[1] + "px";
+    var k = Math.min(window.innerWidth / sz[0], window.innerHeight / sz[1]);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  var GROUP_LABEL = { "Regex": "Find" };
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    var isStep = /^step /i.test(g.name);
+    b.type = "button"; b.className = "pg" + (isStep ? "" : " pg-fit");
+    var shown = GROUP_LABEL[g.name] || g.name;
+    b.setAttribute("aria-label", (g.name === "Regex" ? "Find Values" : shown) + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    var word = isStep ? '<span class="pg-word">Step </span>' + g.name.replace(/^step /i, "") : shown;
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + word + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span"), orig = label.textContent;
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = orig; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner' + (s.cls ? " " + s.cls : "") + '"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + document.getElementById(s.tpl).innerHTML + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(CELLS[b.getAttribute("data-copy")], b, pre); });
+    });
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.where || s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+    space();
+    Array.prototype.forEach.call(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  /* Spacing (Smita, 17 November 2026): no big empty area at the bottom of a slide. Spare height widens the gaps
+     between blocks, up to 2x. */
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = ""; inner.style.marginTop = "";
+    var cs = getComputedStyle(card);
+    var avail = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var base = parseFloat(getComputedStyle(inner).rowGap) || 14;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (base + Math.min(base, spare / gaps)) + "px";
+    /* P5 m2 fix round 1: what is still spare after the gaps widen is split above and below, so a short slide sits in
+       the middle of the card instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    space();
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #slide=N opens slide N directly */
+  var hm = location.hash.match(/slide=(\d+)/);
+  if (hm) i = Math.min(SLIDES.length - 1, Math.max(0, +hm[1] - 1));
+  window.addEventListener("resize", function () { scaleStage(); space(); });
+  scaleStage();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
