@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run an Open-Source AI Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 6, module 5 Learn deck: "Learn How to Run an Open-Source AI Model in Colab".
+   Source: Chaitanya's (SME) pages "[Training] Overview of Open-Source AI Models" (Notion b051..., with its H5P
+   "Open Source LLM") and "[Task] Task: Run Your First Open-Source LLM" (Notion 2181..., the GGUF callout). Ideas only,
+   NO code: his notebook cells are in the Try deck (pfizer3-p6-m5-steps.html). Built 23 November 2026 from
+   m5-learn-build.py (+ m2-learn-style.css, m5-learn-player.js). Never hand-patch this file: change the source and rebuild.
+   7 cards: 1 Some AI Models Are Closed, Others Are Open, 2 It Comes Down to Cost, Privacy and Control, 3 With an Open
+   Model, You Run It Your Way, 4 No Fees per Request, No Rate Limits, No Surprise Changes, 5 Sometimes a Closed Model Is
+   the Better Choice, 6 Three Free Models You'll Run in This Step, 7 GGUF Shrinks a Model So It Fits on Colab.
+   SME text word for word except the swaps listed in step2-coverage-m5.md (dashes restructured; "You can't modify the
+   model" and "the full instructions (the 'source code')" corrected; "fine-tune" defined; H5P "eliminates these costs"
+   softened; "document retrieval" -> writing answers from the retrieved chunks; the GGUF name expansion dropped;
+   "4 to 5GB, instead of 13+ GB" -> 4.4 GB and 14.5 GB, checked on Hugging Face).
+   Gray "Ask Chaitanya to review" notes go on the page under the embed, never in here.
+   REAL DATA: model sizes and parameter counts from the Hugging Face model API (23 Nov 2026); Colab memory 12 GB from
+   the Colab agent's run of his notebook (s2-colab-feasibility.md, 23 Nov 2026).
+   Fixed stage: 760 x 760 at every width (Notion embed height 708 px = 760 x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:760px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* P6 m2 additions, from the tokens above: size bars in the model table, a flash when the model box changes,
+   a model switch that wraps to two rows on the stage */
+.bar{display:flex;align-items:center;gap:8px}
+.bar i{display:block;height:10px;border-radius:5px;background:var(--pfizer-blue);flex:none}
+.bar span{white-space:nowrap}
+.fbox.flash{animation:flash .5s ease}
+@keyframes flash{0%{background:var(--blue-200)}100%{background:var(--surface-card)}}
+.sw.wide button{padding:9px 13px}
+.note{margin:0;font-size:15.5px;line-height:1.45;color:var(--gray-600)}
+.note b{color:var(--ink);font-weight:600}
+.tbl td.sm{font-size:16px}
+/* The Page 1 picture's lines are cut at the right edge: a short white fade says the line goes on */
+.pic.fade::after{content:"";position:absolute;top:0;right:0;bottom:0;width:40px;background:linear-gradient(to right,rgba(255,255,255,0),var(--surface))}
+
+/* P6 m5 additions, from the tokens above: tag lists (Cost, Privacy, Control), the flow's arrows and caption,
+   and the T4 memory gauge on card 7 */
+.tagged{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.tagged li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;align-items:baseline;font-size:18px;line-height:1.45;color:var(--card-text)}
+.tagged.wide li{grid-template-columns:150px minmax(0,1fr)}
+.tagged li b{font-weight:600;color:var(--ink)}
+.tg{justify-self:start;background:var(--surface);border:1.5px solid var(--pfizer-blue);color:var(--pfizer-blue);border-radius:999px;padding:2px 10px;font-size:13.5px;line-height:1.3;font-weight:600;white-space:nowrap}
+.arr{align-self:center;color:var(--pfizer-blue);font-size:20px;flex:none}
+.cap{margin:0;font-size:16.5px;line-height:1.45;color:var(--ink);text-wrap:pretty}
+.cap b{font-weight:600}
+.row .hint{flex:1;min-width:0;text-align:right}
+.gauge{border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.gl{display:flex;justify-content:space-between;font-size:14px;line-height:1.2;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em}
+.gt{height:18px;border-radius:9px;background:var(--blue-50);border:1px solid var(--blue-200);overflow:hidden}
+.gt i{display:block;height:100%;background:var(--pfizer-blue);border-radius:9px;transition:width .5s ease}
+.gt i.over{background:repeating-linear-gradient(135deg,var(--ink) 0 8px,var(--pfizer-blue) 8px 16px);border-radius:9px 0 0 9px}
+.gv{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.box ul{display:flex;flex-direction:column;gap:2px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to run an open-source AI model: 7 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 7</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"SIZES": {"full": {"gb": 14.5, "label": "Full size: about 14.5 GB", "cap": "Full size, Mistral 7B is about <b>14.5 GB</b>. That's more than the 12 GB of memory (RAM, where a computer keeps what it's working on) a free Colab computer has."}, "gguf": {"gb": 4.4, "label": "GGUF Q4: about 4.4 GB", "cap": "As a GGUF Q4 file, the same model is about <b>4.4 GB</b>, about a third of Colab's memory, so it loads with room to spare. This is the file your notebook downloads."}}, "T4_GB": 12};
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- Card 1: where your question goes with a closed model and with an open model ---------- */
+  var CAP1 = {
+    c: 'Closed: your question leaves for the company\'s computers, the model writes the answer there, and only the answer comes back. You never get the model itself.',
+    o: 'Open: you download the model file once, then it runs on the computer you choose. In this reading, that\'s Colab\'s computer, and no API key is needed.'
+  };
+  function initOpen(root) {
+    var btns = root.querySelectorAll(".sw button"), boxes = root.querySelectorAll("#c1-flow .fbox"), cap = root.querySelector("#c1-cap");
+    function show(v, pop) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      var where = boxes[1];
+      where.querySelector(".ft").textContent = v === "c" ? "The company\u2019s computers" : "Colab\u2019s computer";
+      where.querySelector(".fs").textContent = v === "c" ? "e.g. Google\u2019s, for Gemini" : "e.g. Mistral 7B, downloaded once";
+      boxes[0].querySelector(".fs").textContent = v === "c" ? "Sent over the internet, with your API key" : "Stays on Colab\u2019s computer";
+      if (pop) { where.classList.remove("flash"); void where.offsetWidth; where.classList.add("flash"); }
+      cap.innerHTML = CAP1[v];
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view"), true); }); });
+    show("c", false);
+    nudge("c1", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* ---------- Card 7: model file size next to the T4 GPU's memory ---------- */
+  function initSize(root) {
+    var btns = root.querySelectorAll(".sw button"), cap = root.querySelector("#c7-cap");
+    var fill = root.querySelector("#c7-fill");
+    function show(v, pop) {
+      each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); });
+      var s = D.SIZES[v];
+      fill.style.width = Math.min(100, s.gb / D.T4_GB * 100) + "%";
+      fill.classList.toggle("over", s.gb > D.T4_GB);
+      cap.innerHTML = s.cap;
+    }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view"), true); }); });
+    show("full", false);
+    nudge("c7", root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  var timer = null;
+  var INITS = { initOpen: initOpen, initSize: initSize };
+  var CARDS = [{label:"Closed or Open",eyebrow:"Two kinds of AI model",html:"<h2 class=\"title\">Some AI Models Are Closed, Others Are <span class=\"hl\">Open</span></h2><p class=\"why\">Your Project 5 chatbot used a closed model, Gemini. In this step, you'll swap in open ones, so here's what changes.</p><p class=\"p\">A lot of AI systems today, like ChatGPT, are <b>closed-source</b>. This means the company that built them, like OpenAI, controls everything about how they work. You can use them, but you don't get to see how they were made, modify them, or run them on your own computers.</p><p class=\"p\">On the other hand, <b>open-source AI models</b> are freely available for anyone to use, modify, and improve. The creators release the trained model itself, so anyone can download and run it.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a kind of model\"><button type=\"button\" data-view=\"c\" aria-pressed=\"true\">Closed</button><button type=\"button\" data-view=\"o\" aria-pressed=\"false\">Open</button></div></div><p class=\"hint\">Click each one to see where the model runs.</p></div><div class=\"flow\" id=\"c1-flow\"><div class=\"fbox\"><span class=\"fl\">Your question</span><span class=\"ft\">Typed in Colab</span><span class=\"fs\"></span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox on\"><span class=\"fl\">The model runs on</span><span class=\"ft\"></span><span class=\"fs\"></span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">The answer</span><span class=\"ft\">Shows up in Colab</span></div></div><p class=\"cap\" id=\"c1-cap\"></p>",init:"initOpen"},
+{label:"Three Things",eyebrow:"Why run a model yourself",html:"<h2 class=\"title\">It Comes Down to Cost, Privacy and <span class=\"hl\">Control</span></h2><p class=\"why\">These are the trade-offs you'll weigh when you compare the open models with Gemini in the Task.</p><p class=\"p\">But why does it matter if you can run an AI model yourself? Why not just stick with GPT-4 or Claude and let them handle everything?</p><p class=\"p\">It comes down to three key things: <b>cost, privacy, and control</b>.</p><p class=\"p\">When you use a closed-source AI like ChatGPT, every request you make goes to OpenAI's servers. That means:</p><div class=\"box\"><ul class=\"tagged \"><li><span class=\"tg\">Cost</span><span><b>You pay per request</b>, which can get expensive fast.</span></li><li><span class=\"tg\">Privacy</span><span><b>Your data is sent to an external company</b>, which isn't ideal if you're dealing with sensitive information (like <b>pharmaceutical documents</b> or <b>clinical trial data</b>).</span></li><li><span class=\"tg\">Control</span><span><b>You can only change the model in the ways the company allows.</b></span></li></ul></div>",init:null},
+{label:"Open Side",eyebrow:"Why run a model yourself",html:"<h2 class=\"title\">With an Open Model, You Run It Your <span class=\"hl\">Way</span></h2><p class=\"why\">This is why a team handling pharmaceutical documents might choose an open model, even though it takes more setup.</p><p class=\"p\">With an open-source model, you can:</p><div class=\"box\"><ul class=\"tagged \"><li><span class=\"tg\">Privacy</span><span><b>Run the model on your own hardware</b>, keeping everything private.</span></li><li><span class=\"tg\">Cost</span><span><b>Use it as much as you want</b> without worrying about per-use costs.</span></li><li><span class=\"tg\">Control</span><span><b>Fine-tune it</b> (train it a little more on your own documents) to improve accuracy for your specific task.</span></li></ul></div><p class=\"p\">Let's say you're building that AI assistant for pharmaceutical documents. <i>Using an open-source model could save you money, give you more privacy, and let you tweak the system to do exactly what you want.</i> That's why DeepSeek's launch was such a big deal: it proved that powerful AI models don't have to be locked behind paywalls.</p>",init:null},
+{label:"No Limits",eyebrow:"Why run a model yourself",html:"<h2 class=\"title\">No Fees per Request, No Rate Limits, No Surprise <span class=\"hl\">Changes</span></h2><p class=\"why\">You met two of these with Gemini in Project 5: free-tier limits, and model names that changed.</p><div class=\"box white\"><p class=\"bp\"><b>No Usage Costs.</b> AI services like ChatGPT charge per request or have monthly fees. If you're using AI a lot (for document processing, research, or automation), running your own model removes the per-request fee (you still need a computer to run it).</p></div><div class=\"box white\"><p class=\"bp\"><b>No Rate Limits.</b> APIs like OpenAI's have limits on how often you can use them in a day. If you need to process thousands of documents, running AI yourself means no waiting, no restrictions.</p></div><div class=\"box white\"><p class=\"bp\"><b>Control &amp; Independence.</b> Big AI companies can change their models, pricing, or access policies anytime. Running your own AI puts you in control, so your system always works the way you need it to.</p></div><p class=\"note\">A <b>rate limit</b> is the most requests a service lets you send in a set time.</p>",init:null},
+{label:"Closed Wins",eyebrow:"Closed or open?",html:"<h2 class=\"title\">Sometimes a Closed Model Is the Better <span class=\"hl\">Choice</span></h2><p class=\"why\">In the Task, you'll say whether you'd use an open model or Gemini, so you need both sides.</p><div class=\"two\"><div class=\"box white\"><p class=\"bh\">Run it yourself</p><p class=\"bp\">In short: If you need <b>privacy, cost savings, customization, and full control</b>, running an AI model yourself is the best option. If you just need casual AI help now and then, an online service like ChatGPT might be enough.</p></div><div class=\"box\"><p class=\"bh\">Closed is better</p><p class=\"bp\">On the other hand, closed-source models are better if:</p><ul><li>You need <b>state-of-the-art reasoning</b> without extra setup.</li><li>You don't have the computing power to run local models.</li><li>You want a plug-and-play solution without tweaking.</li></ul></div></div><p class=\"note\"><b>State-of-the-art</b> means the best there is today. <b>Local models</b> run on a computer you control. <b>Plug-and-play</b> means it works as soon as you connect it.</p>",init:null},
+{label:"Three Models",eyebrow:"The models in this step",html:"<h2 class=\"title\">Three Free Models You'll Run in This <span class=\"hl\">Step</span></h2><p class=\"why\">You'll put all three side by side in the Task, so here's what each one is good at.</p><p class=\"p\">In this externship, you'll be using these open-source models to <b>generate answers from retrieved chunks</b>. All of them can be used inside your RAG pipeline using <b>LlamaIndex + llama-cpp</b>, and most will run on Colab with a little optimization.</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Model</th><th scope=\"col\">Size</th><th scope=\"col\">Best For</th><th scope=\"col\">Limitations</th></tr></thead><tbody><tr><td class=\"k\">Mistral-7B<br>(GGUF)</td><td class=\"sm\"><div class=\"bar\"><i style=\"width:64px\"></i><span>7.2B</span></div></td><td class=\"sm\">RAG pipelines, Q&amp;A, writing answers from the retrieved chunks. Good balance between performance and efficiency</td><td class=\"sm\">Requires memory optimization for Colab</td></tr><tr><td class=\"k\">Phi-2<br>(Microsoft)</td><td class=\"sm\"><div class=\"bar\"><i style=\"width:25px\"></i><span>2.8B</span></div></td><td class=\"sm\">Lightweight, fast, great for quick experiments</td><td class=\"sm\">Limited context size, may struggle with long documents</td></tr><tr><td class=\"k\">TinyLlama<br>(1.1B)</td><td class=\"sm\"><div class=\"bar\"><i style=\"width:10px\"></i><span>1.1B</span></div></td><td class=\"sm\">Extremely lightweight, runs on low-end hardware</td><td class=\"sm\">Performance lower than larger models</td></tr></tbody></table></div><p class=\"note\">Size is the number of <b>parameters</b>, the numbers a model learned in training (7.2B means 7.2 billion). Which model will be the best fit for you? You'll find out in the Task.</p>",init:null},
+{label:"GGUF",eyebrow:"Why GGUF",html:"<h2 class=\"title\">GGUF Shrinks a Model So It Fits on <span class=\"hl\">Colab</span></h2><p class=\"why\">Your notebook downloads Mistral as a GGUF file, and this is why a model this big fits on a free Colab computer at all.</p><p class=\"p\"><b>GGUF</b> is a file format designed specifically for efficient, optimized LLM inference (the model writing an answer), especially on consumer hardware (like laptops or Colab GPUs).</p><div class=\"box\"><ul class=\"tagged wide\"><li><span class=\"tg\">Small computers</span><span>GGUF is designed to work with libraries like <span class=\"mono\">llama.cpp</span>, which don't need massive cloud servers. You can run models on your own GPU, or even CPU (slowly).</span></li><li><span class=\"tg\">Lightweight</span><span>Models are <b>quantized</b> (each number is stored with fewer digits) to take up way less space.</span></li></ul></div><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a file\"><button type=\"button\" data-view=\"full\" aria-pressed=\"true\">Full size</button><button type=\"button\" data-view=\"gguf\" aria-pressed=\"false\">GGUF Q4</button></div></div><p class=\"hint\">Click each one to fit Mistral 7B into Colab's memory.</p></div><div class=\"gauge\"><div class=\"gl\"><span>Free Colab memory (RAM)</span><span>12 GB</span></div><div class=\"gt\"><i id=\"c7-fill\"></i></div></div><p class=\"cap\" id=\"c7-cap\"></p>",init:"initSize"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
