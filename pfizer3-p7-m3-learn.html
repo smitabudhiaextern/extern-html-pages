@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompts That Return Clean Answers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 7, module 3 Learn deck: "Write Prompts That Return the Same Clean Answer Every Time". Ideas
+   only, NO Python code (his prompt texts only): the code is in the Try deck (pfizer3-p7-m3-steps.html). SME: Chaitanya's
+   Notion page de11 "Learn How to Do Prompt Engineering for Reliable, Deterministic Outputs", word for word except the
+   logged swaps. Built 28 November 2026 by learn-build.py (scratchpad p7/p7-m3); never hand-patch this file.
+   Real data: the 8 labels are the nb1 student copy's DOC_TYPES (b1-notebook-and-runs.md), the same list as his prompts.
+   Shell copied unchanged from pfizer3-p6-m6-learn.html; only its P6 m6 additions block is replaced.
+   Fixed stage 760 x 860 at every width (Notion embed height 801 px = stage x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-600); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:860px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--gray-200);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--gray-200);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--gray-200);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P7 m3 additions, built from the same tokens ---- */
+.pbox{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:8px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.pbox .cl,.reply .cl,.dsrc .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ptxt{margin:0;font-family:var(--font-mono);font-size:15px;line-height:1.45;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.pbox.out{background:var(--surface-card);border-color:var(--blue-200)}
+.pbox.bad .ptxt{font-family:var(--font-text);font-style:italic;font-size:16px}
+.pbox.few .ptxt{font-size:14.5px;line-height:1.4}
+.two .pbox{height:100%}
+.reply{margin:0;border:1.5px solid var(--ink);border-radius:var(--radius-sm);background:var(--surface);padding:9px 14px;display:flex;flex-direction:column;gap:4px;min-height:96px}
+.reply.is-good{border-color:var(--green-600)}
+.reply .ptxt{font-size:16px}
+.down{display:grid;grid-template-columns:150px auto minmax(0,1fr);gap:10px;align-items:center}
+.dsrc{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:12px 12px;text-align:center}
+.dlist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dbox{display:flex;align-items:center;gap:8px;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:7px 10px;font-size:15.5px;line-height:1.3;font-weight:600;color:var(--ink);transition:opacity .3s ease,border-color .3s ease}
+.dbox .mk{flex:none;width:18px;height:18px;display:none}
+.dbox .mk svg{width:18px;height:18px;display:block}
+.dbox.stop{opacity:.55;border-color:var(--line)}
+.dbox.stop .mk{display:block;color:var(--ink)}
+.dbox.go{border-color:var(--green-600)}
+.dbox.go .mk{display:block;color:var(--green-600)}
+.chips.lab{gap:6px}
+.chips.lab .chip{font-size:14px;padding:4px 10px;transition:background .3s ease,border-color .3s ease}
+.chips.lab .chip.on{border-color:var(--green-600);box-shadow:inset 0 0 0 1px var(--green-600);background:var(--surface)}
+.view{display:flex;flex-direction:column;gap:10px}
+.view[hidden]{display:none !important}
+.sw button{padding:9px 13px}
+.pair2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:center}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Five ways to make a model answer the same way every time: 5 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 5</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  var timer = null;
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    each(btns, function (y) { y.setAttribute("aria-pressed", y.getAttribute("data-view") === first ? "true" : "false"); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+
+  var D = {"bad": {"bad": {"label": "Bad", "text": "\"It looks like this page probably continues the previous document and might be part of a packaging specification.\""}, "good": {"label": "Good", "text": "\"is_same_doc: Yes\"\n\"doc_type: Certificate of Quality\""}}, "icoX": "<svg viewBox=\"0 0 16 16\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4 4l8 8M12 4l-8 8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>", "icoOk": "<svg viewBox=\"0 0 16 16\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3 8.5 6.5 12 13 4.5\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"};
+  /* Card 2: Bad or Good. The reply changes, and the four downstream steps either stop or carry on */
+  function initBad(root) {
+    var rep = root.querySelector(".reply"), boxes = root.querySelectorAll(".dbox");
+    wire(root, function (v) {
+      rep.querySelector(".cl").textContent = D.bad[v].label;
+      rep.querySelector(".ptxt").textContent = D.bad[v].text;
+      rep.classList.toggle("is-bad", v === "bad"); rep.classList.toggle("is-good", v === "good");
+      each(boxes, function (b) {
+        b.classList.toggle("stop", v === "bad"); b.classList.toggle("go", v === "good");
+        b.querySelector(".mk").innerHTML = v === "bad" ? D.icoX : D.icoOk;
+      });
+    }, "c2", "bad");
+  }
+  function views(root, v) { each(root.querySelectorAll(".view"), function (x) { x.hidden = x.getAttribute("data-v") !== v; }); }
+  /* Card 3: the 8 labels; technique 1 lights the expected answer, technique 3 lights the way out */
+  function initList(root) {
+    var chips = root.querySelectorAll(".chip");
+    wire(root, function (v) {
+      views(root, v);
+      each(chips, function (c) { c.classList.toggle("on", c.getAttribute("data-l") === (v === "t1" ? "Certificate of Quality" : "Other")); });
+    }, "c3", "t1");
+  }
+  function initTwo(root) { wire(root, function (v) { views(root, v); }, "c4", "t2"); }
+  function initFew(root) { wire(root, function (v) { views(root, v); }, "c5", "h"); }
+
+  var INITS = { initBad: initBad, initList: initList, initTwo: initTwo, initFew: initFew };
+  var CARDS = [{label:"The Catch",eyebrow:"The catch",html:"<h2 class=\"title\">LLMs Don't Always <span class=\"hl\">Play Nice</span></h2><p class=\"why\">Your notebook hands each answer from the model straight to the next line of code.</p><p class=\"p\">But here's the catch: <b>LLMs</b> (large language models, such as Gemini) <b>don't always play nice.</b> Left to themselves, they ramble, guess, or return answers in unpredictable formats. That's fine for casual chats, but <b>not</b> for routing documents or triggering automation. To build stable systems, you need <b>structured prompts:</b> prompts designed to return <b>clean, predictable outputs</b> every time.</p><p class=\"p\">This reading is about writing prompts that <b>work well in production</b> (in the real system people use every day, not a test), especially when your model's output flows directly into follow-on steps like:</p><div class=\"down static\"><div class=\"dsrc\"><span class=\"cl\">The model's answer</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"dlist\"><div class=\"dbox\"><span class=\"mk\"></span><span>Tagging document types</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Assigning workflows</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Extracting metadata</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Routing pages to different teams</span></div></div></div><p class=\"p\">These are known as <b>downstream tasks:</b> the parts of your system that depend on the model's response being right, clean, and structured.</p>",init:null},
+{label:"Bad or Good",eyebrow:"Why prompt precision matters",html:"<h2 class=\"title\">Why Prompt <span class=\"hl\">Precision</span> Matters</h2><p class=\"why\">Code can read the good answer, but a rambling one stops it.</p><p class=\"p\">Let's say the model is classifying pages. It sees this:</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"bad\" aria-pressed=\"false\">Bad</button><button type=\"button\" data-view=\"good\" aria-pressed=\"false\">Good</button></div></div></div><div class=\"reply\"><span class=\"cl\"></span><pre class=\"ptxt\"></pre></div><div class=\"down\"><div class=\"dsrc\"><span class=\"cl\">The model's answer</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"dlist\"><div class=\"dbox\"><span class=\"mk\"></span><span>Tagging document types</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Assigning workflows</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Extracting metadata</span></div><div class=\"dbox\"><span class=\"mk\"></span><span>Routing pages to different teams</span></div></div></div><p class=\"p\">Only the second one works for systems, because it's structured, machine-readable, and easy to chain.</p>",init:"initBad"},
+{label:"Fixed List",eyebrow:"Techniques 1 and 3",html:"<h2 class=\"title\">Give It a Fixed List, and a <span class=\"hl\">Way Out</span></h2><p class=\"why\">Your labels must match one spelling exactly, or a later filter finds nothing.</p><p class=\"p\">Here are 5 key techniques that make your prompts structured and production-ready. Click each one.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"t1\" aria-pressed=\"false\">1. Limit Output to a Fixed Set</button><button type=\"button\" data-view=\"t3\" aria-pressed=\"false\">3. Handle Uncertainty</button></div></div></div><div class=\"chips lab\"><span class=\"chip\" data-l=\"Cover Letter\">Cover Letter</span><span class=\"chip\" data-l=\"Certificate of Quality\">Certificate of Quality</span><span class=\"chip\" data-l=\"Packaging Specification\">Packaging Specification</span><span class=\"chip\" data-l=\"BSE/TSE Declaration\">BSE/TSE Declaration</span><span class=\"chip\" data-l=\"Material Description\">Material Description</span><span class=\"chip\" data-l=\"Supplier Qualification\">Supplier Qualification</span><span class=\"chip\" data-l=\"Chain of Custody\">Chain of Custody</span><span class=\"chip\" data-l=\"Other\">Other</span></div><div class=\"view\" data-v=\"t1\"><p class=\"p\">Never let the model guess freely. Give it a <b>predefined list of document types</b> and instruct it to choose from that.</p><div class=\"pbox few\"><span class=\"cl\">Prompt snippet</span><pre class=\"ptxt\">You are a document classification agent.\nBased on the content below, choose the document type from the following list ONLY:\n[&quot;Cover Letter&quot;, &quot;Certificate of Quality&quot;, &quot;Packaging Specification&quot;, &quot;BSE/TSE Declaration&quot;, &quot;Material Description&quot;, &quot;Supplier Qualification&quot;, &quot;Chain of Custody&quot;, &quot;Other&quot;]\n\nReturn your answer in this format:\n{ &quot;doc_type&quot;: &quot;&lt;ONE OF THE ABOVE&gt;&quot; }</pre></div><div class=\"pair2\"><div class=\"pbox out\"><span class=\"cl\">Expected output</span><pre class=\"ptxt\">{ &quot;doc_type&quot;: &quot;Certificate of Quality&quot; }</pre></div><p class=\"p\">This output is clean, structured, and easy to plug into downstream logic, with no extra parsing or guesswork needed.</p></div></div><div class=\"view\" data-v=\"t3\" hidden><p class=\"p\">Models often hedge or hallucinate (answer vaguely, or make something up) when unsure. Tell the model exactly what to do when it's unsure.</p><p class=\"p\">Clear fallback instructions like this help keep the system stable:</p><div class=\"pbox\"><span class=\"cl\">Fallback instruction</span><pre class=\"ptxt\">If you&#x27;re not sure, return:\n{\n  &quot;doc_type&quot;: &quot;Other&quot;\n}</pre></div><p class=\"p\"><b>Prompt tip:</b> Always provide a fallback option like \"Other.\"</p></div>",init:"initList"},
+{label:"JSON, Short",eyebrow:"Techniques 2 and 4",html:"<h2 class=\"title\">Ask for JSON, and Keep It <span class=\"hl\">Short</span></h2><p class=\"why\">JSON turns the answer into a dictionary your code can read.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"t2\" aria-pressed=\"false\">2. Use JSON or CSV</button><button type=\"button\" data-view=\"t4\" aria-pressed=\"false\">4. Enforce Length &amp; Token Limits</button></div></div></div><div class=\"view\" data-v=\"t2\"><p class=\"p\">Guide the model to return outputs in a strict, machine-readable format, such as JSON or CSV (comma-separated values: a table written as plain text). This ensures your pipeline can reliably parse (read and use) the results without guesswork. Most automation systems can't handle messy or unpredictable output. That's why structured formats like JSON or CSV are a must.</p><p class=\"p\">This is especially important when working with downstream systems that expect structured inputs (e.g., RAG routing, metadata extractors, labeling tools).</p><div class=\"two\"><div class=\"pbox bad\"><span class=\"cl\">Bad example: vague and unstructured output</span><pre class=\"ptxt\">&quot;I&#x27;m pretty sure this is some sort of cover letter, maybe submitted by a supplier for a qualification application.&quot;</pre></div><div class=\"pbox out\"><span class=\"cl\">Good example: clean and structured output</span><pre class=\"ptxt\">{ &quot;doc_type&quot;: &quot;Cover Letter&quot; }</pre></div></div><p class=\"p\">This kind of output is:</p><ul class=\"ul\"><li>Easy for computer systems to read</li><li>Always follows the same format</li><li>Works well in automated tools like tagging, sorting, or routing</li></ul></div><div class=\"view\" data-v=\"t4\" hidden><p class=\"p\">When LLMs get verbose (wordy), your automation breaks. Use prompts that tell the model to:</p><ul class=\"ul\"><li>Keep answers short and structured</li><li>Return exactly one JSON object</li><li>Avoid explanations, commentary, or disclaimers</li></ul><p class=\"p\">This reduces noise and keeps the output clean for downstream use. A token is a small piece of a word, so a token limit caps how long the answer can be.</p><div class=\"pbox\"><span class=\"cl\">Example prompt addition</span><pre class=\"ptxt\">Only return one JSON object. Do not include any extra text or explanation.</pre></div></div>",init:"initTwo"},
+{label:"Examples",eyebrow:"Technique 5",html:"<h2 class=\"title\">Repeat the Format With a Few <span class=\"hl\">Examples</span></h2><p class=\"why\">Examples show the model the exact shape you want back.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"h\" aria-pressed=\"false\">How it works</button><button type=\"button\" data-view=\"p\" aria-pressed=\"false\">Example prompt with priming</button><button type=\"button\" data-view=\"o\" aria-pressed=\"false\">What comes back</button></div></div></div><div class=\"view\" data-v=\"h\"><p class=\"p\">Guide the model by showing it how you want it to respond, before it even starts generating. This technique is called <b>\"few-shot priming.\"</b> By including 2 to 3 examples of input and desired output in your prompt, you help the model:</p><ul class=\"ul\"><li>Understand your structure expectations</li><li>Reduce formatting errors</li><li>Stay consistent across multiple queries</li></ul><p class=\"p\">This works especially well for document classification, tagging, and metadata extraction.</p></div><div class=\"view\" data-v=\"p\" hidden><div class=\"pbox few\"><span class=\"cl\">Example prompt with priming</span><pre class=\"ptxt\">You are a document classification agent.\nRead each document and return its type in JSON format.\n\nExample 1:\nContent: &quot;To Whom It May Concern, The recommended storage temperature for this product is 2-8\u00b0C.&quot;\n{ &quot;doc_type&quot;: &quot;Cover Letter&quot; }\n\nExample 2:\nContent: &quot;This product is manufactured in compliance with our ISO 9001 certified quality management system.&quot;\n{ &quot;doc_type&quot;: &quot;Certificate of Quality&quot; }\n\nNow classify the following document:\nContent: &quot;This declaration confirms the animal origin compliance status of all raw materials used.&quot;</pre></div></div><div class=\"view\" data-v=\"o\" hidden><p class=\"p\">The output should follow the same format:</p><div class=\"pbox out\"><span class=\"cl\">Expected output</span><pre class=\"ptxt\">{ &quot;doc_type&quot;: &quot;BSE/TSE Declaration&quot; }</pre></div></div>",init:"initFew"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
