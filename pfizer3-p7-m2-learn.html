@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find Where Each Document Starts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Project 7, reading 2 Learn deck: "Find Where Each Document Starts in a Bundled PDF". Ideas only, NO code: the code
+   is in the Try deck (pfizer3-p7-m2-steps.html). SME: Chaitanya's Notion pages fa11, 55f1 and c211, his words except
+   the approved swaps in step1-coverage-m2.md. Built 28 November 2026 by learn-build.py (scratchpad p7/p7-m2); never
+   hand-patch this file. Pfizer x Extern Core design system, Light format; shell, rail, switches and "Click me" pulse
+   copied unchanged from pfizer3-p6-m6-learn.html.
+   Real data: the 10 pages of pharma-blob-sample.pdf (rendered with PyMuPDF) and the nb1 run in b1-notebook-and-runs.md.
+   Fixed stage 760 x 870 at every width (Notion embed height 810 px = stage x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:870px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P7 m2 additions, built from the same tokens ---- */
+.stripwrap{position:relative}
+.strip{display:grid;grid-template-columns:repeat(10,1fr);gap:0;border:1.5px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--gray-50);transition:gap .35s ease}
+.strip figure{margin:0;position:relative;line-height:0;background:var(--surface);transition:opacity .3s ease,border-radius .35s ease}
+.strip img{display:block;width:100%;height:auto;aspect-ratio:476/673;object-fit:cover;object-position:top}
+.strip figure + figure{border-left:1px solid var(--line)}
+.strip.dim figure{opacity:.25}
+.strip .q,.strip figcaption{display:none}
+.strip.split{gap:8px;border-color:transparent;background:transparent;overflow:visible}
+.strip.split figure{border:1.5px solid var(--blue-200);border-radius:var(--radius-xs);overflow:hidden}
+.strip.split .q{display:flex;position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:var(--pfizer-blue);color:var(--on-action);font-size:13px;line-height:1;font-weight:700;align-items:center;justify-content:center}
+.strip.split figcaption{display:block;line-height:1.2;font-size:12px;font-weight:600;color:var(--ink-muted);padding:4px 2px 3px;text-align:center;background:var(--surface)}
+.chunk{position:absolute;left:4%;right:4%;top:50%;transform:translateY(-50%);border:1.5px solid var(--pfizer-blue);background:var(--surface);border-radius:var(--radius-sm);padding:10px 14px;display:flex;flex-direction:column;gap:5px;box-shadow:0 6px 24px rgba(0,0,0,.08)}
+.chunk .cl,.detail .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.chunk .code{font-family:var(--font-mono);font-size:13.5px;line-height:1.45;color:var(--ink)}
+.cap2{margin:0;font-size:16px;line-height:1.4;color:var(--ink-muted);font-weight:500}
+.cap2 b{color:var(--ink);font-weight:600}
+.note{margin:0;border-left:4px solid var(--pfizer-blue);background:var(--surface-card);border-radius:0 var(--radius-xs) var(--radius-xs) 0;padding:8px 14px;font-size:16px;line-height:1.45;color:var(--card-text)}
+.note b{color:var(--ink);font-weight:600}
+.tbl.wrong td,.tbl.out td{font-size:15.5px;line-height:1.35;padding:6px 10px}
+.tbl.wrong td.k{white-space:normal}
+.tbl.out tr.more td{color:var(--ink-muted);font-style:italic}
+.ol{margin:0;padding-left:24px;display:flex;flex-direction:column;gap:2px}
+.ol li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ol li b{font-weight:600;color:var(--ink)}
+.box .ol li{color:var(--card-text)}
+/* Phone photo (card 5): his caption drawn as a picture with its metadata tags */
+.phone{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto;column-gap:16px;row-gap:6px;align-items:center;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px}
+.photo{grid-row:1 / span 2;width:118px;height:92px;border-radius:var(--radius-xs);background:var(--surface);border:1.5px solid var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--ink)}
+.photo svg{width:44px;height:44px}
+.photo span{font-size:12.5px;font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tg{background:var(--surface);border:1.5px solid var(--pfizer-blue);color:var(--pfizer-blue);border-radius:999px;padding:3px 11px;font-size:14px;line-height:1.3;font-weight:600}
+.pcap{margin:0;font-size:15.5px;line-height:1.4;color:var(--card-text);font-style:italic}
+/* Metadata rows (card 6) */
+.meta{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px;align-items:center}
+.meta .json{grid-column:1 / -1}
+.json{overflow:hidden}
+.picks{display:flex;gap:8px}
+.pick{display:flex;flex-direction:column;align-items:center;gap:4px;width:56px;padding:4px;border:1.5px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink-muted)}
+.pick img{display:block;width:100%;height:auto;border:1px solid var(--line)}
+.pick[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);color:var(--pfizer-blue)}
+.json{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--gray-50);padding:8px 10px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink)}
+.jr{padding:1px 4px 1px 8px;border-radius:6px;white-space:nowrap;transition:background .25s ease}
+.jr.on{background:var(--surface-card);box-shadow:inset 3px 0 0 var(--pfizer-blue)}
+/* Loop (card 8) */
+.looprow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+.looprow .steps{flex-direction:row}
+.looprow .steps li{flex:1}
+.mini{display:flex;gap:6px}
+.mini figure{margin:0;width:44px;line-height:0;border:1.5px solid var(--line);border-radius:6px;overflow:hidden;transition:border-color .25s ease}
+.mini figure.on{border-color:var(--pfizer-blue);box-shadow:0 0 0 2px var(--blue-200)}
+.mini img{display:block;width:100%;height:auto}
+.detail{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:4px;min-height:96px}
+.detail .dt{font-size:16.5px;line-height:1.45;color:var(--ink)}
+.detail .dt b{font-weight:600}
+/* Review rules (card 10) */
+.rules{display:flex;flex-direction:column;gap:6px}
+.rule{border:1.5px solid var(--line);border-radius:var(--radius-xs);padding:6px 12px;font-size:16.5px;line-height:1.4;color:var(--card-text);background:var(--surface)}
+.rule.on{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue);color:var(--ink)}
+.rule b{font-weight:600;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Why a bundled PDF needs labels on every page: 10 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 10</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"cap1": {"eyes": "You see <b>10 pages</b>: a letter, certificates, a specification and more. One PDF file holds them all.", "text": "Your retriever sees one long run of text. Where does the letter end and the certificate begin? Nothing says."}, "cap4": {"file": "One file: 10 pages glued together, with no labels.", "pages": "10 pages, each its own unit. Each one waits for its labels: which document, and what type?"}, "loop": [{"on": [1, 2], "label": "Page 0: the first page", "text": "The first page always starts a new document, so the model only classifies it: <b>Cover Letter</b>, document ID <b>0</b>."}, {"on": [0, 1, 2], "label": "Page 1: same document as page 0?", "text": "The model says <b>No</b>, so the document ID goes up to <b>1</b> and the model classifies the page: <b>Certificate of Quality</b>."}, {"on": [0, 1, 2], "label": "Page 2: same document as page 1?", "text": "Also a Certificate of Quality, but for a different lot (15102934, not 18356721). The model says <b>No</b>, so this is a new document: ID <b>2</b>, <b>Certificate of Quality</b>."}]};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  function picHTML_unused() {
+    return '<figure class="pic"><img src="' + D.P2.img + '" alt="' + D.P2.alt + '" width="' + D.P2.w + '" height="' + D.P2.h + '">' +
+      '<div class="ov"><svg viewBox="0 0 ' + D.P2.w + ' ' + D.P2.h + '" preserveAspectRatio="none" aria-hidden="true"></svg></div></figure>';
+  }
+
+  var timer = null;
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    each(btns, function (y) { y.setAttribute("aria-pressed", y.getAttribute("data-view") === first ? "true" : "false"); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* Card 1: the 10 real pages as you see them, or the one long run of text the retriever gets */
+  function initBundle(root) {
+    var strip = root.querySelector(".strip"), box = root.querySelector(".chunk"), cap = root.querySelector(".cap2");
+    wire(root, function (v) {
+      strip.classList.toggle("dim", v === "text");
+      box.hidden = v !== "text";
+      cap.innerHTML = D.cap1[v];
+    }, "c1", "eyes");
+  }
+
+  /* Card 4: one glued file, or 10 separate pages, each with an open question */
+  function initPages(root) {
+    var strip = root.querySelector(".strip"), cap = root.querySelector(".cap2");
+    wire(root, function (v) {
+      strip.classList.toggle("split", v === "pages");
+      cap.innerHTML = D.cap4[v];
+    }, "c4", "file");
+  }
+
+  /* Card 6: click a page to light its row of metadata */
+  function initMeta(root) {
+    var picks = root.querySelectorAll(".pick"), rows = root.querySelectorAll(".jr");
+    function pick(n) {
+      each(picks, function (p, k) { p.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      each(rows, function (r, k) { r.classList.toggle("on", k === n); });
+      space();
+    }
+    each(picks, function (p, k) { p.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c6", root.querySelector(".picks"), root.querySelector(".hint"), "inline");
+  }
+
+  /* Card 8: the loop on the bundle's first 3 pages, one click per page, real answers from the run */
+  function initLoop(root) {
+    var rows = root.querySelectorAll(".step"), boxes = root.querySelectorAll(".flow .fbox"), det = root.querySelector(".detail");
+    var thumbs = root.querySelectorAll(".mini figure");
+    function pick(n) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      each(boxes, function (b, k) { var on = D.loop[n].on.indexOf(k) >= 0; b.classList.toggle("on", on); b.classList.toggle("dim", !on); });
+      each(thumbs, function (t, k) { t.classList.toggle("on", k === n); });
+      det.innerHTML = '<span class="cl">' + D.loop[n].label + '</span><span class="dt">' + D.loop[n].text + '</span>';
+      space();
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c8", root.querySelector(".steps"), root.querySelector(".hint"), "inline");
+  }
+
+  var INITS = { initBundle: initBundle, initPages: initPages, initMeta: initMeta, initLoop: initLoop };
+  var CARDS = [{label:"The Hidden Villain",eyebrow:"Why bundles break RAG",html:"<h2 class=\"title\">The Hidden Villain: Unstructured <span class=\"hl\">Bundled</span> Files</h2><p class=\"why\">This is why a RAG pipeline like yours can answer from the wrong paper.</p><p class=\"p\">Here's the catch: <b>RAG is only as good as the structure of the documents it retrieves from</b>. And in the real world, many documents don't come neatly packaged. Instead, you get long, unstructured PDFs where multiple unrelated documents are bundled into one giant scan. Think of a pharmaceutical supplier packet with certificates of quality, BSE/TSE declarations, packaging specifications, cover letters, material descriptions, all mashed into one file.</p><p class=\"p\">To your retriever, that's just one long chunk of undifferentiated text. There are no document boundaries. No labels. No idea what begins where or what type of content it's looking at.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"eyes\" aria-pressed=\"false\">What you see</button><button type=\"button\" data-view=\"text\" aria-pressed=\"false\">What your retriever sees</button></div></div></div><div class=\"stripwrap\"><div class=\"strip\"><figure><img src=\"pfizer3-p7-m2-learn-page0.png\" alt=\"Page 0 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page1.png\" alt=\"Page 1 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page2.png\" alt=\"Page 2 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page3.png\" alt=\"Page 3 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page4.png\" alt=\"Page 4 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page5.png\" alt=\"Page 5 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page6.png\" alt=\"Page 6 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page7.png\" alt=\"Page 7 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page8.png\" alt=\"Page 8 of the supplier bundle\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page9.png\" alt=\"Page 9 of the supplier bundle\" width=\"476\" height=\"673\"></figure></div><div class=\"chunk\" hidden><span class=\"cl\">One long chunk</span><span class=\"code\">This letter is provided for informational purposes only and does not affect or create any rights or obligations in regard to either party. Sincerely, Cytiva Quality Assurance Certificate of Quality This product is manufactured in compliance with our ISO 9001 certified quality management system. ...</span></div></div><p class=\"cap2\"></p>",init:"initBundle"},
+{label:"What Goes Wrong",eyebrow:"So, naturally, things go wrong",html:"<h2 class=\"title\">What Goes <span class=\"hl\">Wrong</span> with Unstructured Bundles?</h2><p class=\"why\">Each of these mistakes can hand a wrong answer to the person checking a supplier's papers.</p><div class=\"tbl wrong\"><table><thead><tr><th>Problem</th><th>Example</th><th>Impact</th></tr></thead><tbody><tr><td class=\"k\">Picks the wrong document type</td><td>A certificate of quality is mistaken for a packaging specification because both have tables</td><td>Extractors return blanks or errors</td></tr><tr><td class=\"k\">Misjudges where a document starts or ends</td><td>Page 2 of a packaging specification is treated as a new doc</td><td>The signature page is lost; the document becomes invalid</td></tr><tr><td class=\"k\">Retrieves the wrong content</td><td>Asked about BSE/TSE compliance, the system pulls from a cover letter</td><td>Hallucinated answers, loss of trust</td></tr><tr><td class=\"k\">Merges unrelated documents</td><td>A material description and cover letter are glued together</td><td>Wrong processing rules applied; confusion in downstream tasks</td></tr></tbody></table></div><p class=\"p\">Once document boundaries are blurred, everything downstream suffers: extraction, retrieval, routing, and worst of all, <b>user trust</b>.</p><p class=\"note\"><b>Wondering what BSE/TSE compliance is?</b> BSE/TSE declarations are about BSE (bovine spongiform encephalopathy, or mad cow disease) and TSE (transmissible spongiform encephalopathies, the family of brain diseases it belongs to). The declaration certifies that pharmaceutical materials carry no risk of passing these diseases on: they have no animal-derived components, or those components come from safe sources. These are mandatory compliance documents in drug manufacturing.</p>",init:null},
+{label:"What's Failing",eyebrow:"The real problem",html:"<h2 class=\"title\">So What's <span class=\"hl\">Actually</span> Failing?</h2><p class=\"why\">The fix is in what you feed your pipeline, not in the model itself.</p><p class=\"p\">Not the model. Not the reranker. Not even the retriever, at least, not by itself.</p><p class=\"p\">The real problem is that your pipeline doesn't understand structure. It can't \"see\" that page 4 starts a new documentation or that page 8 is just a blank scan. It treats the entire file as one unstructured bundle.</p><p class=\"p\">That means it either:</p><ul class=\"ul\"><li>Retrieves the wrong context,</li><li>Misses the relevant part entirely, or</li><li>Grabs too much and confuses the LLM.</li></ul><p class=\"p\">It's not a question of smarter prompts or better models. It's a question of feeding your system documents that it can actually understand.</p><p class=\"take\">To get reliable results from your RAG pipeline, <b>you need structured inputs</b>.</p>",init:null},
+{label:"Think in Pages",eyebrow:"What we need",html:"<h2 class=\"title\">Think in <span class=\"hl\">Pages</span>, Not Files</h2><p class=\"why\">Every later step works page by page, so the page is the unit you'll label.</p><p class=\"p\">We need a way to break these files into logical, usable chunks <i>before</i> we ask the model to do anything with them. That starts by changing how we think: <b>not in terms of files, but in terms of pages</b>.</p><p class=\"p\">Each page can carry its own identity. This one is a certificate of quality. That one's a packaging specification. The next? A cover letter or maybe the back of a BSE/TSE declaration. If we can classify each page and understand its role in the larger document, we give our system the tools it needs to reason about structure.</p><p class=\"take\">That's where <b>page-level classification</b> comes in. Instead of simply asking, <i>\"Where does a document start and end?\"</i>, start treating every page as its own unit of analysis.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"file\" aria-pressed=\"false\">As one file</button><button type=\"button\" data-view=\"pages\" aria-pressed=\"false\">As pages</button></div></div></div><div class=\"strip\"><figure><img src=\"pfizer3-p7-m2-learn-page0.png\" alt=\"Page 0 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 0</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page1.png\" alt=\"Page 1 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 1</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page2.png\" alt=\"Page 2 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 2</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page3.png\" alt=\"Page 3 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 3</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page4.png\" alt=\"Page 4 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 4</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page5.png\" alt=\"Page 5 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 5</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page6.png\" alt=\"Page 6 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 6</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page7.png\" alt=\"Page 7 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 7</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page8.png\" alt=\"Page 8 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 8</figcaption></figure><figure><img src=\"pfizer3-p7-m2-learn-page9.png\" alt=\"Page 9 of the supplier bundle\" width=\"476\" height=\"673\"><span class=\"q\" aria-hidden=\"true\">?</span><figcaption>Page 9</figcaption></figure></div><p class=\"cap2\"></p><p class=\"p\">This lets automation systems: label pages more precisely, extract data more accurately, and route content with higher confidence. But how do we <i>actually</i> do that?</p>",init:"initPages"},
+{label:"Metadata",eyebrow:"The answer lies in metadata",html:"<h2 class=\"title\">The Answer Lies in <span class=\"hl\">Metadata</span></h2><p class=\"why\">You already met metadata in Project 3. Here it becomes the label on each page.</p><p class=\"p\">Metadata is simply <b>data about data</b>. It's the behind-the-scenes information that helps systems make sense of what they're looking at. Think about a photo on your phone:</p><div class=\"phone\"><div class=\"photo\" aria-hidden=\"true\"><svg viewBox=\"0 0 48 48\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"9\" width=\"38\" height=\"30\" rx=\"4\"/><circle cx=\"17\" cy=\"20\" r=\"4\"/><path d=\"M7 36l12-11 9 8 6-5 9 8\"/></svg><span>The photo</span></div><div class=\"tags\"><span class=\"tg\">Timestamp</span><span class=\"tg\">Location</span><span class=\"tg\">etc.</span></div><p class=\"pcap\">The image is the data and information such as timestamp, location, etc. would be metadata</p></div><p class=\"p\">You don't see it at first glance, but your phone uses it to organize your gallery, filter searches, or group albums automatically. That's the power of structure. Now apply that to document automation:</p><ul class=\"ul\"><li>The <b>page</b> is your raw data.</li><li>The <b>document type</b>, <b>position in a doc</b>, and <b>whether it starts a new file</b>: that's your metadata.</li></ul><p class=\"p\">Metadata gives each page a voice. It tells your system what it's looking at <i>before</i> any retrieval or generation happens.</p>",init:null},
+{label:"Three Facts",eyebrow:"Think of it like this",html:"<h2 class=\"title\">Three <span class=\"hl\">Facts</span> for Every Page</h2><p class=\"why\">These three facts are exactly what your code will work out for each page.</p><ul class=\"ul\"><li>Is this the <b>first page</b> of a new document?</li><li>What is the <b>document type</b>: a certificate of quality, a BSE/TSE declaration, a material description?</li><li>What is its <b>position</b> in the document (e.g., page 1 of 3)?</li></ul><p class=\"p\">This small layer of context is game-changing. It allows your system to split pages into distinct documents accurately, apply the right logic to each kind (e.g., extract compliance dates from BSE/TSE declarations, part numbers from packaging specifications), retrieve relevant content with precision, and most importantly, <b>avoid confusion and hallucinations</b>.</p><div class=\"meta\"><p class=\"hint\">Here's what structured page-level metadata looks like for the bundle's first 3 pages. Click a page.</p><div class=\"picks\" role=\"group\" aria-label=\"Pages\"><button type=\"button\" class=\"pick\" aria-pressed=\"false\"><img src=\"pfizer3-p7-m2-learn-page0.png\" alt=\"\" width=\"476\" height=\"673\"><span>Page 0</span></button><button type=\"button\" class=\"pick\" aria-pressed=\"false\"><img src=\"pfizer3-p7-m2-learn-page1.png\" alt=\"\" width=\"476\" height=\"673\"><span>Page 1</span></button><button type=\"button\" class=\"pick\" aria-pressed=\"false\"><img src=\"pfizer3-p7-m2-learn-page2.png\" alt=\"\" width=\"476\" height=\"673\"><span>Page 2</span></button></div><div class=\"json\" aria-label=\"Page-level metadata\"><span class=\"jl\">[</span><span class=\"jr\">{ \"page\": 0, \"doc_type\": \"Cover Letter\", \"page_in_doc\": 0 },</span><span class=\"jr\">{ \"page\": 1, \"doc_type\": \"Certificate of Quality\", \"page_in_doc\": 0 },</span><span class=\"jr\">{ \"page\": 2, \"doc_type\": \"Certificate of Quality\", \"page_in_doc\": 0 }</span><span class=\"jl\">]</span></div></div><p class=\"p\">Now, your retriever isn't flying blind. And the best part? You don't need to rewrite your entire RAG pipeline to get this. You just need to <b>structure your inputs right</b> before your LLM gets involved.</p>",init:"initMeta"},
+{label:"The Plan",eyebrow:"What you'll do next",html:"<h2 class=\"title\">Teach Your System the <span class=\"hl\">Rhythm</span> of a PDF</h2><p class=\"why\">This is the plan for the rest of Step 1.</p><p class=\"p\">You'll <b>build a smarter system that processes documents one page at a time.</b> You'll use an AI model, but with a twist: instead of treating the PDF as one big file, you'll break it down into <b>individual pages.</b> You'll label each page clearly and confidently using predictions and metadata.</p><p class=\"take\">Think of it like teaching your system to <b>\"understand\" the rhythm of a PDF</b>: where one certificate of quality ends and a new packaging specification begins.</p><div class=\"box\"><p class=\"bh\">Here's what you'll tackle:</p><ol class=\"ol\"><li>Is this page part of the same document?</li><li>If not, what type of document is it?</li><li>Output structured metadata</li></ol><p class=\"bp\">This metadata is the foundation for smarter, more accurate automation.</p></div><p class=\"p\">This isn't just about breaking things up for the sake of it. By identifying the <b>boundaries and types of documents</b>, you're giving your pipeline exactly what it needs. That's a <i>huge</i> step toward making automation work in the messy, real world of document files.</p>",init:null},
+{label:"The Loop",eyebrow:"How the page-by-page strategy works",html:"<h2 class=\"title\">Two <span class=\"hl\">Questions</span> for Every Page</h2><p class=\"why\">This loop is the method you'll run in Try It Yourself.</p><p class=\"p\">Instead of splitting pages randomly, we <b>loop through the document one page at a time</b>, and use an LLM to help us decide what's what. For every page, we ask two questions:</p><ol class=\"ol\"><li><b>Is this page part of the same document as the one before it?</b> If <b>yes</b>: keep the same document ID and type.</li><li><b>If it's a new document, what kind of document is it?</b> If <b>no</b>, it's new: assign a new document ID and ask the model to classify the document type.</li></ol><p class=\"hint\">Let's understand this on the supplier bundle's first 3 pages. Click each page.</p><div class=\"looprow\"><ol class=\"steps\"><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">0</span><span>Page 0</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">1</span><span>Page 1</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">2</span><span>Page 2</span></button></li></ol><div class=\"mini\"><figure><img src=\"pfizer3-p7-m2-learn-page0.png\" alt=\"Page 0\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page1.png\" alt=\"Page 1\" width=\"476\" height=\"673\"></figure><figure><img src=\"pfizer3-p7-m2-learn-page2.png\" alt=\"Page 2\" width=\"476\" height=\"673\"></figure></div></div><div class=\"flow\"><div class=\"fbox\"><span class=\"fl\">Question 1</span><span class=\"fs\">Same document as the page before?</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Question 2</span><span class=\"fs\">New document: what type is it?</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Labels</span><span class=\"fs\">Document ID and type for this page</span></div></div><div class=\"detail\"></div>",init:"initLoop"},
+{label:"The Output",eyebrow:"What the final output looks like",html:"<h2 class=\"title\">A Simple, Structured <span class=\"hl\">Table</span></h2><p class=\"why\">This table is what your notebook prints at the end of Try It Yourself.</p><p class=\"p\">Here's what you get at the end: a simple, structured table that tells your system <i>exactly</i> how to handle each page. These are the real first 3 rows for the supplier bundle:</p><div class=\"tbl out\"><table><thead><tr><th>Page</th><th>Document ID</th><th>Type</th></tr></thead><tbody><tr><td>0</td><td>0</td><td>Cover Letter</td></tr><tr><td>1</td><td>1</td><td>Certificate of Quality</td></tr><tr><td>2</td><td>2</td><td>Certificate of Quality</td></tr><tr class=\"more\"><td colspan=\"3\">... 7 more rows, which you'll see in your own notebook</td></tr></tbody></table></div><p class=\"p\">Let's pause and look at that for a second:</p><ul class=\"ul\"><li>The first column, <b>Page</b>, is just the page number. In programming, we start counting from <b>0</b>, not 1. So page 0 is the first page.</li><li><b>Document ID</b> tells us which pages belong to the same document. Pages 1 and 2 are both Certificates of Quality, but they say \"1\" and \"2\", so they're two separate certificates.</li><li><b>Type</b> is the label the model gave us. That's your metadata.</li></ul>",init:null},
+{label:"Human Check",eyebrow:"No model is perfect",html:"<h2 class=\"title\">Keep a <span class=\"hl\">Human</span> in the Loop</h2><p class=\"why\">No model is right every time, so a person checks the pages it is unsure about.</p><p class=\"p\">The classifier gives every page a label, and sometimes that label will be wrong. In pharma, a misclassified page can skip the reviewer it was meant for, and nobody may notice until an audit. Treat the model's label as a first pass, not the final word.</p><p class=\"p\">So decide ahead of time which labels you won't trust. Send a page to a <b>needs review</b> list for a person when:</p><div class=\"rules\"><span class=\"rule on\">the model returns <b>Other</b></span><span class=\"rule\">the label isn't one of your seven types</span><span class=\"rule\">neighboring pages disagree in a way that looks odd (a Certificate of Quality page sitting between two Cover Letter pages, say)</span></div><p class=\"p\">The model doesn't give you a confidence score here, so you use signals like these instead. You'll run the code for the first rule in Try It Yourself.</p><p class=\"take\">A reviewer opens only those pages instead of the whole bundle. You still save most of the time, and the pages with the most risk get a human check before anything is routed automatically.</p>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>

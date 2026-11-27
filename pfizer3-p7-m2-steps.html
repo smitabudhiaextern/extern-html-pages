@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classify and Label Every Page: Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Project 7, reading 2, "Try It Yourself": the student copy of the team's notebook "Design Page Level Detection"
+   (Drive 1-RpL2XWJN1YE0_mLb5zkqepTiR1zzIWq). Built by steps-build.py (scratchpad p7/p7-m2); never hand-patch this file.
+   Code: read from b1-notebooks/nb1-student.ipynb. Outputs: the real Colab run, b1-notebook-and-runs.md and b1-shots.
+   Shell copied unchanged from pfizer3-p6-m6-steps.html.
+   Fixed stage 760 x 1140 (frames under 560 px wide: 450 x 1256), scaled as one piece so nothing scrolls.
+   Look: Pfizer x Extern Core, Light format; every color, size, radius and font comes from design-system/tokens.json. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:1140px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Header: step rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+.narrow .pg-word{display:none}
+.narrow .pg.pg-fit{flex:none}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 0}
+.narrow .card{padding:18px 16px;border-left:0;border-right:0;border-radius:0}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.p code.nw,.list code.nw{white-space:nowrap}
+.list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:22px;text-wrap:pretty}
+.list b{font-weight:600}
+.list code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.list li::marker{color:var(--step-label);font-weight:600}
+.see{margin-top:4px}
+
+/* Buttons (design system Button, Light) */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Run card: a notebook cell (no Copy button: the cells are already in the notebook), or the one cell students add (Copy button) */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin:0}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run.out pre{font-size:12px}
+
+/* The Colab screenshot: the full width of the card (edge to edge), opens full size in a new tab.
+   Under 560 px the card itself runs edge to edge, so the picture is as wide as the frame. */
+.shot{margin:0 calc(-1 * var(--space-5));border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden;line-height:0;background:var(--surface)}
+.narrow .shot{margin:0 -16px}
+.shot a{display:block}
+.shot img{display:block;width:100%;height:auto}
+.shot-cap{margin:-6px 0 0;font-size:13px;line-height:18px;color:var(--gray-600)}
+
+/* A picture of the page (slide 14: the table in foo.pdf): framed like the output blocks, as wide as the text */
+.pagepic{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.pagepic a{display:block}
+.pagepic img{display:block;width:100%;height:auto}
+
+/* Table and analysis box (from the Learn deck) */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.m{font-family:var(--font-mono);font-size:13px;color:var(--ink);white-space:nowrap}
+.tbl td code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .tbl table{font-size:13px}
+.narrow .tbl td,.narrow .tbl th{padding:5px 8px}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px;font-size:15px;line-height:22px;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl p{margin:0}
+.concl p + p{margin-top:6px}
+.concl code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+
+/* A smaller code font for the long function in Step 3 (from the 11 November module 9 steps deck) */
+.run.small pre{font-size:12px;line-height:1.32;padding:8px 14px}
+.narrow .run.small pre{font-size:10.5px;line-height:1.35}
+
+/* Tip box (from the 11 November module 9 Learn deck): pale-blue card, Pfizer blue bulb in a white square */
+.tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px}
+.tip-icon{flex:none;width:30px;height:30px;border-radius:var(--radius-xs);background:var(--surface);display:grid;place-items:center;color:var(--pfizer-blue)}
+.tip-icon svg{width:18px;height:18px}
+.tip p{margin:0;font-size:15px;line-height:22px;color:var(--card-text);text-wrap:pretty}
+.tip b{font-weight:600;color:var(--card-title)}
+
+/* Last slide: his closing line and Key Takeaway (takeaway box copied from the module 7 cheat sheet slide) */
+.inner.end-slide{gap:var(--space-4)}
+.end-slide .p{font-size:17px;line-height:1.55}
+.take{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:14px 18px;font-size:17px;line-height:1.55;color:var(--card-text)}
+.take b{font-weight:700;color:var(--card-title)}
+.take code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .take{font-size:15px;padding:12px 16px}
+.narrow .end-slide .p{font-size:16px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* Added for P4 module 2 (copied from the P3 module 8 Try deck): "now holds" note, the SME's callout box, the Quick Recap size */
+.holds{margin:0;display:flex;align-items:center;gap:8px;background:var(--surface-card);border-left:4px solid var(--pfizer-blue);border-radius:var(--radius-xs);padding:7px 12px;font-size:14px;line-height:20px;font-weight:600;color:var(--card-title)}
+.holds code{font-family:var(--font-mono);font-size:.93em;background:var(--surface);border-radius:4px;padding:1px 5px}
+.holds svg{width:16px;height:16px;flex:none;color:var(--pfizer-blue)}
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:9px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:15px;line-height:1.48;color:var(--ink-muted)}
+.note b{font-weight:600;color:var(--ink)}
+.recap-slide .list{font-size:17px;line-height:1.55;gap:14px}
+.recap-slide .list ul{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:2px}
+.recap-slide .list ul li::marker{color:var(--ink-muted)}
+.narrow .recap-slide .list{font-size:15.5px;gap:10px}
+/* Many steps in the rail: numbers only */
+.pg-word{display:none}
+.pg-label{text-align:center}
+.pg.pg-fit{flex:none}
+.pg.pg-fit .pg-label{text-align:left}
+/* Under 560 px there is no room for the 7 group labels: the rail shows only the progress bars, and "Step N" sits beside the count */
+.narrow .pg-label{display:none}
+.narrow .pg.pg-fit{flex:1 1 0}
+/* Code and output: Project 3's size (fix pass, 22 November 2026: 14 px on the 760 stage, 13 px at the 708 px column; 13 px on
+   the narrow stage). Long lines wrap, so nothing scrolls; long cells and outputs are cut over more slides instead */
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run.out pre{font-size:14px;line-height:1.5}
+.narrow .run pre,.narrow .run.out pre{font-size:13px}
+/* F02: zoomed crops of one strip of the page, before and after a step */
+.zoom{margin:0;display:flex;flex-direction:column;gap:6px}
+.zoom a{display:block;line-height:0}
+.zoom img{display:block;height:auto;max-width:100%;border:1px solid var(--line);border-radius:var(--radius-xs)}
+/* The STEP 15 JSON: the 3 heading lines across the top, the JSON in two columns (same text, same order) */
+.run.out.json pre.head{padding-bottom:0}
+.run.out.json pre.cols{column-count:2;column-gap:24px;padding-top:4px}
+.narrow .run.out.json pre.cols{column-gap:12px;font-size:10.5px}
+/* A page picture from Colab (tall): shown smaller and centred, so the slide stays short; opens full size */
+.shot.tall{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface)}
+.shot.tall img{width:auto;max-width:100%;height:var(--pic-h,480px);margin:0 auto}
+.narrow .shot.tall{margin:0}
+.narrow .shot.tall img{height:var(--pic-hn,520px)}
+/* q3 Proposal A: two Colab page pictures side by side (STEP 6 + 7, STEP 8 + 9), each with its own notes under it */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.half{display:flex;flex-direction:column;gap:8px;min-width:0}
+.half-head{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.half .p{margin:0}
+.half .list{font-size:14.5px;line-height:1.45;gap:4px}
+.half code{overflow-wrap:anywhere}
+.pair-slide .shot.tall img{width:auto;height:auto;max-width:100%;max-height:330px}
+.narrow .pair{gap:10px}
+.narrow .pair-slide .shot.tall img{height:auto;max-height:300px}
+.narrow .half .list{font-size:13.5px}
+.pic-sm .shot.tall img{height:435px}
+
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run pre code{display:block}
+.run pre .ln{display:block;padding-left:calc(var(--i) + 2ch);text-indent:calc(-1 * (var(--i) + 2ch))}
+.run pre .ln:empty::before{content:"\200b"}
+.shot.fit{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.shot.fit img{width:auto;max-width:100%;max-height:var(--mh);margin:0 auto}
+.p a{color:var(--pfizer-blue);text-underline-offset:2px}
+.list a{color:var(--pfizer-blue);text-underline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Step-by-Step Guide to Classifying and Labeling PDF Pages Using an AI Model</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Steps"></nav>
+    <div class="where"><b id="where-section">Start</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+
+<template id="t1">
+<p class="p">Follow along using this Colab notebook, which includes all the code for building and testing a page-level classifier. You'll also be able to upload your own multi-document PDFs to experiment with real data.</p><div class="links"><a class="btn btn-secondary" href="https://colab.research.google.com/drive/1-RpL2XWJN1YE0_mLb5zkqepTiR1zzIWq" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Design Page Level Detection (Colab notebook)</span><span class="sr-only"> (opens in a new tab)</span></a><a class="btn btn-secondary" href="https://drive.google.com/file/d/1fJ7DszcjB_TerDTAhXfAw74VqJBElTyw/view?usp=sharing" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 2.75h6.5L15.5 7v10.25H5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M11.25 2.75V7h4.25" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>pharma-blob-sample.pdf (sample PDF)</span><span class="sr-only"> (opens in a new tab)</span></a></div><p class="p">You can also try it out using this sample multi-document PDF. Use it to test document splitting, classification, and routing.</p><ol class="list"><li>Open the notebook and click <b>File &rarr; Save a copy in Drive</b>. Work in the copy that opens, so your changes are saved.</li><li>Open the sample PDF and click <b>Download</b> (the arrow at the top right) to save it to your computer. Keep its name, <code class="nw">pharma-blob-sample.pdf</code>.</li><li>Check that your Gemini key is in <b>Colab Secrets</b> (the key icon in the left sidebar) under the name <code class="nw">GEMINI_API_KEY</code>, as you set it up in Project 5. The notebook reads it from there.</li></ol>
+</template>
+
+<template id="t2">
+<p class="p">The whole notebook takes about 3 minutes to run (140 seconds in our run). Two things can look like a problem, but aren't:</p><ul class="list"><li>The first time a cell calls Gemini, Colab asks: <b>Notebook does not have secret access ... Grant access?</b> Click <b>Grant access</b>, so the notebook can read your key.</li><li>Steps 2 to 4 send about 19 requests to Gemini, and the free key allows 15 a minute. So the Step 4 loop may pause and print <code class="nw">Gemini is busy, retrying in 30s...</code>, then <code class="nw">...60s...</code>. It carries on by itself.</li></ul><div class="note"><span class="num">NOTHING IS WRONG</span><p>If a cell is still running, it hasn't frozen. Wait for the green tick before you run the next cell.</p></div>
+</template>
+
+<template id="t3">
+<p class="p">Press <b>Run</b> on the first code cell, under <b>Step 1: Extract Page-Level Content from Pharmaceutical PDF</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"># STEP 1: Install Required Libraries</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT WE&#x27;RE DOING:</span><span class="ln" style="--i:0ch"># Installing pypdf, a Python library for reading and extracting</span><span class="ln" style="--i:0ch"># text from PDF files.</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHY THIS MATTERS:</span><span class="ln" style="--i:0ch"># Pharmaceutical bundled files are multi-document PDFs. We need a</span><span class="ln" style="--i:0ch"># reliable way to extract text from each page before we can</span><span class="ln" style="--i:0ch"># classify or route documents.</span><span class="ln" style="--i:0ch">#</span><span class="ln" style="--i:0ch"># WHAT YOU&#x27;LL SEE:</span><span class="ln" style="--i:0ch"># A brief installation log confirming pypdf was installed.</span><span class="ln" style="--i:0ch"># ============================================</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">!pip install -q pypdf==6.21.4</span><span class="ln" style="--i:0ch">!pip install -q google-genai==2.12.1</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>pypdf</code> reads PDF files. <code>google-genai</code> lets your code send prompts to Gemini.</li><li><code>==6.21.4</code> and <code>==2.12.1</code> ask for the exact versions tested in Colab in November 2026, so a Colab update can't break the notebook.</li></ul><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:110px"><a href="pfizer3-p7-m2-cell-01.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-cell-01.png" width="1820" height="794" alt="The install cell in Colab with a green tick and no output."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">No output. The green tick next to the cell means it worked.</p>
+</template>
+
+<template id="t4">
+<p class="p">Press <b>Run</b> on the cell that starts with <code class="nw"># Upload the sample PDF</code>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Upload the sample PDF</span><span class="ln" style="--i:0ch"># Click &quot;Choose Files&quot; below and pick pharma-blob-sample.pdf from your computer.</span><span class="ln" style="--i:0ch"># Colab saves it in /content, where the next cell looks for it.</span><span class="ln" style="--i:0ch">from google.colab import files</span><span class="ln" style="--i:0ch">uploaded = files.upload()</span></code></pre></figure><ol class="list"><li>Click <b>Choose Files</b> under the cell.</li><li>Pick <code class="nw">pharma-blob-sample.pdf</code>, the file you downloaded on slide 1.</li></ol><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:70px"><a href="pfizer3-p7-m2-run-02.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-02.png" width="1820" height="180" alt="The output under the upload cell: Choose files, pharma-blob-sample.pdf, 100% done, then Saving pharma-blob-sample.pdf to pharma-blob-sample.pdf."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span>The PDF is now in Colab's <code>/content</code> folder, where the next cell looks for it.</span></p>
+</template>
+
+<template id="t5">
+<p class="p">Let's start with the basics: <b>loading your PDF</b> and pulling out the text <b>one page at a time</b>. This step sets the stage for everything else: you can't classify or detect anything unless you know what's on each page. You'll use a Python library called <code>pypdf</code> to do this.</p><p class="p">Press <b>Run</b> on the cell with <code class="nw">STEP 2: Extract Page-Level Content from PDF</code> in its top comment:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 19 to 24 of 24</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">from pypdf import PdfReader</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">reader = PdfReader(&quot;/content/pharma-blob-sample.pdf&quot;)</span><span class="ln" style="--i:0ch">pages = [page.extract_text() for page in reader.pages]</span><span class="ln" style="--i:0ch">doc_pages = [{&quot;page_num&quot;: i, &quot;text&quot;: p} for i, p in enumerate(pages)]</span><span class="ln" style="--i:0ch">doc_pages</span></code></pre></figure><p class="p">Let's break it down:</p><ul class="list"><li><code>PdfReader</code> is like a tool that opens up your PDF and lets you peek inside.</li><li>Here, you go through each page using a <b>list comprehension</b> (that <code>[something for something in something]</code> syntax, which you met in Project 2). For each page, you <b>extract the text</b>.</li><li>Then, you wrap each one into a <b>dictionary</b> like this: <code>{ "page_num": 0, "text": "This is page 0 content..." }</code></li></ul>
+</template>
+
+<template id="t6">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:520px"><a href="pfizer3-p7-m2-run-03.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-03.png" width="1820" height="960" alt="The top of the output under the Step 1 cell: a list that starts with page_num 0, the Cytiva cover letter&#x27;s text, then page_num 1, the first Certificate of Quality&#x27;s text."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">A list of 10 dictionaries, one per page. The top shows page 0, the cover letter, and page 1, the first Certificate of Quality. Colab shows the rest in a scroll box under the cell.</p><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span><code>doc_pages</code> now holds the text of all 10 pages.</span></p>
+</template>
+
+<template id="t7">
+<p class="p">Before your code can ask Gemini anything, the notebook has to connect to it.</p><p class="p">Press <b>Run</b> on the cell under <b>Step 2: Set Up Gemini LLM Connection</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 19 to 39 of 39</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">from google import genai</span><span class="ln" style="--i:0ch">from google.colab import userdata</span><span class="ln" style="--i:0ch">import time</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">MODEL = &quot;gemini-3.5-flash-lite&quot;</span><span class="ln" style="--i:0ch">client = genai.Client(api_key=userdata.get(&#x27;GEMINI_API_KEY&#x27;))</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">def gemini_model(prompt, retries=3):</span><span class="ln" style="--i:4ch">    for attempt in range(retries):</span><span class="ln" style="--i:8ch">        try:</span><span class="ln" style="--i:12ch">            response = client.models.generate_content(model=MODEL, contents=prompt)</span><span class="ln" style="--i:12ch">            return response.text</span><span class="ln" style="--i:8ch">        except Exception as e:</span><span class="ln" style="--i:12ch">            busy = any(s in str(e).lower() for s in</span><span class="ln" style="--i:23ch">                       [&quot;429&quot;, &quot;503&quot;, &quot;overloaded&quot;, &quot;resource_exhausted&quot;, &quot;unavailable&quot;])</span><span class="ln" style="--i:12ch">            if busy and attempt &lt; retries - 1:</span><span class="ln" style="--i:16ch">                wait = 30 * (attempt + 1)</span><span class="ln" style="--i:16ch">                print(f&quot;Gemini is busy, retrying in {wait}s...&quot;)</span><span class="ln" style="--i:16ch">                time.sleep(wait)</span><span class="ln" style="--i:12ch">            else:</span><span class="ln" style="--i:16ch">                raise</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li>It reads your <code>GEMINI_API_KEY</code> from Colab Secrets and connects to the model <code>gemini-3.5-flash-lite</code>.</li><li><code>gemini_model(prompt)</code> sends one prompt and returns Gemini's reply as text. If Gemini is busy, it waits 30 seconds, then 60, and tries again.</li></ul><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span>No output. If Colab asks <b>Grant access?</b>, click it.</span></p>
+</template>
+
+<template id="t8">
+<p class="p">Now that you have the page content, let's start comparing them! Your next job is to decide: <b>"Does this page belong to the same document as the one before it?"</b> You'll write a function that asks an LLM (like Gemini) to look at the text on two consecutive pages and return <b>Yes</b> or <b>No</b>.</p><p class="p">Read the prompt in the next cell first:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 19 to 44 of 53</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">def is_same_document(prev_text, curr_text, doc_type=None):</span><span class="ln" style="--i:4ch">    prompt = f&quot;&quot;&quot;</span><span class="ln" style="--i:4ch">    You are checking whether two consecutive pages from a pharmaceutical</span><span class="ln" style="--i:4ch">    document package belong to the SAME individual document.</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    A NEW document starts when the page has:</span><span class="ln" style="--i:4ch">    - A different document title or heading (e.g., &quot;Certificate of Quality&quot;</span><span class="ln" style="--i:6ch">      vs &quot;Packaging Specification&quot; vs &quot;Material Description Sheet&quot;)</span><span class="ln" style="--i:4ch">    - A completely different topic or subject matter</span><span class="ln" style="--i:4ch">    - Its own header with a new document number or reference</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Pages belong to the SAME document when:</span><span class="ln" style="--i:4ch">    - The second page says &quot;continued&quot; or &quot;page 2 of 2&quot;</span><span class="ln" style="--i:4ch">    - The content directly continues the previous page&#x27;s discussion</span><span class="ln" style="--i:4ch">    - They share the same document number or title</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Previous page type: {doc_type or &#x27;unknown&#x27;}</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Previous Page:</span><span class="ln" style="--i:4ch">    {prev_text}</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Current Page:</span><span class="ln" style="--i:4ch">    {curr_text}</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Do these two pages belong to the SAME document? Answer ONLY &#x27;Yes&#x27; or &#x27;No&#x27;.</span><span class="ln" style="--i:4ch">    &quot;&quot;&quot;</span></code></pre></figure>
+</template>
+
+<template id="t9">
+<p class="p">Press <b>Run</b> on that cell, with <code class="nw">STEP 4: Write Document Boundary Detection Function</code> in its top comment. Its last lines test the function:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 45 to 53 of 53</span></div><pre tabindex="0"><code><span class="ln" style="--i:4ch">    response = gemini_model(prompt)</span><span class="ln" style="--i:4ch">    return response.strip().lower().startswith(&quot;yes&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">prev_text = doc_pages[1][&quot;text&quot;]</span><span class="ln" style="--i:0ch">curr_text = doc_pages[2][&quot;text&quot;]</span><span class="ln" style="--i:0ch">doc_type = &quot;Certificate of Quality&quot;  # Optional, can be &quot;unknown&quot; or None</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">is_same_document(prev_text, curr_text, doc_type)</span></code></pre></figure><p class="p"><b>Why this matters:</b></p><ul class="list"><li>You give the model the content of two pages (previous + current).</li><li>You also tell it what kind of document the <b>previous page</b> was (if known).</li><li>The model looks at both pages and decides: <b>same document or not?</b></li></ul><p class="p"><code>.lower().startswith("yes")</code> turns the model's reply into <code>True</code> or <code>False</code>.</p>
+</template>
+
+<template id="t10">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:40px"><a href="pfizer3-p7-m2-run-05.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-05.png" width="1820" height="98" alt="The output under the same-document cell: False."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><code>False</code>: pages 1 and 2 are both Certificates of Quality, but for different lots (18356721 and 15102934), so the model says they're two separate documents.</p><p class="take">This function becomes the <i>brain</i> of your boundary detection.</p>
+</template>
+
+<template id="t11">
+<p class="p">Whenever the model says <i>"This is a new document,"</i> we need to figure out <b>what kind of document it is</b>. Is it a Cover Letter? A Certificate of Quality? A Packaging Specification? This next function does that. Read its prompt first:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 19 to 37 of 54</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">DOC_TYPES = [&quot;Cover Letter&quot;, &quot;Certificate of Quality&quot;, &quot;Packaging Specification&quot;, &quot;BSE/TSE Declaration&quot;, &quot;Material Description&quot;, &quot;Supplier Qualification&quot;, &quot;Chain of Custody&quot;, &quot;Other&quot;]</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">def classify_document_type(text):</span><span class="ln" style="--i:4ch">    prompt = f&quot;&quot;&quot;</span><span class="ln" style="--i:4ch">    You are a pharmaceutical document classifier. Based on the page</span><span class="ln" style="--i:4ch">    content below, classify it into ONE of these document types:</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    - Cover Letter: A formal letter (often starting with &quot;To Whom It</span><span class="ln" style="--i:6ch">      May Concern&quot;) discussing product information or storage conditions.</span><span class="ln" style="--i:4ch">    - Certificate of Quality: Contains lot numbers, manufacture dates,</span><span class="ln" style="--i:6ch">      expiration dates, and test results (autoclave, gamma irradiation).</span><span class="ln" style="--i:4ch">    - Packaging Specification: Describes packaging components, materials,</span><span class="ln" style="--i:6ch">      part numbers, and configuration change history.</span><span class="ln" style="--i:4ch">    - BSE/TSE Declaration: A declaration about animal-origin materials</span><span class="ln" style="--i:6ch">      and transmissible spongiform encephalopathy compliance.</span><span class="ln" style="--i:4ch">    - Material Description: Lists materials of construction, sterilization</span><span class="ln" style="--i:6ch">      compatibility, and physical properties of a product.</span><span class="ln" style="--i:4ch">    - Supplier Qualification: Contains supplier audit history,</span><span class="ln" style="--i:6ch">      certifications (ISO 9001, ISO 13485), and approved product lists.</span></code></pre></figure>
+</template>
+
+<template id="t12">
+<p class="p">Press <b>Run</b> on the cell under <b>Step 3: Write the Document Type Classifier</b>. Its second half sends the prompt and reads Gemini's answer:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 38 to 54 of 54</span></div><pre tabindex="0"><code><span class="ln" style="--i:4ch">    - Chain of Custody: Lists manufactured assemblies, traceability</span><span class="ln" style="--i:6ch">      information, and the manufacturing-to-shipment flow.</span><span class="ln" style="--i:4ch">    - Other: Use ONLY if the content does not match any of the above.</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Page Content:</span><span class="ln" style="--i:4ch">    {text}</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    Respond with ONLY the document type name. No explanation.</span><span class="ln" style="--i:4ch">    &quot;&quot;&quot;</span><span class="ln" style="--i:4ch">    response = gemini_model(prompt).strip().lower().replace(&quot;.&quot;, &quot;&quot;)</span><span class="ln" style="--i:4ch">    # Match the answer to one of the 8 labels, spelled exactly as in the list above</span><span class="ln" style="--i:4ch">    for label in DOC_TYPES:</span><span class="ln" style="--i:8ch">        if label.lower() in response:</span><span class="ln" style="--i:12ch">            return label</span><span class="ln" style="--i:4ch">    return &quot;Other&quot;</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">classify_document_type(doc_pages[3][&quot;text&quot;])</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li>The loop matches Gemini's reply to one label in <code>DOC_TYPES</code> and returns it spelled exactly as in the list, so <code>cover letter</code> becomes <code>Cover Letter</code>. If the reply matches none of them, the page gets <code>Other</code>.</li><li>The last line tests it on page 3.</li></ul>
+</template>
+
+<template id="t13">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:40px"><a href="pfizer3-p7-m2-run-06.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-06.png" width="1820" height="104" alt="The output under the classifier cell: &#x27;Packaging Specification&#x27;."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><b>Why this matters:</b></p><p class="p">Each document needs a type label so we can apply the correct logic downstream (e.g., route certificates of quality to a compliance reviewer, BSE/TSE declarations to a regulatory verifier, etc.).</p><p class="p">One spelling for every label matters too. Later readings filter pages by their exact label, so <code>Certificate of Quality</code> and <code>Certificate Of Quality</code> would count as two different types.</p>
+</template>
+
+<template id="t14">
+<p class="p">Here comes the fun part: walking through all your pages and using the two functions above to check if a page is part of the same document, assign a <b>document ID</b> and classify the document <b>type</b>, generating a structured metadata list that tracks document boundaries and types.</p><p class="p">Press <b>Run</b> on the cell under <b>Step 4: Loop Through Pages and Generate Page-Level Metadata</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 20 to 42 of 42</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">results = []</span><span class="ln" style="--i:0ch">current_doc_type = None</span><span class="ln" style="--i:0ch">doc_counter = 0</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">for i, page in enumerate(doc_pages):</span><span class="ln" style="--i:4ch">    if i == 0:</span><span class="ln" style="--i:8ch">        current_doc_type = classify_document_type(page[&quot;text&quot;])</span><span class="ln" style="--i:4ch">    else:</span><span class="ln" style="--i:8ch">        prev_text = doc_pages[i - 1][&quot;text&quot;]</span><span class="ln" style="--i:8ch">        same = is_same_document(prev_text, page[&quot;text&quot;], current_doc_type)</span><span class="ln" style="--i:8ch">        if not same:</span><span class="ln" style="--i:12ch">            doc_counter += 1</span><span class="ln" style="--i:12ch">            current_doc_type = classify_document_type(page[&quot;text&quot;])</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    results.append({</span><span class="ln" style="--i:8ch">        &quot;page&quot;: i,</span><span class="ln" style="--i:8ch">        &quot;doc_id&quot;: doc_counter,</span><span class="ln" style="--i:8ch">        &quot;doc_type&quot;: current_doc_type</span><span class="ln" style="--i:4ch">    })</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">for r in results:</span><span class="ln" style="--i:4ch">    print(r)</span></code></pre></figure><p class="holds"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg><span>This cell takes the longest, about 1.5 minutes. If it prints <code>Gemini is busy, retrying in 30s...</code>, let it run.</span></p>
+</template>
+
+<template id="t15">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:230px"><a href="pfizer3-p7-m2-run-07.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-07.png" width="1820" height="478" alt="The output under the loop cell: two Gemini is busy lines, then 10 rows from page 0 Cover Letter to page 9 Chain of Custody, 8 documents in all."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><b>What's happening here?</b></p><ul class="list"><li>On the <b>first page</b>, we assume it's a new document and classify it.</li><li>For every other page, we compare it to the one before. If the model says "Yes, same doc", we keep the current document ID. If it says "No", we bump up the document ID and classify the new type.</li></ul><p class="p">This creates a neat little map of your file: 10 pages, 8 documents (IDs 0 to 7). The two <code>Gemini is busy</code> lines are the waits from slide 2.</p>
+</template>
+
+<template id="t16">
+<p class="p">Now let's make it easier to read. You'll use <code>pandas</code> to turn your results into a <b>table</b>.</p><p class="p">Press <b>Run</b> on the cell under <b>Step 5: Visualize Results</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook &middot; lines 20 to 22 of 22</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">df = pd.DataFrame(results)</span><span class="ln" style="--i:0ch">df</span></code></pre></figure><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:320px"><a href="pfizer3-p7-m2-run-08.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-08.png" width="1820" height="760" alt="The DataFrame in Colab: 10 rows with page, doc_id and doc_type."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><b>Why is this helpful?</b> This page-by-page metadata gives your system a detailed understanding of document structure, unlocking smarter routing, more accurate extraction, and scalable automation. With this metadata table, your system can now extract and process each document separately, with confidence.</p>
+</template>
+
+<template id="t17">
+<p class="p">Here's what the <b>needs review</b> list from the cards looks like with the <code>results</code> list from Step 4.</p><p class="p">Press <b>Run</b> on the cell under <b>Step 6: Keep a Human in the Loop</b>:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">needs_review = [r for r in results if r[&quot;doc_type&quot;] == &quot;Other&quot;]</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">for r in needs_review:</span><span class="ln" style="--i:4ch">    print(f&quot;Page {r[&#x27;page&#x27;]} goes to a person for review&quot;)</span></code></pre></figure><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:110px"><a href="pfizer3-p7-m2-cell-09.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-cell-09.png" width="1820" height="224" alt="The needs_review cell in Colab with a green tick and nothing printed under it."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">If nothing prints, no page was labelled <code>Other</code>, so no page needs a person. That's what our run shows for this file.</p><p class="p">This sketch checks only the first rule. The other two follow the same pattern.</p>
+</template>
+
+<template id="t18">
+<p class="p"><b>Return the Final Output.</b> Export your final classification as a JSON array (one dictionary per page) OR a pandas DataFrame. Your notebook now shows both:</p><figure class="shot fit" style="--mh:200px"><a href="pfizer3-p7-m2-run-07.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-07.png" width="1820" height="478" alt="The output under the loop cell: two Gemini is busy lines, then 10 rows from page 0 Cover Letter to page 9 Chain of Custody, 8 documents in all."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><figure class="shot fit" style="--mh:290px"><a href="pfizer3-p7-m2-run-08.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p7-m2-run-08.png" width="1820" height="760" alt="The DataFrame in Colab: 10 rows with page, doc_id and doc_type."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">Your rows should look like these. Then go to <b>Check Your Own Work</b> below the slides.</p>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var CELLS = {};
+  var GROUPS = ["Start", "Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6", "Done"];
+  var SLIDES = [
+    {"group": "Start", "label": "GET READY &middot; PART 1 OF 2", "title": "Open the Notebook and the Sample <span class=\"hl\">PDF</span>", "plain": "Open the Notebook and the Sample PDF", "tpl": "t1", "where": "Start"},
+    {"group": "Start", "label": "GET READY &middot; PART 2 OF 2", "title": "Know What to <span class=\"hl\">Expect</span>", "plain": "Know What to Expect", "tpl": "t2", "where": "Start", "cls": "end-slide"},
+    {"group": "Step 1", "label": "STEP 1 &middot; PART 1 OF 4: RUN IT AND SEE IT", "title": "Install the <span class=\"hl\">Libraries</span>", "plain": "Step 1. Install the Libraries", "tpl": "t3"},
+    {"group": "Step 1", "label": "STEP 1 &middot; PART 2 OF 4: RUN IT AND SEE IT", "title": "Upload the Sample <span class=\"hl\">PDF</span>", "plain": "Step 1. Upload the Sample PDF", "tpl": "t4"},
+    {"group": "Step 1", "label": "STEP 1 &middot; PART 3 OF 4: RUN IT", "title": "Extract Page-Level Content from the <span class=\"hl\">PDF</span>", "plain": "Step 1. Extract Page-Level Content from the PDF", "tpl": "t5"},
+    {"group": "Step 1", "label": "STEP 1 &middot; PART 4 OF 4: SEE IT", "title": "Ten Pages, Ten <span class=\"hl\">Dictionaries</span>", "plain": "Step 1. Ten Pages, Ten Dictionaries", "tpl": "t6", "cls": "end-slide"},
+    {"group": "Step 2", "label": "STEP 2 &middot; PART 1 OF 4: RUN IT", "title": "Connect Your Notebook to <span class=\"hl\">Gemini</span>", "plain": "Step 2. Connect Your Notebook to Gemini", "tpl": "t7"},
+    {"group": "Step 2", "label": "STEP 2 &middot; PART 2 OF 4: READ IT", "title": "Write the \"Same <span class=\"hl\">Document</span>?\" Function", "plain": "Step 2. Write the Same Document? Function", "tpl": "t8"},
+    {"group": "Step 2", "label": "STEP 2 &middot; PART 3 OF 4: RUN IT", "title": "Test It on Pages 1 and <span class=\"hl\">2</span>", "plain": "Step 2. Test It on Pages 1 and 2", "tpl": "t9"},
+    {"group": "Step 2", "label": "STEP 2 &middot; PART 4 OF 4: SEE IT", "title": "Two Separate <span class=\"hl\">Certificates</span>", "plain": "Step 2. Two Separate Certificates", "tpl": "t10", "cls": "end-slide"},
+    {"group": "Step 3", "label": "STEP 3 &middot; PART 1 OF 3: READ IT", "title": "Write the Document Type <span class=\"hl\">Classifier</span>", "plain": "Step 3. Write the Document Type Classifier", "tpl": "t11"},
+    {"group": "Step 3", "label": "STEP 3 &middot; PART 2 OF 3: RUN IT", "title": "Match the Answer to One <span class=\"hl\">Label</span>", "plain": "Step 3. Match the Answer to One Label", "tpl": "t12"},
+    {"group": "Step 3", "label": "STEP 3 &middot; PART 3 OF 3: SEE IT", "title": "Page 3 Is a Packaging <span class=\"hl\">Specification</span>", "plain": "Step 3. Page 3 Is a Packaging Specification", "tpl": "t13", "cls": "end-slide"},
+    {"group": "Step 4", "label": "STEP 4 &middot; PART 1 OF 2: RUN IT", "title": "Loop Through Every <span class=\"hl\">Page</span>", "plain": "Step 4. Loop Through Every Page", "tpl": "t14"},
+    {"group": "Step 4", "label": "STEP 4 &middot; PART 2 OF 2: SEE IT", "title": "A Neat Little <span class=\"hl\">Map</span> of Your File", "plain": "Step 4. A Neat Little Map of Your File", "tpl": "t15", "cls": "end-slide"},
+    {"group": "Step 5", "label": "STEP 5 &middot; RUN IT AND SEE IT", "title": "Turn Your Results into a <span class=\"hl\">Table</span>", "plain": "Step 5. Turn Your Results into a Table", "tpl": "t16", "cls": "end-slide"},
+    {"group": "Step 6", "label": "STEP 6 &middot; RUN IT AND SEE IT", "title": "Keep a <span class=\"hl\">Human</span> in the Loop", "plain": "Step 6. Keep a Human in the Loop", "tpl": "t17", "cls": "end-slide"},
+    {"group": "Done", "label": "DONE LOOKS LIKE", "title": "Check Your Final <span class=\"hl\">Output</span>", "plain": "Check Your Final Output", "tpl": "t18", "where": "Done", "cls": "end-slide"}
+  ];
+  var STAGE = { wide: [760, 1140], narrow: [450, 1256] };
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var sz = narrow ? STAGE.narrow : STAGE.wide;
+    app.style.width = sz[0] + "px"; app.style.height = sz[1] + "px";
+    var k = Math.min(window.innerWidth / sz[0], window.innerHeight / sz[1]);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  var GROUP_LABEL = { "Regex": "Find" };
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    var isStep = g.name.indexOf("Step ") === 0;
+    b.type = "button"; b.className = "pg" + (isStep ? "" : " pg-fit");
+    var shown = GROUP_LABEL[g.name] || g.name;
+    b.setAttribute("aria-label", (g.name === "Regex" ? "Find Values" : shown) + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    var word = isStep ? '<span class="pg-word">Step </span>' + g.name.replace("Step ", "") : shown;
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + word + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span"), orig = label.textContent;
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = orig; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner' + (s.cls ? " " + s.cls : "") + '"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + document.getElementById(s.tpl).innerHTML + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(CELLS[b.getAttribute("data-copy")], b, pre); });
+    });
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.where || s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+    space();
+    Array.prototype.forEach.call(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  /* Spacing (Smita, 17 November 2026): no big empty area at the bottom of a slide. Spare height widens the gaps
+     between blocks, up to 2x. */
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = ""; inner.style.marginTop = "";
+    var cs = getComputedStyle(card);
+    var avail = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var base = parseFloat(getComputedStyle(inner).rowGap) || 14;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (base + Math.min(base, spare / gaps)) + "px";
+    /* P5 m2 fix round 1: what is still spare after the gaps widen is split above and below, so a short slide sits in
+       the middle of the card instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    space();
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #slide=N opens slide N directly */
+  var hm = location.hash.match(/slide=(\d+)/);
+  if (hm) i = Math.min(SLIDES.length - 1, Math.max(0, +hm[1] - 1));
+  window.addEventListener("resize", function () { scaleStage(); space(); });
+  scaleStage();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
