@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Gradio Turns Your Python Code Into a Web App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 8, Step 1, page m2 Learn deck: "How Gradio Turns Your Python Code Into a Web App".
+   Chaitanya's (SME) "Learn How To Get Started With Gradio" (Notion 0ac1d028b9f4838abd4101742fd4ce6e), ideas only, NO code:
+   the code is in the Try (his notebook "Intro to Gradio", Drive 1SvtKZ4LPhbnN8L66zy0BKojxzHcdSpeX).
+   Built 27 November 2026 from source/m2-learn-build.py (+ m2-learn-style.css, m2-learn-player.js, this head), the same
+   way as the P5 m4 Learn deck. Never hand-patch this file: change the source and rebuild.
+   SME text word for word, except the decided swaps (kor-step1 S4 to S8, p8-decisions.md item 9) and the swaps listed in
+   ../coverage-m2.md section 3. Ours: titles, eyebrows, one bold why line per card, captions, flow-box labels and short
+   term definitions.
+   REAL DATA: the pictures are crops of real Colab shots of his notebook (saved copy, 27 November 2026, Gradio 6.32.0),
+   made by source/m2-learn-crops.py. Boxes drawn over them come from the crop's own pixels.
+   Fixed stage: 760 x 780 at every width, scaled as one piece to fit the frame and centred. Nothing scrolls. */
+
+/* Pfizer x Extern Core design system, Light format. P8 m2 Learn deck: copied unchanged from project-05/source/m4-learn-style.css (P5 m4), plus the P8 m2 blocks at the end. P5 m4 header: copied from m2-learn-style.css (P5 m2), plus the m4 blocks at the end. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:780px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---------- m4 additions (same tokens only) ---------- */
+/* Wide and mid-width page crops, with the caption under the picture */
+.pic.wide{width:100%}
+.pic.mid{width:540px;align-self:flex-start}
+.cap.under{margin:0;font-size:17px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.cap b{color:var(--ink)}
+
+/* Page thumbnails (whole supplier pages). Labels sit under each page, never on it. */
+.thumbs{display:flex;gap:12px;flex:none}
+.th{margin:0;width:112px;display:flex;flex-direction:column;gap:5px;transition:opacity .3s ease}
+.th img{display:block;width:112px;height:auto;border:1.5px solid var(--line);border-radius:6px;background:var(--surface);transition:border-color .3s ease,box-shadow .3s ease}
+.th figcaption{display:flex;flex-direction:column;gap:1px;line-height:1.25}
+.th .pn{font-size:14px;font-weight:600;color:var(--ink)}
+.th .sc{font-size:14px;font-weight:600;color:var(--step-label);font-variant-numeric:tabular-nums;min-height:17px}
+.th.on img{border-color:var(--pfizer-blue);box-shadow:0 0 0 3px var(--pfizer-blue)}
+.th.dim{opacity:.38}
+.tview{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+.tview .cap{margin:0;font-size:18px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start}
+.duo .side{display:flex;flex-direction:column;gap:8px;width:360px}
+.duo .side .cap{margin:0;font-size:16.5px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo .side .thumbs{gap:12px}
+
+/* Clickable boxes (card 4): the text never changes, a click changes the picture */
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:var(--radius-sm)}
+.box.pick{text-align:left;cursor:pointer;border-width:1.5px;font:inherit}
+.box.pick .bh,.box.pick .bp{display:block}
+.box.pick[aria-pressed="true"]{border-color:var(--pfizer-blue);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.box.pick[aria-pressed="false"]{background:var(--surface);border-color:var(--line)}
+
+/* Key and value table (one technique per card) */
+.kv td.k{width:170px;white-space:normal}
+
+/* Ranked results that swap places (card 11) */
+.rank{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.rank li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;column-gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:9px 12px;font-size:18px;line-height:1.4;color:var(--card-text)}
+.rank li .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.rank li .tg{font-size:13px;font-weight:600;color:var(--pfizer-blue);background:var(--surface-card);border:1px solid var(--blue-200);border-radius:999px;padding:3px 10px;white-space:nowrap;visibility:hidden}
+.rank li.top{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.rank li.top .n{background:var(--pfizer-blue);color:var(--on-action)}
+.rank li.top .tg{visibility:visible;background:var(--surface)}
+.rank li.mv{animation:pop .35s ease both}
+.tbl.rr td.k{white-space:normal;width:210px}
+
+/* ---------- P8 m2 additions (same tokens only) ---------- */
+/* Link card (his live hello-world app) */
+.lnk{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:10px 14px;text-decoration:none;color:var(--ink);align-self:flex-start;max-width:100%}
+.lnk:hover{border-color:var(--blue-200)}
+.lnk .lt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lnk .lt b{font-size:17px;line-height:1.3;font-weight:600;color:var(--ink)}
+.lnk .lt span{font-size:14px;line-height:1.3;color:var(--gray-600)}
+.lnk svg{width:18px;height:18px;flex:none;color:var(--pfizer-blue)}
+/* His quote, in serif */
+.say{margin:0;border-left:4px solid var(--pfizer-blue);background:var(--surface-card);padding:10px 16px;font-family:var(--font-serif);font-size:23px;line-height:1.35;color:var(--card-title)}
+/* Five skills: five boxes in a row */
+.flow.five .fbox{padding:8px 8px}
+.flow.five .ft{font-size:16px}
+.flow.five .fs{font-size:13.5px}
+/* Picture on the left, switch and caption on the right (card 8) */
+.side2{display:grid;grid-template-columns:380px minmax(0,1fr);gap:18px;align-items:center}
+.side2 .sidecol{display:flex;flex-direction:column;gap:10px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How Gradio turns your Python code into a web app: 11 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 11</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"ST": {"c1": {"t": {"flow": [0, 1, 2, 3, 4], "cap": "The traditional route: five skills before Sarah can use your model."}, "g": {"flow": [0], "cap": "With Gradio, you write the Python. Gradio builds the page."}}, "c2": {"0": {"boxes": {"c2-pic": [[4, 4, 1426, 452]]}, "cap": "A real Gradio app from your notebook, made from one short Python function."}}, "c5": {"0": {"boxes": {"c5-pic": [[370, 366, 698, 446], [730, 10, 1418, 190]]}, "cap": "Press <b>Submit</b> and <span class=\"mono\">greet()</span> runs. Its answer fills the output box."}, "1": {"boxes": {"c5-pic": [[10, 10, 698, 182], [10, 190, 698, 334], [730, 10, 1418, 190]]}, "cap": "Three components: a text box, a slider and an output box."}, "2": {"boxes": {"c5-pic": [[4, 4, 1426, 452]]}, "cap": "The interface is the whole screen that joins them."}}, "c6": {"0": {"flow": [1]}, "1": {"flow": [0]}, "2": {"flow": [2]}}, "c8": {"i": {"boxes": {"c8-pic": [[10, 10, 698, 190]]}, "cap": "One box in: a sentence."}, "o": {"boxes": {"c8-pic": [[730, 10, 1418, 368]]}, "cap": "Two boxes out: the word count and the sentence in capitals."}}, "c9": {"0": {"boxes": {"c9-pic": [[428, 0, 1072, 38]]}, "cap": "The public link your notebook printed. Anyone with it can open the app."}}, "c10": {"0": {"boxes": {"c10-pic": [[4, 70, 1258, 110]]}, "cap": "Colab printed how long the link lasts."}}}};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- One init for every m4 card with a picture (copied idea from the m2 cards, made generic) ----------
+     Each card holds one element with data-key. D.ST[key] has one state per button (data-v), or a single state "0" for a
+     card with no buttons. A state can set: boxes (per picture id, in the picture's own pixels), pages (per page number:
+     [class, label under the page]), flow (indexes of lit flow boxes), order (ids of the ranked rows, top first) and cap.
+     Buttons change only the picture, the labels under the pages and the caption. The card's text never changes. */
+  function initState(root) {
+    var host = root.querySelector("[data-key]");
+    if (!host) return;
+    var S = D.ST[host.getAttribute("data-key")];
+    var btns = root.querySelectorAll("[data-v]");
+    function show(v, pop) {
+      var s = S[v];
+      each(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-v") === v ? "true" : "false"); });
+      each(root.querySelectorAll(".pic"), function (fig) {
+        var svg = fig.querySelector("svg"); if (!svg) return;
+        draw(svg, (s.boxes && s.boxes[fig.id]) || [], pop);
+      });
+      if (s.pages) each(root.querySelectorAll(".th"), function (th) {
+        var st = s.pages[th.getAttribute("data-p")] || ["", ""];
+        th.className = "th" + (st[0] ? " " + st[0] : "");
+        th.querySelector(".sc").textContent = st[1];
+      });
+      if (s.flow) each(root.querySelectorAll(".fbox"), function (b, k) {
+        var on = s.flow.indexOf(k) >= 0; b.classList.toggle("on", on); b.classList.toggle("dim", !on);
+      });
+      if (s.order) {
+        var list = root.querySelector(".rank");
+        s.order.forEach(function (id, k) {
+          var li = list.querySelector('[data-id="' + id + '"]');
+          list.appendChild(li);
+          li.querySelector(".n").textContent = k + 1;
+          li.classList.toggle("top", k === 0);
+          if (pop) { li.classList.remove("mv"); void li.offsetWidth; li.classList.add("mv"); }
+        });
+      }
+      var cap = root.querySelector(".cap.vz");
+      if (cap) cap.innerHTML = s.cap || "";
+      space();
+    }
+    each(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-v"), true); }); });
+    show(btns.length ? btns[0].getAttribute("data-v") : "0", false);
+    var group = root.querySelector(".sw, .steps:not(.static), .picks");
+    if (group) {
+      var hint = root.querySelector(".nhost");
+      nudge(host.getAttribute("data-key"), group, hint || group.parentNode, hint ? "inline" : "");
+    }
+  }
+
+  var timer = null;
+  var INITS = { initState: initState };
+  var CARDS = [{label:"Five Skills",eyebrow:"What is Gradio?",html:"<h2 class=\"title\">Sharing a Model Used to Take Five <span class=\"hl\">Skills</span></h2><p class=\"why\">Gradio cuts this down to one: the Python you already write.</p><div class=\"keyhost\" data-key=\"c1\" hidden></div><p class=\"p\">If you want people to <i>use</i> your machine learning model (ML, the kind of AI that learns from examples) today, the traditional route isn't fun:</p><div class=\"flow five vz\"><div class=\"fbox\"><span class=\"ft\">Python</span><span class=\"fs\">You write the ML code</span></div><div class=\"fbox\"><span class=\"ft\">HTML</span><span class=\"fs\">You build the website</span></div><div class=\"fbox\"><span class=\"ft\">JavaScript</span><span class=\"fs\">You add interactivity</span></div><div class=\"fbox\"><span class=\"ft\">Backend</span><span class=\"fs\">Handles the data</span></div><div class=\"fbox\"><span class=\"ft\">Hosting</span><span class=\"fs\">So others can try it out</span></div></div><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a route\"><button type=\"button\" data-v=\"t\" aria-pressed=\"false\">The traditional route</button><button type=\"button\" data-v=\"g\" aria-pressed=\"false\">With Gradio</button></div></div></div><p class=\"cap vz under\"></p><p class=\"p\">That's a lot of skills, and a lot of time, just to share your model.</p>",init:"initState"},
+{label:"The Wrapper",eyebrow:"What is Gradio?",html:"<h2 class=\"title\">Gradio Wraps Your Function in a Web <span class=\"hl\">Page</span></h2><p class=\"why\">Your chatbot will reach Sarah through a page like this one.</p><div class=\"keyhost\" data-key=\"c2\" hidden></div><p class=\"p\"><b>Gradio changes all of that.</b> It's a <b>Python library</b> that takes your Python function and instantly wraps it in a <b>simple, usable web page</b>.</p><p class=\"p\">Think of it like a <b>wrapper</b>: just like a burrito's tortilla holds the beans and rice together, Gradio's wrapper holds your code and presents it neatly so people can use it without ever touching the actual code.</p><figure class=\"pic wide\" id=\"c2-pic\"><img src=\"pfizer3-p8-m2-learn-greet.png\" alt=\"A Gradio app in Colab: a name box with Sarah typed in, an intensity slider set to 3, Clear and Submit buttons, and an output box that reads Hello, Sarah!!!\" width=\"1430\" height=\"456\"><div class=\"ov\"><svg viewBox=\"0 0 1430 456\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Three Lines",eyebrow:"What is Gradio?",html:"<h2 class=\"title\">You Tell Gradio Three Things, and It Builds the <span class=\"hl\">Rest</span></h2><p class=\"why\">These three things are all you'll write for every app in this project.</p><p class=\"p\">Instead of building a site from scratch, you connect your model to Gradio, and you've got an interactive app that Sarah (or anyone) can open right in their browser. All you do is tell Gradio:</p><p class=\"say\">\"Here's my function. These are my inputs. These are my outputs.\"</p><p class=\"p\">&hellip;and it builds the interface for you. No HTML. No JavaScript. No deployment headaches (deployment means putting an app online).</p><div class=\"box\"><p class=\"bp\">You can run a web app straight from Colab.</p></div>",init:null},
+{label:"In Practice",eyebrow:"What it looks like",html:"<h2 class=\"title\">Sarah Gets a Website, Not a Pile of <span class=\"hl\">Code</span></h2><p class=\"why\">This is what your finished chatbot will give Sarah.</p><p class=\"p\">Gradio turns your command-line pipeline into something anyone can use by letting users:</p><ul class=\"ul\"><li><b>Upload documents</b> with a simple drag-and-drop</li><li><b>Type questions</b> in a normal text box</li><li><b>Get answers</b> displayed in a clean, readable format</li><li><b>Access it all</b> through a regular browser, no setup needed</li></ul><p class=\"p\">It's the difference between handing Sarah a pile of code vs. handing her a website she can actually use.</p><a class=\"lnk\" href=\"https://gradio-hello-world-4.hf.space/\" target=\"_blank\" rel=\"noopener noreferrer\"><span class=\"lt\"><b>Try a real Gradio app before you code</b><span>gradio-hello-world-4.hf.space &middot; opens in a new tab</span></span><svg viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"M11.5 3.75h4.75V8.5M16 4l-7 7M14.25 11.5v3.25c0 .8-.7 1.5-1.5 1.5h-7.5c-.8 0-1.5-.7-1.5-1.5v-7.5c0-.8.7-1.5 1.5-1.5H8.5\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",init:null},
+{label:"Three Words",eyebrow:"What's happening",html:"<h2 class=\"title\">Function, Component and <span class=\"hl\">Interface</span></h2><p class=\"why\">You'll meet these three words on every Gradio page in this project.<span class=\"nhost\"></span></p><div class=\"keyhost\" data-key=\"c5\" hidden></div><ol class=\"steps \"><li><button type=\"button\" class=\"step\" data-v=\"0\" aria-pressed=\"false\"><span class=\"n\">1</span><span><b>Function</b>: Here, <span class=\"mono\">greet()</span> is a function that takes a name and adds exclamation marks.</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"1\" aria-pressed=\"false\"><span class=\"n\">2</span><span><b>Component</b>: A visual element in the web page (like a text box, button, slider).</span></button></li><li><button type=\"button\" class=\"step\" data-v=\"2\" aria-pressed=\"false\"><span class=\"n\">3</span><span><b>Interface</b>: In Gradio, this is a ready-made \"screen\" where you connect your code to input/output components. It's the bridge between your function and the user's browser.</span></button></li></ol><figure class=\"pic mid\" id=\"c5-pic\"><img src=\"pfizer3-p8-m2-learn-greet.png\" alt=\"A Gradio app in Colab: a name box with Sarah typed in, an intensity slider set to 3, Clear and Submit buttons, and an output box that reads Hello, Sarah!!!\" width=\"1430\" height=\"456\"><div class=\"ov\"><svg viewBox=\"0 0 1430 456\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Kiosk Builder",eyebrow:"Understanding gr.Interface",html:"<h2 class=\"title\"><span class=\"mono\">gr.Interface</span> Is Your Instant Kiosk <span class=\"hl\">Builder</span></h2><p class=\"why\">This class is perfect for RAG pipelines because most RAG systems follow a simple pattern: take some inputs (questions, documents), process them, and return results.</p><div class=\"keyhost\" data-key=\"c6\" hidden></div><p class=\"p\">The app on the earlier cards uses something called the <span class=\"mono\">gr.Interface</span> class. Think of it as the <b>instant kiosk builder</b> for your AI app (a kiosk is a self-service screen, like a ticket machine).</p><p class=\"p\">You tell it:<span class=\"nhost\"></span></p><ol class=\"steps \"><li><button type=\"button\" class=\"step\" data-v=\"0\" aria-pressed=\"false\"><span class=\"n\">1</span><span><i>What happens when someone gives your app something (your function)</i></span></button></li><li><button type=\"button\" class=\"step\" data-v=\"1\" aria-pressed=\"false\"><span class=\"n\">2</span><span><i>How people give it to you (inputs)</i></span></button></li><li><button type=\"button\" class=\"step\" data-v=\"2\" aria-pressed=\"false\"><span class=\"n\">3</span><span><i>How you show them the results (outputs)</i></span></button></li></ol><div class=\"flow vz\"><div class=\"fbox\"><span class=\"fl\">Inputs</span><span class=\"ft\">Sarah, 3</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Function</span><span class=\"ft\"><span class=\"mono\">greet()</span></span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">Outputs</span><span class=\"ft\">Hello, Sarah!!!</span></div></div>",init:"initState"},
+{label:"Three Pieces",eyebrow:"Understanding gr.Interface",html:"<h2 class=\"title\">The Three Core <span class=\"hl\">Pieces</span></h2><p class=\"why\">When an app doesn't work, check these three first.</p><p class=\"p\">&hellip;and it does the rest: it builds the UI (user interface, what people see and click) automatically so you can focus on the logic.</p><p class=\"p\"><span class=\"mono\">gr.Interface</span> mainly needs <b>three things</b>:</p><div class=\"tbl \"><table><thead><tr><th scope=\"col\">Argument</th><th scope=\"col\">What it means in plain English</th><th scope=\"col\">Example in real life</th></tr></thead><tbody><tr><td class=\"k\"><span class=\"mono\">fn</span></td><td>The function that does the work</td><td>The coffee machine's brewing process</td></tr><tr><td class=\"k\"><span class=\"mono\">inputs</span></td><td>How people give you info</td><td>The coffee selection buttons</td></tr><tr><td class=\"k\"><span class=\"mono\">outputs</span></td><td>How you give results back</td><td>The coffee cup you hand them</td></tr></tbody></table></div><div class=\"flow\"><div class=\"fbox\"><span class=\"fl\">inputs</span><span class=\"ft\">Selection buttons</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">fn</span><span class=\"ft\">Brewing</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"fl\">outputs</span><span class=\"ft\">Your coffee</span></div></div>",init:null},
+{label:"More Boxes",eyebrow:"Understanding gr.Interface",html:"<h2 class=\"title\">More Than One Box In, More Than One <span class=\"hl\">Out</span></h2><p class=\"why\">Your document chatbot will need a file and a question in.</p><div class=\"keyhost\" data-key=\"c8\" hidden></div><p class=\"p\"><b>Remember:</b> You're not locked into just \"one text box in, one answer out.\" Gradio is flexible; you can design the interface to fit exactly what your pipeline needs. You can:</p><div class=\"tbl \"><table><thead><tr><th scope=\"col\">You can</th><th scope=\"col\">For example</th></tr></thead><tbody><tr><td class=\"k\">Have multiple inputs</td><td>Upload a PDF <i>and</i> type a question</td></tr><tr><td class=\"k\">Show multiple outputs</td><td>Return an answer <i>and</i> a chart</td></tr><tr><td class=\"k\">Choose the look and feel</td><td>From plain text boxes to file uploads, sliders, images, or even audio players</td></tr></tbody></table></div><div class=\"side2\"><figure class=\"pic \" id=\"c8-pic\"><img src=\"pfizer3-p8-m2-learn-analyze.png\" alt=\"A Gradio app in Colab with one input box and two output boxes. The input reads Gradio turns functions into apps. Output 0 reads 5. Output 1 reads GRADIO TURNS FUNCTIONS INTO APPS.\" width=\"1430\" height=\"488\"><div class=\"ov\"><svg viewBox=\"0 0 1430 488\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><div class=\"sidecol\"><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a side\"><button type=\"button\" data-v=\"i\" aria-pressed=\"false\">Inputs</button><button type=\"button\" data-v=\"o\" aria-pressed=\"false\">Outputs</button></div></div></div><p class=\"cap vz under\"></p></div></div>",init:"initState"},
+{label:"Public Link",eyebrow:"Sharing your Gradio app",html:"<h2 class=\"title\">One Extra Line Gives You a Public <span class=\"hl\">Link</span></h2><p class=\"why\">In Project 9, you'll demo your chatbot from a link like this.</p><div class=\"keyhost\" data-key=\"c9\" hidden></div><p class=\"p\">If you want to give Sarah (or anyone else) a link to try it without sending them code, you can do that with just one extra line of code. You can generate a <b>public link</b> and share your demo with anyone, anywhere.</p><p class=\"p\">Once you're ready to show off your app, simply add <span class=\"mono\">share=True</span> in <span class=\"mono\">launch</span>.</p><figure class=\"pic wide\" id=\"c9-pic\"><img src=\"pfizer3-p8-m2-learn-share.png\" alt=\"Colab output: Running on public URL: https://9a09131edcb924b576.gradio.live. This share link is temporary and will last for up to 1 week (best effort).\" width=\"1262\" height=\"114\"><div class=\"ov\"><svg viewBox=\"0 0 1262 114\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Runs in Colab",eyebrow:"Sharing your Gradio app",html:"<h2 class=\"title\">The Link Works Only While Your Notebook <span class=\"hl\">Runs</span></h2><p class=\"why\">If Sarah's link stops working, this is why.</p><div class=\"keyhost\" data-key=\"c10\" hidden></div><p class=\"p\">When you run this code, Gradio will create a <b>public URL</b> (a web address) for your app in just a few seconds, something like: <span class=\"mono\">https://your-app-name.gradio.live</span></p><p class=\"p\">This link is hosted by Gradio, but your app still runs in your Colab notebook, and the link stops when the notebook stops (or after a week).</p><p class=\"p\">It's a fast and easy way to share your work without needing to set up a server (a computer that keeps apps running)!</p><figure class=\"pic wide\" id=\"c10-pic\"><img src=\"pfizer3-p8-m2-learn-share.png\" alt=\"Colab output: Running on public URL: https://9a09131edcb924b576.gradio.live. This share link is temporary and will last for up to 1 week (best effort).\" width=\"1262\" height=\"114\"><div class=\"ov\"><svg viewBox=\"0 0 1262 114\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap vz under\"></p><figure class=\"pic mid\" id=\"c10b\"><img src=\"pfizer3-p8-m2-learn-browser.png\" alt=\"The same kind of app opened from its gradio.live link in a browser tab: a name box with Sarah, an output box with Hello Sarah!, and Clear, Submit and Flag buttons.\" width=\"1440\" height=\"320\"><div class=\"ov\"><svg viewBox=\"0 0 1440 320\" preserveAspectRatio=\"none\" aria-hidden=\"true\"></svg></div></figure><p class=\"cap under\">The app, opened from its link in a browser tab.</p>",init:"initState"},
+{label:"Recap",eyebrow:"Quick recap",html:"<h2 class=\"title\">Quick <span class=\"hl\">Recap</span></h2><p class=\"why\">You'll do both of these in your notebook next.</p><div class=\"recap\"><div class=\"box\"><p class=\"bh\">1. Build Interactive Python UIs with Gradio</p><p class=\"bp\">You discovered how Gradio turns any Python function into a live web app, no front-end skills needed.</p><p class=\"bp\">You did this with:</p><ul><li><span class=\"mono\">gr.Interface(fn, inputs, outputs)</span></li><li>Just a few lines of code to launch your demo</li></ul></div><div class=\"box\"><p class=\"bh\">2. Share Your Apps Instantly</p><p class=\"bp\">You learned how to generate a public link to your app so others can try it, great for demos, testing, or feedback.</p><p class=\"bp\">You did this by:</p><ul><li>Adding <span class=\"mono\">share=True</span> to <span class=\"mono\">.launch()</span></li></ul></div></div>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps, .picks")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>

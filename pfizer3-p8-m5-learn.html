@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Give Your Chatbot a Brain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 8, Step 2, page m5 Learn deck: "Full RAG Pipeline With Gradio UI: Give Your Chatbot a Brain".
+   Folds Chaitanya's (SME) concept-only page "Blueprint of Our AI Document Q&A System" (Notion 7d61d028...) into this
+   reading (rule 4, p8-decisions.md item 1), plus the concept parts of his "Full RAG Pipeline with Gradio UI" (1fb1d028...):
+   "This brain is the part that", the Gemini and open-source challenge, "What You'll Build" and "But Why Are We Doing This?".
+   His step-by-step code (Steps 1 to 7) is on the Try slides, not here.
+   Built 27 November 2026 from source/m5-learn-build.py (+ m5-learn-style.css, m5-learn-player.js, m5-learn-head.txt),
+   the same way as the P5 m4 deck. Never hand-patch this file: change the source and rebuild.
+   SME text word for word, except the swaps listed in coverage-m5.md (S2 size limits, S3 hype cuts, S4 function names,
+   "one or more PDF files" to "a PDF file", em dashes and en dashes to commas or colons, his opening ChatGPT paragraph
+   replaced by a Project 5 pointer).
+   Ours: titles, eyebrows, one bold why line per card, captions, the app sketch labels (from his STEP 10 code) and short
+   term definitions.
+   REAL DATA: page pictures are the 10 pages of P7's pharma-blob-sample.pdf (source/m5-learn-crops.py, PyMuPDF 1.26.5).
+   The document structure on card 6 is his notebook's saved run (STEP 11 output), shown in his STEP 10 display format
+   (pages counted from 1, as get_document_structure() does).
+   Fixed stage: 760 x 760 at every width, scaled as one piece to fit the frame and centred. Nothing scrolls. */
+
+/* Pfizer x Extern Core design system, Light format. P8 m5 Learn deck: copied from project-05/source/m4-learn-style.css on 27 November 2026, plus the m5 blocks at the very end. The P5 m4 deck was copied from m2-learn-style.css (P5 m2). Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:760px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---------- m4 additions (same tokens only) ---------- */
+/* Wide and mid-width page crops, with the caption under the picture */
+.pic.wide{width:100%}
+.pic.mid{width:540px;align-self:flex-start}
+.cap.under{margin:0;font-size:17px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.cap b{color:var(--ink)}
+
+/* Page thumbnails (whole supplier pages). Labels sit under each page, never on it. */
+.thumbs{display:flex;gap:12px;flex:none}
+.th{margin:0;width:112px;display:flex;flex-direction:column;gap:5px;transition:opacity .3s ease}
+.th img{display:block;width:112px;height:auto;border:1.5px solid var(--line);border-radius:6px;background:var(--surface);transition:border-color .3s ease,box-shadow .3s ease}
+.th figcaption{display:flex;flex-direction:column;gap:1px;line-height:1.25}
+.th .pn{font-size:14px;font-weight:600;color:var(--ink)}
+.th .sc{font-size:14px;font-weight:600;color:var(--step-label);font-variant-numeric:tabular-nums;min-height:17px}
+.th.on img{border-color:var(--pfizer-blue);box-shadow:0 0 0 3px var(--pfizer-blue)}
+.th.dim{opacity:.38}
+.tview{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+.tview .cap{margin:0;font-size:18px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start}
+.duo .side{display:flex;flex-direction:column;gap:8px;width:360px}
+.duo .side .cap{margin:0;font-size:16.5px;line-height:1.4;font-weight:600;color:var(--gray-600)}
+.duo .side .thumbs{gap:12px}
+
+/* Clickable boxes (card 4): the text never changes, a click changes the picture */
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:var(--radius-sm)}
+.box.pick{text-align:left;cursor:pointer;border-width:1.5px;font:inherit}
+.box.pick .bh,.box.pick .bp{display:block}
+.box.pick[aria-pressed="true"]{border-color:var(--pfizer-blue);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.box.pick[aria-pressed="false"]{background:var(--surface);border-color:var(--line)}
+
+/* Key and value table (one technique per card) */
+.kv td.k{width:170px;white-space:normal}
+
+/* Ranked results that swap places (card 11) */
+.rank{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.rank li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;column-gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:9px 12px;font-size:18px;line-height:1.4;color:var(--card-text)}
+.rank li .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.rank li .tg{font-size:13px;font-weight:600;color:var(--pfizer-blue);background:var(--surface-card);border:1px solid var(--blue-200);border-radius:999px;padding:3px 10px;white-space:nowrap;visibility:hidden}
+.rank li.top{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.rank li.top .n{background:var(--pfizer-blue);color:var(--on-action)}
+.rank li.top .tg{visibility:visible;background:var(--surface)}
+.rank li.mv{animation:pop .35s ease both}
+.tbl.rr td.k{white-space:normal;width:210px}
+
+/* ---------- P8 m5 additions (same tokens only) ---------- */
+/* Strip of the 10 blob PDF pages (card 1): labels sit under each page, never on it */
+.strip{display:flex;gap:8px;flex:none}
+.strip .th{width:58px;gap:3px}
+.strip .th img{width:58px}
+.strip .th .pn{display:none}
+.strip .th .sc{display:none}
+/* App sketch: the layout of the team's app (his STEP 10 cell), drawn with tokens; each part is an .fbox so a state can light it */
+.sk{border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex:none}
+.sk .skt{font-family:var(--font-serif);font-size:17px;line-height:1.2;color:var(--ink)}
+.sk .skg{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:8px}
+.sk .skm{display:flex;flex-direction:column;gap:8px}
+.sk .fbox{flex:none;padding:6px 9px;min-height:0}
+.sk .skm .fbox{flex:1 1 auto}
+.sk .fbox .ft{font-size:14.5px;line-height:1.3}
+.sk .fbox .fs{font-size:13px;line-height:1.3}
+.sk .tall{min-height:0}
+.sk .num{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:12px;font-weight:700;align-items:center;justify-content:center;margin-right:6px;flex:none}
+.sk .fbox.on .num{background:var(--pfizer-blue);color:var(--on-action)}
+.sk .fh{display:flex;align-items:center}
+.sk .back{border-style:dashed}
+/* Mock controls (settings and chat cards) */
+.mock{display:flex;flex-direction:column;gap:8px;border:1.5px solid var(--pfizer-blue);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;flex:none}
+.mock .ml{font-size:13px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.mock .row2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mock .ctl{font-size:15px;line-height:1.3;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:6px 10px}
+.mock .ctl.grow{flex:1;color:var(--gray-600)}
+.mock .ctl b{font-weight:600}
+.mock .mb{font-size:14px;font-weight:600;line-height:1.2;padding:6px 10px;border-radius:var(--radius-xs);border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.mock .mb.pri{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.mock .mk{font-size:14.5px;color:var(--ink-muted)}
+/* Document structure list (card 6): his STEP 10 format, values from his saved run */
+.tbl.slist{flex:none}
+.tbl.slist td,.tbl.slist th{padding:4px 12px;font-size:15.5px}
+.slist li{font-size:15px;line-height:1.45;color:var(--card-text);break-inside:avoid}
+.slist li b{font-weight:600;color:var(--ink)}
+/* One line of code on a card */
+.cd1{margin:0;font-family:var(--font-mono);font-size:16px;line-height:1.4;background:var(--gray-50);border:1px solid var(--line);border-radius:var(--radius-xs);padding:8px 12px;color:var(--ink);flex:none}
+code{font-family:var(--font-mono);font-size:.88em}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Give your chatbot a brain: 13 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 13</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"ST": {"c1": {"0": {"pages": {"3": ["dim", ""], "4": ["dim", ""], "5": ["dim", ""], "6": ["dim", ""], "7": ["dim", ""], "8": ["dim", ""], "9": ["dim", ""], "10": ["dim", ""], "1": ["on", ""], "2": ["on", ""]}, "cap": "Suppose you paste only pages 1 and 2 of the blob PDF. The chatbot knows nothing else."}}, "c2": {"0": {"flow": [0, 1, 2]}}, "c3": {"0": {"flow": [0, 1, 2, 3, 4]}}, "c4": {"0": {"flow": [0], "cap": "In the app, this box is called <b>Upload Pharmaceutical PDF</b>."}}, "c5": {"0": {"flow": [1]}}, "c7": {"0": {"flow": [2]}}, "c9": {"0": {"flow": [4]}}, "c10": {"0": {"flow": [0, 1, 2, 3]}}}};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  /* ---------- (P8 m5: copied unchanged from project-05/source/m4-learn-player.js, 27 November 2026) One init for every m4 card with a picture (copied idea from the m2 cards, made generic) ----------
+     Each card holds one element with data-key. D.ST[key] has one state per button (data-v), or a single state "0" for a
+     card with no buttons. A state can set: boxes (per picture id, in the picture's own pixels), pages (per page number:
+     [class, label under the page]), flow (indexes of lit flow boxes), order (ids of the ranked rows, top first) and cap.
+     Buttons change only the picture, the labels under the pages and the caption. The card's text never changes. */
+  function initState(root) {
+    var host = root.querySelector("[data-key]");
+    if (!host) return;
+    var S = D.ST[host.getAttribute("data-key")];
+    var btns = root.querySelectorAll("[data-v]");
+    function show(v, pop) {
+      var s = S[v];
+      each(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-v") === v ? "true" : "false"); });
+      each(root.querySelectorAll(".pic"), function (fig) {
+        var svg = fig.querySelector("svg"); if (!svg) return;
+        draw(svg, (s.boxes && s.boxes[fig.id]) || [], pop);
+      });
+      if (s.pages) each(root.querySelectorAll(".th"), function (th) {
+        var st = s.pages[th.getAttribute("data-p")] || ["", ""];
+        th.className = "th" + (st[0] ? " " + st[0] : "");
+        th.querySelector(".sc").textContent = st[1];
+      });
+      if (s.flow) each(root.querySelectorAll(".fbox"), function (b, k) {
+        var on = s.flow.indexOf(k) >= 0; b.classList.toggle("on", on); b.classList.toggle("dim", !on);
+      });
+      if (s.order) {
+        var list = root.querySelector(".rank");
+        s.order.forEach(function (id, k) {
+          var li = list.querySelector('[data-id="' + id + '"]');
+          list.appendChild(li);
+          li.querySelector(".n").textContent = k + 1;
+          li.classList.toggle("top", k === 0);
+          if (pop) { li.classList.remove("mv"); void li.offsetWidth; li.classList.add("mv"); }
+        });
+      }
+      var cap = root.querySelector(".cap.vz");
+      if (cap) cap.innerHTML = s.cap || "";
+      space();
+    }
+    each(btns, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-v"), true); }); });
+    show(btns.length ? btns[0].getAttribute("data-v") : "0", false);
+    var group = root.querySelector(".sw, .steps:not(.static), .picks");
+    if (group) {
+      var hint = root.querySelector(".nhost");
+      nudge(host.getAttribute("data-key"), group, hint || group.parentNode, hint ? "inline" : "");
+    }
+  }
+
+  var timer = null;
+  var INITS = { initState: initState };
+  var CARDS = [{label:"Pasting Falls Short",eyebrow:"From ChatGPT to Document Q&amp;A",html:"<h2 class=\"title\">Pasting a PDF Into a Chatbot <span class=\"hl\">Falls</span> Short</h2><p class=\"why\">Your chatbot has to read the PDF itself, not wait for you to paste it.</p><p class=\"p\">You already know from Project 5 that a chatbot answers from what it was trained on.</p><p class=\"p\">While you <i>can</i> paste parts of a document into ChatGPT, it's not ideal for a few reasons:</p><ul class=\"ul\"><li><b>Size limits:</b> Long PDFs can hit the chat's limits, and you'd have to paste them again in every new chat.</li><li><b>No structure awareness:</b> ChatGPT won't “remember” your whole document, just the parts you pasted in that moment.</li><li><b>No automation:</b> You need to feed it context every single time you start a new chat.</li></ul>",init:null},
+{label:"Hasn't Read It",eyebrow:"From ChatGPT to Document Q&amp;A",html:"<h2 class=\"title\">A Chatbot Hasn't <span class=\"hl\">Read</span> Your Document Yet</h2><p class=\"why\">So it can only answer from the pages you hand it.</p><div class=\"keyhost\" data-key=\"c1\" hidden></div><p class=\"p\">In short: ChatGPT is like a very smart person… who hasn't read your document yet. You'd have to hand them the right pages for every question you ask.</p><div class=\"strip\"><figure class=\"th\" data-p=\"1\"><img src=\"pfizer3-p8-m5-learn-page1.png\" alt=\"Page 1 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">1</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"2\"><img src=\"pfizer3-p8-m5-learn-page2.png\" alt=\"Page 2 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">2</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"3\"><img src=\"pfizer3-p8-m5-learn-page3.png\" alt=\"Page 3 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">3</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"4\"><img src=\"pfizer3-p8-m5-learn-page4.png\" alt=\"Page 4 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">4</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"5\"><img src=\"pfizer3-p8-m5-learn-page5.png\" alt=\"Page 5 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">5</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"6\"><img src=\"pfizer3-p8-m5-learn-page6.png\" alt=\"Page 6 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">6</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"7\"><img src=\"pfizer3-p8-m5-learn-page7.png\" alt=\"Page 7 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">7</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"8\"><img src=\"pfizer3-p8-m5-learn-page8.png\" alt=\"Page 8 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">8</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"9\"><img src=\"pfizer3-p8-m5-learn-page9.png\" alt=\"Page 9 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">9</span><span class=\"sc\"></span></figcaption></figure><figure class=\"th\" data-p=\"10\"><img src=\"pfizer3-p8-m5-learn-page10.png\" alt=\"Page 10 of the blob PDF\" width=\"120\" height=\"170\"><figcaption><span class=\"pn\">10</span><span class=\"sc\"></span></figcaption></figure></div><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Document Q&A",eyebrow:"From ChatGPT to Document Q&amp;A",html:"<h2 class=\"title\">A Document Q&amp;A System Reads Your <span class=\"hl\">Files</span> First</h2><p class=\"why\">You hand it the PDF once, and it finds the right pages for each question.</p><div class=\"keyhost\" data-key=\"c2\" hidden></div><p class=\"p\">That's where a <b>document Q&amp;A system</b> comes in. Instead of relying on general memory, a document Q&amp;A system is connected to <b>your specific documents</b>.</p><div class=\"flow vz\"><div class=\"fbox\"><span class=\"ft\">You ask a question</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">it searches through <i>your files</i></span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">and answers based only on what's there</span></div></div><p class=\"p\">We're building an <b>Enhanced Document Q&amp;A System,</b> which is essentially a web app where users can upload PDFs and then chat with them using an AI-powered backend.</p>",init:"initState"},
+{label:"Five Parts",eyebrow:"What Are We Doing?",html:"<h2 class=\"title\">The App You'll Run Has Five <span class=\"hl\">Parts</span></h2><p class=\"why\">You'll find each part when you run the app.</p><div class=\"keyhost\" data-key=\"c3\" hidden></div><p class=\"p\">The system lets users upload documents, automatically process and tag them with metadata (labels such as the document type and pages), and then query their contents through a chatbot interface. When a question is asked, the system routes it to the most relevant document chunks, extracts the right information, and returns a context-aware answer, all powered by a language model.</p><p class=\"p\">Sounds straightforward enough, but what should such a system even contain? Let's find out:</p><div class=\"sk vz\" role=\"img\" aria-label=\"A sketch of the app: an upload box on the left, Document Info and Retrieval Settings in the middle, Ask Questions on the right, and the RAG backend behind them.\"><span class=\"skt\">Pharmaceutical Document Q&amp;A System</span><div class=\"skg\"><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">1</span><span class=\"ft\">Upload Pharmaceutical PDF</span></span></div><div class=\"skm\"><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">2</span><span class=\"ft\">Document Info</span></span></div><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">3</span><span class=\"ft\">Retrieval Settings</span></span></div></div><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">4</span><span class=\"ft\">Ask Questions</span></span></div></div><div class=\"fbox back\"><span class=\"fh\"><span class=\"num\">5</span><span class=\"ft\">RAG backend</span></span></div></div>",init:"initState"},
+{label:"Part 1: Upload",eyebrow:"Part 1 &middot; PDF Document Viewer",html:"<h2 class=\"title\">The PDF Document Viewer Is Where It All <span class=\"hl\">Begins</span></h2><p class=\"why\">Why this matters: Without this step, there's nothing to process. This is how we get the raw material that will eventually turn into smart, searchable answers.</p><div class=\"keyhost\" data-key=\"c4\" hidden></div><p class=\"p\">First things first, our system needs something to work with.</p><p class=\"p\">The <b>PDF Document Viewer</b> is where it all begins. Here, a user can either <b>click to upload</b> or simply <b>drag and drop</b> a PDF file into the app.</p><div class=\"sk vz\" role=\"img\" aria-label=\"A sketch of the app: an upload box on the left, Document Info and Retrieval Settings in the middle, Ask Questions on the right, and the RAG backend behind them.\"><div class=\"skg\"><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">1</span><span class=\"ft\">Upload Pharmaceutical PDF</span></span></div><div class=\"skm\"><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">2</span><span class=\"ft\">Document Info</span></span></div><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">3</span><span class=\"ft\">Retrieval Settings</span></span></div></div><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">4</span><span class=\"ft\">Ask Questions</span></span></div></div><div class=\"fbox back\"><span class=\"fh\"><span class=\"num\">5</span><span class=\"ft\">RAG backend, behind the panels</span></span></div></div><p class=\"cap vz under\"></p>",init:"initState"},
+{label:"Part 2: Info",eyebrow:"Part 2 &middot; Document Info Panel",html:"<h2 class=\"title\">The Document Info Panel Reports What the App <span class=\"hl\">Found</span></h2><p class=\"why\">Check this panel before you ask anything.</p><div class=\"keyhost\" data-key=\"c5\" hidden></div><p class=\"p\">Once the PDFs are in, the <b>Document Info Panel</b> acts like a “status report” for what just happened. It tells you:</p><ul class=\"ul\"><li>The file name and number of pages</li><li>How many separate documents were found inside the PDF</li><li>How many chunks of text were created for processing</li><li>What types of documents they are (e.g., Certificate of Quality, Packaging Specification)</li><li>How long it took to process everything</li><li>A breakdown of pages and chunks for each document type</li></ul><div class=\"sk vz\" role=\"img\" aria-label=\"A sketch of the app: an upload box on the left, Document Info and Retrieval Settings in the middle, Ask Questions on the right, and the RAG backend behind them.\"><div class=\"skg\"><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">1</span><span class=\"ft\">Upload Pharmaceutical PDF</span></span></div><div class=\"skm\"><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">2</span><span class=\"ft\">Document Info</span></span></div><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">3</span><span class=\"ft\">Retrieval Settings</span></span></div></div><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">4</span><span class=\"ft\">Ask Questions</span></span></div></div><div class=\"fbox back\"><span class=\"fh\"><span class=\"num\">5</span><span class=\"ft\">RAG backend, behind the panels</span></span></div></div>",init:"initState"},
+{label:"Why Info Matters",eyebrow:"Part 2 &middot; Document Info Panel",html:"<h2 class=\"title\">One PDF Can Hold <span class=\"hl\">Several</span> Documents</h2><p class=\"why\">Why this matters: This is your reassurance that the system understood and organized your file correctly.</p><p class=\"p\">It's especially handy if you upload something like a multi-page PDF that actually contains <i>several</i> different documents inside and now you can see exactly how it was split and classified. You split a blob PDF like this yourself in Project 7.</p><div class=\"tbl slist\"><table><thead><tr><th scope=\"col\">Document</th><th scope=\"col\">Pages</th></tr></thead><tbody><tr><td class=\"k\">Cover Letter</td><td>1-1</td></tr><tr><td class=\"k\">Certificate Of Quality</td><td>2-2</td></tr><tr><td class=\"k\">Certificate Of Quality</td><td>3-3</td></tr><tr><td class=\"k\">Packaging Specification</td><td>4-5</td></tr><tr><td class=\"k\">Bse/Tse Declaration</td><td>6-6</td></tr><tr><td class=\"k\">Material Description</td><td>7-7</td></tr><tr><td class=\"k\">Supplier Qualification</td><td>8-9</td></tr><tr><td class=\"k\">Chain Of Custody</td><td>10-10</td></tr></tbody></table></div><p class=\"cap under\">From the team's saved run on the blob PDF. Each document became 1 chunk.</p>",init:null},
+{label:"Part 3: Settings",eyebrow:"Part 3 &middot; Settings Panel",html:"<h2 class=\"title\">The Settings Panel Picks Where to <span class=\"hl\">Look</span></h2><p class=\"why\">Why this matters: Sometimes you want speed, sometimes you want depth, and sometimes you only care about one type of document. These settings put that power in your hands.</p><p class=\"p\">This is the control center, the part that lets you fine-tune how the system works for your needs. You can:</p><ul class=\"ul\"><li><b>Filter by document type</b>: for example, only search in Certificates of Quality, not Packaging Specifications.</li><li><b>Auto-route queries</b>: let the system guess the best document type for your question.</li><li><b>Choose how many chunks to retrieve</b>: pull just the top few or cast a wider net.</li></ul><div class=\"mock vz\"><div class=\"row2\"><span class=\"ctl\">Document Type Filter: <b>All</b></span><span class=\"ctl\">&#10003; Auto-Route Queries</span><span class=\"ctl\">Chunks to Retrieve: <b>4</b></span></div></div>",init:null},
+{label:"Part 4: Ask",eyebrow:"Part 4 &middot; Ask Questions Panel",html:"<h2 class=\"title\">The Ask Questions Panel Is Where You <span class=\"hl\">Chat</span></h2><p class=\"why\">Why this matters: Instead of hunting through dozens of pages yourself, you can get direct, conversational answers that turn your static pile of documents into an interactive experience.</p><p class=\"p\">Here, you type a question, and the system replies with an answer pulled straight from your documents.</p><div class=\"mock vz\"><span class=\"ml\">Ask Questions</span><div class=\"row2\"><span class=\"ctl grow\">e.g., What is the lot number? What sterilization method was used?</span><span class=\"mb pri\">Send</span></div><div class=\"row2\"><span class=\"mb\">Clear Chat</span><span class=\"mb\">Summarise this document</span><span class=\"mb\">Find lot numbers</span></div></div><p class=\"cap under\">The last two buttons ask a ready-made question for you.</p>",init:null},
+{label:"Part 5: Backend",eyebrow:"Part 5 &middot; RAG-Powered Backend",html:"<h2 class=\"title\">The RAG Backend Is the <span class=\"hl\">Brain</span> Behind the Panels</h2><p class=\"why\">Why this matters: This is what makes the answers grounded in your documents, rather than just educated guesses.</p><div class=\"keyhost\" data-key=\"c9\" hidden></div><p class=\"p\">Behind all these panels is the <b>RAG backend</b>, the brain of the operation. Here's what it does:</p><ol class=\"steps static\"><li><div class=\"step\"><span class=\"n\">1</span><span>Splits your documents into smaller, manageable chunks.</span></div></li><li><div class=\"step\"><span class=\"n\">2</span><span>Searches for the chunks most relevant to your question.</span></div></li><li><div class=\"step\"><span class=\"n\">3</span><span><i>Feeds those chunks to a language model</i> to craft a context-aware answer.</span></div></li></ol><p class=\"p\">You already know these three steps from Project 5. Here they run behind a web page.</p><div class=\"sk vz\" role=\"img\" aria-label=\"A sketch of the app: an upload box on the left, Document Info and Retrieval Settings in the middle, Ask Questions on the right, and the RAG backend behind them.\"><div class=\"skg\"><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">1</span><span class=\"ft\">Upload Pharmaceutical PDF</span></span></div><div class=\"skm\"><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">2</span><span class=\"ft\">Document Info</span></span></div><div class=\"fbox \"><span class=\"fh\"><span class=\"num\">3</span><span class=\"ft\">Retrieval Settings</span></span></div></div><div class=\"fbox tall\"><span class=\"fh\"><span class=\"num\">4</span><span class=\"ft\">Ask Questions</span></span></div></div><div class=\"fbox back\"><span class=\"fh\"><span class=\"num\">5</span><span class=\"ft\">RAG backend, behind the panels</span></span></div></div>",init:"initState"},
+{label:"The Brain",eyebrow:"Giving Your Chatbot a Brain",html:"<h2 class=\"title\">The Brain Finds, Prompts and <span class=\"hl\">Answers</span></h2><p class=\"why\">This is the part you'll rebuild with your own model in the Task.</p><div class=\"keyhost\" data-key=\"c10\" hidden></div><p class=\"p\">This “brain” is the part that:</p><div class=\"flow vz\"><div class=\"fbox\"><span class=\"ft\">Retrieves the right chunks</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Formats them with your question</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Sends the prompt to an LLM</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Returns the answer</span></div></div><p class=\"p\">We'll walk you through how this works using <b>Gemini</b> as an example.</p><p class=\"p\"><b>Your challenge:</b> swap Gemini out for an open-source model (a model anyone can download and run) like <b>Mistral 7B</b>, <b>Phi</b>, or <b>TinyLlama</b>.</p><p class=\"p\">If your code is modular (built from separate parts), this swap is easier.</p>",init:"initState"},
+{label:"What You'll Build",eyebrow:"What You'll Build",html:"<h2 class=\"title\">One Function Turns a Question Into an <span class=\"hl\">Answer</span></h2><p class=\"why\">Each step below is one block of code you'll find in the notebook.</p><p class=\"p\">You're building a simple function, something like:</p><pre class=\"cd1\">def prompt_func(query: str) -&gt; str</pre><p class=\"p\">It will:</p><ol class=\"steps static\"><li><div class=\"step\"><span class=\"n\">1</span><span><b>Retrieve</b> the most relevant document chunks from your index (like pulling the right pages out of a book).</span></div></li><li><div class=\"step\"><span class=\"n\">2</span><span><b>Format</b> them with your question into a clean, clear prompt.</span></div></li><li><div class=\"step\"><span class=\"n\">3</span><span><b>Send</b> that prompt to an LLM (Gemini in our demo, but yours could be any open-source model).</span></div></li><li><div class=\"step\"><span class=\"n\">4</span><span><b>Return</b> the final answer to display in the chatbot.</span></div></li></ol><p class=\"p\">In the team's notebook, step 1 is <code>retrieve()</code>, and steps 2 to 4 are <code>generate_answer_with_sources()</code>.</p>",init:null},
+{label:"Why Separate",eyebrow:"But Why Are We Doing This?",html:"<h2 class=\"title\">Keeping the Brain Apart From the Window Makes It Easy to <span class=\"hl\">Change</span></h2><p class=\"why\">In the Task, you'll swap the model without touching the chat window.</p><ul class=\"ul\"><li><b>Keeps things organized</b>: The UI is separate from the “thinking” part, so you can fix or upgrade either one without breaking the other.</li><li><b>Future-proof</b>: Want to swap Gemini for Mistral? No problem.</li><li><b>Real-world ready</b>: This modular approach is how professional AI systems are built.</li><li><b>Flexible</b>: Works with any LLM, not just the one we picked for the demo.</li></ul><div class=\"flow vz\"><div class=\"fbox\"><span class=\"ft\">Chat window</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Brain</span></div><span class=\"arr\" aria-hidden=\"true\">&rarr;</span><div class=\"fbox\"><span class=\"ft\">Model</span></div></div><p class=\"p\">Now that you understand the prompt function, let's review how we're enhancing the existing document Q&amp;A pipeline.</p>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps, .picks")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build a Chatbot Window</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 8, module 3 Learn deck: "Build a Chatbot Window for Your Documents".
+   Folds Chaitanya's concept-only "Learn How To Design Advanced UIs" (c581, Notion c581d028...) into his "Learn How To
+   Build a Chatbot Interface with Gradio" (9fa1d028...), PF CLAUDE.md rule 4 and p8-decisions.md item 1.
+   Built 27 November 2026 from source/m3-learn-build.py (+ m3-learn-style.css, m3-learn-player.js). Never hand-patch this
+   file: change the source and rebuild. Card plan: fitcheck-m3.md section 6; swaps: coverage-m3.md section 3.
+   Pictures: real Colab crops (images/pfizer3-p8-m3-try-*.png); pending ones show a dashed COLAB SHOT PENDING box.
+   Look: Pfizer x Extern Core, Light format; every color, size, radius and font comes from design-system/tokens.json. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-200); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:800px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---------- m3 additions (built 23 November 2026), from the same tokens only ---------- */
+.p a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.viz{display:flex;flex-direction:column;gap:8px}
+.vrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.tag{display:inline-block;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:3px 10px;font-size:13.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.ex{font-size:13px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-600)}
+
+/* Documents drawn as one bar per real line (bar length = the line's length in characters) */
+.docs{display:flex;gap:14px;align-items:flex-start}
+.doc{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.fn{font-family:var(--font-mono);font-size:13.5px;line-height:1.2;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lines{border:1px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);padding:8px 9px;display:flex;flex-direction:column;gap:5px}
+.lines i{display:block;height:7px;border-radius:4px;background:var(--blue-200);transition:opacity .3s ease,background .3s ease}
+.lines i.on{background:var(--pfizer-blue)}
+.lines i.dim{opacity:.25}
+.lines i.ans{background:var(--highlight)}
+.lines .cut{height:0;border-top:2px dashed var(--ink);margin:1px -9px;position:relative}
+.lines .cut.off{border-top-color:transparent}
+.lines .cut span{position:absolute;right:4px;top:-11px;background:var(--surface);font-size:12px;line-height:1;font-weight:700;color:var(--ink);padding:2px 4px}
+.lines.piece{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.lines .ck{font-size:12.5px;line-height:1.1;font-weight:700;color:var(--pfizer-blue);margin:-2px 0 0}
+
+/* Card 3: similarity scores on a 0 to 1 line */
+.scale{position:relative;height:100px;margin:0 40px}
+.scale .track{position:absolute;left:0;right:0;top:72px;height:4px;border-radius:2px;background:var(--blue-200)}
+.scale .tk{position:absolute;top:82px;transform:translateX(-50%);font-size:13px;line-height:1.2;color:var(--gray-600);font-variant-numeric:tabular-nums}
+.scale .pd{position:absolute;top:68px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--pfizer-blue);box-shadow:0 0 0 2px var(--surface)}
+.pin{position:absolute;transform:translateX(-50%);background:none;border:0;padding:0;cursor:pointer;border-radius:999px}
+.pin .pl{display:block;font-size:13.5px;line-height:1.2;font-weight:600;color:var(--ink);background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.pin[aria-pressed="true"] .pl{background:var(--action);color:var(--on-action)}
+.pair{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:8px 12px;font-size:16px;line-height:1.4;color:var(--card-text)}
+.pair b{color:var(--ink);font-weight:600}
+
+/* Card 4: his three vectors, plotted */
+.plot{display:flex;gap:16px;align-items:center}
+.plot svg{width:230px;height:150px;flex:none;overflow:visible}
+.plot .ax{stroke:var(--ink);stroke-width:1.5}
+.plot .gd{stroke:var(--line);stroke-width:1}
+.plot .dot{fill:var(--pfizer-blue)}
+.plot .dot.far{fill:var(--ink)}
+.plot text{font-family:var(--font-text);font-size:13px;fill:var(--ink)}
+.plot text.n{fill:var(--gray-600);font-size:11.5px}
+
+/* Card 5: the two quotes, with the words a search compares */
+.quote{margin:0;border-left:4px solid var(--blue-200);padding:3px 0 3px 14px;font-size:18px;line-height:1.45;color:var(--ink);font-style:italic}
+.mk{border-radius:4px;padding:0 2px;transition:background .3s ease,box-shadow .3s ease}
+.mk.on{background:var(--surface-card);box-shadow:0 0 0 2px var(--pfizer-blue)}
+.mk.miss{box-shadow:0 0 0 2px var(--ink);background:var(--gray-50)}
+
+/* Card 6: sentence into model into numbers */
+.vec{font-family:var(--font-mono);font-size:14.5px;color:var(--ink)}
+
+/* Card 12: bar chart from the run */
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:10px;font-size:15px;color:var(--ink)}
+.bar .bt{height:22px;border-radius:5px;background:var(--pfizer-blue);color:var(--on-action);font-size:13.5px;font-weight:600;display:flex;align-items:center;padding-left:8px;white-space:nowrap}
+
+/* Card 13: real words as blocks, cut every 20 words */
+.words{display:flex;flex-wrap:wrap;gap:4px 3px;align-items:center;border:1px solid var(--line);border-radius:var(--radius-xs);padding:9px}
+.words i{display:block;height:12px;border-radius:3px;background:var(--blue-200)}
+.words i.end{background:var(--pfizer-blue)}
+.words .wc{width:0;height:22px;border-left:2.5px dashed var(--ink);margin:0 3px}
+.words i.hot{background:var(--highlight)}
+
+/* Card 15 and 19: text pieces */
+.pieces{display:flex;gap:10px;align-items:stretch}
+.piece{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 12px;font-size:16px;line-height:1.4;color:var(--card-text)}
+.piece .pk{display:block;font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label);margin-bottom:3px}
+.piece.on{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.piece .hit{background:var(--surface);box-shadow:0 0 0 2px var(--pfizer-blue);border-radius:4px;padding:0 2px}
+
+/* Card 17: a report outline split in two passes */
+.outline .lines i.h{height:11px;background:var(--pfizer-blue);width:45%}
+
+/* Card 18a: the dictionary scale */
+.dict{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.dict .box{align-items:center;text-align:center}
+.dict .box.on{border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+
+/* Strategy number badges (cards 13 to 18b, 21) */
+.sn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--pfizer-blue);color:var(--on-action);font-size:12.5px;font-weight:700;margin-right:6px;vertical-align:2px;flex:none}
+.pc td{font-size:16.5px}
+.pc th{font-size:14px}
+.tbl td.sz{white-space:nowrap}
+.szb{display:block;height:6px;border-radius:3px;background:var(--pfizer-blue);margin-top:5px}
+.tap.left{left:auto;right:calc(100% + 10px)}
+
+/* ---------- P8 m3 additions (built 27 November 2026), from the same tokens only ---------- */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.p code,.ul code,.box code,.tbl code,.take code{font-family:var(--font-mono);font-size:.88em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.code{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--gray-50);overflow:hidden}
+.code .ch{display:block;font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label);padding:7px 12px 0}
+.code pre{margin:0;padding:6px 12px 9px;font-family:var(--font-mono);font-size:15px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
+/* Card 1: Sarah's two asks */
+.asks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ask{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:10px 14px;font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.ask .mk{flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.ask.no{color:var(--gray-600)}
+.ask.no .mk{background:var(--gray-50);color:var(--ink);border:1.5px solid var(--ink)}
+.ask.yes{border-color:var(--pfizer-blue);background:var(--surface-card)}
+.ask.yes .mk{background:var(--pfizer-blue);color:var(--on-action)}
+/* Colab shots inside a card: drawn no taller than their slot; a pending shot is a dashed box of the same height */
+.shot{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface);display:flex;justify-content:center}
+.shot img{display:block;width:auto;max-width:100%;max-height:var(--mh)}
+.shot.pending{height:var(--mh);border:2px dashed var(--ink-muted);background:var(--gray-50);align-items:center;line-height:20px}
+.pend{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:8px 16px;font-size:13px;color:var(--ink-muted)}
+.pend b{font-size:15px;letter-spacing:.06em;color:var(--ink)}
+.side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.side > div{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ol{margin:0;padding-left:24px;display:flex;flex-direction:column;gap:2px}
+.ol li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ol li::marker{color:var(--step-label);font-weight:700}
+.ol li b{font-weight:600;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Build a chatbot window: 11 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 11</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {};
+  var timer = null;
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  function bar(len, cls) { return '<i class="' + (cls || "") + '" style="width:' + (100 * len / D.MAXLEN).toFixed(1) + '%"></i>'; }
+  function pressed(btns, v) { each(btns, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v ? "true" : "false"); }); }
+  function switcher(root, views, first, key) {
+    var btns = root.querySelectorAll(".sw button");
+    function show(v) { pressed(btns, v); views(v); space(); }
+    each(btns, function (x) { x.addEventListener("click", function () { show(x.getAttribute("data-view")); }); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Card 1: Sarah's two asks, first with gr.Interface, then with a chat window ---------- */
+  function initAsks(root) {
+    var viz = root.querySelector("#c1-viz");
+    var ASKS = ["Keep the PDF loaded between questions", "See my previous questions and answers"];
+    switcher(root, function (v) {
+      var ok = v === "chat";
+      viz.innerHTML = '<div class="asks">' + ASKS.map(function (a) {
+        return '<div class="ask ' + (ok ? "yes" : "no") + '"><span class="mk" role="img" aria-label="' + (ok ? "Yes" : "No") + '">' +
+          (ok ? "&#10003;" : "&#10005;") + '</span><span>' + a + '</span></div>';
+      }).join("") + '</div><p class="cap">' + (ok ? "A chat window keeps the document and the conversation." :
+        "One question in, one answer out, then it starts over.") + '</p>';
+    }, "iface", "c1");
+  }
+
+  var INITS = { initAsks: initAsks };
+  var CARDS = [{label:"Sarah's Asks",eyebrow:"The problem",html:"<h2 class=\"title\">One Question, One Answer Isn't Enough for <span class=\"hl\">Sarah</span></h2><p class=\"why\">Sarah's email asks for two things a one-question app can't do.</p><p class=\"p\">You already used <code>gr.Interface</code> in the last reading.</p><p class=\"p\">You realize your <code>gr.Interface</code> app works great for <b>one question, one answer</b>, but it's not built for <b>more complex, interactive workflows</b>.</p><p class=\"p\">You could hack it with more <code>inputs</code> and <code>outputs</code>&hellip;</p><p class=\"p\">&hellip;but there's a better way.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose an app\"><button type=\"button\" data-view=\"iface\" aria-pressed=\"true\">With gr.Interface</button><button type=\"button\" data-view=\"chat\" aria-pressed=\"false\">With a chat window</button></div></div></div><div class=\"viz\" id=\"c1-viz\"></div>",init:"initAsks"},
+{label:"Blocks",eyebrow:"gr.Blocks",html:"<h2 class=\"title\"><code>gr.Blocks</code> Lets You Decide Where Everything <span class=\"hl\">Goes</span></h2><p class=\"why\">Your chat window is built with Blocks, so this is the tool you'll use most.</p><p class=\"p\"><code>gr.Blocks</code> is for when your interface needs <b>more control and personality</b> than <code>gr.Interface</code> can give.</p><p class=\"p\">Imagine <code>gr.Interface</code> as a pre-built coffee cart: You can serve coffee with minimal setup, but you can't rearrange the espresso machine, display pastries, and add a custom tip jar exactly where you want.</p><p class=\"p\"><code>gr.Blocks</code> is like having your own counter space: you decide where everything goes, and you can even make things appear or change based on what the user does.</p><div class=\"two\"><div class=\"box white\"><p class=\"bh\">Coffee cart: <code>gr.Interface</code></p></div><div class=\"box\"><p class=\"bh\">Your own counter: <code>gr.Blocks</code></p></div></div>",init:null},
+{label:"What Blocks Can Do",eyebrow:"gr.Blocks",html:"<h2 class=\"title\">What You Can Do With <code>gr.Blocks</code></h2><p class=\"why\">A chat window needs its own layout and buttons that run your functions.</p><p class=\"p\">You can:</p><ul class=\"ul\"><li>Decide where each component appears on the page</li><li>Handle multiple data flows or chained actions</li><li>Update component properties (like visibility) based on user interaction</li><li>Build advanced tools like the <b>Automatic1111 Web UI for image generation</b></li></ul><p class=\"p\">Automatic1111 is a free web app, built with Gradio, that makes pictures with AI.</p><p class=\"p\">With <code>gr.Blocks</code>, you can keep stacking, arranging, and wiring components, however your RAG pipeline (or imagination) demands.</p>",init:null},
+{label:"Blocks Demo",eyebrow:"gr.Blocks",html:"<h2 class=\"title\">Watch a Box Change <span class=\"hl\">as You Type</span></h2><p class=\"why\">This is the wiring your chat window uses: one part changes, a function runs, another part shows the result.</p><p class=\"p\">Here's a mini demo that transforms your name into uppercase letters <b>as you type</b>:</p><div class=\"side\"><div><figure class=\"code\"><span class=\"ch\">Python</span><pre><code>with gr.Blocks() as demo:\n    name = gr.Textbox(label=&quot;Name&quot;)\n    out = gr.Textbox()\n    name.change(fn=lambda x: x.upper(), inputs=name, outputs=out)\n\ndemo.launch()</code></pre></figure></div><div><figure class=\"shot\" style=\"--mh:190px\"><img src=\"pfizer3-p8-m3-try-g8.png\" width=\"1740\" height=\"1326\" alt=\"The gr.Blocks demo in Colab: the Name box says sarah and the box under it says SARAH.\"></figure></div></div>",init:null},
+{label:"ChatInterface",eyebrow:"gr.ChatInterface",html:"<h2 class=\"title\"><code>gr.ChatInterface</code> Remembers the <span class=\"hl\">Conversation</span></h2><p class=\"why\">This is how a chat window keeps the history Sarah asked for.</p><p class=\"p\">Sometimes the best way to interact with a system isn't through forms or sliders. It's through a <b>natural conversation</b>.</p><p class=\"p\">If your RAG pipeline works like a chatbot (&ldquo;Ask me a question, I'll find the answer&rdquo;), <code>gr.ChatInterface</code> gives you that interface instantly.</p><p class=\"p\">Instead of manually setting up input boxes and maintaining chat history, <code>gr.ChatInterface</code>:</p><ul class=\"ul\"><li>Automatically stores conversation history</li><li>Displays messages in a clean, chat-style format</li><li>Keeps your function code simple: it just receives a message and returns a response</li></ul>",init:null},
+{label:"ChatInterface Demo",eyebrow:"gr.ChatInterface",html:"<h2 class=\"title\">A Chatbot in <span class=\"hl\">Five Lines</span></h2><p class=\"why\">Your function gets the new message and the chat so far, and sends back the reply.</p><p class=\"p\"><b>Example:</b></p><div class=\"side\"><div><figure class=\"code\"><span class=\"ch\">Python</span><pre><code>def bot(msg, history):\n    return &quot;You said: &quot; + msg\n\ndemo = gr.ChatInterface(bot)\ndemo.launch()</code></pre></figure></div><div><figure class=\"shot\" style=\"--mh:200px\"><img src=\"pfizer3-p8-m3-try-g9-fixed.png\" width=\"1740\" height=\"1326\" alt=\"The gr.ChatInterface demo in Colab: the message hello and the reply You said: hello.\"></figure></div></div><p class=\"p\">This is perfect for:</p><ul class=\"ul\"><li>Customer support assistants</li><li>Study or research helpers</li><li>Interactive Q&amp;A over documents</li></ul><p class=\"p\">In Project 5, your chatbot kept its memory in a <code>messages</code> list. Gradio's chat window keeps it for you.</p>",init:null},
+{label:"Compare",eyebrow:"Choosing",html:"<h2 class=\"title\">When Would You Use <span class=\"hl\">Each?</span></h2><p class=\"why\">Knowing what each tool is for tells you which one to start with.</p><div class=\"tbl\"><table><thead><tr><th scope=\"col\">Feature</th><th scope=\"col\"><code>gr.Interface</code></th><th scope=\"col\"><code>gr.Blocks</code></th><th scope=\"col\"><code>gr.ChatInterface</code></th></tr></thead><tbody><tr><td class=\"k\">Best for</td><td>Quick demos</td><td>Multi-step workflows</td><td>Conversational bots</td></tr><tr><td class=\"k\">Layout control</td><td>Minimal</td><td>Full</td><td>Chat-focused</td></tr><tr><td class=\"k\">Handles multiple connected tools</td><td>No</td><td>Yes</td><td>Yes, in chat style</td></tr><tr><td class=\"k\">Built-in chat history</td><td>No</td><td>Possible with custom logic</td><td>Yes</td></tr></tbody></table></div><p class=\"p\">The beauty of Gradio is that you don't have to choose one forever: you can start with <code>gr.Interface</code> for speed, move to <code>gr.Blocks</code> for flexibility, or switch to <code>gr.ChatInterface</code> when chat feels right.</p>",init:null},
+{label:"Your Pipeline",eyebrow:"Choosing",html:"<h2 class=\"title\">Why This Matters for Your RAG <span class=\"hl\">Pipeline</span></h2><p class=\"why\">Your document chatbot is a multi-step workflow, so it's built with Blocks.</p><p class=\"p\">If your RAG tool is meant for quick one-off lookups (&ldquo;Give me a number&rdquo;), <code>gr.Interface</code> is fine.</p><p class=\"p\">If you want a multi-step document workflow, <code>gr.Blocks</code> shines.</p><p class=\"p\">If you want a natural back-and-forth conversation over your docs, <code>gr.ChatInterface</code> is the way to go.</p><p class=\"p\">And once you know when to use each, you can mix and match to create exactly the RAG experience your users need, whether that's a student researcher or a curious AI enthusiast.</p>",init:null},
+{label:"Your Chat Window",eyebrow:"What you'll build",html:"<h2 class=\"title\">Next, Build a Chat Window for Your <span class=\"hl\">Documents</span></h2><p class=\"why\">This is the window Sarah asked for.</p><p class=\"p\">Now that you know how to take a number and transform it in different ways, and have also explored some advanced UI elements like <b>Gradio Blocks</b> and <b>chat components</b>, it's time to step into more practical, real-world apps. Before we dive into complex retrieval pipelines and prompt engineering, we'll start with the essentials: adding inputs, buttons, and file uploaders; displaying messages in a chat window; and connecting it all to your backend Python functions.</p><p class=\"p\">A UI (user interface) is the screen people click and type on. The backend is the code behind it.</p>",init:null},
+{label:"Four Parts",eyebrow:"What you'll build",html:"<h2 class=\"title\">The Four Parts of Your Chat <span class=\"hl\">Window</span></h2><p class=\"why\">You'll build each part, then run the whole window in Try It Yourself.</p><p class=\"p\">Here, you'll learn how to use Gradio's <b>Blocks API</b> to create a clean, chat-based UI for your document Q&amp;A system.</p><p class=\"p\">You'll build:</p><ol class=\"ol\"><li>A <b>chat area</b> for conversation history</li><li>A <b>textbox</b> where the user can type questions</li><li>A <b>PDF uploader</b> for documents</li><li>Buttons to <b>process the file</b> and <b>clear the chat</b></li></ol><figure class=\"shot\" style=\"--mh:230px\"><img src=\"pfizer3-p8-m3-try-g11.png\" width=\"1740\" height=\"1326\" alt=\"The app in Colab, freshly loaded: the share link lines, then Step 5: Connected UI, an empty Chat History box, the Your Question box and the top of the Send button.\"></figure><p class=\"p\">By the end, you'll have something Sarah, or anyone, can use with zero coding knowledge.</p>",init:null},
+{label:"Recap",eyebrow:"Quick recap",html:"<h2 class=\"title\">Quick <span class=\"hl\">Recap</span></h2><p class=\"why\">Three tools, one for each kind of app.</p><ul class=\"ul\"><li><b><code>gr.Interface</code></b> is best for simple, one-question RAG demos over pharmaceutical documents.</li><li><b><code>gr.Blocks</code></b> gives you full layout control for multi-step QA workflows and document review tools.</li><li><b><code>gr.ChatInterface</code></b> enables a conversational experience with built-in chat history for interactive document analysis.</li></ul><div class=\"box\"><p class=\"bp\">You'll try examples like:</p><ul><li><code>with gr.Blocks() as demo: ...</code></li><li><code>gr.ChatInterface(bot_function)</code></li></ul></div>",init:null}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>

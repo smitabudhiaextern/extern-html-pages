@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P8 Build a Chat Window Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* P8 module 3, "Try It Yourself": Part 1 runs sections 5 and 6 of Chaitanya's "Intro to Gradio" notebook (cells 10
+   and 12); Part 2 walks through his "Learn How To Build a Chatbot Interface with Gradio" Steps 1 to 5, then runs his
+   "Gradio Chatbot" notebook (cell 1). Built by m3-steps-build.py (06-content/project-08/source/). Shell copied from the
+   P5 m3 Try deck. Code: his notebook cells and page snippets exactly, except the two fixed lines (S9, S14 in
+   coverage-m3.md). Colab shots pending: none. Notebook copies pending: none.
+   Fixed stage 760 x 1150 (frames under 560 px wide: 450 x 1250), scaled as one piece so nothing scrolls.
+   Look: Pfizer x Extern Core, Light format; every color, size, radius and font comes from design-system/tokens.json. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0;
+  --blue-50:#e6ecf7;
+  --blue-200:#b9c8e8;
+  --green-600:#07a657;
+  --gray-50:#f2f2f2;
+  --gray-200:#e4e4e4;
+  --gray-600:#666666;
+  --gray-800:#333333;
+  --surface:#ffffff;
+  --surface-card:var(--blue-50);
+  --ink:#000000;
+  --ink-muted:var(--gray-800);
+  --card-title:#000000;
+  --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue);
+  --highlight:var(--green-600);
+  --action:#000000;
+  --on-action:#ffffff;
+  --line:var(--gray-200);
+  --focus-ring:var(--pfizer-blue);
+  --space-1:4px;--space-2:8px;--space-3:14px;--space-4:18px;--space-5:26px;--space-6:40px;
+  --radius-xs:8px;--radius-sm:12px;--radius-md:14px;--radius-full:9999px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:22px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+
+/* The design stage, scaled and centred by the script at the end */
+.app{position:absolute;left:50%;top:50%;width:760px;height:1150px;transform:translate(-50%,-50%);transform-origin:50% 50%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Header: step rail and "Slide X of N" */
+.top{flex:none;border-bottom:1px solid var(--line);padding:10px 16px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+.where{order:2;display:flex;align-items:center;gap:8px;font-size:13px;line-height:16px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.where b{font-weight:600;color:var(--ink)}
+.rail{display:flex;gap:6px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 2px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.segs{display:flex;gap:3px;height:6px;align-items:center}
+.segs i{flex:1;height:4px;border-radius:2px;background:var(--blue-200)}
+.segs i.done{background:var(--pfizer-blue)}
+.segs i.cur{background:var(--pfizer-blue);height:6px;border-radius:3px}
+.pg-label{font-size:13px;font-weight:500;line-height:16px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg.is-done .pg-label{color:var(--pfizer-blue)}
+.pg.is-cur .pg-label{color:var(--ink);font-weight:600}
+.narrow .top{grid-template-columns:minmax(0,1fr);row-gap:8px}
+.narrow .where{order:0}
+.narrow .pg-word{display:none}
+.narrow .pg.pg-fit{flex:none}
+
+/* Slide area and slide */
+.stage{flex:1 1 auto;min-height:0;background:var(--gray-50);padding:12px 16px;display:flex;overflow:hidden}
+.card{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:22px var(--space-5);display:flex;flex-direction:column;overflow:hidden}
+.narrow .stage{padding:10px 0}
+.narrow .card{padding:18px 16px;border-left:0;border-right:0;border-radius:0}
+.inner{flex:none;display:flex;flex-direction:column;gap:var(--space-3);width:100%}
+.step{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:0.08em;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:32px;line-height:38px;padding-bottom:3px;color:var(--ink);text-wrap:balance}
+.narrow .title{font-size:28px;line-height:34px}
+.hl{color:var(--highlight)}
+.p{margin:0;font-size:15px;line-height:22px;color:var(--ink);text-wrap:pretty}
+.p b{font-weight:600}
+.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.p code.nw,.list code.nw{white-space:nowrap}
+.list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:22px;text-wrap:pretty}
+.list b{font-weight:600}
+.list code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.list li::marker{color:var(--step-label);font-weight:600}
+.see{margin-top:4px}
+
+/* Buttons (design system Button, Light) */
+.links{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);max-width:100%;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:13px 20px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-decoration:none}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-primary{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.btn-secondary{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* Run card: a notebook cell (no Copy button: the cells are already in the notebook), or the one cell students add (Copy button) */
+.run{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;margin:0}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:6px 8px 6px 14px;background:var(--gray-50);border-bottom:1px solid var(--line)}
+.code-lang{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.04em;color:var(--ink-muted)}
+.run pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:14px;line-height:1.55;color:var(--ink);white-space:pre;background:var(--surface)}
+.run pre code{font:inherit}
+.run.out .code-head{background:var(--surface-card);border-bottom-color:var(--blue-200)}
+.run.out{border-color:var(--blue-200)}
+.run.out pre{background:var(--surface-card);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.copy{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--ink);color:var(--ink);border-radius:var(--radius-xs);padding:6px 12px;font-size:13px;line-height:1.2;font-weight:600;cursor:pointer;white-space:nowrap}
+.copy svg{width:14px;height:14px;flex:none}
+.copy.ok{background:var(--action);color:var(--on-action);border-color:var(--action)}
+.narrow .run pre{font-size:13px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.narrow .run.out pre{font-size:12px}
+
+/* The Colab screenshot: the full width of the card (edge to edge), opens full size in a new tab.
+   Under 560 px the card itself runs edge to edge, so the picture is as wide as the frame. */
+.shot{margin:0 calc(-1 * var(--space-5));border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden;line-height:0;background:var(--surface)}
+.narrow .shot{margin:0 -16px}
+.shot a{display:block}
+.shot img{display:block;width:100%;height:auto}
+.shot-cap{margin:-6px 0 0;font-size:13px;line-height:18px;color:var(--gray-600)}
+
+/* A picture of the page (slide 14: the table in foo.pdf): framed like the output blocks, as wide as the text */
+.pagepic{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.pagepic a{display:block}
+.pagepic img{display:block;width:100%;height:auto}
+
+/* Table and analysis box (from the Learn deck) */
+.tbl{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.4}
+.tbl th{text-align:left;font-size:13px;line-height:16px;font-weight:600;color:var(--ink-muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--card-text)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.m{font-family:var(--font-mono);font-size:13px;color:var(--ink);white-space:nowrap}
+.tbl td code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .tbl table{font-size:13px}
+.narrow .tbl td,.narrow .tbl th{padding:5px 8px}
+.concl{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px;font-size:15px;line-height:22px;color:var(--card-text)}
+.concl b{font-weight:600;color:var(--card-title)}
+.concl p{margin:0}
+.concl p + p{margin-top:6px}
+.concl code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+
+/* A smaller code font for the long function in Step 3 (from the 11 November module 9 steps deck) */
+.run.small pre{font-size:12px;line-height:1.32;padding:8px 14px}
+.narrow .run.small pre{font-size:10.5px;line-height:1.35}
+
+/* Tip box (from the 11 November module 9 Learn deck): pale-blue card, Pfizer blue bulb in a white square */
+.tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface-card);border-radius:var(--radius-md);padding:10px 16px}
+.tip-icon{flex:none;width:30px;height:30px;border-radius:var(--radius-xs);background:var(--surface);display:grid;place-items:center;color:var(--pfizer-blue)}
+.tip-icon svg{width:18px;height:18px}
+.tip p{margin:0;font-size:15px;line-height:22px;color:var(--card-text);text-wrap:pretty}
+.tip b{font-weight:600;color:var(--card-title)}
+
+/* Last slide: his closing line and Key Takeaway (takeaway box copied from the module 7 cheat sheet slide) */
+.inner.end-slide{gap:var(--space-4)}
+.end-slide .p{font-size:17px;line-height:1.55}
+.take{margin:0;background:var(--surface-card);border-radius:var(--radius-md);padding:14px 18px;font-size:17px;line-height:1.55;color:var(--card-text)}
+.take b{font-weight:700;color:var(--card-title)}
+.take code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.narrow .take{font-size:15px;padding:12px 16px}
+.narrow .end-slide .p{font-size:16px}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:22px;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:14px}
+.foot .btn{padding:10px 16px;font-size:15px}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+.narrow .upnext{visibility:hidden}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* Added for P4 module 2 (copied from the P3 module 8 Try deck): "now holds" note, the SME's callout box, the Quick Recap size */
+.holds{margin:0;display:flex;align-items:center;gap:8px;background:var(--surface-card);border-left:4px solid var(--pfizer-blue);border-radius:var(--radius-xs);padding:7px 12px;font-size:14px;line-height:20px;font-weight:600;color:var(--card-title)}
+.holds code{font-family:var(--font-mono);font-size:.92em;background:var(--surface);border-radius:4px;padding:1px 5px}
+.holds svg{width:16px;height:16px;flex:none;color:var(--pfizer-blue)}
+.note{border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:9px 14px}
+.note .num{display:block;margin-bottom:3px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;color:var(--step-label)}
+.note p{margin:0;font-size:15px;line-height:1.48;color:var(--ink-muted)}
+.note b{font-weight:600;color:var(--ink)}
+.recap-slide .list{font-size:17px;line-height:1.55;gap:14px}
+.recap-slide .list ul{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:2px}
+.recap-slide .list ul li::marker{color:var(--ink-muted)}
+.narrow .recap-slide .list{font-size:15.5px;gap:10px}
+/* Many steps in the rail: numbers only */
+.pg-word{display:none}
+.pg-label{text-align:center}
+.pg.pg-fit{flex:none}
+.pg.pg-fit .pg-label{text-align:left}
+/* Under 560 px there is no room for the 7 group labels: the rail shows only the progress bars, and "Step N" sits beside the count */
+.narrow .pg-label{display:none}
+.narrow .pg.pg-fit{flex:1 1 0}
+/* Code and output: Project 3's size (fix pass, 22 November 2026: 14 px on the 760 stage, 13 px at the 708 px column; 13 px on
+   the narrow stage). Long lines wrap, so nothing scrolls; long cells and outputs are cut over more slides instead */
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run.out pre{font-size:14px;line-height:1.5}
+.narrow .run pre,.narrow .run.out pre{font-size:13px}
+/* F02: zoomed crops of one strip of the page, before and after a step */
+.zoom{margin:0;display:flex;flex-direction:column;gap:6px}
+.zoom a{display:block;line-height:0}
+.zoom img{display:block;height:auto;max-width:100%;border:1px solid var(--line);border-radius:var(--radius-xs)}
+/* The STEP 15 JSON: the 3 heading lines across the top, the JSON in two columns (same text, same order) */
+.run.out.json pre.head{padding-bottom:0}
+.run.out.json pre.cols{column-count:2;column-gap:24px;padding-top:4px}
+.narrow .run.out.json pre.cols{column-gap:12px;font-size:10.5px}
+/* A page picture from Colab (tall): shown smaller and centred, so the slide stays short; opens full size */
+.shot.tall{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface)}
+.shot.tall img{width:auto;max-width:100%;height:var(--pic-h,480px);margin:0 auto}
+.narrow .shot.tall{margin:0}
+.narrow .shot.tall img{height:var(--pic-hn,520px)}
+/* q3 Proposal A: two Colab page pictures side by side (STEP 6 + 7, STEP 8 + 9), each with its own notes under it */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.half{display:flex;flex-direction:column;gap:8px;min-width:0}
+.half-head{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.half .p{margin:0}
+.half .list{font-size:14.5px;line-height:1.45;gap:4px}
+.half code{overflow-wrap:anywhere}
+.pair-slide .shot.tall img{width:auto;height:auto;max-width:100%;max-height:330px}
+.narrow .pair{gap:10px}
+.narrow .pair-slide .shot.tall img{height:auto;max-height:300px}
+.narrow .half .list{font-size:13.5px}
+.pic-sm .shot.tall img{height:435px}
+
+.run pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.run pre code{display:block}
+.run pre .ln{display:block;padding-left:calc(var(--i) + 2ch);text-indent:calc(-1 * (var(--i) + 2ch))}
+.run pre .ln:empty::before{content:"\200b"}
+.shot.fit{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;line-height:0;background:var(--surface)}
+.shot.fit img{width:auto;max-width:100%;max-height:var(--mh);margin:0 auto;display:block}
+.shot.pending{margin:0;height:var(--mh);border:2px dashed var(--ink-muted);border-radius:var(--radius-sm);background:var(--gray-50);
+  display:flex;align-items:center;justify-content:center;line-height:20px}
+.pend{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:8px 16px;font-size:13px;color:var(--ink-muted)}
+.pend b{font-size:15px;letter-spacing:.06em;color:var(--ink)}
+.note.pendnb{border-style:dashed;background:var(--gray-50)}
+.p a,.list a{color:var(--pfizer-blue);text-underline-offset:2px}
+.note code,.tip code,.p code{font-family:var(--font-mono);font-size:.92em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink)}
+.tbl td code{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1 class="sr-only">Build a Chat Window With a PDF Uploader: The Steps</h1>
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Steps"></nav>
+    <div class="where"><b id="where-section">Start</b><span aria-hidden="true">&middot;</span><span id="where-count">Slide 1</span></div>
+  </header>
+  <main class="stage" aria-label="Slide"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-secondary" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-primary" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+
+
+<template id="t1">
+<p class="p">Go back to your copy of the Intro to Gradio notebook from the last reading. You skipped sections 5 and 6 there. Now you'll run them.</p><p class="p">Lost your copy? Open the notebook below and click <b>File &rarr; Save a copy in Drive</b>. Work in the copy that opens.</p><a class="btn btn-secondary" href="https://colab.research.google.com/drive/1j3svz74MWgXiwXFpdOu83d6k9zBu_tIc" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Intro to Gradio (Pfizer 3.0) (Colab notebook)</span><span class="sr-only"> (opens in a new tab)</span></a><div class="note"><span class="num">COLAB DISCONNECTED?</span><p>If Colab disconnected since the last reading, go to the top of your notebook and run the cells under <b>1. Installing Gradio</b> and <b>2. Your First Gradio Demo</b> again. The second one loads Gradio as <code>gr</code>, which sections 5 and 6 use.</p></div>
+</template>
+
+<template id="t2">
+<p class="p">Find the heading <b>5. Using gr.Blocks for Custom Layouts</b> and press <b>Run</b> on the cell under it:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">with gr.Blocks() as demo4:</span><span class="ln" style="--i:4ch">    name = gr.Textbox(label=&quot;Name&quot;)</span><span class="ln" style="--i:4ch">    out = gr.Textbox()</span><span class="ln" style="--i:4ch">    name.change(fn=lambda x: x.upper(), inputs=name, outputs=out)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">demo4.launch()</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>with gr.Blocks() as demo4:</code> opens a blank canvas. Everything indented under it goes on the page.</li><li><code>name</code> and <code>out</code> are two text boxes, one under the other.</li><li><code>name.change(...)</code> runs a function every time the text in <code>name</code> changes, and shows the result in <code>out</code>.</li><li><code>lambda x: x.upper()</code> is a one-line function with no name. It takes the text <code>x</code> and gives it back in capital letters.</li><li><code>demo4.launch()</code> starts the app under the cell.</li></ul>
+</template>
+
+<template id="t3">
+<p class="p">Type <code>sarah</code> in the <b>Name</b> box. The box under it fills in capital letters as you type.</p><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:200px"><a href="pfizer3-p8-m3-try-g8.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g8.png" width="1740" height="1326" alt="The gr.Blocks demo in Colab: the Name box says sarah and the box under it says SARAH."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure>
+</template>
+
+<template id="t4">
+<p class="p">Find the heading <b>6. Creating a Chatbot with gr.ChatInterface</b> and press <b>Run</b> on the cell under it:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">def bot(msg, history):</span><span class="ln" style="--i:4ch">    return &quot;You said: &quot; + msg</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">demo5 = gr.ChatInterface(bot)</span><span class="ln" style="--i:0ch">demo5.launch()</span></code></pre></figure><div class="note"><span class="num">WHAT WE CHANGED, AND WHY</span><p>We changed one line of the team's notebook: <code>def bot(msg):</code> became <code>def bot(msg, history):</code>. <code>gr.ChatInterface</code> hands your function two things, the new message and the chat so far. Today's Gradio shows an <b>Error</b> in the chat when the function takes only one. If your copy from the last reading still says <code>def bot(msg):</code>, add <code>, history</code> and run the cell again. Without the change, you'll see this:</p></div><figure class="shot fit" style="--mh:230px"><a href="pfizer3-p8-m3-try-g9-error.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g9-error.png" width="1740" height="1602" alt="Colab with def bot(msg): four UserWarning lines that say Expected 1 arguments or Expected maximum 1 arguments, the share link lines, and a red Error badge in the empty chat window."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>bot</code> gets the message (<code>msg</code>) and the chat so far (<code>history</code>), and sends back <code>"You said: "</code> plus the message.</li><li><code>gr.ChatInterface(bot)</code> builds a whole chat window around that one function.</li></ul>
+</template>
+
+<template id="t5">
+<p class="p">Type <code>hello</code> in the message box and press <b>Enter</b>. Your message and the bot's reply appear in the chat, one under the other.</p><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:300px"><a href="pfizer3-p8-m3-try-g9-fixed.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g9-fixed.png" width="1740" height="1326" alt="The gr.ChatInterface demo in Colab: the message hello and the reply You said: hello."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure>
+</template>
+
+<template id="t6">
+<p class="p">Now you'll build the chat window Sarah asked for. You can refer to this Colab notebook for the complete implementation.</p><a class="btn btn-secondary" href="https://colab.research.google.com/drive/1gK5Srtktlmc8o7xY5TXN51wD35igO7Sr" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="2.75" width="12" height="14.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Gradio Chatbot (Pfizer 3.0) (Colab notebook)</span><span class="sr-only"> (opens in a new tab)</span></a><ol class="list"><li>Open the notebook and click <b>File &rarr; Save a copy in Drive</b>. Work in the copy that opens.</li><li>The notebook has one code cell. It builds the whole app from Steps 1 to 5 at once.</li><li>The next slides walk through the code step by step, as in the reading. You run the cell after Step 5.</li></ol>
+</template>
+
+<template id="t7">
+<p class="p">This sets up the Gradio "canvas" where you'll add and design all your UI components.</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">import gradio as gr</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">with gr.Blocks(title=&quot;Document Q&amp;A Chatbot&quot;) as demo:</span><span class="ln" style="--i:4ch">    # UI components go here</span><span class="ln" style="--i:4ch">    pass</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">demo.launch()</span></code></pre></figure><p class="p"><b>Gradio Blocks</b> lets you arrange UI elements using layout containers like rows and columns, a bit like building with Lego!</p><p class="p"><code>pass</code> is Python for "do nothing here yet". It holds the place until you add components.</p>
+</template>
+
+<template id="t8">
+<p class="p">Now you'll create a <b>chat window</b> to show the conversation and a <b>textbox</b> for user questions.</p><ul class="list"><li><code>chatbot</code> is for <b>displaying the conversation history</b>, including both the user's questions and the AI's answers.</li><li><code>textbox</code> is for <b>letting the user type their question or message</b> before sending it to the chatbot.</li></ul><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">with gr.Column(scale=2):</span><span class="ln" style="--i:4ch">    chatbot = gr.Chatbot(label=&quot;Chat History&quot;, height=500)</span><span class="ln" style="--i:4ch">    user_input = gr.Textbox(</span><span class="ln" style="--i:8ch">        placeholder=&quot;Ask a question about your document...&quot;,</span><span class="ln" style="--i:8ch">        label=&quot;Your Question&quot;</span><span class="ln" style="--i:4ch">    )</span><span class="ln" style="--i:4ch">    send_btn = gr.Button(&quot;📤 Send&quot;)</span></code></pre></figure><p class="p"><code>gr.Column(scale=2)</code> stacks its parts in a column. <code>scale=2</code> makes it twice as wide as a column with <code>scale=1</code>.</p><figure class="shot fit" style="--mh:300px"><a href="pfizer3-p8-m3-try-g10a.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g10a.png" width="1408" height="1038" alt="The chat window part of the app: Chat History, the Your Question box and the Send button."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">Now, whenever Sarah types something, it'll appear in the chat window, and the bot's reply will show up right under it, like ChatGPT.</p>
+</template>
+
+<template id="t9">
+<p class="p">Your RAG pipeline can't answer questions without documents. Now we'll use the <code>gr.File</code> component to let users <b>upload a PDF document</b> they want to ask questions about.</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">with gr.Column(scale=1):</span><span class="ln" style="--i:4ch">    pdf_input = gr.File(label=&quot;📄 Upload PDF&quot;, file_types=[&quot;.pdf&quot;])</span></code></pre></figure><p class="p"><code>file_types=[".pdf"]</code> tells the uploader to accept PDF files.</p><figure class="shot fit" style="--mh:170px"><a href="pfizer3-p8-m3-try-g10b.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g10b.png" width="1408" height="486" alt="The Upload PDF box of the app."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">This file will be passed to your Python function that processes and chunks the PDF for question answering.</p>
+</template>
+
+<template id="t10">
+<p class="p">Two small but important tools:</p><ul class="list"><li><b>Process Document</b>: sends the PDF to your pipeline for indexing</li><li><b>Clear Chat</b>: wipes the conversation for a fresh start</li></ul><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">process_btn = gr.Button(&quot;🔄 Process Document&quot;)</span><span class="ln" style="--i:0ch">clear_btn = gr.Button(&quot;🗑️ Clear Chat&quot;)</span></code></pre></figure><figure class="shot fit" style="--mh:130px"><a href="pfizer3-p8-m3-try-g10c.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g10c.png" width="1408" height="188" alt="The Process Document and Clear Chat buttons of the app."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">These will be connected to your custom logic functions (like building the index or resetting the chat).</p>
+</template>
+
+<template id="t11">
+<p class="p">Right now, these buttons look nice but don't <i>do</i> anything.</p><p class="p">Let's hook them up to the Python functions:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch"># Sample logic functions</span><span class="ln" style="--i:0ch">def process_pdf(file):</span><span class="ln" style="--i:4ch">    return &quot;PDF processed successfully!&quot;</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">def handle_chat(message, history):</span><span class="ln" style="--i:4ch">    return history + [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: message}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;This is a mock answer.&quot;}]</span></code></pre></figure><div class="note"><span class="num">WHAT WE CHANGED, AND WHY</span><p>We changed the last line, in the code above and in your copy of the notebook. In the reading, <code>handle_chat</code> added the question and answer as a pair, <code>(message, "This is a mock answer.")</code>. Today's Gradio no longer accepts pairs. It wants each message as a dictionary with a <code>"role"</code> (who said it, <code>"user"</code> or <code>"assistant"</code>) and its <code>"content"</code> (the words). With the old line, Send shows this:</p></div><figure class="shot fit" style="--mh:230px"><a href="pfizer3-p8-m3-try-g10-error.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g10-error.png" width="1740" height="1326" alt="Colab with the old pair line: a red Error badge in Chat History and the message Data incompatible with messages format. Each message should be a dictionary with &#x27;role&#x27; and &#x27;content&#x27; keys or a ChatMessage object."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>process_pdf</code> is a stand-in for now. It only returns a message. In Step 2 of this project, it starts reading the PDF.</li><li><code>handle_chat</code> takes the question and the chat so far, and gives back the chat with the question and a mock answer added.</li></ul>
+</template>
+
+<template id="t12">
+<p class="p">Now connect the components using Gradio's <code>.click()</code> and <code>.submit()</code> functions:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; from the reading</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">process_btn.click(process_pdf, inputs=pdf_input, outputs=None)</span><span class="ln" style="--i:0ch">send_btn.click(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)</span><span class="ln" style="--i:0ch">user_input.submit(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)</span><span class="ln" style="--i:0ch">clear_btn.click(lambda: [], outputs=[chatbot])</span></code></pre></figure><p class="p"><b>What this code does:</b></p><ul class="list"><li><code>.click(...)</code> runs a function when a button is clicked: first the function, then <code>inputs</code> (what it gets) and <code>outputs</code> (where its answer goes).</li><li><code>user_input.submit(...)</code> does the same when you press <b>Enter</b> in the question box.</li><li><code>outputs=None</code> means <code>process_pdf</code>'s message isn't shown anywhere on the page.</li><li><code>lambda: []</code> is a one-line function with no name that gives back an empty list, so the chat empties.</li></ul>
+</template>
+
+<template id="t13">
+<p class="p">Press <b>Run</b> on the one code cell in your notebook. It holds Steps 1 to 5 together:</p><figure class="run"><div class="code-head"><span class="code-lang">Python &middot; in your notebook</span></div><pre tabindex="0"><code><span class="ln" style="--i:0ch">import gradio as gr</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">def process_pdf(file):</span><span class="ln" style="--i:4ch">    return &quot;PDF processed successfully!&quot;</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">def handle_chat(message, history):</span><span class="ln" style="--i:4ch">    return history + [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: message}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;This is a mock answer.&quot;}]</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">with gr.Blocks(title=&quot;Step 5: Full Functioning UI&quot;) as demo:</span><span class="ln" style="--i:4ch">    gr.Markdown(&quot;### Step 5: Connected UI&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    with gr.Column(scale=2):</span><span class="ln" style="--i:8ch">        chatbot = gr.Chatbot(label=&quot;Chat History&quot;, height=300)</span><span class="ln" style="--i:8ch">        user_input = gr.Textbox(</span><span class="ln" style="--i:12ch">            placeholder=&quot;Ask a question about your document...&quot;,</span><span class="ln" style="--i:12ch">            label=&quot;Your Question&quot;</span><span class="ln" style="--i:8ch">        )</span><span class="ln" style="--i:8ch">        send_btn = gr.Button(&quot;📤 Send&quot;)</span><span class="ln" style="--i:8ch">        clear_btn = gr.Button(&quot;🗑️ Clear Chat&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    with gr.Column(scale=1):</span><span class="ln" style="--i:8ch">        pdf_input = gr.File(label=&quot;📄 Upload PDF&quot;, file_types=[&quot;.pdf&quot;])</span><span class="ln" style="--i:8ch">        process_btn = gr.Button(&quot;🔄 Process Document&quot;)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:4ch">    process_btn.click(process_pdf, inputs=pdf_input, outputs=None)</span><span class="ln" style="--i:4ch">    send_btn.click(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)</span><span class="ln" style="--i:4ch">    user_input.submit(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)</span><span class="ln" style="--i:4ch">    clear_btn.click(lambda: [], outputs=chatbot)</span><span class="ln" style="--i:0ch"></span><span class="ln" style="--i:0ch">demo.launch()</span></code></pre></figure>
+</template>
+
+<template id="t14">
+<p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:430px"><a href="pfizer3-p8-m3-try-g11.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g11.png" width="1740" height="1326" alt="The app in Colab, freshly loaded: the share link lines, then Step 5: Connected UI, an empty Chat History box, the Your Question box and the top of the Send button."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">The app appears under the cell. It also prints a public link that ends in <code>gradio.live</code>, so you can open the same app in a new tab.</p><p class="p">Three small differences from the slides: the chat window is 300 pixels tall instead of 500, the Clear Chat button sits under Send, and the app has a title line, <b>Step 5: Connected UI</b>.</p>
+</template>
+
+<template id="t15">
+<ol class="list"><li>Download the practice PDF from Project 7 to your computer: <a href="https://drive.google.com/file/d/1fJ7DszcjB_TerDTAhXfAw74VqJBElTyw/view" target="_blank" rel="noopener noreferrer">pharma-blob-sample.pdf</a>. (Any PDF works.)</li><li>Drag it into <b>Upload PDF</b>, then click <b>Process Document</b>.</li><li>Type a question in <b>Your Question</b>, such as <code>What is the expiry date?</code>, and click <b>Send</b>.</li><li>Type a second question and press <b>Enter</b>.</li></ol><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:420px"><a href="pfizer3-p8-m3-try-g12.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g12.png" width="1408" height="602" alt="Chat History after two questions: the reply This is a mock answer. twice, with the second question, Who signed the declaration?, between them."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">Each question gets the same reply, <b>This is a mock answer.</b>, because <code>handle_chat</code> doesn't read the PDF yet. You'll connect it to your RAG pipeline in Step 2 of this project.</p><p class="p">Your question stays in the box after you send it. Delete it before you type the next one.</p>
+</template>
+
+<template id="t16">
+<p class="p">Click <b>Clear Chat</b>.</p><p class="p see"><b>What you'll see in Colab:</b></p><figure class="shot fit" style="--mh:300px"><a href="pfizer3-p8-m3-try-g13.png" target="_blank" rel="noopener noreferrer"><img src="pfizer3-p8-m3-try-g13.png" width="1408" height="602" alt="The app after Clear Chat: Chat History is empty again."><span class="sr-only"> (opens the picture full size in a new tab)</span></a></figure><p class="p">The chat is empty again, ready for the next question.</p>
+</template>
+
+<template id="t17">
+<p class="p"><b>You now have:</b></p><ul class="list"><li>A working chat interface</li><li>PDF upload capability</li><li>Buttons that trigger actions</li><li>Frontend and backend are talking to each other, so the app behaves like a real chatbot.</li></ul><p class="p">And most importantly, you just built a <b>real AI app interface</b> with almost no frontend code.</p><p class="p">The frontend is the part of the app you see and click.</p><div class="tip"><span class="tip-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><p><b>Key Takeaway</b><br>Use <b><code>gr.Blocks</code></b> when you need full control over layout and workflow.<br>Always connect UI components (<code>Chatbot</code>, <code>Textbox</code>, <code>File</code>, <code>Button</code>) to backend Python functions using <code>.click()</code> and <code>.submit()</code>.<br>A clean UI + connected logic = a usable QA tool for reviewing pharmaceutical documents.</p></div>
+</template>
+
+<template id="t18">
+<p class="p">Let's do a quick walk-through of the components we've been using&hellip; This will help you with the task later:</p><div class="tbl"><table><thead><tr><th scope="col">Component</th><th scope="col">What It Does</th></tr></thead><tbody><tr><td><code>gr.Blocks()</code></td><td>Creates the overall layout container for your web app</td></tr><tr><td><code>gr.Chatbot()</code></td><td>Displays the chat history between the user and the AI</td></tr><tr><td><code>gr.Textbox()</code></td><td>Lets users type their questions</td></tr><tr><td><code>gr.File()</code></td><td>Uploads the PDF that will be processed for Q&amp;A</td></tr><tr><td><code>gr.Button()</code></td><td>Triggers actions like processing a PDF or sending a message</td></tr><tr><td><code>send_btn.click()</code> / <code>user_input.submit()</code></td><td>Connects buttons/textbox to your Python functions</td></tr><tr><td><code>clear_btn.click()</code></td><td>Resets the chat history when clicked</td></tr><tr><td><code>process_pdf()</code></td><td>Your custom function that processes the uploaded PDF</td></tr><tr><td><code>handle_chat()</code></td><td>Your function that takes the user&rsquo;s message and returns a response</td></tr><tr><td><code>demo.launch()</code></td><td>Starts the Gradio app so it runs in the browser</td></tr></tbody></table></div>
+</template>
+
+<script>
+(function () {
+  "use strict";
+  var CELLS = {"blocks": "with gr.Blocks() as demo4:\n    name = gr.Textbox(label=\"Name\")\n    out = gr.Textbox()\n    name.change(fn=lambda x: x.upper(), inputs=name, outputs=out)\n\ndemo4.launch()", "chat": "def bot(msg, history):\n    return \"You said: \" + msg\n\ndemo5 = gr.ChatInterface(bot)\ndemo5.launch()", "app": "import gradio as gr\n\ndef process_pdf(file):\n    return \"PDF processed successfully!\"\n\ndef handle_chat(message, history):\n    return history + [{\"role\": \"user\", \"content\": message}, {\"role\": \"assistant\", \"content\": \"This is a mock answer.\"}]\n\nwith gr.Blocks(title=\"Step 5: Full Functioning UI\") as demo:\n    gr.Markdown(\"### Step 5: Connected UI\")\n\n    with gr.Column(scale=2):\n        chatbot = gr.Chatbot(label=\"Chat History\", height=300)\n        user_input = gr.Textbox(\n            placeholder=\"Ask a question about your document...\",\n            label=\"Your Question\"\n        )\n        send_btn = gr.Button(\"\ud83d\udce4 Send\")\n        clear_btn = gr.Button(\"\ud83d\uddd1\ufe0f Clear Chat\")\n\n    with gr.Column(scale=1):\n        pdf_input = gr.File(label=\"\ud83d\udcc4 Upload PDF\", file_types=[\".pdf\"])\n        process_btn = gr.Button(\"\ud83d\udd04 Process Document\")\n\n    process_btn.click(process_pdf, inputs=pdf_input, outputs=None)\n    send_btn.click(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)\n    user_input.submit(handle_chat, inputs=[user_input, chatbot], outputs=chatbot)\n    clear_btn.click(lambda: [], outputs=chatbot)\n\ndemo.launch()"};
+  var GROUPS = ["Start", "Blocks", "Chat", "Part 2", "Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Run", "End"];
+  var SLIDES = [
+    {"group": "Start", "label": "PART 1 &middot; GET READY", "title": "Go Back to Your Gradio <span class=\"hl\">Notebook</span>", "plain": "Go Back to Your Gradio Notebook", "tpl": "t1", "where": "Part 1"},
+    {"group": "Blocks", "label": "SECTION 5 &middot; RUN IT", "title": "Build a Custom Layout With <span class=\"hl\">Blocks</span>", "plain": "Section 5. Build a Custom Layout With Blocks", "tpl": "t2", "where": "Section 5"},
+    {"group": "Blocks", "label": "SECTION 5 &middot; SEE IT", "title": "Type Your Name and Watch It <span class=\"hl\">Change</span>", "plain": "Section 5. Type Your Name and Watch It Change", "tpl": "t3", "where": "Section 5"},
+    {"group": "Chat", "label": "SECTION 6 &middot; RUN IT", "title": "Make a Chatbot With <span class=\"hl\">ChatInterface</span>", "plain": "Section 6. Make a Chatbot With ChatInterface", "tpl": "t4", "where": "Section 6"},
+    {"group": "Chat", "label": "SECTION 6 &middot; SEE IT", "title": "Say <span class=\"hl\">Hello</span>", "plain": "Section 6. Say Hello", "tpl": "t5", "where": "Section 6"},
+    {"group": "Part 2", "label": "PART 2 &middot; GET READY", "title": "Open the Chatbot <span class=\"hl\">Notebook</span>", "plain": "Open the Chatbot Notebook", "tpl": "t6", "where": "Part 2"},
+    {"group": "Step 1", "label": "STEP 1", "title": "Import Gradio and Start a Blocks <span class=\"hl\">App</span>", "plain": "Step 1. Import Gradio and Start a Blocks App", "tpl": "t7"},
+    {"group": "Step 2", "label": "STEP 2", "title": "Add a Chat Interface (Textbox + Chat <span class=\"hl\">Window</span>)", "plain": "Step 2. Add a Chat Interface (Textbox + Chat Window)", "tpl": "t8"},
+    {"group": "Step 3", "label": "STEP 3", "title": "Add a File <span class=\"hl\">Uploader</span>", "plain": "Step 3. Add a File Uploader", "tpl": "t9"},
+    {"group": "Step 4", "label": "STEP 4", "title": "Add Buttons to Process and <span class=\"hl\">Clear</span>", "plain": "Step 4. Add Buttons to Process and Clear", "tpl": "t10"},
+    {"group": "Step 5", "label": "STEP 5 &middot; PART 1 OF 2", "title": "Connect the UI to Your Backend <span class=\"hl\">Logic</span>", "plain": "Step 5. Connect the UI to Your Backend Logic", "tpl": "t11"},
+    {"group": "Step 5", "label": "STEP 5 &middot; PART 2 OF 2", "title": "Wire the Buttons to the <span class=\"hl\">Functions</span>", "plain": "Step 5. Wire the Buttons to the Functions (Part 2 of 2)", "tpl": "t12"},
+    {"group": "Run", "label": "RUN IT", "title": "Run the Whole <span class=\"hl\">App</span>", "plain": "Run the Whole App", "tpl": "t13", "where": "Run It"},
+    {"group": "Run", "label": "SEE IT &middot; PART 1 OF 3", "title": "Meet Your Chat <span class=\"hl\">Window</span>", "plain": "See Your Chat Window", "tpl": "t14", "where": "See It"},
+    {"group": "Run", "label": "SEE IT &middot; PART 2 OF 3", "title": "Ask It a <span class=\"hl\">Question</span>", "plain": "Ask It a Question (Part 2 of 3)", "tpl": "t15", "where": "See It"},
+    {"group": "Run", "label": "SEE IT &middot; PART 3 OF 3", "title": "Start a Fresh <span class=\"hl\">Chat</span>", "plain": "Start a Fresh Chat (Part 3 of 3)", "tpl": "t16", "where": "See It"},
+    {"group": "End", "label": "WHAT YOU NOW HAVE", "title": "You Built a Chat <span class=\"hl\">Window</span>", "plain": "You Built a Chat Window", "tpl": "t17", "where": "Wrap-Up"},
+    {"group": "End", "label": "REFERENCE", "title": "The Components You <span class=\"hl\">Used</span>", "plain": "The Components You Used", "tpl": "t18", "where": "Wrap-Up"}
+  ];
+  var STAGE = { wide: [760, 1150], narrow: [450, 1250] };
+  var END_LABEL = "Done";
+  var DONE_MSG = "You're done with the slides. Scroll down to the next part of this reading.";
+  var standalone = !(window.parent && window.parent !== window);
+  var DONE_MSG_TAB = "You're done with the slides. Go back to the tab with this reading.";
+
+  var i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $("app"), rail = $("rail"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+
+  function scaleStage() {
+    var narrow = window.innerWidth < 560;
+    app.classList.toggle("narrow", narrow);
+    var sz = narrow ? STAGE.narrow : STAGE.wide;
+    app.style.width = sz[0] + "px"; app.style.height = sz[1] + "px";
+    var k = Math.min(window.innerWidth / sz[0], window.innerHeight / sz[1]);
+    app.style.transform = "translate(-50%,-50%) scale(" + k + ")";
+  }
+
+  var groupInfo = GROUPS.map(function (name) {
+    var ids = []; SLIDES.forEach(function (s, n) { if (s.group === name) ids.push(n); });
+    return { name: name, ids: ids };
+  });
+  var GROUP_LABEL = { "Regex": "Find" };
+  groupInfo.forEach(function (g) {
+    var b = document.createElement("button");
+    var isStep = /^step /i.test(g.name);
+    b.type = "button"; b.className = "pg" + (isStep ? "" : " pg-fit");
+    var shown = GROUP_LABEL[g.name] || g.name;
+    b.setAttribute("aria-label", (g.name === "Regex" ? "Find Values" : shown) + ", " + g.ids.length + (g.ids.length === 1 ? " slide" : " slides"));
+    var word = isStep ? '<span class="pg-word">Step </span>' + g.name.replace(/^step /i, "") : shown;
+    b.innerHTML = '<span class="segs">' + g.ids.map(function () { return "<i></i>"; }).join("") + '</span><span class="pg-label">' + word + "</span>";
+    b.addEventListener("click", function () { go(g.ids[0]); });
+    rail.appendChild(b);
+  });
+
+  /* Copy: the clipboard first, then the older copy command, then select the code so Ctrl+C works */
+  function copyText(text, btn, pre) {
+    var label = btn.querySelector("span"), orig = label.textContent;
+    function done(msg, ok) { label.textContent = msg; btn.classList.toggle("ok", ok); setTimeout(function () { label.textContent = orig; btn.classList.remove("ok"); }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) { done("Copied", true); return; }
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      done("Press Ctrl+C", false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done("Copied", true); }).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  function slideHTML(n) {
+    var s = SLIDES[n];
+    return '<div class="inner' + (s.cls ? " " + s.cls : "") + '"><p class="step">' + s.label + '</p><h2 class="title">' + s.title + '</h2>' + document.getElementById(s.tpl).innerHTML + '</div>';
+  }
+
+  function render(anim) {
+    var s = SLIDES[i];
+    card.innerHTML = slideHTML(i);
+    if (anim) card.firstChild.classList.add("anim");
+    Array.prototype.forEach.call(card.querySelectorAll("[data-copy]"), function (b) {
+      var pre = b.closest(".run").querySelector("pre");
+      b.addEventListener("click", function () { copyText(CELLS[b.getAttribute("data-copy")], b, pre); });
+    });
+    var g = GROUPS.indexOf(s.group);
+    Array.prototype.forEach.call(rail.children, function (b, gi) {
+      var ids = groupInfo[gi].ids;
+      b.classList.toggle("is-cur", gi === g);
+      b.classList.toggle("is-done", gi < g);
+      if (gi === g) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      Array.prototype.forEach.call(b.querySelectorAll(".segs i"), function (seg, si) {
+        seg.classList.toggle("done", ids[si] < i);
+        seg.classList.toggle("cur", ids[si] === i);
+      });
+    });
+    $("where-section").textContent = s.where || s.group;
+    $("where-count").textContent = "Slide " + (i + 1) + " of " + SLIDES.length;
+    back.disabled = i === 0;
+    var last = i === SLIDES.length - 1;
+    next.classList.toggle("end", last);
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + SLIDES[i + 1].plain + "</b>";
+    donemsg.textContent = "";
+    space();
+    Array.prototype.forEach.call(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  /* Spacing (Smita, 17 November 2026): no big empty area at the bottom of a slide. Spare height widens the gaps
+     between blocks, up to 2x. */
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = ""; inner.style.marginTop = "";
+    var cs = getComputedStyle(card);
+    var avail = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var base = parseFloat(getComputedStyle(inner).rowGap) || 14;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (base + Math.min(base, spare / gaps)) + "px";
+    /* P5 m2 fix round 1: what is still spare after the gaps widen is split above and below, so a short slide sits in
+       the middle of the card instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  function go(n) { if (n === i || n < 0 || n >= SLIDES.length) return; i = n; render(true); }
+  function finish() {
+    donemsg.textContent = standalone ? DONE_MSG_TAB : DONE_MSG;
+    space();
+    if (!standalone) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+  }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () { if (i === SLIDES.length - 1) finish(); else go(i + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < SLIDES.length - 1) go(i + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #slide=N opens slide N directly */
+  var hm = location.hash.match(/slide=(\d+)/);
+  if (hm) i = Math.min(SLIDES.length - 1, Math.max(0, +hm[1] - 1));
+  window.addEventListener("resize", function () { scaleStage(); space(); });
+  scaleStage();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
