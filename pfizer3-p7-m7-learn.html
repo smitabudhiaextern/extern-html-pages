@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search Inside the Right Document</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 7, module 7 Learn deck: "Search Only Inside the Right Document". Ideas only, NO code: the code is
+   in the Try deck (pfizer3-p7-m7-steps.html). SME: Chaitanya's Notion page 54a1d028 "Improve Query Routing in Large Files
+   using Metadata" (p7-source/step2/04-improve-routing-metadata-54a1.md): I2 to I5, I-S2, I-S3 why, I-S5, I7, I8, I9's
+   filters/embeddings/both bullets, in his words; changes logged as SWAPS on the page (02-search-only-inside-the-right-document.md).
+   Built 28 November 2026 by learn_build.py (scratchpad p7/p7-m7); shell, rail, switches, steps and "Click me" pulse copied
+   unchanged from pfizer3-p6-m6-learn.html. Real data: nb4 student copy run, 06-content/project-07/b1-notebook-and-runs.md
+   section 8.nb4 (10 pages, 8 documents, labels, page_in_doc; queries 4 and 6). Word counts: nb4 cell 8/9 logic on the run's
+   page texts (191, 137, 137, 193, 151, 156, 258, 150 words: every document is 1 chunk of 500 words or fewer).
+   Fixed stage 760 x 860 at every width (Notion embed height = stage x 708 / 760). Nothing scrolls. */
+/* Pfizer x Extern Core design system, Light format. Tokens, card player, rail, "Click me" pulse, switches and pictures
+   copied from pfizer3-p4-m2-learn.html (P4 module 2, rebuilt 22 November 2026: body text 18 css px). */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-600); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:860px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--gray-200);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--gray-200);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--gray-200);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P7 m7 additions, built from the same tokens ---- */
+.qbox{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:9px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.qbox .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.qbox .cq{font-size:17px;line-height:1.35;color:var(--ink);font-style:italic}
+.qbox .tag{margin-left:auto;font-size:15px;line-height:1.2;font-weight:600;padding:5px 12px;border-radius:999px;border:1.5px solid var(--pfizer-blue);background:var(--surface);color:var(--pfizer-blue);transition:opacity .3s ease}
+.qbox .tag.off{opacity:0}
+.docs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.doc{border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:7px 10px;display:flex;flex-direction:column;gap:2px;transition:opacity .3s ease,background .3s ease,border-color .3s ease}
+.doc .dt{font-size:15px;line-height:1.25;font-weight:600;color:var(--ink)}
+.doc .dp{font-size:13.5px;line-height:1.3;color:var(--card-text)}
+.doc.dim{opacity:.3}
+.doc.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.detail{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:9px 14px;font-size:16.5px;line-height:1.45;color:var(--ink);min-height:50px}
+.detail b{font-weight:600}
+.jbox{margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);padding:9px 12px;font-family:var(--font-mono);font-size:14px;line-height:1.5;color:var(--ink);white-space:pre}
+.defs{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:1px}
+.defs li{font-size:16px;line-height:1.45;color:var(--ink-muted)}
+.defs li code,.p code,.take code,.ul code,.bp code,.tbl code{font-family:var(--font-mono);font-size:.88em;background:var(--gray-50);border-radius:4px;padding:1px 5px;color:var(--ink);white-space:nowrap}
+.found{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:2px 0 2px 14px;display:flex;flex-direction:column;gap:3px}
+.found p{margin:0;font-size:16.5px;line-height:1.45;color:var(--ink-muted)}
+.found p b{color:var(--ink);font-weight:600}
+.found ul{margin:0;padding-left:20px}
+.found li{font-size:16.5px;line-height:1.4;color:var(--ink-muted)}
+.view{display:flex;flex-direction:column;gap:10px}
+.pgs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.pgs.g4{grid-template-columns:repeat(4,1fr)}
+.pgs .blk{min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-xs);background:var(--surface);padding:6px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;min-height:86px}
+.pgs .blk .bn{font-size:12px;line-height:1.2;font-weight:600;color:var(--step-label);letter-spacing:.04em;text-transform:uppercase}
+.pgs .blk .bt{font-size:13px;line-height:1.25;font-weight:600;color:var(--ink)}
+.pgs .blk .bw{font-size:12.5px;line-height:1.2;color:var(--card-text)}
+.pgs .blk.doc2{background:var(--surface-card);border-color:var(--pfizer-blue)}
+.pgs .blk.chunk{background:var(--pfizer-blue);border-color:var(--pfizer-blue)}
+.pgs .blk.chunk .bn,.pgs .blk.chunk .bt,.pgs .blk.chunk .bw{color:var(--on-action)}
+.tabbody{display:flex;flex-direction:column;gap:10px}
+.tbl td,.tbl th{font-size:16px}
+.tbl ul{margin:2px 0 0;padding-left:18px}
+.tbl li{font-size:16px;line-height:1.4}
+.chips2{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.chips2 span{border:1.5px solid var(--blue-200);border-radius:var(--radius-xs);padding:5px 8px;font-size:13.5px;line-height:1.2;font-weight:600;text-align:center;color:var(--ink);background:var(--surface);transition:opacity .3s ease,background .3s ease}
+.chips2 span.dim{opacity:.28}
+.chips2 span.on{background:var(--pfizer-blue);border-color:var(--pfizer-blue);color:var(--on-action)}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="How to search only inside the right document: 4 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 4</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"c1": [{"tag": true, "dim": false, "on": false, "html": "Gemini reads the question and guesses its type: <b>Supplier Qualification</b>."}, {"tag": true, "dim": true, "on": false, "html": "The search now ignores every other document. Only the Supplier Qualification is left: <b>pages 7 and 8</b>."}, {"tag": true, "dim": true, "on": true, "html": "In our run, the search returned <b>1 chunk, from pages 7 to 8</b>, and Gemini answered from it: the supplier's address, code and approval status."}], "c3": {"pages": "The supplier bundle is one PDF with <b>10 pages</b>. Your notebook counts pages from 0, so the first page is page 0. Each page has a label from the last step.", "docs": "A <b>logical document</b> is a full, self-contained section of a larger PDF that belongs together based on content, like all pages of a BSE/TSE Declaration or a Packaging Specification, even if the original file didn't mark those boundaries. For example, page 3 has <code>page_in_doc = 0</code> (a new document starts) and <code>doc_type = \"Packaging Specification\"</code>, and page 4 follows with <code>page_in_doc = 1</code>, so you group pages 3 and 4 into a single logical document representing one Packaging Specification. That makes <b>8 documents</b>.", "chunks": "Why chunk? Because LLMs (large language models, such as Gemini) aren't great at handling very long pieces of text: they can get overwhelmed, slow, or even miss key details. That's why we break each document into smaller chunks. This makes searching faster, more accurate, and easier for the model to understand. Your notebook cuts every 500 words. Every document in this bundle is shorter than that, so each one becomes <b>1 chunk: 8 chunks</b> in all."}, "c4": [{"tag": true, "dim": false, "html": "Gemini reads the question and picks one type: <b>BSE/TSE Declaration</b>."}, {"tag": true, "dim": true, "html": "The filter keeps only chunks whose <code>doc_type</code> matches exactly. The other 7 chunks are never searched."}], "pg": "<div class=\"blk\"><span class=\"bn\">Page 0</span><span class=\"bt\">Cover Letter</span></div><div class=\"blk\"><span class=\"bn\">Page 1</span><span class=\"bt\">Certificate of Quality</span></div><div class=\"blk\"><span class=\"bn\">Page 2</span><span class=\"bt\">Certificate of Quality</span></div><div class=\"blk\"><span class=\"bn\">Page 3</span><span class=\"bt\">Packaging Specification</span></div><div class=\"blk\"><span class=\"bn\">Page 4</span><span class=\"bt\">Packaging Specification</span></div><div class=\"blk\"><span class=\"bn\">Page 5</span><span class=\"bt\">BSE/TSE Declaration</span></div><div class=\"blk\"><span class=\"bn\">Page 6</span><span class=\"bt\">Material Description</span></div><div class=\"blk\"><span class=\"bn\">Page 7</span><span class=\"bt\">Supplier Qualification</span></div><div class=\"blk\"><span class=\"bn\">Page 8</span><span class=\"bt\">Supplier Qualification</span></div><div class=\"blk\"><span class=\"bn\">Page 9</span><span class=\"bt\">Chain of Custody</span></div>", "dc": "<div class=\"blk doc2\"><span class=\"bn\">Page 0</span><span class=\"bt\">Cover Letter</span></div><div class=\"blk doc2\"><span class=\"bn\">Page 1</span><span class=\"bt\">Certificate of Quality</span></div><div class=\"blk doc2\"><span class=\"bn\">Page 2</span><span class=\"bt\">Certificate of Quality</span></div><div class=\"blk doc2\"><span class=\"bn\">Pages 3 and 4</span><span class=\"bt\">Packaging Specification</span></div><div class=\"blk doc2\"><span class=\"bn\">Page 5</span><span class=\"bt\">BSE/TSE Declaration</span></div><div class=\"blk doc2\"><span class=\"bn\">Page 6</span><span class=\"bt\">Material Description</span></div><div class=\"blk doc2\"><span class=\"bn\">Pages 7 and 8</span><span class=\"bt\">Supplier Qualification</span></div><div class=\"blk doc2\"><span class=\"bn\">Page 9</span><span class=\"bt\">Chain of Custody</span></div>", "ck": "<div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Cover Letter</span><span class=\"bw\">191 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Certificate of Quality</span><span class=\"bw\">137 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Certificate of Quality</span><span class=\"bw\">137 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Packaging Specification</span><span class=\"bw\">193 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">BSE/TSE Declaration</span><span class=\"bw\">151 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Material Description</span><span class=\"bw\">156 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Supplier Qualification</span><span class=\"bw\">258 words</span></div><div class=\"blk chunk\"><span class=\"bn\">Chunk</span><span class=\"bt\">Chain of Custody</span><span class=\"bw\">150 words</span></div>", "chips": "<span>Cover Letter</span><span>Certificate of Quality</span><span>Certificate of Quality</span><span>Packaging Specification</span><span>BSE/TSE Declaration</span><span>Material Description</span><span>Supplier Qualification</span><span>Chain of Custody</span>"};
+  var DOCS = [["Cover Letter", "page 0"], ["Certificate of Quality", "page 1"], ["Certificate of Quality", "page 2"], ["Packaging Specification", "pages 3 and 4"], ["BSE/TSE Declaration", "page 5"], ["Material Description", "page 6"], ["Supplier Qualification", "pages 7 and 8"], ["Chain of Custody", "page 9"]];
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  var timer = null;
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    each(btns, function (y) { y.setAttribute("aria-pressed", y.getAttribute("data-view") === first ? "true" : "false"); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  function picks(root, n, fn, key) {
+    var rows = root.querySelectorAll(".step");
+    function pick(k) {
+      each(rows, function (r, j) { r.setAttribute("aria-pressed", j === k ? "true" : "false"); });
+      fn(k); space();
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge(key, root.querySelector(".steps"), root.querySelector(".hint"), "inline");
+  }
+
+  /* Card 1: the question gets its type, then only the Supplier Qualification stays lit (real run: query 6) */
+  function initAvail(root) {
+    var tag = root.querySelector(".tag"), docs = root.querySelectorAll(".doc"), det = root.querySelector(".detail");
+    picks(root, 3, function (k) {
+      var s = D.c1[k];
+      tag.classList.toggle("off", !s.tag);
+      each(docs, function (d, j) {
+        var mine = DOCS[j][0] === "Supplier Qualification";
+        d.classList.toggle("dim", s.dim && !mine);
+        d.classList.toggle("on", s.on && mine);
+      });
+      det.innerHTML = s.html;
+    }, "c1");
+  }
+
+  /* Card 2: page metadata (his JSON, real values) or one real chunk's metadata */
+  function initMeta(root) {
+    var views = root.querySelectorAll(".view");
+    wire(root, function (v) { each(views, function (x) { x.hidden = x.getAttribute("data-for") !== v; }); }, "c2", "pages");
+  }
+
+  /* Card 3: 10 pages, 8 logical documents, 8 chunks (real labels and word counts) */
+  function initChunks(root) {
+    var box = root.querySelector(".pgs"), cap = root.querySelector(".cap3");
+    wire(root, function (v) {
+      box.innerHTML = v === "pages" ? D.pg : v === "docs" ? D.dc : D.ck; box.classList.toggle("g4", v !== "pages");
+      cap.innerHTML = D.c3[v];
+    }, "c3", "pages");
+  }
+
+  /* Card 4: three views; the first has Route and Filter steps on the real query 4 */
+  function initRoute(root) {
+    var bodies = root.querySelectorAll(".tabbody");
+    var chips = root.querySelector(".chips2"); chips.innerHTML = D.chips;
+    var tag = root.querySelector(".tag"), det = root.querySelector(".tabbody .detail");
+    var cs = chips.querySelectorAll("span");
+    wire(root, function (v) { each(bodies, function (x) { x.hidden = x.getAttribute("data-for") !== v; }); }, "c4", "route");
+    picks(root, 2, function (k) {
+      var s = D.c4[k];
+      tag.classList.toggle("off", !s.tag);
+      each(cs, function (c) { var mine = c.textContent === "BSE/TSE Declaration"; c.classList.toggle("dim", s.dim && !mine); c.classList.toggle("on", s.dim && mine); });
+      det.innerHTML = s.html;
+    }, "c4s");
+  }
+
+  var INITS = { initAvail: initAvail, initMeta: initMeta, initChunks: initChunks, initRoute: initRoute };
+  var CARDS = [{label:"What's Available",eyebrow:"Search inside the right document",html:"<h2 class=\"title\">What Supplier Information Is <span class=\"hl\">Available</span>?</h2><p class=\"why\">You can only search well once you know what's in the bundle, and where.</p><p class=\"p\">In the last reading, you sent a question to the right document. Now you'll search inside it, piece by piece. Each piece is a <b>chunk</b>: a small part of a document's text that the search compares with your question. This way, when a user asks something like <i>\"What supplier information is available?\"</i>, your system will:</p><p class=\"hint\">Click each step.</p><ol class=\"steps\"><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">1</span><span>Guess the document type (<b>Supplier Qualification</b>)</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">2</span><span>Search only inside documents of that type</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">3</span><span>Find and return the most relevant <i>chunks</i>, not the entire document</span></button></li></ol><div class=\"qbox\"><span class=\"cl\">The question</span><span class=\"cq\">\"What supplier information is available?\"</span><span class=\"tag off\">Supplier Qualification</span></div><div class=\"docs\"><div class=\"doc\"><span class=\"dt\">Cover Letter</span><span class=\"dp\">page 0</span></div><div class=\"doc\"><span class=\"dt\">Certificate of Quality</span><span class=\"dp\">page 1</span></div><div class=\"doc\"><span class=\"dt\">Certificate of Quality</span><span class=\"dp\">page 2</span></div><div class=\"doc\"><span class=\"dt\">Packaging Specification</span><span class=\"dp\">pages 3 and 4</span></div><div class=\"doc\"><span class=\"dt\">BSE/TSE Declaration</span><span class=\"dp\">page 5</span></div><div class=\"doc\"><span class=\"dt\">Material Description</span><span class=\"dp\">page 6</span></div><div class=\"doc\"><span class=\"dt\">Supplier Qualification</span><span class=\"dp\">pages 7 and 8</span></div><div class=\"doc\"><span class=\"dt\">Chain of Custody</span><span class=\"dp\">page 9</span></div></div><p class=\"detail\"></p>",init:"initAvail"},
+{label:"Metadata",eyebrow:"What every piece carries",html:"<h2 class=\"title\">The Metadata on Every <span class=\"hl\">Chunk</span></h2><p class=\"why\">Project 8's chatbot prints these fields next to every answer, so it can say where each answer came from.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"pages\" aria-pressed=\"false\">Each page (Step 1)</button><button type=\"button\" data-view=\"chunk\" aria-pressed=\"false\">Each chunk (this reading)</button></div></div></div><div class=\"view\" data-for=\"pages\"><p class=\"p\">Let's remind ourselves of what we built in the last step. Each page in the PDF has been labeled with the following metadata:</p><pre class=\"jbox\">[\n  ...\n  { &quot;page&quot;: 2, &quot;is_new_doc&quot;: &quot;Yes&quot;,\n    &quot;doc_type&quot;: &quot;Certificate of Quality&quot;, &quot;page_in_doc&quot;: 0 },\n  { &quot;page&quot;: 3, &quot;is_new_doc&quot;: &quot;Yes&quot;,\n    &quot;doc_type&quot;: &quot;Packaging Specification&quot;, &quot;page_in_doc&quot;: 0 },\n  { &quot;page&quot;: 4, &quot;is_new_doc&quot;: &quot;No&quot;,\n    &quot;doc_type&quot;: &quot;Packaging Specification&quot;, &quot;page_in_doc&quot;: 1 },\n  ...\n]</pre><ul class=\"defs\"><li><code>page</code>: The absolute page number in the full PDF</li><li><code>is_new_doc</code>: Whether this page starts a new document (Yes/No)</li><li><code>doc_type</code>: The type of document this page belongs to (e.g., Cover Letter, Certificate of Quality, BSE/TSE Declaration)</li><li><code>page_in_doc</code>: Page number <i>within</i> the specific document</li></ul></div><div class=\"view\" data-for=\"chunk\" hidden><div class=\"found\"><p>This is your foundation. You now know:</p><ul><li>Where one document ends and the next begins</li><li>What kind of document each page belongs to</li><li>How to stitch pages together into full, labeled documents</li></ul><p>In this reading, you'll use this exact structure to build something better: an <b>intelligent, filtered retrieval system</b> that only looks where it should.</p></div><p class=\"p\">In this reading, each chunk carries its own metadata too. This is the metadata your notebook gives the Supplier Qualification chunk:</p><pre class=\"jbox\">{\n  &quot;doc_type&quot;: &quot;Supplier Qualification&quot;,\n  &quot;chunk_index&quot;: 0,\n  &quot;page_start&quot;: 7,\n  &quot;page_end&quot;: 8,\n  &quot;source_file&quot;: &quot;pharma-blob-sample.pdf&quot;\n}</pre><ul class=\"defs\"><li><code>chunk_index</code>: which chunk of its document this is, counting from 0</li><li><code>page_start</code> and <code>page_end</code>: the first and last page of its document</li><li><code>source_file</code>: the PDF it came from</li></ul></div>",init:"initMeta"},
+{label:"Chunks",eyebrow:"Pages, then documents, then chunks",html:"<h2 class=\"title\">From Pages to Documents to <span class=\"hl\">Chunks</span></h2><p class=\"why\">Chunks are what the search actually compares with your question.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"pages\" aria-pressed=\"false\">10 pages</button><button type=\"button\" data-view=\"docs\" aria-pressed=\"false\">8 documents</button><button type=\"button\" data-view=\"chunks\" aria-pressed=\"false\">8 chunks</button></div></div></div><div class=\"pgs\"></div><p class=\"p cap3\"></p>",init:"initChunks"},
+{label:"Route and Filter",eyebrow:"Search only the right type",html:"<h2 class=\"title\">Route First, Then <span class=\"hl\">Filter</span></h2><p class=\"why\">A filter makes the search ignore every other document, so the answer can only come from the right one.</p><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"route\" aria-pressed=\"false\">Route, then filter</button><button type=\"button\" data-view=\"when\" aria-pressed=\"false\">Filters or embeddings?</button><button type=\"button\" data-view=\"pit\" aria-pressed=\"false\">Common pitfalls</button></div></div></div><div class=\"tabbody\" data-for=\"route\"><p class=\"p\">When a user sends a query (a question), your system should <b>first guess the document type</b> the answer likely belongs to. You can use a lightweight model like Gemini or Mistral to route the query. Then, retrieve only from chunks that match that type. This drastically reduces irrelevant retrieval, improving precision and speed.</p><p class=\"hint\">Click each step.</p><ol class=\"steps\"><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">1</span><span>Route: guess the type of the question</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">2</span><span>Filter: search only chunks of that type</span></button></li></ol><div class=\"qbox\"><span class=\"cl\">The question</span><span class=\"cq\">\"What are the BSE/TSE compliance dates?\"</span><span class=\"tag off\">BSE/TSE Declaration</span></div><div class=\"chips2\"></div><p class=\"detail\"></p></div><div class=\"tabbody\" data-for=\"when\" hidden><p class=\"p\">A <b>metadata filter</b> keeps only the chunks whose label matches, like <code>doc_type</code>. <b>Embeddings</b> are the numbers that capture what a text means, which you used in Projects 5 and 6 to find the closest chunks. When to use metadata filters vs. embeddings (or both):</p><ul class=\"ul\"><li>Use <b>metadata filters</b> for targeted, structured queries</li><li>Use <b>embeddings</b> for vague, semantic queries</li><li>Use <b>both</b> when you want fast results <i>and</i> semantic depth: filtering first, then applying retrieval</li></ul><p class=\"take\">Your notebook uses <b>both</b>: the filter picks the document type, then embeddings pick the closest chunks inside it.</p></div><div class=\"tabbody\" data-for=\"pit\" hidden><p class=\"p\">As you build your metadata-aware system, keep these in mind:</p><div class=\"tbl\"><table><tbody><tr><td><b>Missing or Incorrect <code>doc_type</code> Labels</b><ul><li>If your classifier is uncertain, use <code>\"Other\"</code> as a fallback</li><li>Don't leave it blank: you'll lose retrieval filtering power</li></ul></td></tr><tr><td><b>Test Your Query Classifier on Real Questions</b><ul><li>Use sample queries from real users or stakeholders</li><li>See if your routing model predicts the right <code>doc_type</code></li><li>Refine your prompt and model choice based on errors</li></ul></td></tr><tr><td><b>Never Let Chunks Cross Document Boundaries</b><ul><li>Chunk <b>within</b> documents only</li><li>Avoid combining content from a Certificate of Quality and a Packaging Specification in one chunk</li></ul></td></tr></tbody></table></div></div>",init:"initRoute"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
