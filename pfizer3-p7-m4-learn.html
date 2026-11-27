@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tag Every Page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Pfizer 3.0, Project 7, module 4 Learn deck: "Tag Every Page With Its Document Type". Ideas only, NO code: the code is
+   in the Try deck (pfizer3-p7-m4-steps.html). SME: Chaitanya's Notion page e181 "Learn How to Do Metadata Tagging With
+   LlamaIndex" (his words verbatim, em dashes restructured). Built 28 November 2026 by build.py (scratchpad p7/p7-m4);
+   shell, rail, switches and "Click me" pulse copied unchanged from pfizer3-p6-m6-learn.html.
+   Real data: the 10 pages of pharma-blob-sample.pdf rendered with PyMuPDF; labels from the nb2 student copy (STEP 4);
+   pages that name part numbers found in the PDF's own text (pages 1, 4, 6, 7, 8); page 1 and 2 text and metadata from
+   STEP 5's real output, and pages 4 and 5 for the part-number question from the Bonus cell's real output
+   (b1-notebook-and-runs.md section 8.nb2). Fixed stage 760 x 880 at every width (Notion embed height = stage x 708 / 760).
+   Nothing scrolls. */
+:root{
+  color-scheme:light;
+  --pfizer-blue:#0033a0; --blue-50:#e6ecf7; --blue-200:#b9c8e8;
+  --extern-black:#000000; --extern-white:#ffffff; --green-600:#07a657;
+  --gray-50:#f2f2f2; --gray-200:#e4e4e4; --gray-600:#666666; --gray-800:#333333;
+  --surface:var(--extern-white); --surface-card:var(--blue-50); --surface-icon:var(--extern-white);
+  --ink:var(--extern-black); --ink-muted:var(--gray-800); --card-title:var(--extern-black); --card-text:var(--gray-800);
+  --step-label:var(--pfizer-blue); --highlight:var(--green-600);
+  --action:var(--extern-black); --on-action:var(--extern-white); --line:var(--gray-600); --focus-ring:var(--pfizer-blue);
+  --radius-xs:8px; --radius-sm:12px; --radius-md:14px;
+  --font-serif:"DM Serif Display", Georgia, serif;
+  --font-text:Inter, system-ui, sans-serif;
+  --font-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --stage-w:760px; --stage-h:880px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface)}
+body{color:var(--ink);font-family:var(--font-text);font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px;border-radius:4px}
+[hidden]{display:none !important}
+
+.app{position:absolute;top:0;left:0;width:var(--stage-w);height:var(--stage-h);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+
+/* Rail */
+.top{flex:none;border-bottom:1px solid var(--line);padding:12px 16px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px;align-items:center}
+.where{order:2;font-size:13px;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rail{display:flex;gap:5px;min-width:0}
+.pg{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:4px 1px 2px;margin:0;cursor:pointer;border-radius:6px;text-align:left}
+.seg{display:block;height:4px;border-radius:2px;background:var(--blue-200)}
+.pg.is-done .seg{background:var(--pfizer-blue)}
+.pg.is-cur .seg{background:var(--pfizer-blue);height:6px;margin-top:-1px;border-radius:3px}
+
+/* Card */
+.stage{flex:1 1 auto;min-height:0;padding:18px 28px;display:flex;flex-direction:column}
+.stage > .card{flex:1 0 auto}
+.inner{display:flex;flex-direction:column;gap:12px;width:100%}
+.label{margin:0;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--step-label)}
+.title{margin:0;font-family:var(--font-serif);font-weight:400;font-size:30px;line-height:1.2;letter-spacing:-0.01em;text-wrap:balance;padding-bottom:2px}
+.hl{color:var(--highlight)}
+.why{margin:-6px 0 0;font-size:19px;line-height:1.4;font-weight:600;color:var(--ink)}
+.p{margin:0;font-size:18px;line-height:1.5;color:var(--ink-muted);text-wrap:pretty}
+.p b,.li b{font-weight:600;color:var(--ink)}
+.hint{margin:0;font-size:15.5px;line-height:1.4;font-weight:600;color:var(--step-label)}
+.ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:2px}
+.ul li{font-size:18px;line-height:1.5;color:var(--ink-muted)}
+.ul li b{font-weight:600;color:var(--ink)}
+.q{font-style:italic}
+.mono{font-family:var(--font-mono);font-size:.9em;white-space:nowrap}
+
+/* Switch */
+.sw{display:inline-flex;flex:none;border:1.5px solid var(--ink);border-radius:var(--radius-xs);overflow:hidden}
+.sw button{border:0;background:var(--surface);color:var(--ink);padding:9px 15px;cursor:pointer;font-size:15.5px;line-height:1.2;font-weight:600;white-space:nowrap}
+.sw button + button{border-left:1.5px solid var(--ink)}
+.sw button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.row{display:flex;align-items:center;gap:16px}
+
+/* Click-me nudge: a soft pulsing outline and a small tag, both gone after the first click */
+.nwrap{position:relative;display:inline-flex;flex:none}
+.nudge{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(0,51,160,.55)}50%{box-shadow:0 0 0 7px rgba(0,51,160,.12)}}
+.tap{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--surface-card);color:var(--pfizer-blue);border:1px solid var(--blue-200);border-radius:999px;padding:4px 11px;font-size:13px;line-height:1.2;font-weight:600;pointer-events:none;animation:tapx 1.6s ease-in-out infinite}
+.tap.inline{position:static;transform:none;display:inline-block;margin-left:10px;vertical-align:1px}
+@keyframes tapx{0%,100%{margin-left:0}50%{margin-left:4px}}
+.tap.inline{animation:none}
+@media (prefers-reduced-motion:reduce){ .nudge{animation:none;box-shadow:0 0 0 3px rgba(0,51,160,.5)} .tap{animation:none} }
+
+/* Pictures with boxes drawn over them */
+.pic{position:relative;margin:0;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface);line-height:0;flex:none;padding:8px 10px}
+.pic img{display:block;width:100%;height:auto}
+.pic .ov{position:absolute;inset:8px 10px;pointer-events:none}
+.pic svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pic rect{fill:none;vector-effect:non-scaling-stroke}
+.pic rect.g{stroke:var(--highlight);fill:var(--highlight);fill-opacity:.16;stroke-width:3px}
+.pic rect.pop{animation:pop .3s ease both}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+.pic .blank{position:absolute;inset:0;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:72px;line-height:1;color:var(--blue-200)}
+.cap{margin:6px 0 0;font-size:15px;line-height:1.35;font-weight:600;color:var(--gray-600);text-align:left}
+.cap b{color:var(--ink)}
+.picwrap{display:flex;gap:18px;align-items:center}
+.picwrap .pic{width:300px}
+.picwrap .cap{flex:1;margin:0;font-size:18px}
+
+/* Clickable rows (text always visible; a click only changes the picture) */
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font-size:18px;line-height:1.45;color:var(--ink-muted)}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--surface-card);color:var(--pfizer-blue);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step b{font-weight:600;color:var(--ink)}
+.step:hover{border-color:var(--blue-200)}
+.step[aria-pressed="true"]{border-color:var(--pfizer-blue);background:var(--surface-card);box-shadow:inset 4px 0 0 var(--pfizer-blue)}
+.step[aria-pressed="true"] .n{background:var(--pfizer-blue);color:var(--on-action)}
+.steps.static .step{cursor:default}
+.steps.static .step:hover{border-color:var(--line)}
+.steps.wrap{border-radius:var(--radius-sm)}
+
+/* Flow diagrams built from boxes */
+.flow{display:flex;align-items:stretch;gap:6px}
+.fbox{flex:1 1 0;min-width:0;border:1.5px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:3px;transition:background .3s ease,border-color .3s ease,opacity .3s ease}
+.fbox .fl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.fbox .ft{font-size:17px;line-height:1.35;font-weight:600;color:var(--ink)}
+.fbox .fs{font-size:14.5px;line-height:1.35;color:var(--card-text)}
+.fbox.on{background:var(--surface-card);border-color:var(--pfizer-blue);box-shadow:inset 0 0 0 1px var(--pfizer-blue)}
+.fbox.dim{opacity:.45}
+.arr{flex:none;align-self:center;color:var(--ink);font-size:20px;line-height:1}
+.ctx{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.ctx .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.ctx .cq{font-size:18px;line-height:1.4;color:var(--ink)}
+.ctx .cd{font-family:var(--font-mono);font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:5px 10px;color:var(--ink);align-self:flex-start}
+
+/* Tables */
+.tbl{border:1px solid var(--gray-200);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:14px;line-height:1.3;font-weight:600;color:var(--ink-muted);padding:7px 12px;border-bottom:1px solid var(--gray-200);background:var(--gray-50)}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--gray-200);font-size:18px;line-height:1.4;color:var(--card-text);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl td b{font-weight:600;color:var(--ink)}
+.tbl a{color:var(--pfizer-blue);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.tbl a:hover{text-decoration-thickness:2px}
+
+/* Two columns */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:5px}
+.box .bh{margin:0;font-size:18px;line-height:1.35;font-weight:600;color:var(--card-title)}
+.box .bp{margin:0;font-size:18px;line-height:1.45;color:var(--card-text);text-wrap:pretty}
+.box .bp b{font-weight:600;color:var(--ink)}
+.box ul{margin:0;padding-left:20px}
+.box li{font-size:18px;line-height:1.45;color:var(--card-text)}
+.box li b{font-weight:600;color:var(--ink)}
+.box.white{background:var(--surface);border-color:var(--line)}
+
+/* Sources into LlamaIndex (card 6) */
+.src{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.src .chips{display:grid;grid-template-columns:auto auto;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:15px;line-height:1.2;font-weight:600;white-space:nowrap}
+.hub{border:1.5px solid var(--pfizer-blue);background:var(--surface-card);border-radius:var(--radius-sm);padding:10px 12px;text-align:center;font-size:16px;line-height:1.3;font-weight:600;color:var(--ink)}
+.hub small{display:block;font-size:13.5px;font-weight:500;color:var(--card-text);margin-top:2px}
+
+/* Play button (card 10) */
+.btn-play{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;line-height:1.2;font-weight:600;padding:9px 15px;border-radius:var(--radius-xs);border:1.5px solid var(--ink);background:var(--surface);cursor:pointer}
+.btn-play svg{width:13px;height:13px}
+
+/* Recap (last card) */
+.recap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.recap .box{padding:9px 13px;gap:3px}
+.recap .bh{font-size:18px}
+.recap li{font-size:18px;line-height:1.4}
+.take{margin:0;border-left:4px solid var(--highlight);background:var(--surface);padding:4px 0 4px 14px;font-size:18px;line-height:1.45;color:var(--ink)}
+.take b{font-weight:600}
+
+/* Done message and foot */
+.donemsg{flex:none;margin:0;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-card);color:var(--card-title);font-size:15px;line-height:1.45;font-weight:600;text-wrap:pretty}
+.donemsg:empty{display:none}
+.foot{flex:none;border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-text);font-size:15px;line-height:1.2;font-weight:600;padding:12px 18px;border-radius:var(--radius-xs);border:1.5px solid transparent;cursor:pointer;text-align:center;white-space:nowrap}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-back{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn-back:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--action);color:var(--on-action)}
+.upnext{flex:1;min-width:0;text-align:right;font-size:13px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upnext b{font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){ .inner.anim{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}} }
+
+/* ---- P7 m4 additions, built from the same tokens ---- */
+.grid10{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.grid10 figure{margin:0;border:1.5px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);overflow:hidden;display:flex;flex-direction:column;transition:opacity .3s ease,border-color .3s ease,box-shadow .3s ease}
+.grid10 img{display:block;width:100%;height:74px;object-fit:cover;object-position:top;border-bottom:1px solid var(--gray-200)}
+.grid10 figcaption{padding:4px 6px 5px;display:flex;flex-direction:column;gap:2px}
+.grid10 .pn{font-size:12.5px;line-height:1.2;font-weight:600;color:var(--ink-muted)}
+.grid10 .tg{font-size:12.5px;line-height:1.25;font-weight:600;color:var(--pfizer-blue);min-height:31px}
+.grid10 .tg.off{visibility:hidden}
+.grid10 figure.lit{border-color:var(--highlight);box-shadow:inset 0 0 0 2px var(--highlight)}
+.grid10 figure.dim{border-color:var(--gray-200)}
+.grid10 figure.dim img{opacity:.3}
+.grid10 figure.dim .pn{color:var(--gray-600)}
+.ctx .cs{font-size:16px;line-height:1.4;color:var(--card-text)}
+.cap2{margin:0;font-size:16px;line-height:1.4;color:var(--ink-muted);font-weight:500;min-height:45px}
+.cap2 b{color:var(--ink);font-weight:600}
+.callout{margin:0;border-left:4px solid var(--pfizer-blue);background:var(--surface-card);border-radius:0 var(--radius-xs) var(--radius-xs) 0;padding:8px 14px;font-size:16.5px;line-height:1.45;color:var(--card-text)}
+.callout b{color:var(--ink);font-weight:600}
+.docpair{display:grid;grid-template-columns:1.25fr 1fr;gap:10px}
+.docpair .box{gap:4px}
+.docpair .bh{font-family:var(--font-mono);font-size:15px}
+.docpair .txt{margin:0;font-family:var(--font-mono);font-size:14px;line-height:1.45;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;min-height:126px}
+.kv{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.kv li{font-size:15px;line-height:1.35;color:var(--card-text);display:flex;flex-direction:column}
+.kv .k{font-family:var(--font-mono);font-size:14px;color:var(--step-label);font-weight:600}
+.kv .v{font-family:var(--font-mono);font-size:14.5px;color:var(--ink)}
+.fields .step{grid-template-columns:30px minmax(0,1fr);padding:6px 12px;font-size:16.5px;line-height:1.4}
+.fields .fk{font-family:var(--font-mono);font-weight:600;color:var(--ink)}
+.dict{font-family:var(--font-mono);font-size:14.5px;line-height:1.5;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xs);padding:6px 10px;overflow-wrap:anywhere}
+.dict mark{background:none;color:var(--ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--highlight)}
+.detail{margin:0;border:1px solid var(--blue-200);border-radius:var(--radius-sm);background:var(--surface-card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.detail .cl{font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--step-label)}
+.detail .dt{font-size:16.5px;line-height:1.45;color:var(--ink)}
+.detail .dict{display:block}
+.detail.f{min-height:150px}
+</style>
+</head>
+<body>
+<div class="app" id="app" role="region" aria-label="Tag every page with its document type: 3 cards">
+  <header class="top">
+    <nav class="rail" id="rail" aria-label="Cards"></nav>
+    <div class="where"><span id="where-count">Card 1 of 3</span></div>
+  </header>
+  <main class="stage" id="stage" aria-label="Card"><section class="card" id="card" aria-live="polite"></section></main>
+  <p class="donemsg" id="donemsg" role="status"></p>
+  <footer class="foot">
+    <button type="button" class="btn btn-back" id="back"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div class="upnext" id="upnext"></div>
+    <button type="button" class="btn btn-next" id="next"><span id="next-label">Next</span><svg id="next-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var D = {"labels": ["Cover Letter", "Certificate of Quality", "Certificate of Quality", "Packaging Specification", "Packaging Specification", "BSE/TSE Declaration", "Material Description", "Supplier Qualification", "Supplier Qualification", "Chain of Custody"], "partPages": [1, 4, 6, 7, 8], "cap1": {"none": "Five pages of the supplier bundle name part numbers: pages 1, 4, 6, 7 and 8. With no tags, the search can't tell which one is the Material Description. In our run, a part-number question came back from pages 4 and 5, the Packaging Specification.", "tags": "Each page now carries its <b>doc_type</b>. Ask for <span class=\"mono\">doc_type = \"Material Description\"</span>, and only page 7 is searched."}, "pages": [{"text": "Cytiva\n100 Results Way\nMarlborough, MA 01752\nUnited States\nPage 1 / 1\ncytiva.com\n3 June, 2022\nRe: AKTA ready Flow Kit Storage Conditions\nTo Whom It Ma", "meta": [["page_number", "1"], ["source_file", "'pharma-blob-sample.pdf'"], ["doc_type", "'Cover Letter'"]]}, {"text": "Certificate of Quality\nThis product is manufactured in compliance with our ISO 9001 certified quality management system.\nIssued by Cytiva Westborough", "meta": [["page_number", "2"], ["source_file", "'pharma-blob-sample.pdf'"], ["doc_type", "'Certificate of Quality'"]]}], "fields": [{"key": "doc_type", "say": "<b>str</b> means text. On page 2, <span class=\"mono\">doc_type</span> is Certificate of Quality."}, {"key": "page_number", "say": "<b>int</b> means a whole number. Page 2's <span class=\"mono\">page_number</span> is 2."}, {"key": "source_file", "say": "<b>str</b> means text. Every page of the bundle comes from the same file."}, {"key": "chunk_index", "say": "<b>int</b> means a whole number. Your notebook in this reading keeps each page whole, so it doesn't add <span class=\"mono\">chunk_index</span>. You'll meet it in Step 2, when documents are cut into chunks."}], "dict2": [["page_number", "2"], ["source_file", "'pharma-blob-sample.pdf'"], ["doc_type", "'Certificate of Quality'"]]};
+
+  function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+  /* boxes: [x0, y0, x1, y1] in the picture's own pixels */
+  function draw(svg, boxes, pop) {
+    clear(svg);
+    boxes.forEach(function (b) {
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", b[0]); r.setAttribute("y", b[1]);
+      r.setAttribute("width", b[2] - b[0]); r.setAttribute("height", b[3] - b[1]); r.setAttribute("rx", 4);
+      r.setAttribute("class", "g" + (pop ? " pop" : ""));
+      svg.appendChild(r);
+    });
+  }
+
+  /* Click-me nudges (copied from the P3 and P4 decks): a pulsing outline and a "Click me" tag until the first click */
+  var tapped = {};
+  function nudge(key, target, tagHost, cls) {
+    if (tapped[key] || target.classList.contains("nudge")) return;
+    target.classList.add("nudge");
+    var tag = document.createElement("span");
+    tag.className = "tap" + (cls ? " " + cls : ""); tag.setAttribute("aria-hidden", "true"); tag.textContent = "👆 Click me";
+    (tagHost || target.parentNode).appendChild(tag);
+    target.addEventListener("click", function () {
+      tapped[key] = true;
+      target.classList.remove("nudge");
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }, true);
+  }
+
+  var timer = null;
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function wire(root, show, key, first) {
+    var btns = root.querySelectorAll(".sw button");
+    each(btns, function (x) {
+      x.addEventListener("click", function () {
+        each(btns, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); });
+        show(x.getAttribute("data-view"));
+        space();
+      });
+    });
+    each(btns, function (y) { y.setAttribute("aria-pressed", y.getAttribute("data-view") === first ? "true" : "false"); });
+    show(first);
+    nudge(key, root.querySelector(".sw"), root.querySelector(".sw").parentNode);
+  }
+
+  /* Card 1: the 10 real pages of the supplier bundle; "No tags" lights the pages that name part numbers, "With tags"
+     shows each page's doc_type and lights only the Material Description page */
+  function initTags(root) {
+    var figs = root.querySelectorAll(".grid10 figure"), cap = root.querySelector(".cap2");
+    wire(root, function (v) {
+      each(figs, function (f) {
+        var n = +f.getAttribute("data-p");
+        var lit = v === "none" ? D.partPages.indexOf(n) >= 0 : n === 7;
+        f.classList.toggle("lit", lit); f.classList.toggle("dim", !lit);
+        f.querySelector(".tg").classList.toggle("off", v === "none");
+      });
+      cap.innerHTML = D.cap1[v];
+    }, "c1", "none");
+  }
+  /* Card 2: the first two pages exactly as STEP 5 of the notebook prints them: text (first 150 characters) and metadata */
+  function initDoc(root) {
+    var txt = root.querySelector(".txt"), kv = root.querySelector(".kv");
+    wire(root, function (v) {
+      var pg = D.pages[v === "p1" ? 0 : 1];
+      txt.textContent = pg.text;
+      kv.innerHTML = pg.meta.map(function (m) { return '<li><span class="k">' + m[0] + '</span><span class="v">' + esc(m[1]) + '</span></li>'; }).join("");
+    }, "c2", "p1");
+  }
+  /* Card 3: each field lights its key in page 2's real metadata (chunk_index is not in this notebook) */
+  function initFields(root) {
+    var rows = root.querySelectorAll(".step"), det = root.querySelector(".detail");
+    function pick(n) {
+      each(rows, function (r, k) { r.setAttribute("aria-pressed", k === n ? "true" : "false"); });
+      var key = D.fields[n].key;
+      var d = "{" + D.dict2.map(function (m) { var s = "'" + m[0] + "': " + esc(m[1]); return m[0] === key ? "<mark>" + s + "</mark>" : s; }).join(", ") + "}";
+      det.innerHTML = '<span class="cl">Page 2 of the supplier bundle, as your notebook prints it</span><span class="dict">' + d + '</span><span class="dt">' + D.fields[n].say + '</span>';
+      space();
+    }
+    each(rows, function (r, k) { r.addEventListener("click", function () { pick(k); }); });
+    pick(0);
+    nudge("c3", root.querySelector(".steps"), root.querySelector(".hint"), "inline");
+  }
+  var INITS = { initTags: initTags, initDoc: initDoc, initFields: initFields };
+  var CARDS = [{"label": "Why Tag", "eyebrow": "Why tag every page", "html": "<h2 class=\"title\">Why Tag Every <span class=\"hl\">Page</span></h2><p class=\"why\">A tag lets the search skip whole documents it doesn't need.</p><p class=\"p\">That's where <b>metadata tagging</b> comes in: the backbone of intelligent and filtered retrieval. Metadata gives you more control over what gets retrieved, not just based on the text, but also based on context like document type, source, or location.</p><div class=\"ctx\"><span class=\"cl\">Real-world example</span><span class=\"cq\">\"Give me the part numbers, but only from the 'Material Description' document.\"</span><span class=\"cs\">This isn't possible unless the chunks are tagged with <span class=\"mono\">doc_type = \"Material Description\"</span>.</span></div><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"none\" aria-pressed=\"false\">No tags</button><button type=\"button\" data-view=\"tags\" aria-pressed=\"false\">With tags</button></div></div></div><div class=\"grid10\"><figure data-p=\"1\"><img src=\"pfizer3-p7-m4-learn-page01.png\" alt=\"Page 1 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 1</span><span class=\"tg off\">Cover Letter</span></figcaption></figure><figure data-p=\"2\"><img src=\"pfizer3-p7-m4-learn-page02.png\" alt=\"Page 2 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 2</span><span class=\"tg off\">Certificate of Quality</span></figcaption></figure><figure data-p=\"3\"><img src=\"pfizer3-p7-m4-learn-page03.png\" alt=\"Page 3 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 3</span><span class=\"tg off\">Certificate of Quality</span></figcaption></figure><figure data-p=\"4\"><img src=\"pfizer3-p7-m4-learn-page04.png\" alt=\"Page 4 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 4</span><span class=\"tg off\">Packaging Specification</span></figcaption></figure><figure data-p=\"5\"><img src=\"pfizer3-p7-m4-learn-page05.png\" alt=\"Page 5 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 5</span><span class=\"tg off\">Packaging Specification</span></figcaption></figure><figure data-p=\"6\"><img src=\"pfizer3-p7-m4-learn-page06.png\" alt=\"Page 6 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 6</span><span class=\"tg off\">BSE/TSE Declaration</span></figcaption></figure><figure data-p=\"7\"><img src=\"pfizer3-p7-m4-learn-page07.png\" alt=\"Page 7 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 7</span><span class=\"tg off\">Material Description</span></figcaption></figure><figure data-p=\"8\"><img src=\"pfizer3-p7-m4-learn-page08.png\" alt=\"Page 8 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 8</span><span class=\"tg off\">Supplier Qualification</span></figcaption></figure><figure data-p=\"9\"><img src=\"pfizer3-p7-m4-learn-page09.png\" alt=\"Page 9 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 9</span><span class=\"tg off\">Supplier Qualification</span></figcaption></figure><figure data-p=\"10\"><img src=\"pfizer3-p7-m4-learn-page10.png\" alt=\"Page 10 of the supplier bundle\" width=\"497\" height=\"702\"><figcaption><span class=\"pn\">Page 10</span><span class=\"tg off\">Chain of Custody</span></figcaption></figure></div><p class=\"cap2\"></p>", "init": "initTags"}, {"label": "Text Plus Tags", "eyebrow": "How LlamaIndex stores each page", "html": "<h2 class=\"title\">How LlamaIndex Keeps Text and Tags <span class=\"hl\">Together</span></h2><p class=\"why\">Every page you load becomes one of these: text plus tags.</p><p class=\"callout\"><b>Wait, isn't this just like chunking? Haven't we done this before?</b> Not quite. Chunking focuses on <i>breaking text into digestible pieces</i> for semantic understanding. Metadata tagging adds a layer of <i>contextual labeling</i>, things like page numbers, document types, or file names, so the system knows where each chunk came from and when to use it. You're not just storing text anymore; you're storing <i>text + meaning + location</i>.</p><p class=\"p\">In LlamaIndex, every chunk is stored as a <b>Document</b> with two parts:</p><ul class=\"ul\"><li><span class=\"mono\">text</span>: The chunk's content</li><li><span class=\"mono\">metadata</span>: A dictionary of tags (e.g., page number, doc type, source file)</li></ul><div class=\"row\"><div class=\"nwrap\"><div class=\"sw\" role=\"group\" aria-label=\"Choose a view\"><button type=\"button\" data-view=\"p1\" aria-pressed=\"false\">Page 1</button><button type=\"button\" data-view=\"p2\" aria-pressed=\"false\">Page 2</button></div></div></div><div class=\"docpair\"><div class=\"box white\"><p class=\"bh\">text</p><p class=\"txt\"></p></div><div class=\"box\"><p class=\"bh\">metadata</p><ul class=\"kv\"></ul></div></div><p class=\"take\">This makes it super easy to search smarter: by file, by type, by page.</p>", "init": "initDoc"}, {"label": "Fields", "eyebrow": "Suggested metadata fields", "html": "<h2 class=\"title\">The Tags Worth <span class=\"hl\">Adding</span></h2><p class=\"why\">Your chatbot in Project 8 filters and labels its answers with fields like these.</p><p class=\"p\">Below are common metadata fields to attach to each document chunk. They help with filtering, traceability, and structured retrieval.</p><p class=\"hint\">Click each field.</p><ol class=\"steps fields\"><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">1</span><span><span class=\"fk\">doc_type</span> &middot; str. Categorizes the chunk (e.g., Certificate of Quality, Packaging Specification) for filtered search and routing.</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">2</span><span><span class=\"fk\">page_number</span> &middot; int. Keeps track of where the chunk came from in the source document; useful for debugging and traceable answers.</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">3</span><span><span class=\"fk\">source_file</span> &middot; str. Identifies which file the chunk came from. Helpful when handling multiple documents.</span></button></li><li><button type=\"button\" class=\"step\" aria-pressed=\"false\"><span class=\"n\">4</span><span><span class=\"fk\">chunk_index</span> &middot; int. Tracks the chunk's position within a document; allows reconstruction of full content or ordering of responses.</span></button></li></ol><div class=\"detail f\"></div><p class=\"p\">You can also create your own fields, like <span class=\"mono\">author</span>, <span class=\"mono\">section</span>, or <span class=\"mono\">timestamp</span>.</p>", "init": "initFields"}];
+  var END_LABEL = "Done";
+
+  var i = 0;
+  var app = $("app"), rail = $("rail"), stage = $("stage"), card = $("card"), back = $("back"), next = $("next");
+  var nextLabel = $("next-label"), nextIcon = $("next-icon"), upnext = $("upnext"), donemsg = $("donemsg");
+  var DONE_MSG = "You're done with the cards. Scroll down to the next part of this reading.";
+
+  /* Scale the fixed stage as one piece so it fits the frame, and centre it. Nothing inside ever scrolls. */
+  function fit() {
+    var cs = getComputedStyle(document.documentElement);
+    var W = parseFloat(cs.getPropertyValue("--stage-w")), H = parseFloat(cs.getPropertyValue("--stage-h"));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    app.style.transform = "scale(" + s + ")";
+    app.style.left = Math.max(0, (vw - W * s) / 2) + "px";
+    app.style.top = Math.max(0, (vh - H * s) / 2) + "px";
+  }
+
+  /* Spacing (from P3 module 9 and P4): spare height widens the gaps between blocks, up to 2x. */
+  var GAP = 12;
+  function space() {
+    var inner = card.querySelector(".inner");
+    if (!inner) return;
+    inner.style.gap = GAP + "px"; inner.style.marginTop = "";
+    var cs = getComputedStyle(stage);
+    var avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var spare = avail - inner.offsetHeight;
+    var gaps = Array.prototype.filter.call(inner.children, function (c) { return c.offsetHeight > 0; }).length - 1;
+    if (spare > 0 && gaps > 0) inner.style.gap = (GAP + Math.min(GAP, spare / gaps)) + "px";
+    /* Fix round 2 (as the Steps deck): what is still spare after the gaps widen is split above and below, so a short
+       card sits in the middle of the stage instead of leaving one big empty area at the bottom */
+    var left = avail - inner.offsetHeight;
+    if (left > 1) inner.style.marginTop = Math.floor(left / 2) + "px";
+  }
+
+  CARDS.forEach(function (c, n) {
+    if (typeof c.init === "string") c.init = INITS[c.init];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "pg";
+    b.setAttribute("aria-label", "Card " + (n + 1) + ": " + c.label);
+    b.innerHTML = '<span class="seg"></span>';
+    b.addEventListener("click", function () { go(n); });
+    rail.appendChild(b);
+  });
+
+  function titleOf(n) { var m = CARDS[n].html.match(/<h2[^>]*>(.*?)<\/h2>/); return m ? m[1].replace(/<[^>]+>/g, "") : ""; }
+
+  function render(anim) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var c = CARDS[i];
+    card.innerHTML = '<div class="inner' + (anim ? ' anim' : '') + '"><p class="label">' + c.eyebrow + '</p>' + c.html + '</div>';
+    each(rail.children, function (b, n) {
+      b.classList.toggle("is-cur", n === i);
+      b.classList.toggle("is-done", n < i);
+      if (n === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    $("where-count").textContent = "Card " + (i + 1) + " of " + CARDS.length;
+    back.disabled = i === 0;
+    var last = i === CARDS.length - 1;
+    nextIcon.style.display = last ? "none" : "";
+    nextLabel.textContent = last ? END_LABEL : "Next";
+    upnext.innerHTML = last ? "" : "Next: <b>" + titleOf(i + 1) + "</b>";
+    donemsg.textContent = "";
+    if (c.init) c.init(card);
+    space();
+    each(card.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", space); });
+  }
+
+  function go(n) { if (n < 0 || n >= CARDS.length || n === i) return; i = n; render(true); }
+  back.addEventListener("click", function () { go(i - 1); });
+  next.addEventListener("click", function () {
+    if (i === CARDS.length - 1) {
+      donemsg.textContent = DONE_MSG;
+      space();
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: "extern-deck-done" }, "*");
+      return;
+    }
+    go(i + 1);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest(".sw, .steps")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); if (i < CARDS.length - 1) go(i + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); go(i - 1); }
+  });
+
+  /* Test hook: #card=N opens a card directly */
+  var m = location.hash.match(/card=(\d+)/);
+  if (m) { i = Math.min(CARDS.length - 1, Math.max(0, +m[1] - 1)); }
+  window.addEventListener("resize", function () { fit(); });
+  fit();
+  render(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(space);
+})();
+</script>
+</body>
+</html>
